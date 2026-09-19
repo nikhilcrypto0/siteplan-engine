@@ -22,7 +22,7 @@ from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Command, interrupt
 from openai import APIConnectionError
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, ConfigDict, StrictBool, ValidationError
 from shapely.geometry import Polygon
 
 from siteplan.guards import sanitize_brief, ungrounded_numbers, ungrounded_values
@@ -113,6 +113,14 @@ COMMENTARY_PROMPT = (
 )
 
 
+class Decision(BaseModel):
+    """The architect's answer at the approval step. Only a real boolean true approves."""
+
+    model_config = ConfigDict(extra="forbid")
+    approve: StrictBool
+    edits: dict[str, Any] = {}
+
+
 class State(TypedDict, total=False):
     brief: str
     clean_brief: str
@@ -148,8 +156,9 @@ class Assistant:
     def start(self, brief: str) -> dict[str, Any]:
         return self._invoke({"brief": brief})
 
-    def resume(self, decision: dict[str, Any]) -> dict[str, Any]:
-        return self._invoke(Command(resume=decision))
+    def resume(self, decision: Any) -> dict[str, Any]:
+        # LangGraph treats a None resume as "no answer yet"; make it a refused answer instead.
+        return self._invoke(Command(resume={} if decision is None else decision))
 
     def _invoke(self, payload: Any) -> dict[str, Any]:
         return self.graph.invoke(payload, {"configurable": {"thread_id": self.thread_id}})
@@ -265,9 +274,14 @@ class Assistant:
                 "unclear": state.get("unclear", []),
             }
         )
-        if not decision.get("approve"):
+        try:
+            answer = Decision.model_validate(decision)
+        except ValidationError:
+            log.warning("approval answer rejected: %r", decision)
+            return {"status": "Stopped: the approval answer was not understood; nothing solved."}
+        if answer.approve is not True:
             return {"status": "Stopped: the architect did not approve the request."}
-        merged = {**state["request"], **decision.get("edits", {})}
+        merged = {**state["request"], **answer.edits}
         try:
             request = LayoutRequest.model_validate(merged)
         except ValidationError as exc:

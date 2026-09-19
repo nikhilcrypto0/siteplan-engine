@@ -14,7 +14,7 @@ import unicodedata
 from dataclasses import dataclass
 
 _ROLE_MARKERS = re.compile(
-    r"(?im)^\s*(system|assistant|user|developer|tool)\s*:\s*"
+    r"(?i)\b(system|assistant|user|developer|tool)\s*:\s*"
     r"|<\|?/?im_(start|end)\|?>|<\|(system|user|assistant|endoftext)\|>"
     r"|\[/?INST\]|<</?SYS>>"
 )
@@ -50,8 +50,17 @@ def sanitize_brief(raw: str, max_chars: int) -> CleanBrief:
     return CleanBrief(text, tuple(removed))
 
 
+_CATEGORY_AFTER = re.compile(r"\s*(bhk|b\.h\.k|bed)", re.IGNORECASE)
+
+
 def numbers_in(text: str) -> list[float]:
-    return [float(m.group().replace(",", "")) for m in _NUMBER.finditer(text)]
+    """Numbers written in the text, excluding digits that name a flat type ("3BHK",
+    "2 bed"), which would otherwise make an invented "3 floors" look stated."""
+    return [
+        float(m.group().replace(",", ""))
+        for m in _NUMBER.finditer(text)
+        if not _CATEGORY_AFTER.match(text, m.end())
+    ]
 
 
 def ungrounded_values(

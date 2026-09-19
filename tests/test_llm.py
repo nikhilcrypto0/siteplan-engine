@@ -55,3 +55,21 @@ def test_a_prompt_that_alone_would_cross_the_budget_is_never_sent(tmp_path):
 def test_token_estimate_errs_high():
     messages = [{"role": "user", "content": "x" * 300}]
     assert estimate_tokens(messages) >= 100
+
+
+def test_concurrent_runs_never_lose_ledger_updates(tmp_path):
+    import threading
+
+    ledger_dir = tmp_path / "usage"
+    day = date(2026, 9, 19)
+
+    def spend():
+        for _ in range(100):
+            DailyLedger(ledger_dir, day).add(1)
+
+    threads = [threading.Thread(target=spend) for _ in range(4)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert DailyLedger(ledger_dir, day).used() == 400

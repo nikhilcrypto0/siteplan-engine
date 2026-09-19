@@ -6,7 +6,9 @@ day; crossing any of the three halts the pipeline (BudgetExceeded) and is logged
 
 from __future__ import annotations
 
+import fcntl  # POSIX: the Mac and the Linux office server
 import json
+import os
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
@@ -62,7 +64,10 @@ class ChatModel(Protocol):
 
 
 class DailyLedger:
-    """Tokens used per calendar day, kept in a small local JSON file."""
+    """Tokens used per calendar day, kept in a small local JSON file.
+
+    Two runs on the same day must not lose each other's usage, so updates hold an
+    exclusive lock and replace the file atomically (a reader never sees half a write)."""
 
     def __init__(self, directory: str | Path, today: date | None = None):
         self.path = Path(directory) / f"{(today or date.today()).isoformat()}.json"
@@ -74,9 +79,13 @@ class DailyLedger:
             return 0
 
     def add(self, tokens: int) -> int:
-        total = self.used() + tokens
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.path.write_text(json.dumps({"tokens": total}))
+        with open(self.path.with_suffix(".lock"), "w") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            total = self.used() + tokens
+            tmp = self.path.with_suffix(f".{os.getpid()}.tmp")
+            tmp.write_text(json.dumps({"tokens": total}))
+            os.replace(tmp, self.path)
         return total
 
 
