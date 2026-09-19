@@ -224,13 +224,14 @@ class Assistant:
             if set(extraction.unit_mix_percent) - set(self.categories):
                 log.warning("extraction rejected (attempt %d): unknown categories", attempt)
                 continue
-            return self._interpret(extraction, state["clean_brief"])
+            return self.interpret(extraction, state["clean_brief"])
         return {"status": "The assistant could not read the brief. Please restate the floors "
                 "and unit mix."}
 
-    def _interpret(self, ext: BriefExtraction, brief: str) -> dict:
+    @staticmethod
+    def interpret(ext: BriefExtraction, brief: str) -> dict:
         """Deterministic: turn the extraction into a request, listing defaults, gaps and any
-        value the brief never stated."""
+        value the brief never stated. Also used by the MCP server."""
         request: dict[str, Any] = {}
         assumptions, missing = [], []
         if ext.floors_above_stilt:
