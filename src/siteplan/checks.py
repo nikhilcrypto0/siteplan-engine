@@ -147,7 +147,8 @@ def _height_finding(b: Building) -> Finding:
         _m(height),
         f"high-rise band {span}",
         rules.TABLE_IV_CLAUSE,
-        f"Needs a {band.min_road_m:g} m road and {band.min_open_space_m:g} m all round.",
+        f"Needs a road at least {band.min_road_m:g} m wide "
+        f"and {band.min_open_space_m:g} m open all round.",
     )
 
 
