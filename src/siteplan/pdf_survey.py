@@ -172,7 +172,7 @@ def _segments_by_colour(page, include_rects: bool) -> dict[Colour, list[LineStri
 
 def _scale_estimates(
     polygon: Polygon, numbers: list[tuple[float, Token]], profile: PdfProfile
-) -> list[ScaleEstimate]:
+) -> list[tuple[ScaleEstimate, Token]]:
     runs = straight_runs(polygon)
     estimates = []
     for value, token in numbers:
@@ -185,7 +185,7 @@ def _scale_estimates(
         ]
         if parallel:
             nearest = min(parallel, key=lambda r: r.line.distance(here))
-            estimates.append(ScaleEstimate(written_m=value, drawn_units=nearest.length))
+            estimates.append((ScaleEstimate(value, nearest.length), token))
     return estimates
 
 
@@ -195,6 +195,32 @@ class _Candidate:
     polygon: Polygon
     calibration: Calibration
     area_sqm: float
+    dimension_tokens: frozenset[int]  # id() of tokens used as dimension labels
+
+
+def _calibrate_candidate(
+    polygon: Polygon, numbers: list[tuple[float, Token]], profile: PdfProfile
+) -> tuple[Calibration, frozenset[int]] | None:
+    """Calibrate from dimension labels. Small numbers can only be dimensions, so they set the
+    scale. Numbers in the level range count as dimensions only if they sit along an edge AND
+    agree with that scale, so a 450 m edge label is used, and never mistaken for a level."""
+    lo = profile.level_range[0]
+    small = _scale_estimates(polygon, [(v, t) for v, t in numbers if 0 < v < lo], profile)
+    cal = calibrate([e for e, _ in small], profile.scale_agreement_pct)
+    if cal is None:
+        return None
+    large = _scale_estimates(polygon, [(v, t) for v, t in numbers if v >= lo], profile)
+    tolerance = profile.scale_agreement_pct / 100
+    large = [
+        (e, t)
+        for e, t in large
+        if abs(e.metres_per_unit / cal.fitted_metres_per_unit - 1) <= tolerance
+    ]
+    if large:
+        cal = calibrate([e for e, _ in small + large], profile.scale_agreement_pct) or cal
+    agreeing = set(cal.agreeing)
+    tokens = frozenset(id(t) for e, t in small + large if e in agreeing)
+    return snap_to_standard_scale(cal, profile.snap_tolerance_pct), tokens
 
 
 def read_pdf_survey(path: str | Path, profile: PdfProfile | None = None) -> Survey:
@@ -210,7 +236,6 @@ def read_pdf_survey(path: str | Path, profile: PdfProfile | None = None) -> Surv
 
     stated = next((a for a in (parse_acre_gunta(r) for r in runs) if a), None)
     numbers = [(float(t.text), t) for t in tokens if _NUMBER.fullmatch(t.text)]
-    dims = [(v, t) for v, t in numbers if 0 < v < profile.level_range[0]]
 
     candidates = []
     for colour, segs in shapes.items():
@@ -220,11 +245,11 @@ def read_pdf_survey(path: str | Path, profile: PdfProfile | None = None) -> Surv
         fraction = polygon.area / page_area
         if not profile.min_polygon_page_fraction <= fraction <= 0.9:
             continue
-        cal = calibrate(_scale_estimates(polygon, dims, profile), profile.scale_agreement_pct)
-        if cal is not None:
-            cal = snap_to_standard_scale(cal, profile.snap_tolerance_pct)
+        found = _calibrate_candidate(polygon, numbers, profile)
+        if found is not None:
+            cal, dimension_tokens = found
             area = polygon.area * cal.metres_per_unit**2
-            candidates.append(_Candidate(colour, polygon, cal, area))
+            candidates.append(_Candidate(colour, polygon, cal, area, dimension_tokens))
     if not candidates:
         raise ValueError(
             f"{path}: no closed boundary with at least two matching dimension labels was found"
@@ -250,7 +275,7 @@ def _build_survey(source, best, stated, numbers, segments, profile) -> Survey:
     levels = tuple(
         SpotLevel(*to_m(t.x, t.y), z=v, on_site=boundary_page.contains(Point(t.x, t.y)))
         for v, t in numbers
-        if lo <= v <= hi and "." in t.text
+        if lo <= v <= hi and "." in t.text and id(t) not in best.dimension_tokens
     )
 
     def lines_of(colour: Colour | None) -> tuple[LineString, ...]:

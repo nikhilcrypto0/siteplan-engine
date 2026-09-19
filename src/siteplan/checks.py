@@ -72,22 +72,26 @@ def _pct(value: float) -> str:
 
 
 def check_site(site: Site) -> list[Finding]:
-    findings: list[Finding] = []
-    bands = {}
-    for b in site.buildings:
-        findings.append(_height_finding(b))
-        height = b.resolved_height()
-        if height is not None and height >= rules.HIGH_RISE_THRESHOLD_M:
-            bands[b.name] = rules.band_for_height(height)
-    high_rise = [b for b in site.buildings if b.name in bands and bands[b.name] is not None]
+    findings: list[Finding] = [_height_finding(b) for b in site.buildings]
+    all_high_rise = [
+        b for b in site.buildings if (b.resolved_height() or 0) >= rules.HIGH_RISE_THRESHOLD_M
+    ]
+    bands = {b.name: rules.band_for_height(b.resolved_height() or 0) for b in all_high_rise}
+    encoded = [b for b in all_high_rise if bands[b.name] is not None]
+    beyond_table = [b for b in all_high_rise if bands[b.name] is None]
 
-    if high_rise:
-        tallest = max(high_rise, key=lambda b: b.resolved_height() or 0)
-        band = bands[tallest.name]
-        findings.append(_road_finding(site, tallest.name, band))
+    if all_high_rise:
         findings.append(_plot_size_finding(site))
-        findings += _setback_findings(site, high_rise, bands)
-        findings += _spacing_findings(high_rise, bands)
+        tallest = max(all_high_rise, key=lambda b: b.resolved_height() or 0)
+        if bands[tallest.name] is not None:
+            findings.append(_road_finding(site, tallest.name, bands[tallest.name]))
+        else:
+            findings.append(_beyond_table(f"Abutting road width (for {tallest.name})", tallest))
+    for b in beyond_table:
+        findings.append(_beyond_table(f"Setbacks and block gaps: {b.name}", b))
+    if encoded:
+        findings += _setback_findings(site, encoded, bands)
+        findings += _spacing_findings(encoded, bands)
     findings += _open_space_findings(site)
     findings.append(
         Finding(
@@ -144,6 +148,17 @@ def _height_finding(b: Building) -> Finding:
         f"high-rise band {span}",
         rules.TABLE_IV_CLAUSE,
         f"Needs a {band.min_road_m:g} m road and {band.min_open_space_m:g} m all round.",
+    )
+
+
+def _beyond_table(rule: str, b: Building) -> Finding:
+    return Finding(
+        rule,
+        Status.NOT_CHECKED,
+        _m(b.resolved_height() or 0),
+        "Table IV rows up to 55 m are encoded",
+        rules.TABLE_IV_CLAUSE,
+        "Above 55 m the requirement is not encoded yet. Check it by hand.",
     )
 
 

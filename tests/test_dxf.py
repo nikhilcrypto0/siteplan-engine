@@ -69,3 +69,15 @@ def test_unitless_drawing_must_be_told_its_units(tmp_path):
     survey = read_dxf_survey(path, DxfProfile(metres_per_unit_if_unset=0.3048))
     assert survey.area_sqm == pytest.approx(10000, rel=1e-6)
     assert any("assumed" in w for w in survey.warnings)
+
+
+def test_arcs_in_legacy_polylines_are_warned_about(tmp_path):
+    doc = ezdxf.new("R2018")
+    doc.header["$INSUNITS"] = 6
+    poly = doc.modelspace().add_polyline2d(
+        [(0, 0), (100, 0), (100, 100), (0, 100)], close=True, dxfattribs={"layer": "PLOT"}
+    )
+    poly.vertices[1].dxf.bulge = 0.5
+    doc.saveas(tmp_path / "arc.dxf")
+    survey = read_dxf_survey(tmp_path / "arc.dxf")
+    assert any("arcs" in w for w in survey.warnings)

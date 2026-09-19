@@ -103,3 +103,11 @@ def test_non_high_rise_is_flagged_as_not_checked():
     found = _by_rule(check_site(Site(buildings=(Building("Villa", height_m=10),))))
     assert found["Height class: Villa"].status is Status.NOT_CHECKED
     assert not any(rule.startswith("Abutting road") for rule in found)
+
+
+def test_tower_above_the_encoded_table_is_flagged_not_silently_skipped():
+    site = Site(net_area_sqm=10000, abutting_road_m=30, buildings=(Building("Tall", height_m=60),))
+    found = _by_rule(check_site(site))
+    assert found["Plot size for high-rise"].status is Status.PASS
+    assert found["Abutting road width (for Tall)"].status is Status.NOT_CHECKED
+    assert found["Setbacks and block gaps: Tall"].status is Status.NOT_CHECKED

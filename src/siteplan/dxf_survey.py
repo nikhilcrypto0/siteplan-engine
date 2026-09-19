@@ -42,7 +42,8 @@ def _closed_polylines(msp) -> list[tuple[str, Polygon, bool]]:
     for e in msp.query("POLYLINE"):
         if e.is_closed and len(e) >= 3:
             ring = [tuple(v.dxf.location)[:2] for v in e.vertices]
-            found.append((e.dxf.layer, Polygon(ring), False))
+            has_arcs = any(v.dxf.bulge for v in e.vertices)
+            found.append((e.dxf.layer, Polygon(ring), has_arcs))
     return [(layer, poly, arcs) for layer, poly, arcs in found if poly.is_valid and poly.area > 0]
 
 

@@ -17,6 +17,18 @@ from siteplan.units import ft_to_m, parse_acre_gunta, sqft_to_sqm, sqyd_to_sqm
 Ring = list[tuple[float, float]]
 
 
+def _ft(value: float | None) -> float | None:
+    return ft_to_m(value) if value is not None else None
+
+
+def _sqyd(value: float | None) -> float | None:
+    return sqyd_to_sqm(value) if value is not None else None
+
+
+def _text_area(value: str | None) -> float | None:
+    return parse_acre_gunta(value) if value else None
+
+
 class BuildingIn(BaseModel):
     name: str
     height_m: PositiveFloat | None = None
@@ -53,6 +65,24 @@ class SiteIn(BaseModel):
     def _area_text_parses(self) -> SiteIn:
         if self.gross_area_text and parse_acre_gunta(self.gross_area_text) is None:
             raise ValueError(f"gross_area_text not understood: {self.gross_area_text!r}")
+        return self
+
+    @model_validator(mode="after")
+    def _paired_units_agree(self) -> SiteIn:
+        """The same quantity given twice (e.g. feet and metres) must agree, not be silently
+        overridden. This catches a bad unit conversion by a person or by the LLM."""
+        pairs = [
+            ("abutting_road_m", self.abutting_road_m, _ft(self.abutting_road_ft)),
+            ("master_plan_road_m", self.master_plan_road_m, _ft(self.master_plan_road_ft)),
+            ("net_area_sqm", self.net_area_sqm, _sqyd(self.net_area_sqyd)),
+            ("gross_area_sqm", self.gross_area_sqm, _text_area(self.gross_area_text)),
+        ]
+        for name, given, derived in pairs:
+            if given is not None and derived is not None and abs(given / derived - 1) > 0.01:
+                raise ValueError(
+                    f"{name}={given:g} disagrees with the other unit given for it "
+                    f"({derived:.2f} after conversion). Give one, or make them match."
+                )
         return self
 
     def gross_sqm(self) -> float | None:
