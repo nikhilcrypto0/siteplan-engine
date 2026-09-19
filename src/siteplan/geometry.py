@@ -51,6 +51,12 @@ def straight_runs(polygon: Polygon, tolerance_deg: float = 3.0) -> list[Run]:
     return runs
 
 
+def opening(shape, width_m: float):
+    """Remove every part of a shape narrower than width_m (shrink by half, grow back)."""
+    half = width_m / 2 - 1e-6
+    return shape.buffer(-half, join_style="mitre").buffer(half, join_style="mitre")
+
+
 def largest_polygon(segments: list[LineString]) -> Polygon | None:
     """Close a soup of line segments into polygons and return the biggest one."""
     if len(segments) < 3:

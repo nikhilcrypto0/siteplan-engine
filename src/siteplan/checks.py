@@ -13,6 +13,7 @@ from itertools import combinations
 from shapely.geometry import Polygon
 
 from siteplan import rules
+from siteplan.geometry import opening
 
 
 class Status(StrEnum):
@@ -301,14 +302,9 @@ def _spacing_findings(high_rise, bands) -> list[Finding]:
 
 
 def _narrower_than(shape: Polygon, width_m: float) -> bool:
-    """True if any part of the shape is narrower than width_m.
-
-    Shrinking by half the width and growing back removes every part thinner than the
-    width; if a noticeable share of the area disappears, the shape has a narrow part.
-    """
-    half = width_m / 2 - 1e-6
-    opened = shape.buffer(-half, join_style="mitre").buffer(half, join_style="mitre")
-    return opened.area < shape.area * 0.98
+    """True if any part of the shape is narrower than width_m (a noticeable share of its
+    area disappears when every part thinner than the width is removed)."""
+    return opening(shape, width_m).area < shape.area * 0.98
 
 
 def _open_space_findings(site: Site) -> list[Finding]:

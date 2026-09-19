@@ -1,0 +1,103 @@
+"""Write a layout option as DXF (for ZWCAD) and as an SVG preview (for a browser)."""
+
+from __future__ import annotations
+
+from html import escape
+from pathlib import Path
+
+import ezdxf
+from shapely.geometry import Polygon
+
+from siteplan.layout import LayoutOption
+
+# BuildNow plugin layer names where one fits; SOLVER-* layers are ours, not BuildNow's.
+LAYERS = {
+    "Plot": 6,
+    "Building Plan": 7,
+    "Dwelling Unit": 3,
+    "Organized Open Space": 94,
+    "SOLVER-CORES": 8,
+    "SOLVER-LABELS": 7,
+}
+
+
+def _ring(polygon: Polygon) -> list[tuple[float, float]]:
+    return [(x, y) for x, y in list(polygon.exterior.coords)[:-1]]
+
+
+def write_layout_dxf(option: LayoutOption, plot: Polygon, path: str | Path) -> Path:
+    doc = ezdxf.new("R2018", setup=True)
+    doc.units = ezdxf.units.M
+    for name, colour in LAYERS.items():
+        doc.layers.add(name, color=colour)
+    msp = doc.modelspace()
+
+    def add(polygon: Polygon, layer: str) -> None:
+        msp.add_lwpolyline(_ring(polygon), close=True, dxfattribs={"layer": layer})
+
+    add(plot, "Plot")
+    for pocket in option.open_space:
+        add(pocket, "Organized Open Space")
+    for tower in option.towers:
+        add(tower.footprint, "Building Plan")
+        for flat in tower.flat_outlines:
+            add(flat, "Dwelling Unit")
+        for core in tower.cores:
+            add(core, "SOLVER-CORES")
+        c = tower.footprint.centroid
+        msp.add_text(tower.name, height=3.0, dxfattribs={"layer": "SOLVER-LABELS"}).set_placement(
+            (c.x, c.y)
+        )
+    out = Path(path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    doc.saveas(out)
+    return out
+
+
+def write_layout_svg(option: LayoutOption, plot: Polygon, path: str | Path, title: str) -> Path:
+    """A plain drawing for a browser: plot, open space, towers, flats, cores, labels."""
+    minx, miny, maxx, maxy = plot.bounds
+    pad = 12.0
+    scale = 900 / max(maxx - minx + 2 * pad, maxy - miny + 2 * pad)
+    width = (maxx - minx + 2 * pad) * scale
+    height = (maxy - miny + 2 * pad) * scale + 70
+
+    def pts(polygon: Polygon) -> str:
+        return " ".join(
+            f"{(x - minx + pad) * scale:.1f},{(maxy - y + pad) * scale + 70:.1f}"
+            for x, y in polygon.exterior.coords
+        )
+
+    s = option.summary()
+    lines = [
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{width:.0f}" height="{height:.0f}" '
+        f'viewBox="0 0 {width:.0f} {height:.0f}" font-family="Helvetica, Arial, sans-serif">',
+        '<rect width="100%" height="100%" fill="#fbfbf8"/>',
+        f'<text x="14" y="26" font-size="17" font-weight="700">{escape(title)}</text>',
+        f'<text x="14" y="50" font-size="13" fill="#444">{s["towers"]} tower'
+        f'{"" if s["towers"] == 1 else "s"} · '
+        f'{s["total_flats"]} flats · {s["saleable_sqft"]:,} sft saleable · open space '
+        f'{s["open_space_share_pct"]}% · mix {escape(str(s["unit_mix_achieved"]))}</text>',
+        f'<polygon points="{pts(plot)}" fill="none" stroke="#ad2677" stroke-width="2"/>',
+    ]
+    for pocket in option.open_space:
+        lines.append(f'<polygon points="{pts(pocket)}" fill="#bfdcaa" stroke="#47762c"/>')
+    for tower in option.towers:
+        lines.append(f'<polygon points="{pts(tower.footprint)}" fill="#e8e4d6" stroke="#333"/>')
+        for flat in tower.flat_outlines:
+            lines.append(
+                f'<polygon points="{pts(flat)}" fill="none" stroke="#777" stroke-width="0.6"/>'
+            )
+        for core in tower.cores:
+            lines.append(f'<polygon points="{pts(core)}" fill="#8a8a8a"/>')
+        c = tower.footprint.centroid
+        lines.append(
+            f'<text x="{(c.x - minx + pad) * scale:.1f}" y="{(maxy - c.y + pad) * scale + 70:.1f}" '
+            f'font-size="14" font-weight="700" text-anchor="middle" fill="#bd3b27">'
+            f"{escape(tower.name)}</text>"
+        )
+    lines.append("</svg>")
+    out = Path(path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text("\n".join(lines))
+    return out

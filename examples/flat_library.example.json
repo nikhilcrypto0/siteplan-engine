@@ -1,0 +1,11 @@
+{
+  "note": "EXAMPLE sizes only, chosen to be plausible for Hyderabad 2BHK/3BHK flats. Replace with the firm's own flat blocks before trusting any layout.",
+  "flats": [
+    {"name": "2BHK-A", "bhk": "2BHK", "width_m": 10.0, "depth_m": 11.0, "saleable_sqft": 1190},
+    {"name": "2BHK-B", "bhk": "2BHK", "width_m": 10.5, "depth_m": 11.0, "saleable_sqft": 1220},
+    {"name": "3BHK-A", "bhk": "3BHK", "width_m": 13.5, "depth_m": 11.0, "saleable_sqft": 1690}
+  ],
+  "core_width_m": 7.5,
+  "corridor_width_m": 2.13,
+  "flats_per_core_per_side": 4
+}

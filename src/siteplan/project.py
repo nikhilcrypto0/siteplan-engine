@@ -12,6 +12,7 @@ from shapely.geometry import Polygon
 
 from siteplan.area_statement import AreaStatement
 from siteplan.checks import Building, Site
+from siteplan.layout import LayoutRequest
 from siteplan.units import ft_to_m, parse_acre_gunta, sqft_to_sqm, sqyd_to_sqm
 
 Ring = list[tuple[float, float]]
@@ -105,6 +106,7 @@ class Project(BaseModel):
     site: SiteIn
     buildings: list[BuildingIn] = []
     area_statement: AreaStatement | None = None
+    layout: LayoutRequest | None = None
 
     def to_site(self) -> Site:
         s = self.site
