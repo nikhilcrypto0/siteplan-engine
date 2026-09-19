@@ -1,41 +1,22 @@
-"""Command line: `siteplan survey`, `siteplan check`, `siteplan area-statement`."""
+"""Command line: survey, check, area-statement, layout, assist."""
 
 from __future__ import annotations
 
 import argparse
 import json
+import logging
 import sys
 from pathlib import Path
 
 from pydantic import ValidationError
-from shapely.geometry import Polygon
 
 from siteplan.area_statement import render
 from siteplan.checks import Status, check_site
 from siteplan.dxf_export import write_survey_dxf
-from siteplan.dxf_survey import read_dxf_survey
-from siteplan.layout import area_statement, solve
-from siteplan.layout_export import write_layout_dxf, write_layout_svg
 from siteplan.library import FlatLibrary
-from siteplan.pdf_survey import read_pdf_survey
+from siteplan.llm import AssistantConfig
 from siteplan.project import Project
-from siteplan.survey import Survey
-
-LAYOUT_CAVEAT = (
-    "Layouts are first drafts for an architect: v0 ignores the club house, amenities, "
-    "parking ramps and driveway connections, and uses whatever flat library it is given."
-)
-
-
-def read_survey(path: Path) -> Survey:
-    suffix = path.suffix.lower()
-    if suffix == ".pdf":
-        return read_pdf_survey(path)
-    if suffix == ".dxf":
-        return read_dxf_survey(path)
-    if suffix == ".dwg":
-        raise ValueError("DWG is not read directly. Save it as DXF in ZWCAD first.")
-    raise ValueError(f"Unsupported survey file type: {path.suffix}")
+from siteplan.runner import LAYOUT_CAVEAT, load_plot, read_survey, run_layout
 
 
 def _cmd_survey(args: argparse.Namespace) -> int:
@@ -83,56 +64,104 @@ def _count(n: int, noun: str) -> str:
     return f"{n} {noun}{'' if n == 1 else 's'}"
 
 
+def _print_options(summaries: list[dict]) -> None:
+    for summary in summaries:
+        fails = [rule for rule, status in summary["rule_findings"].items() if status == "FAIL"]
+        print(
+            f"Option {summary['option']}: {_count(summary['towers'], 'tower')}, "
+            f"{summary['total_flats']} flats, {summary['saleable_sqft']:,} sft saleable, "
+            f"open space {summary['open_space_share_pct']}%, mix {summary['unit_mix_achieved']}"
+        )
+        print(f"          rule FAILs: {', '.join(fails) or 'none'}")
+
+
 def _cmd_layout(args: argparse.Namespace) -> int:
     project = _load_project(args.project)
     if project.layout is None:
         print("The project file has no layout section.", file=sys.stderr)
         return 2
     library = FlatLibrary.model_validate_json(Path(args.library).read_text())
-    if project.site.net_plot_m:
-        plot = Polygon(project.site.net_plot_m)
-        basis = "net plot from the project file"
-    elif args.survey:
-        plot = read_survey(Path(args.survey)).boundary
-        basis = "surveyed boundary (road-widening strip, if any, NOT deducted)"
-    else:
-        print("Give --survey, or net_plot_m in the project file.", file=sys.stderr)
-        return 2
-
-    site = project.to_site()
-    options = solve(
-        plot,
-        library,
-        project.layout,
-        gross_area_sqm=site.gross_area_sqm,
-        abutting_road_m=site.abutting_road_m,
-        master_plan_road_m=site.master_plan_road_m,
-    )
+    plot, basis = load_plot(project, args.survey)
     print(f"Layout: {project.name}\nPlot: {plot.area:,.0f} m², {basis}\n")
-    if not options:
+    out = Path(args.out)
+    summaries = run_layout(project, library, plot, project.layout, out)
+    if not summaries:
         print("No tower fits inside the setbacks with the required open space.")
         return 1
-    out = Path(args.out)
-    for i, option in enumerate(options, 1):
-        stem = out / f"option_{i}"
-        write_layout_dxf(option, plot, stem.with_suffix(".dxf"))
-        write_layout_svg(option, plot, stem.with_suffix(".svg"), f"{project.name}: option {i}")
-        summary = option.summary() | {
-            "area_statement": render(area_statement(option, project.layout)),
-            "flat_library_note": library.note,
-            "caveat": LAYOUT_CAVEAT,
-        }
-        stem.with_suffix(".json").write_text(json.dumps(summary, indent=2))
-        fails = [rule for rule, status in summary["rule_findings"].items() if status == "FAIL"]
-        print(
-            f"Option {i}: {_count(summary['towers'], 'tower')}, {summary['total_flats']} flats, "
-            f"{summary['saleable_sqft']:,} sft saleable, open space "
-            f"{summary['open_space_share_pct']}%, mix {summary['unit_mix_achieved']}"
-        )
-        print(f"          rule FAILs: {', '.join(fails) or 'none'}")
-    print(f"\nWrote option_1..{len(options)} (.dxf, .svg, .json) to {out}/")
+    _print_options(summaries)
+    print(f"\nWrote option_1..{len(summaries)} (.dxf, .svg, .json) to {out}/")
     if library.note:
         print(f"Flat library: {library.note}")
+    print(LAYOUT_CAVEAT)
+    return 0
+
+
+def _ask_architect(question: dict) -> dict:
+    """Show the interpreted request and get an explicit decision. There is no skip flag."""
+    print("\nThe assistant read the brief as:")
+    print(json.dumps(question["request"], indent=2))
+    for title, key in (("Defaults it will use", "assumptions"), ("Still missing", "missing"),
+                       ("Values the brief never stated (check these)", "flagged"),
+                       ("Parts of the brief it could not use", "unclear")):
+        if question.get(key):
+            print(f"{title}:")
+            for item in question[key]:
+                print(f"  - {item}")
+    while True:
+        answer = input("\nApprove? [y]es / [e]dit / [n]o: ").strip().lower()
+        if answer in {"y", "yes"}:
+            return {"approve": True}
+        if answer in {"n", "no"}:
+            return {"approve": False}
+        if answer in {"e", "edit"}:
+            example = '{"floors": 8, "unit_mix": {"2BHK": 0.7, "3BHK": 0.3}}'
+            raw = input(f"Edits as JSON, e.g. {example}: ")
+            try:
+                return {"approve": True, "edits": json.loads(raw)}
+            except json.JSONDecodeError:
+                print("That was not valid JSON; try again.")
+
+
+def _cmd_assist(args: argparse.Namespace) -> int:
+    from siteplan.assistant import Assistant  # keeps LangGraph off the plain CLI paths
+    from siteplan.llm import OpenAICompatibleModel
+
+    config = (
+        AssistantConfig.model_validate_json(Path(args.config).read_text())
+        if args.config
+        else AssistantConfig()
+    )
+    Path(config.log_file).parent.mkdir(parents=True, exist_ok=True)
+    handler = logging.FileHandler(config.log_file)
+    handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
+    logging.getLogger("siteplan.assistant").addHandler(handler)
+    logging.getLogger("siteplan.assistant").setLevel(logging.INFO)
+
+    project = _load_project(args.project)
+    library = FlatLibrary.model_validate_json(Path(args.library).read_text())
+    plot, basis = load_plot(project, args.survey)
+    brief = args.brief if args.brief else Path(args.brief_file).read_text()
+    out = Path(args.out)
+    assistant = Assistant(OpenAICompatibleModel(config), config, project, library, plot, out)
+    print(f"Assistant: {project.name} | plot {plot.area:,.0f} m², {basis} | model {config.model}")
+
+    result = assistant.start(brief)
+    while (question := Assistant.pending_question(result)) is not None:
+        result = assistant.resume(_ask_architect(question))
+
+    record = {k: v for k, v in result.items() if not k.startswith("__")}
+    record["tokens_used"] = assistant.meter.run_used
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "run.json").write_text(json.dumps(record, indent=2, default=str))
+    if result.get("options"):
+        print()
+        _print_options(result["options"])
+    if result.get("status"):
+        print(f"\n{result['status']}")
+        return 1
+    labels = {"code": "computed", "code + model commentary": "computed, plus model commentary"}
+    print(f"\nComparison ({labels[result['explanation_source']]}):\n{result['explanation']}")
+    print(f"\nFiles and run record in {out}/ | tokens used: {assistant.meter.run_used:,}")
     print(LAYOUT_CAVEAT)
     return 0
 
@@ -161,6 +190,17 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--survey", help="Survey PDF/DXF, used when the project has no net_plot_m")
     p.add_argument("--out", default="out/layout")
     p.set_defaults(run=_cmd_layout)
+
+    p = sub.add_parser("assist", help="Plain-English brief -> approved request -> layouts.")
+    p.add_argument("project")
+    p.add_argument("--library", required=True, help="Flat library JSON")
+    brief = p.add_mutually_exclusive_group(required=True)
+    brief.add_argument("--brief", help="The brief, in plain English")
+    brief.add_argument("--brief-file", help="A text file holding the brief")
+    p.add_argument("--survey", help="Survey PDF/DXF, used when the project has no net_plot_m")
+    p.add_argument("--config", help="Assistant config JSON (model endpoint, budgets)")
+    p.add_argument("--out", default="out/assist")
+    p.set_defaults(run=_cmd_assist)
 
     args = parser.parse_args(argv)
     try:
