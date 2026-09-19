@@ -19,6 +19,8 @@ import argparse
 import json
 import logging
 import uuid
+import webbrowser
+from collections.abc import Callable
 from functools import partial
 from pathlib import Path
 from typing import Annotated, Any
@@ -37,6 +39,7 @@ from siteplan.guards import sanitize_brief
 from siteplan.layout import LayoutRequest
 from siteplan.library import FlatLibrary
 from siteplan.project import Project
+from siteplan.result_page import write_result_page
 from siteplan.runner import LAYOUT_CAVEAT, load_plot, read_survey, run_layout
 
 log = logging.getLogger("siteplan.mcp")
@@ -147,7 +150,8 @@ def approval_request(project: str, plot: str, request: LayoutRequest, reading: d
 
 def build_server(workspace: Path, out_dir: Path, approval: str = "elicit",
                  desk: ApprovalDesk | None = None,
-                 approval_timeout: float = APPROVAL_TIMEOUT_S) -> FastMCP:
+                 approval_timeout: float = APPROVAL_TIMEOUT_S,
+                 open_result: Callable[[str], object] | None = webbrowser.open) -> FastMCP:
     ws = Workspace(workspace, out_dir)
     desk = desk or (ApprovalDesk() if approval == "page" else None)
     server = FastMCP("siteplan", instructions=INSTRUCTIONS)
@@ -251,14 +255,23 @@ def build_server(workspace: Path, out_dir: Path, approval: str = "elicit",
             return {"solved": False,
                     "next": "No tower fits inside the setbacks with the required open space."}
         facts = [{k: o[k] for k in OPTION_KEYS} for o in options]
+        comparison = compare_options(facts)
         record = {"project": project.name, "brief": clean.text, "plot": plot_text,
-                  "approved_request": request.model_dump(), "options": facts}
+                  "approved_request": request.model_dump(), "options": facts,
+                  "caveat": LAYOUT_CAVEAT, "flat_library_note": library.note}
         (out / "run.json").write_text(json.dumps(record, indent=2))
+        page = write_result_page(record, comparison, out)
+        if open_result is not None:
+            try:  # the drawings are ready: put them in front of the architect
+                open_result(page.as_uri())
+            except Exception as exc:
+                log.warning("could not open the results page: %s", exc)
         log.info("run %s: approved and solved, %d options", run, len(options))
         return {
             "solved": True,
             "folder": str(out),
-            "comparison": compare_options(facts),
+            "results_page": str(page),
+            "comparison": comparison,
             "options": [
                 f | {"dxf": str(out / f"option_{f['option']}.dxf"),
                      "preview_svg": str(out / f"option_{f['option']}.svg")}
@@ -311,13 +324,16 @@ def main(argv: list[str] | None = None) -> None:
         help="Where the architect approves: 'elicit' asks through the chat app (needs a client "
              "that shows MCP approval prompts), 'page' opens a page on this machine.",
     )
+    parser.add_argument("--no-open-result", action="store_true",
+                        help="Do not open the drawings in a browser when a run finishes.")
     args = parser.parse_args(argv)
     Path(args.log_file).parent.mkdir(parents=True, exist_ok=True)
     logging.basicConfig(  # stdout carries the protocol, so logs go to a file
         filename=args.log_file, level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
     )
-    build_server(Path(args.workspace), Path(args.out), args.approval).run("stdio")
+    build_server(Path(args.workspace), Path(args.out), args.approval,
+                 open_result=None if args.no_open_result else webbrowser.open).run("stdio")
 
 
 if __name__ == "__main__":

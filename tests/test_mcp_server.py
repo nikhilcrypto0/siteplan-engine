@@ -52,9 +52,11 @@ def ws(tmp_path):
     return tmp_path / "ws"
 
 
-def call(ws, tool, args=None, architect=None, approval="elicit", desk=None, wait=5.0):
-    async def go():
-        server = build_server(ws, ws / "out", approval, desk, wait)
+def call(ws, tool, args=None, architect=None, approval="elicit", desk=None, wait=5.0,
+         opened=None):
+    async def go():  # opened=None: no browser window is ever opened during tests
+        server = build_server(ws, ws / "out", approval, desk, wait,
+                              open_result=None if opened is None else opened.append)
         async with create_connected_server_and_client_session(
             server, elicitation_callback=architect
         ) as client:
@@ -143,6 +145,18 @@ def test_anything_but_an_approval_draws_nothing(ws, architect, reason):
     assert reply["solved"] is False
     assert reason in reply["next"]
     assert nothing_drawn(ws)
+
+
+def test_the_drawings_open_by_themselves_when_the_run_finishes(ws):
+    opened: list[str] = []
+    reply = ok(call(ws, "propose_layouts", LAYOUT_ARGS, Architect(), opened=opened))
+    page = Path(reply["results_page"])
+    assert opened == [page.as_uri()] and page.is_file()
+    html = page.read_text()
+    assert html.count("<img src=") == len(reply["options"])
+    assert 'src="option_1.svg"' in html and 'href="option_1.dxf"' in html
+    assert reply["comparison"].splitlines()[0] in html
+    assert "No rule failures" in html and "placeholder" not in html.lower()
 
 
 def test_missing_values_come_back_without_asking(ws):
