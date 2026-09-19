@@ -7,13 +7,16 @@ Hermes Agent, which accepts with an empty form.
 import json
 import shutil
 from pathlib import Path
+from urllib.parse import parse_qs, urlparse
 
 import anyio
 import pytest
+from browser_stub import clicker, read_page
 from mcp.shared.memory import create_connected_server_and_client_session
 from mcp.types import ElicitResult
 from shapely.geometry import Polygon
 
+from siteplan.approval import ApprovalDesk
 from siteplan.dxf_export import write_survey_dxf
 from siteplan.mcp_server import build_server
 from siteplan.survey import Survey
@@ -49,9 +52,9 @@ def ws(tmp_path):
     return tmp_path / "ws"
 
 
-def call(ws, tool, args=None, architect=None):
+def call(ws, tool, args=None, architect=None, approval="elicit", desk=None, wait=5.0):
     async def go():
-        server = build_server(ws, ws / "out")
+        server = build_server(ws, ws / "out", approval, desk, wait)
         async with create_connected_server_and_client_session(
             server, elicitation_callback=architect
         ) as client:
@@ -114,7 +117,7 @@ def test_approved_request_is_solved_and_compared_in_code(ws):
     reply = ok(call(ws, "propose_layouts", LAYOUT_ARGS, architect))
     assert reply["solved"] is True
     assert len(architect.asked) == 1
-    assert "floors above the stilt: 8" in architect.asked[0]
+    assert "Floors above the stilt: 8" in architect.asked[0]
     assert "2BHK 70%" in architect.asked[0]
     best = max(reply["options"], key=lambda o: o["saleable_sqft"])
     assert reply["comparison"].startswith(f"Option {best['option']} sells the most")
@@ -154,6 +157,35 @@ def test_a_value_the_brief_never_stated_is_flagged_to_the_architect(ws):
     architect = Architect("decline")
     call(ws, "propose_layouts", LAYOUT_ARGS | {"floors_above_stilt": 9}, architect)
     assert "CHECK: the brief never states floors" in architect.asked[0]
+
+
+@pytest.mark.parametrize(
+    ("decision", "solved"), [("approve", True), ("reject", False)], ids=["approve", "reject"]
+)
+def test_the_approval_page_decides_and_its_link_never_reaches_the_model(ws, decision, solved):
+    seen: list[str] = []
+    desk = ApprovalDesk(open_page=clicker(decision, seen=seen))
+    try:
+        reply = ok(call(ws, "propose_layouts", LAYOUT_ARGS, approval="page", desk=desk))
+    finally:
+        desk.close()
+    assert reply["solved"] is solved
+    assert nothing_drawn(ws) is not solved
+    assert len(seen) == 1
+    token = parse_qs(urlparse(seen[0]).query)["t"][0]
+    assert token not in json.dumps(reply) and "127.0.0.1" not in json.dumps(reply)
+
+
+def test_the_approval_page_shows_what_the_brief_never_stated(ws):
+    shown: list[str] = []
+    desk = ApprovalDesk(open_page=lambda url: shown.append(read_page(url)))
+    try:
+        call(ws, "propose_layouts", LAYOUT_ARGS | {"floors_above_stilt": 9},
+             approval="page", desk=desk, wait=0.5)  # nobody clicks: the page still showed
+    finally:
+        desk.close()
+    assert "CHECK: the brief never states floors" in shown[0]
+    assert "Floors above the stilt: 9" in shown[0]
 
 
 def test_unknown_flat_category_is_refused(ws):

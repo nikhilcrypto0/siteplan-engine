@@ -4,8 +4,11 @@ The harness's model decides which tool to call and fills in the arguments; every
 reply is computed here. Two rules carry over from the assistant:
 
 - Nothing is solved until the architect approves the request, and that approval is asked of
-  the person through MCP elicitation, never of the model. A client that cannot ask, a
-  timeout, or any answer other than "accept" stops the call with nothing drawn.
+  the person, never of the model: through MCP elicitation (`--approval elicit`) or on a page
+  served on this machine (`--approval page`, for clients that cannot show a prompt). The
+  channel is fixed at startup and never falls back to the other one, because a failure in
+  one must not be retried in a channel that might answer differently. A client that cannot
+  ask, a timeout, or any answer other than an approval stops the call with nothing drawn.
 - The model only reaches files inside the workspace, and replies carry computed numbers
   and fixed wording, never text copied out of a drawing.
 """
@@ -16,6 +19,7 @@ import argparse
 import json
 import logging
 import uuid
+from functools import partial
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -25,6 +29,7 @@ from mcp.server.fastmcp.exceptions import ToolError
 from mcp.types import ToolAnnotations
 from pydantic import BaseModel, Field, ValidationError
 
+from siteplan.approval import ApprovalDesk
 from siteplan.area_statement import render
 from siteplan.assistant import Assistant, BriefExtraction, compare_options
 from siteplan.checks import check_site
@@ -41,6 +46,7 @@ WRITES_FILES = ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWo
 SURVEY_TYPES = {".pdf", ".dxf"}
 MAX_LISTED = 200
 MAX_BRIEF_CHARS = 2000
+APPROVAL_TIMEOUT_S = 300
 OPTION_KEYS = ("option", "towers", "total_flats", "saleable_sqft", "open_space_share_pct",
                "unit_mix_achieved", "mix_error", "rule_findings")
 
@@ -123,24 +129,27 @@ def _json_kind(path: Path) -> str | None:
     return None
 
 
-def approval_message(project: str, plot: str, request: LayoutRequest, reading: dict) -> str:
+def approval_request(project: str, plot: str, request: LayoutRequest, reading: dict) -> tuple:
+    """What the architect is shown before anything is drawn: a title and one line per value."""
     mix = ", ".join(f"{k} {v * 100:.0f}%" for k, v in sorted(request.unit_mix.items()))
     lines = [
-        f"Generate layout options for {project} ({plot}) with:",
-        f"  floors above the stilt: {request.floors} (height {request.height_m:g} m)",
-        f"  unit mix: {mix}",
-        f"  stilt {request.stilt_height_m:g} m, floor-to-floor {request.floor_height_m:g} m, "
+        f"Plot: {plot}",
+        f"Floors above the stilt: {request.floors} (height {request.height_m:g} m)",
+        f"Unit mix: {mix}",
+        f"Stilt {request.stilt_height_m:g} m, floor-to-floor {request.floor_height_m:g} m, "
         f"common area {request.common_area_pct:g}%",
     ]
-    lines += [f"  default: {a}" for a in reading["assumptions"]]
+    lines += [f"Default: {a}" for a in reading["assumptions"]]
     if reading["flagged"]:
         lines.append(f"CHECK: the brief never states {', '.join(reading['flagged'])}.")
-    lines.append("Nothing is drawn unless you approve.")
-    return "\n".join(lines)
+    return f"Generate layout options for {project}", lines
 
 
-def build_server(workspace: Path, out_dir: Path) -> FastMCP:
+def build_server(workspace: Path, out_dir: Path, approval: str = "elicit",
+                 desk: ApprovalDesk | None = None,
+                 approval_timeout: float = APPROVAL_TIMEOUT_S) -> FastMCP:
     ws = Workspace(workspace, out_dir)
+    desk = desk or (ApprovalDesk() if approval == "page" else None)
     server = FastMCP("siteplan", instructions=INSTRUCTIONS)
 
     @server.tool(annotations=READ_ONLY)
@@ -225,7 +234,8 @@ def build_server(workspace: Path, out_dir: Path) -> FastMCP:
             raise ToolError(str(exc)) from None
 
         plot_text = f"plot {plot.area:,.0f} m², {basis}"
-        refusal = await _refusal(ctx, approval_message(project.name, plot_text, request, reading))
+        title, lines = approval_request(project.name, plot_text, request, reading)
+        refusal = await _refusal(ctx, approval, desk, title, lines, approval_timeout)
         if refusal:
             return {"solved": False, "next": refusal}
 
@@ -261,15 +271,27 @@ def build_server(workspace: Path, out_dir: Path) -> FastMCP:
     return server
 
 
-async def _refusal(ctx: Context, message: str) -> str | None:
-    """Ask the person, not the model. None means approved; anything but an explicit accept
-    comes back as the reason nothing was drawn."""
+async def _refusal(ctx: Context, channel: str, desk: ApprovalDesk | None,
+                   title: str, lines: list[str], timeout: float) -> str | None:
+    """Ask the person, not the model. None means approved; anything else comes back as the
+    reason nothing was drawn. The channel is chosen at startup, never by the model, and a
+    failure in one channel is never retried in the other: that would let a real no through."""
+    if channel == "page":
+        assert desk is not None
+        approved = await anyio.to_thread.run_sync(partial(desk.ask, title, lines, timeout))
+        if approved:
+            return None
+        return ("The architect did not approve on the approval page (or did not answer in "
+                f"{timeout / 60:.0f} minutes), so nothing was drawn. Ask what to change.")
+    message = f"{title}:\n" + "\n".join(f"  {line}" for line in lines) + \
+              "\nNothing is drawn unless you approve."
     try:
         answer = await ctx.elicit(message, Approval)
     except Exception as exc:  # the client cannot ask, or answered outside the form
         log.warning("approval could not be asked: %s", exc)
         return ("This app could not show the architect the approval prompt, so nothing was "
-                "drawn. It needs an MCP client that supports approval prompts (elicitation).")
+                "drawn. It needs an MCP client that supports approval prompts (elicitation), "
+                "or this server started with --approval page.")
     approved = answer.action == "accept" and answer.data.approve is True
     log.info("approval answer: %s%s", answer.action,
              "" if answer.action != "accept" else f" (approve={answer.data.approve})")
@@ -284,13 +306,18 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--workspace", required=True, help="Folder the tools may read from")
     parser.add_argument("--out", default="out/mcp", help="Folder runs are written to")
     parser.add_argument("--log-file", default="out/logs/mcp.log")
+    parser.add_argument(
+        "--approval", choices=("elicit", "page"), default="elicit",
+        help="Where the architect approves: 'elicit' asks through the chat app (needs a client "
+             "that shows MCP approval prompts), 'page' opens a page on this machine.",
+    )
     args = parser.parse_args(argv)
     Path(args.log_file).parent.mkdir(parents=True, exist_ok=True)
     logging.basicConfig(  # stdout carries the protocol, so logs go to a file
         filename=args.log_file, level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
     )
-    build_server(Path(args.workspace), Path(args.out)).run("stdio")
+    build_server(Path(args.workspace), Path(args.out), args.approval).run("stdio")
 
 
 if __name__ == "__main__":
