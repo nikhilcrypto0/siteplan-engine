@@ -1,0 +1,39 @@
+[project]
+name = "siteplan-engine"
+version = "0.1.0"
+description = "Offline survey-to-site-plan tools for Telangana group housing: survey reader, rules checker, area statement, BuildNow-layered DXF."
+requires-python = ">=3.11"
+dependencies = [
+    "ezdxf>=1.4",        # MIT
+    "numpy>=2.0",        # BSD
+    "pdfplumber>=0.11",  # MIT (PyMuPDF is AGPL, so it is deliberately not used)
+    "pydantic>=2.7",     # MIT
+    "shapely>=2.0",      # BSD
+]
+
+[project.scripts]
+siteplan = "siteplan.cli:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "reportlab>=4",  # BSD; builds synthetic survey PDFs for tests
+    "ruff>=0.6",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/siteplan"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

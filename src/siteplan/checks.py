@@ -1,0 +1,335 @@
+"""Check a proposed site against the encoded Telangana rules.
+
+Each finding says what was measured, what the rule requires and which clause says so.
+When an input is missing the finding says so (NEEDS_INPUT) rather than guessing.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from enum import StrEnum
+from itertools import combinations
+
+from shapely.geometry import Polygon
+
+from siteplan import rules
+
+
+class Status(StrEnum):
+    PASS = "PASS"
+    FAIL = "FAIL"
+    NEEDS_INPUT = "NEEDS_INPUT"
+    NOT_CHECKED = "NOT_CHECKED"
+    INFO = "INFO"  # a classification that drives other checks, not a verdict
+
+
+@dataclass(frozen=True)
+class Finding:
+    rule: str
+    status: Status
+    measured: str
+    required: str
+    clause: str
+    note: str = ""
+
+
+@dataclass(frozen=True)
+class Building:
+    name: str
+    height_m: float | None = None
+    stilt_height_m: float | None = None
+    floors: int | None = None
+    floor_height_m: float | None = None
+    footprint: Polygon | None = None
+
+    def resolved_height(self) -> float | None:
+        """Height including the stilt, as rule 2(f) counts it."""
+        if self.height_m is not None:
+            return self.height_m
+        if None in (self.stilt_height_m, self.floors, self.floor_height_m):
+            return None
+        return self.stilt_height_m + self.floors * self.floor_height_m  # type: ignore[operator]
+
+
+@dataclass(frozen=True)
+class Site:
+    gross_area_sqm: float | None = None  # as per documents / survey
+    net_area_sqm: float | None = None  # after road widening and other deductions
+    abutting_road_m: float | None = None  # existing width
+    master_plan_road_m: float | None = None  # proposed width, if the road is to be widened
+    open_space_sqm: float | None = None
+    net_plot: Polygon | None = None
+    open_space_pockets: tuple[Polygon, ...] = ()
+    buildings: tuple[Building, ...] = field(default_factory=tuple)
+
+
+def _m(value: float) -> str:
+    return f"{value:.2f} m"
+
+
+def _pct(value: float) -> str:
+    return f"{value * 100:.2f}%"
+
+
+def check_site(site: Site) -> list[Finding]:
+    findings: list[Finding] = []
+    bands = {}
+    for b in site.buildings:
+        findings.append(_height_finding(b))
+        height = b.resolved_height()
+        if height is not None and height >= rules.HIGH_RISE_THRESHOLD_M:
+            bands[b.name] = rules.band_for_height(height)
+    high_rise = [b for b in site.buildings if b.name in bands and bands[b.name] is not None]
+
+    if high_rise:
+        tallest = max(high_rise, key=lambda b: b.resolved_height() or 0)
+        band = bands[tallest.name]
+        findings.append(_road_finding(site, tallest.name, band))
+        findings.append(_plot_size_finding(site))
+        findings += _setback_findings(site, high_rise, bands)
+        findings += _spacing_findings(high_rise, bands)
+    findings += _open_space_findings(site)
+    findings.append(
+        Finding(
+            "Peripheral green strip",
+            Status.NOT_CHECKED,
+            "not modelled yet",
+            f">= {rules.PERIPHERAL_GREEN_STRIP_M:g} m on all sides, inside the setbacks",
+            rules.PERIPHERAL_GREEN_STRIP_CLAUSE,
+            "Needs the landscape layer from the site-plan DWG.",
+        )
+    )
+    return findings
+
+
+def _height_finding(b: Building) -> Finding:
+    height = b.resolved_height()
+    if height is None:
+        return Finding(
+            f"Height class: {b.name}",
+            Status.NEEDS_INPUT,
+            "unknown",
+            "total height including stilt",
+            rules.HIGH_RISE_CLAUSE,
+            "Give height_m, or stilt height + floors + floor-to-floor height.",
+        )
+    if height < rules.HIGH_RISE_THRESHOLD_M:
+        return Finding(
+            f"Height class: {b.name}",
+            Status.NOT_CHECKED,
+            _m(height),
+            f"high-rise from {rules.HIGH_RISE_THRESHOLD_M:g} m",
+            rules.HIGH_RISE_CLAUSE,
+            "Not high-rise: Table III (plot-size setbacks) applies and is not encoded yet.",
+        )
+    band = rules.band_for_height(height)
+    if band is None:
+        return Finding(
+            f"Height class: {b.name}",
+            Status.NOT_CHECKED,
+            _m(height),
+            "up to 55 m encoded",
+            rules.TABLE_IV_CLAUSE,
+            "Above 55 m: 0.5 m extra setback per 5 m; not encoded yet.",
+        )
+    span = (
+        f"up to {band.up_to_m:g} m"
+        if band.above_m == 0
+        else f"above {band.above_m:g} m, up to {band.up_to_m:g} m"
+    )
+    return Finding(
+        f"Height class: {b.name}",
+        Status.INFO,
+        _m(height),
+        f"high-rise band {span}",
+        rules.TABLE_IV_CLAUSE,
+        f"Needs a {band.min_road_m:g} m road and {band.min_open_space_m:g} m all round.",
+    )
+
+
+def _road_finding(site: Site, tallest: str, band: rules.HeightBand) -> Finding:
+    rule = f"Abutting road width (for {tallest})"
+    required = f">= {band.min_road_m:g} m"
+    if site.master_plan_road_m is not None:
+        ok = site.master_plan_road_m >= band.min_road_m
+        return Finding(
+            rule,
+            Status.PASS if ok else Status.FAIL,
+            f"{_m(site.master_plan_road_m)} (master plan)",
+            required,
+            f"{rules.TABLE_IV_CLAUSE}; {rules.ROAD_WIDENING_CLAUSE}",
+            "Counts only if the road-widening strip is surrendered.",
+        )
+    if site.abutting_road_m is None:
+        return Finding(rule, Status.NEEDS_INPUT, "unknown", required, rules.TABLE_IV_CLAUSE)
+    ok = site.abutting_road_m >= band.min_road_m
+    return Finding(
+        rule,
+        Status.PASS if ok else Status.FAIL,
+        f"{_m(site.abutting_road_m)} (existing)",
+        required,
+        rules.TABLE_IV_CLAUSE,
+        "" if ok else "If the master plan widens this road, re-run with master_plan_road_m.",
+    )
+
+
+def _plot_size_finding(site: Site) -> Finding:
+    area = site.net_area_sqm or site.gross_area_sqm
+    required = f">= {rules.MIN_HIGH_RISE_PLOT_SQM:,.0f} m²"
+    if area is None:
+        return Finding(
+            "Plot size for high-rise",
+            Status.NEEDS_INPUT,
+            "unknown",
+            required,
+            rules.MIN_HIGH_RISE_PLOT_CLAUSE,
+        )
+    ok = area >= rules.MIN_HIGH_RISE_PLOT_SQM
+    return Finding(
+        "Plot size for high-rise",
+        Status.PASS if ok else Status.FAIL,
+        f"{area:,.0f} m²",
+        required,
+        rules.MIN_HIGH_RISE_PLOT_CLAUSE,
+    )
+
+
+def _no_geometry(rule: str, required: str, clause: str, count: int) -> Finding:
+    return Finding(
+        rule,
+        Status.NEEDS_INPUT,
+        f"no footprint geometry ({count} to check)",
+        required,
+        clause,
+        "Needs building footprints and the net plot boundary (DWG).",
+    )
+
+
+def _setback_findings(site, high_rise, bands) -> list[Finding]:
+    if site.net_plot is None or all(b.footprint is None for b in high_rise):
+        need = ", ".join(sorted({f"{bands[b.name].min_open_space_m:g} m" for b in high_rise}))
+        required = f">= {need} to the net plot line (by height)"
+        return [_no_geometry("All-round setbacks", required, rules.TABLE_IV_CLAUSE, len(high_rise))]
+    findings = []
+    for b in high_rise:
+        required = f">= {bands[b.name].min_open_space_m:g} m to the net plot line"
+        if b.footprint is None or site.net_plot is None:
+            findings.append(
+                Finding(
+                    f"All-round setback: {b.name}",
+                    Status.NEEDS_INPUT,
+                    "no footprint geometry",
+                    required,
+                    rules.TABLE_IV_CLAUSE,
+                    "Needs the building footprint and net plot boundary (DWG).",
+                )
+            )
+            continue
+        gap = site.net_plot.exterior.distance(b.footprint)
+        if not site.net_plot.contains(b.footprint):
+            gap = 0.0
+        ok = gap >= bands[b.name].min_open_space_m
+        findings.append(
+            Finding(
+                f"All-round setback: {b.name}",
+                Status.PASS if ok else Status.FAIL,
+                _m(gap),
+                required,
+                rules.TABLE_IV_CLAUSE,
+                "Front setback may also be governed by the Table III building line (not encoded).",
+            )
+        )
+    return findings
+
+
+def _spacing_findings(high_rise, bands) -> list[Finding]:
+    pairs = list(combinations(high_rise, 2))
+    if pairs and all(b.footprint is None for b in high_rise):
+        need = max(bands[b.name].min_open_space_m for b in high_rise)
+        return [
+            _no_geometry(
+                "Gaps between blocks",
+                f">= the taller block's all-round open space (up to {need:g} m here)",
+                rules.BLOCK_SPACING_CLAUSE,
+                len(pairs),
+            )
+        ]
+    findings = []
+    for a, b in pairs:
+        need = max(bands[a.name].min_open_space_m, bands[b.name].min_open_space_m)
+        rule = f"Gap between blocks: {a.name} / {b.name}"
+        if a.footprint is None or b.footprint is None:
+            findings.append(
+                Finding(
+                    rule,
+                    Status.NEEDS_INPUT,
+                    "no footprint geometry",
+                    f">= {need:g} m",
+                    rules.BLOCK_SPACING_CLAUSE,
+                    "Needs both footprints (DWG).",
+                )
+            )
+            continue
+        gap = a.footprint.distance(b.footprint)
+        findings.append(
+            Finding(
+                rule,
+                Status.PASS if gap >= need else Status.FAIL,
+                _m(gap),
+                f">= {need:g} m",
+                rules.BLOCK_SPACING_CLAUSE,
+                "This gap does not count towards the tot-lot.",
+            )
+        )
+    return findings
+
+
+def _narrower_than(shape: Polygon, width_m: float) -> bool:
+    """True if any part of the shape is narrower than width_m.
+
+    Shrinking by half the width and growing back removes every part thinner than the
+    width; if a noticeable share of the area disappears, the shape has a narrow part.
+    """
+    half = width_m / 2 - 1e-6
+    opened = shape.buffer(-half, join_style="mitre").buffer(half, join_style="mitre")
+    return opened.area < shape.area * 0.98
+
+
+def _open_space_findings(site: Site) -> list[Finding]:
+    rule = "Organized open space (tot-lot)"
+    required = f">= {rules.OPEN_SPACE_MIN_FRACTION:.0%} of site area, over and above setbacks"
+    if site.open_space_sqm is None:
+        return [Finding(rule, Status.NEEDS_INPUT, "unknown", required, rules.OPEN_SPACE_CLAUSE)]
+    shares = {
+        name: site.open_space_sqm / area
+        for name, area in (("net", site.net_area_sqm), ("gross", site.gross_area_sqm))
+        if area
+    }
+    if not shares:
+        clause = rules.OPEN_SPACE_CLAUSE
+        return [Finding(rule, Status.NEEDS_INPUT, "no site area", required, clause)]
+    measured = ", ".join(f"{_pct(v)} of {k}" for k, v in shares.items())
+    passing = [v >= rules.OPEN_SPACE_MIN_FRACTION for v in shares.values()]
+    if all(passing):
+        status, note = Status.PASS, ""
+    elif not any(passing):
+        status, note = Status.FAIL, ""
+    else:
+        status = Status.NEEDS_INPUT
+        note = "Passes on one site-area basis only. Confirm whether the rule uses net or gross."
+    findings = [Finding(rule, status, measured, required, rules.OPEN_SPACE_CLAUSE, note)]
+
+    for i, pocket in enumerate(site.open_space_pockets, 1):
+        too_small = pocket.area < rules.OPEN_SPACE_MIN_POCKET_SQM
+        too_narrow = _narrower_than(pocket, rules.OPEN_SPACE_MIN_WIDTH_M)
+        findings.append(
+            Finding(
+                f"Open-space pocket {i}",
+                Status.FAIL if too_small or too_narrow else Status.PASS,
+                f"{pocket.area:,.1f} m²" + (", narrower than 3 m" if too_narrow else ""),
+                f">= {rules.OPEN_SPACE_MIN_POCKET_SQM:g} m² and >= "
+                f"{rules.OPEN_SPACE_MIN_WIDTH_M:g} m wide",
+                rules.OPEN_SPACE_CLAUSE,
+            )
+        )
+    return findings

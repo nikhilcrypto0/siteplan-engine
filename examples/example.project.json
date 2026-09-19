@@ -1,0 +1,33 @@
+{
+  "name": "Example site (made-up numbers, safe to share)",
+  "site": {
+    "gross_area_text": "2 AC 18.84 GTS",
+    "net_area_sqm": 9500,
+    "abutting_road_ft": 40,
+    "master_plan_road_ft": 60,
+    "open_space_sqft": 11000,
+    "net_plot_m": [[0, 0], [100, 0], [100, 95], [0, 95]],
+    "open_space_pockets_m": [[[40, 40], [60, 40], [60, 60], [40, 60]]]
+  },
+  "buildings": [
+    {"name": "Block A", "stilt_height_m": 3.0, "floors": 8, "floor_height_m": 3.0,
+     "footprint_m": [[10, 10], [30, 10], [30, 85], [10, 85]]},
+    {"name": "Block B", "stilt_height_m": 3.0, "floors": 8, "floor_height_m": 3.0,
+     "footprint_m": [[70, 10], [90, 10], [90, 85], [70, 85]]}
+  ],
+  "area_statement": {
+    "site_area_sqyd": 11362,
+    "open_space_sqft": 11000,
+    "groups": [
+      {
+        "name": "BLOCK - A, B",
+        "storeys": "STILT + 8 FLOORS",
+        "common_area_pct": 22,
+        "floors": [
+          {"label": "FIRST", "area_sqft": 30000},
+          {"label": "TYPICAL", "area_sqft": 32000, "count": 7, "includes_balconies": true}
+        ]
+      }
+    ]
+  }
+}
