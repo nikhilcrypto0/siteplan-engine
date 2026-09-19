@@ -157,8 +157,9 @@ class Assistant:
         return self._invoke({"brief": brief})
 
     def resume(self, decision: Any) -> dict[str, Any]:
-        # LangGraph treats a None resume as "no answer yet"; make it a refused answer instead.
-        return self._invoke(Command(resume={} if decision is None else decision))
+        # LangGraph treats an empty resume (None, {}, "") as "no answer yet" and stays paused;
+        # turn it into an answer that the approval schema will refuse.
+        return self._invoke(Command(resume=decision or {"approve": None}))
 
     def _invoke(self, payload: Any) -> dict[str, Any]:
         return self.graph.invoke(payload, {"configurable": {"thread_id": self.thread_id}})

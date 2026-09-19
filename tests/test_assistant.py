@@ -180,9 +180,10 @@ def test_unreachable_model_is_reported_plainly(make):
 
 @pytest.mark.parametrize(
     "decision",
-    [{"approve": "no"}, {"approve": "yes"}, {"approve": 1}, "yes", None,
+    [{"approve": "no"}, {"approve": "yes"}, {"approve": 1}, "yes", None, {}, "",
      {"approve": True, "edits": ["floors", 9]}, {"approve": True, "sneaky": 1}],
-    ids=["str-no", "str-yes", "int", "bare-str", "none", "edits-list", "extra-key"],
+    ids=["str-no", "str-yes", "int", "bare-str", "none", "empty-dict", "empty-str",
+         "edits-list", "extra-key"],
 )
 def test_only_a_real_true_approves_and_bad_answers_stop_cleanly(make, tmp_path, decision):
     assistant = make(ScriptedModel(extraction()))
