@@ -1,6 +1,6 @@
 # siteplan-engine: Agent Instructions
 
-> Last verified: 2026-09-19
+> Last verified: 2026-09-20
 
 An offline "survey to site plan" assistant for a Hyderabad architecture firm (agency client). It reads a surveyor's drawing, checks a proposal against Telangana building rules, prints the firm's area statement, and writes DXF using BuildNow plugin layer names. It is client-facing software: tests, lint and review apply.
 
@@ -15,7 +15,8 @@ An offline "survey to site plan" assistant for a Hyderabad architecture firm (ag
 - Layout options (Stage 2a): `uv run siteplan layout examples/example.project.json --library examples/flat_library.example.json` (add `--survey <file>` when the project has no `net_plot_m`)
 
 - Assistant (Stage 2b): `uv run siteplan assist examples/example.project.json --library examples/flat_library.example.json --config examples/assistant.config.json --brief "Stilt + 8 floors, 70% 2BHK, rest 3BHK"` (needs a local OpenAI-compatible model: Ollama `qwen3.5:9b` on the Mac, vLLM + Qwen3.6-27B on the office server)
-- MCP server for an agent harness: `uv run siteplan-mcp --workspace examples --out out/mcp --approval page` (stdio). Tools: `list_files`, `read_survey_drawing`, `check_rules`, `area_statement`, `propose_layouts`. The Hermes Agent profile that runs it lives outside the repo: `hermes -p siteplan chat` (config in `~/.hermes/profiles/siteplan/config.yaml`).
+- Rule question: `uv run siteplan rules "is a ramp allowed in the setback"` (searches the order, prints the passage and page) or `uv run siteplan rules --height 35` (the Table IV row, no search). The document lives in gitignored `fixtures/rules/`.
+- MCP server for an agent harness: `uv run siteplan-mcp --workspace examples --out out/mcp --approval page --rules fixtures/rules/go168-2012.pdf` (stdio). Tools: `list_files`, `read_survey_drawing`, `check_rules`, `area_statement`, `propose_layouts`. The Hermes Agent profile that runs it lives outside the repo: `hermes -p siteplan chat` (config in `~/.hermes/profiles/siteplan/config.yaml`).
 
 ## Rules
 
@@ -32,6 +33,7 @@ An offline "survey to site plan" assistant for a Hyderabad architecture firm (ag
 - **The MCP SDK stays on 1.x** (`mcp<2`) because Hermes 0.21's client is mcp 1.26; move to 2.x only after checking elicitation against the Hermes version in use.
 - In the harness path the model calls are Hermes's, so the per-run limit is `agent.max_turns` in the profile; there is no per-day token cap there yet.
 - **Amenities take their land before the towers** (`amenities.py`): the club house is reserved inside the setback envelope and subtracted from it (so it is never counted as open space), the driveway ring runs in the setback band outside the envelope. A club house that does not fit raises rather than being silently dropped. Rules added from the primary G.O. text: driveway >= 4.5 m (rule 13(viii)), amenities >= 5% of site over 5 acres (rule 9(o), whose applicability to group housing the firm must confirm, so a shortfall is NEEDS_INPUT not FAIL), parking NOT_CHECKED pending the Table V row for the authority.
+- **A rule question is answered from the order, never from the model's memory** (`rulebook.py`, tools `rules_for_height` and `search_rules`). Heights come from the encoded Table IV; everything else comes back as the passage, its page, and a citation built from the section heading and clause marker in the document. A live run showed why the citation matters: the model quoted page 19 correctly and then called it "rule 7(a)(vii)" when it is rule 13(vii). Ranking is BM25 over clause-sized chunks plus a bonus for words the order splits ("drive way" for "driveway"). With no `--rules` document the search refuses rather than letting the model improvise.
 - **A missing input is reported, not guessed.** Checks return `NEEDS_INPUT` rather than assuming.
 - **No AGPL dependencies.** PyMuPDF is AGPL, so PDFs are read with pdfplumber (MIT). Check the licence of anything new before adding it.
 - **Every layout option is re-checked by the rule checker** before it is shown, and carries the flat library's note plus the v0 caveat (no club house, amenities, ramps or driveway connectivity yet). The example flat library is illustrative, not the firm's.
