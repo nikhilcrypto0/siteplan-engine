@@ -124,3 +124,15 @@ def test_a_long_building_needs_more_setback_than_the_table_alone():
     assert finding.status is Status.FAIL                            # 10 m is no longer enough
     assert "13.00 m" in finding.required and "80 m long" in finding.required
     assert finding.clause.startswith("G.O.Ms.No.50")
+
+
+def test_the_green_strip_is_only_asked_for_where_the_setback_reaches_9_m():
+    """G.O.Ms.No.7 of 2016 limited rule 7(viii) to setbacks of 9 m and above."""
+    shallow = Site(net_area_sqm=10000, abutting_road_m=12, net_plot=box(0, 0, 100, 100),
+                   buildings=(_tower("A", 10, 10, 30, 40, floors=6),))   # 21 m tall -> 7 m
+    deep = Site(net_area_sqm=10000, abutting_road_m=18, net_plot=box(0, 0, 100, 100),
+                buildings=(_tower("A", 10, 10, 30, 50),))                # 27 m tall -> 9 m
+    shallow_finding = _by_rule(check_site(shallow))["Peripheral green strip"]
+    assert shallow_finding.status is Status.INFO
+    assert "9 m" in shallow_finding.note
+    assert _by_rule(check_site(deep))["Peripheral green strip"].status is Status.NOT_CHECKED

@@ -78,8 +78,23 @@ OPEN_SPACE_MIN_WIDTH_M = 3.0
 OPEN_SPACE_MIN_POCKET_SQM = 50.0
 OPEN_SPACE_CLAUSE = "G.O.168 rule 7(a)(vii)"
 
+# Rule 7(viii) as substituted by G.O.Ms.No.7 of 05-01-2016, Amendment-8: the strip is required
+# "where the setback is 9m and above", which the 2012 text did not qualify.
 PERIPHERAL_GREEN_STRIP_M = 2.0
-PERIPHERAL_GREEN_STRIP_CLAUSE = "G.O.168 rule 7(a)(viii)"
+PERIPHERAL_GREEN_STRIP_FROM_SETBACK_M = 9.0
+PERIPHERAL_GREEN_STRIP_CLAUSE = (
+    "G.O.168 rule 7(a)(viii) as substituted by G.O.Ms.No.7 of 2016 (setbacks of 9 m and above)"
+)
+
+# Rule 7(xvi), added by the same order: "Where parking floors are provided above ground floor,
+# the height of the parking floors shall be excluded while reckoning the height of the building
+# for the purpose of deciding the setbacks as per the Table IV." A stilt sits at ground level,
+# so this code counts it in the height, which is the stricter reading. Whether the firm's
+# authority treats a stilt the same way is a question for them, not for us to assume.
+PARKING_FLOOR_HEIGHT_CLAUSE = (
+    "G.O.168 rule 7(xvi), added by G.O.Ms.No.7 of 2016 (parking floors above the ground floor "
+    "are left out of the height that decides the Table IV setback)"
+)
 
 BLOCK_SPACING_CLAUSE = "G.O.168 rule 7(a)(xii) (same as Table IV column 4)"
 ROAD_WIDENING_CLAUSE = "G.O.168 rule 16 (surrender free of cost; TDR, extra floor or setbacks)"

@@ -101,20 +101,31 @@ def check_site(site: Site) -> list[Finding]:
         findings += _setback_findings(site, encoded, bands)
         findings += _spacing_findings(encoded, bands)
     findings += _open_space_findings(site)
-    findings.append(
-        Finding(
-            "Peripheral green strip",
-            Status.NOT_CHECKED,
-            "not modelled yet",
-            f">= {rules.PERIPHERAL_GREEN_STRIP_M:g} m on all sides, inside the setbacks",
-            rules.PERIPHERAL_GREEN_STRIP_CLAUSE,
-            "Needs the landscape layer from the site-plan DWG.",
-        )
-    )
+    findings.append(_green_strip_finding(site, encoded, bands))
     findings.append(_driveway_finding(site))
     findings.append(_amenity_finding(site))
     findings.append(_parking_finding(site))
     return findings
+
+
+def _green_strip_finding(site: Site, high_rise, bands) -> Finding:
+    """The 2 m planting strip, which since 2016 is asked for only where the setback is 9 m+."""
+    from_m = rules.PERIPHERAL_GREEN_STRIP_FROM_SETBACK_M
+    required = (f">= {rules.PERIPHERAL_GREEN_STRIP_M:g} m on sides with a setback of "
+                f"{from_m:g} m or more")
+    setbacks = [_needed_setback(b, bands[b.name]) for b in high_rise] if high_rise else []
+    if setbacks and max(setbacks) < from_m:
+        return Finding(
+            "Peripheral green strip", Status.INFO,
+            f"deepest setback here is {max(setbacks):.2f} m", required,
+            rules.PERIPHERAL_GREEN_STRIP_CLAUSE,
+            f"The strip is required only where the setback reaches {from_m:g} m.",
+        )
+    return Finding(
+        "Peripheral green strip", Status.NOT_CHECKED, "not modelled yet", required,
+        rules.PERIPHERAL_GREEN_STRIP_CLAUSE,
+        "Needs the landscape layer from the site-plan DWG.",
+    )
 
 
 def _driveway_finding(site: Site) -> Finding:
