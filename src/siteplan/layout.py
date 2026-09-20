@@ -28,6 +28,7 @@ from siteplan.area_statement import AreaStatement, FloorLine, TowerGroup
 from siteplan.checks import Building, Finding, Site, check_site
 from siteplan.geometry import angle_gap, opening, straight_runs
 from siteplan.library import FlatLibrary, FlatType
+from siteplan.parking import bay_area_sqm, free_for_parking, gates, surface_bays
 from siteplan.units import sqm_to_sqft, sqm_to_sqyd
 
 EPS_M = 0.01  # added to every minimum so floating-point noise can never break a rule
@@ -105,6 +106,8 @@ class LayoutOption:
     club_house: Polygon | None = None  # footprint; it may have more than one floor
     club_house_floors: int = 1
     driveway: Polygon | None = None
+    parking_bays: tuple[Polygon, ...] = ()
+    gates: tuple[tuple[str, Polygon], ...] = ()
 
     @property
     def flats_per_floor(self) -> dict[str, int]:
@@ -175,6 +178,7 @@ class LayoutOption:
             "club_house_sqm": round(self.club_house_sqm, 1),
             "club_house_footprint_sqm": round(self.club_house.area, 1) if self.club_house else 0,
             "driveway_sqm": round(self.driveway.area, 1) if self.driveway else 0,
+            "surface_parking_bays": len(self.parking_bays),
             "rule_findings": {f.rule: f.status.value for f in self.findings},
         }
 
@@ -333,6 +337,10 @@ def _one_layout(plot, envelope, angle, offset, library, request, gap,
         Tower(f"T{i}", t.footprint, t.flats_per_side, t.flat_outlines, t.cores)
         for i, t in enumerate(towers, 1)
     )
+    # Parking and gates come last: they use what the buildings and the tot-lot left.
+    free = free_for_parking(envelope, named, club, pockets)
+    bays = surface_bays(free, angle)
+    frontage = max(straight_runs(plot), key=lambda r: r.length).line
     return LayoutOption(
         orientation_deg=angle,
         towers=named,
@@ -343,6 +351,8 @@ def _one_layout(plot, envelope, angle, offset, library, request, gap,
         club_house=club,
         club_house_floors=request.club_house_floors,
         driveway=drive,
+        parking_bays=tuple(bays),
+        gates=tuple(gates(plot, frontage, request.driveway_width_m + gap)),
     )
 
 
@@ -490,6 +500,7 @@ def _with_findings(option, plot, request, gross, road, master_road, authority=No
         club_house_built_up_sqm=option.club_house_sqm,
         driveway=option.driveway,
         built_up_sqm=option.built_up_sqm,
+        surface_parking_sqm=bay_area_sqm(len(option.parking_bays)),
         units=option.total_flats,
         authority=authority,
     )

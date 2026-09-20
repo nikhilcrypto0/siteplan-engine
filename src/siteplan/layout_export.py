@@ -17,6 +17,8 @@ LAYERS = {
     "Dwelling Unit": 3,
     "Organized Open Space": 94,
     "Driveway": 253,
+    "Parking": 51,
+    "SOLVER-GATES": 1,
     "SOLVER-CORES": 8,
     "SOLVER-LABELS": 7,
 }
@@ -52,6 +54,14 @@ def write_layout_dxf(option: LayoutOption, plot: Polygon, path: str | Path) -> P
         msp.add_text(
             "CLUB HOUSE", height=3.0, dxfattribs={"layer": "SOLVER-LABELS"}
         ).set_placement((c.x, c.y))
+    for bay in option.parking_bays:
+        add(bay, "Parking")
+    for name, gate in option.gates:
+        add(gate, "SOLVER-GATES")
+        c = gate.centroid
+        msp.add_text(name, height=2.5, dxfattribs={"layer": "SOLVER-LABELS"}).set_placement(
+            (c.x, c.y)
+        )
     for pocket in option.open_space:
         add(pocket, "Organized Open Space")
     for tower in option.towers:
@@ -106,6 +116,17 @@ def write_layout_svg(option: LayoutOption, plot: Polygon, path: str | Path, titl
         lines.append(
             f'<text x="{(c.x - minx + pad) * scale:.1f}" y="{(maxy - c.y + pad) * scale + 70:.1f}" '
             f'font-size="11" font-weight="700" text-anchor="middle" fill="#3a5a8c">CLUB</text>'
+        )
+    for bay in option.parking_bays:
+        lines.append(
+            f'<polygon points="{pts(bay)}" fill="#f0ece0" stroke="#9a9384" stroke-width="0.5"/>'
+        )
+    for name, gate in option.gates:
+        c = gate.centroid
+        lines.append(f'<polygon points="{pts(gate)}" fill="#f6d6cc" stroke="#bd3b27"/>')
+        lines.append(
+            f'<text x="{(c.x - minx + pad) * scale:.1f}" y="{(maxy - c.y + pad) * scale + 70:.1f}" '
+            f'font-size="10" font-weight="700" text-anchor="middle" fill="#bd3b27">{name}</text>'
         )
     for pocket in option.open_space:
         lines.append(f'<polygon points="{pts(pocket)}" fill="#bfdcaa" stroke="#47762c"/>')

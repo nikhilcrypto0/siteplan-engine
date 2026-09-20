@@ -109,6 +109,11 @@ def write_sheet_dxf(option: LayoutOption, plot: Polygon, request: LayoutRequest,
     poly(plot, "Plot")
     for part in _parts(option.driveway):
         poly(part, "Driveway")
+    for bay in option.parking_bays:
+        poly(bay, "Parking")
+    for name, gate in option.gates:
+        poly(gate, "SOLVER-GATES")
+        label(name, (gate.centroid.x, gate.centroid.y), text_h * 0.9)
     for pocket in option.open_space:
         poly(pocket, "Organized Open Space")
         label("TOT-LOT", (pocket.centroid.x, pocket.centroid.y), text_h * 0.8)

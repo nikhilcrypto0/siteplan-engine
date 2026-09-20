@@ -21,8 +21,10 @@ from siteplan.sheet import SheetInfo, write_sheet_dxf
 from siteplan.survey import Survey
 
 LAYOUT_CAVEAT = (
-    "Layouts are first drafts for an architect: v0 ignores the club house, amenities, "
-    "parking ramps and driveway connections, and uses whatever flat library it is given."
+    "Layouts are first drafts for an architect. They now include the amenities block, the "
+    "drive, surface parking bays and the gates, but the entry and exit assume the longest "
+    "boundary faces the road, and cellar or podium parking, ramps and landscaping are not "
+    "modelled. They use whatever flat library they are given."
 )
 
 

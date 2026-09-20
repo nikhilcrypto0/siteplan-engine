@@ -66,6 +66,7 @@ class Site:
     club_house_built_up_sqm: float | None = None  # all its floors
     driveway: Polygon | None = None
     built_up_sqm: float | None = None  # all floors of all blocks
+    surface_parking_sqm: float = 0.0
     units: int | None = None
     authority: str | None = None  # GHMC, HMDA, DTCP...; Table V differs by authority
 
@@ -169,19 +170,21 @@ def _parking_finding(site: Site) -> Finding:
                        rules.PARKING_CLAUSE)
     need = percent / 100 * site.built_up_sqm
     stilt = sum(b.footprint.area for b in site.buildings if b.footprint is not None)
-    note = "Counts the stilt floor only; cellars and surface parking are not modelled."
+    provided = stilt + site.surface_parking_sqm
+    measured = f"stilt {stilt:,.0f} m² + surface {site.surface_parking_sqm:,.0f} m²"
+    note = "Cellars and podium parking are not modelled."
     if site.authority is None:
         note += " Authority not given, so the 20% column is used; inside GHMC it is 30%."
-    if stilt + 0.5 >= need:
-        return Finding("Parking", Status.PASS, f"stilt {stilt:,.0f} m²", f"{required} = "
-                       f"{need:,.0f} m²", rules.PARKING_CLAUSE, note)
+    if provided + 0.5 >= need:
+        return Finding("Parking", Status.PASS, measured, f"{required} = {need:,.0f} m²",
+                       rules.PARKING_CLAUSE, note)
     return Finding(
         "Parking",
         Status.NEEDS_INPUT,
-        f"stilt {stilt:,.0f} m², short by {need - stilt:,.0f} m²",
+        f"{measured}, short by {need - provided:,.0f} m²",
         f"{required} = {need:,.0f} m²",
         rules.PARKING_CLAUSE,
-        f"{note} Say where the rest goes (cellar, podium or surface) to settle this.",
+        f"{note} Say where the rest goes (cellar or podium) to settle this.",
     )
 
 
