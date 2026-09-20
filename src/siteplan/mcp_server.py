@@ -31,6 +31,7 @@ from mcp.server.fastmcp.exceptions import ToolError
 from mcp.types import ToolAnnotations
 from pydantic import BaseModel, Field, ValidationError
 
+from siteplan import rules
 from siteplan.approval import ApprovalDesk
 from siteplan.area_statement import render
 from siteplan.assistant import Assistant, BriefExtraction, compare_options
@@ -40,6 +41,7 @@ from siteplan.layout import LayoutRequest
 from siteplan.library import FlatLibrary
 from siteplan.project import Project
 from siteplan.result_page import write_result_page
+from siteplan.rulebook import RuleBook
 from siteplan.runner import LAYOUT_CAVEAT, load_plot, read_survey, run_layout
 
 log = logging.getLogger("siteplan.mcp")
@@ -58,7 +60,10 @@ INSTRUCTIONS = (
     "computed; quote them as given and never estimate areas, setbacks or flat counts yourself. "
     "Call list_files first to find project, survey and flat-library files. propose_layouts asks "
     "the architect to approve before it draws anything; if it reports that the architect did "
-    "not approve, do not call it again unless the architect asks."
+    "not approve, do not call it again unless the architect asks. "
+    "For any question about the building rules, call rules_for_height or search_rules and "
+    "answer from what they return, quoting the clause and page: never answer a rule question "
+    "from memory, and say so plainly when the tools find nothing."
 )
 
 
@@ -151,7 +156,8 @@ def approval_request(project: str, plot: str, request: LayoutRequest, reading: d
 def build_server(workspace: Path, out_dir: Path, approval: str = "elicit",
                  desk: ApprovalDesk | None = None,
                  approval_timeout: float = APPROVAL_TIMEOUT_S,
-                 open_result: Callable[[str], object] | None = webbrowser.open) -> FastMCP:
+                 open_result: Callable[[str], object] | None = webbrowser.open,
+                 book: RuleBook | None = None) -> FastMCP:
     ws = Workspace(workspace, out_dir)
     desk = desk or (ApprovalDesk() if approval == "page" else None)
     server = FastMCP("siteplan", instructions=INSTRUCTIONS)
@@ -184,6 +190,29 @@ def build_server(workspace: Path, out_dir: Path, approval: str = "elicit",
         if statement is None:
             raise ToolError("The project file has no area_statement section.")
         return render(statement)
+
+    @server.tool(annotations=READ_ONLY)
+    def rules_for_height(height_m: float) -> dict[str, Any]:
+        """What the Telangana rules require of a building of this height: the minimum abutting
+        road, the all-round setback and the gap between blocks, each with its clause. Exact
+        values from the encoded Table IV, not a search."""
+        if height_m <= 0:
+            raise ToolError("Give the building height in metres, stilt included.")
+        return rules.height_rules(height_m)
+
+    @server.tool(annotations=READ_ONLY)
+    def search_rules(question: str, limit: int = 3) -> dict[str, Any]:
+        """Search the building rules document itself and return the passages that answer the
+        question, each with its page number, so the answer can be quoted rather than recalled."""
+        if book is None:
+            raise ToolError("No rules document is loaded; start the server with --rules <pdf>.")
+        hits = book.search(question, limit=max(1, min(limit, 8)))
+        return {
+            "source": book.source,
+            "passages": [hit.as_dict() for hit in hits],
+            "next": ("Quote the passage and its page. If this is empty, say the document does "
+                     "not answer it rather than answering from memory."),
+        }
 
     @server.tool(annotations=WRITES_FILES)
     async def propose_layouts(
@@ -322,6 +351,8 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--workspace", required=True, help="Folder the tools may read from")
     parser.add_argument("--out", default="out/mcp", help="Folder runs are written to")
     parser.add_argument("--log-file", default="out/logs/mcp.log")
+    parser.add_argument("--rules",
+                        help="The building rules PDF that rule questions are answered from")
     parser.add_argument(
         "--approval", choices=("elicit", "page"), default="elicit",
         help="Where the architect approves: 'elicit' asks through the chat app (needs a client "
@@ -335,8 +366,10 @@ def main(argv: list[str] | None = None) -> None:
         filename=args.log_file, level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
     )
+    book = RuleBook.load(args.rules) if args.rules else None
     build_server(Path(args.workspace), Path(args.out), args.approval,
-                 open_result=None if args.no_open_result else webbrowser.open).run("stdio")
+                 open_result=None if args.no_open_result else webbrowser.open,
+                 book=book).run("stdio")
 
 
 if __name__ == "__main__":

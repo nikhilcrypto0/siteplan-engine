@@ -10,6 +10,7 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
+from siteplan import rules
 from siteplan.area_statement import render
 from siteplan.checks import Status, check_site
 from siteplan.dxf_export import write_survey_dxf
@@ -93,6 +94,22 @@ def _cmd_layout(args: argparse.Namespace) -> int:
     if library.note:
         print(f"Flat library: {library.note}")
     print(LAYOUT_CAVEAT)
+    return 0
+
+
+def _cmd_rules(args: argparse.Namespace) -> int:
+    if args.height:
+        for key, value in rules.height_rules(args.height).items():
+            print(f"{key}: {value}")
+        return 0
+    from siteplan.rulebook import RuleBook  # only a document search pays for pdfplumber
+
+    hits = RuleBook.load(args.document).search(args.question, limit=args.limit)
+    if not hits:
+        print("The document does not answer that. Try other words, or ask the firm.")
+        return 1
+    for hit in hits:
+        print(f"\n--- page {hit.page} ---\n{hit.text}")
     return 0
 
 
@@ -190,6 +207,13 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--survey", help="Survey PDF/DXF, used when the project has no net_plot_m")
     p.add_argument("--out", default="out/layout")
     p.set_defaults(run=_cmd_layout)
+
+    p = sub.add_parser("rules", help="Answer a rule question from the order, with its page.")
+    p.add_argument("question", nargs="?", default="", help="The question, in plain English")
+    p.add_argument("--height", type=float, help="Skip the search: the Table IV row for a height")
+    p.add_argument("--document", default="fixtures/rules/go168-2012.pdf")
+    p.add_argument("--limit", type=int, default=3)
+    p.set_defaults(run=_cmd_rules)
 
     p = sub.add_parser("assist", help="Plain-English brief -> approved request -> layouts.")
     p.add_argument("project")

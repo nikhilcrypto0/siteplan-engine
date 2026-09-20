@@ -30,7 +30,8 @@ LAYOUT_ARGS = {
     "floors_above_stilt": 8,
     "unit_mix_percent": {"2BHK": 70, "3BHK": 30},
 }
-READ_TOOLS = {"list_files", "read_survey_drawing", "check_rules", "area_statement"}
+READ_TOOLS = {"list_files", "read_survey_drawing", "check_rules", "area_statement",
+              "rules_for_height", "search_rules"}
 
 
 class Architect:
@@ -167,6 +168,17 @@ def test_the_project_settings_apply_and_the_brief_still_wins(ws):
     record = json.loads((Path(reply["folder"]) / "run.json").read_text())
     assert record["approved_request"]["max_tower_length_m"] == 40   # from the project file
     assert record["approved_request"]["floors"] == 8                # from the brief
+
+
+def test_a_height_question_is_answered_from_the_table_with_its_clause(ws):
+    answer = ok(call(ws, "rules_for_height", {"height_m": 35.0}))
+    assert answer["min_abutting_road_m"] == 24.0 and answer["min_all_round_setback_m"] == 11.0
+    assert answer["clause"].startswith("G.O.168")
+
+
+def test_rule_search_refuses_rather_than_improvising_when_no_document_is_loaded(ws):
+    result = call(ws, "search_rules", {"question": "how wide must the driveway be"})
+    assert result.isError and "--rules" in result.content[0].text
 
 
 def test_missing_values_come_back_without_asking(ws):

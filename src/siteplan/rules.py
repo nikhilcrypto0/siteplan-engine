@@ -9,6 +9,7 @@ news reports, so the conservative base values are the defaults.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 
 RULES_SOURCE = "Telangana Building Rules 2012, G.O.Ms.No.168 (HMDA consolidated text)"
@@ -88,6 +89,51 @@ def parking_percent(authority: str | None) -> float:
     return PARKING_PERCENT_GHMC if inside_ghmc else PARKING_PERCENT_ELSEWHERE
 
 
+TALLEST_BAND_M = 55.0
+ABOVE_TABLE_STEP_M = 5.0
+ABOVE_TABLE_EXTRA_M = 0.5
+ABOVE_TABLE_CLAUSE = (
+    "G.O.168 Table IV note (after 55 m, 0.5 m additional setback for every 5 m of height)"
+)
+
+
 def band_for_height(height_m: float) -> HeightBand | None:
     """The Table IV row for a building height, or None above 55 m (not encoded yet)."""
     return next((band for band in TABLE_IV if band.contains(height_m)), None)
+
+
+def height_rules(height_m: float) -> dict:
+    """What the rules require of a building of this height, with the clause for each value."""
+    if height_m < HIGH_RISE_THRESHOLD_M:
+        return {
+            "height_m": height_m,
+            "class": "not high-rise",
+            "answer": f"Below {HIGH_RISE_THRESHOLD_M:g} m the Table III setbacks of rule 5 apply, "
+                      "and those are not encoded here yet.",
+            "clause": HIGH_RISE_CLAUSE,
+        }
+    band = band_for_height(height_m)
+    if band is not None:
+        return {
+            "height_m": height_m,
+            "class": "high-rise",
+            "band": f"{band.above_m:g} to {band.up_to_m:g} m",
+            "min_abutting_road_m": band.min_road_m,
+            "min_all_round_setback_m": band.min_open_space_m,
+            "min_gap_between_blocks_m": band.min_open_space_m,
+            "clause": TABLE_IV_CLAUSE,
+            "also": [BLOCK_SPACING_CLAUSE, OPEN_SPACE_CLAUSE, PERIPHERAL_GREEN_STRIP_CLAUSE],
+        }
+    steps = math.ceil((height_m - TALLEST_BAND_M) / ABOVE_TABLE_STEP_M)
+    tallest = TABLE_IV[-1]
+    return {
+        "height_m": height_m,
+        "class": "high-rise above the last Table IV row",
+        "min_abutting_road_m": tallest.min_road_m,
+        "min_all_round_setback_m": tallest.min_open_space_m + steps * ABOVE_TABLE_EXTRA_M,
+        "clause": ABOVE_TABLE_CLAUSE,
+        "note": f"The extra setback is worked out from the note under Table IV: "
+                f"{tallest.min_open_space_m:g} m at {TALLEST_BAND_M:g} m plus "
+                f"{ABOVE_TABLE_EXTRA_M:g} m for each {ABOVE_TABLE_STEP_M:g} m above it. The road "
+                f"width is the last row's; the note does not widen it.",
+    }
