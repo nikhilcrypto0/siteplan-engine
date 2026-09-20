@@ -9,6 +9,7 @@ An offline "survey to site plan" assistant for a Hyderabad architecture firm (ag
 - Install: `uv sync`
 - Tests: `uv run pytest -q` (client-drawing tests skip when `fixtures/` is empty)
 - Lint: `uv run ruff check src tests`
+- Start a project: `uv run siteplan new` (asks the questions, writes `<name>.project.json`; the only entry point a customer should need)
 - Read a survey: `uv run siteplan survey <survey.pdf|survey.dxf> --out out/`
 - Rule check: `uv run siteplan check examples/example.project.json` (exit 1 if any rule FAILs)
 - Area statement: `uv run siteplan area-statement examples/example.project.json`

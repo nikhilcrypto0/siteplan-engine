@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import re
 import sys
 from pathlib import Path
 
@@ -19,6 +20,7 @@ from siteplan.llm import AssistantConfig
 from siteplan.project import Project
 from siteplan.runner import LAYOUT_CAVEAT, load_plot, read_survey, run_layout
 from siteplan.site_amenities import AmenityLibrary
+from siteplan.wizard import build_project, collect
 
 
 def _cmd_survey(args: argparse.Namespace) -> int:
@@ -100,6 +102,28 @@ def _cmd_layout(args: argparse.Namespace) -> int:
         print(f"Flat library: {library.note}")
     print(LAYOUT_CAVEAT)
     return 0
+
+
+def _cmd_new(args: argparse.Namespace) -> int:
+    """Ask a few questions and write the project file the other commands read."""
+    print("A few questions about the site. Press enter to take the value in brackets.\n")
+    project = build_project(collect(input))
+    out = Path(args.out or f"{_slug(project['name'])}.project.json")
+    if out.exists() and (input(f"\n{out} exists. Overwrite? [y/N]: ").strip().lower() != "y"):
+        print("Left it alone.")
+        return 1
+    Project.model_validate(project)  # refuse to write a file the tool cannot read back
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(project, indent=2) + "\n")
+    print(f"\nWrote {out}")
+    print("\nNext, to draw layouts:")
+    print(f"  uv run siteplan layout {out} --library <flat library>.json \\")
+    print("      --survey <survey>.pdf --amenities examples/amenities.example.json")
+    return 0
+
+
+def _slug(name: str) -> str:
+    return "-".join(re.findall(r"[a-z0-9]+", name.lower())) or "project"
 
 
 def _cmd_rules(args: argparse.Namespace) -> int:
@@ -213,6 +237,10 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--amenities", help="Amenity library JSON: pool, courts, play area, cabin")
     p.add_argument("--out", default="out/layout")
     p.set_defaults(run=_cmd_layout)
+
+    p = sub.add_parser("new", help="Answer a few questions; write the project file.")
+    p.add_argument("--out", help="Where to write it (default: from the project name)")
+    p.set_defaults(run=_cmd_new)
 
     p = sub.add_parser("rules", help="Answer a rule question from the order, with its page.")
     p.add_argument("question", nargs="?", default="", help="The question, in plain English")
