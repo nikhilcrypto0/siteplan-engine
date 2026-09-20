@@ -227,8 +227,11 @@ def build_server(workspace: Path, out_dir: Path, approval: str = "elicit",
         if reading["missing"]:
             return {"solved": False, "missing": reading["missing"],
                     "next": "Ask the architect for these values. Do not guess them."}
+        # The project's own layout section carries site-level settings (tower length cap,
+        # amenities); the brief decides the rest.
+        settings = project.layout.model_dump(exclude_unset=True) if project.layout else {}
         try:
-            request = LayoutRequest.model_validate(reading["request"])
+            request = LayoutRequest.model_validate(settings | reading["request"])
         except ValidationError as exc:
             raise ToolError(f"The request is invalid ({_fields(exc)}).") from None
         survey = ws.file(survey_file, SURVEY_TYPES) if survey_file else None

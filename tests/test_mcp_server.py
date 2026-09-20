@@ -159,6 +159,16 @@ def test_the_drawings_open_by_themselves_when_the_run_finishes(ws):
     assert "No rule failures" in html and "placeholder" not in html.lower()
 
 
+def test_the_project_settings_apply_and_the_brief_still_wins(ws):
+    project = json.loads((ws / "example.project.json").read_text())
+    project["layout"] = {"floors": 5, "unit_mix": {"2BHK": 1.0}, "max_tower_length_m": 40}
+    (ws / "example.project.json").write_text(json.dumps(project))
+    reply = ok(call(ws, "propose_layouts", LAYOUT_ARGS, Architect()))
+    record = json.loads((Path(reply["folder"]) / "run.json").read_text())
+    assert record["approved_request"]["max_tower_length_m"] == 40   # from the project file
+    assert record["approved_request"]["floors"] == 8                # from the brief
+
+
 def test_missing_values_come_back_without_asking(ws):
     architect = Architect()
     args = LAYOUT_ARGS | {"unit_mix_percent": None}
