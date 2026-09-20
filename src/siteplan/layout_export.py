@@ -18,6 +18,7 @@ LAYERS = {
     "Organized Open Space": 94,
     "Driveway": 253,
     "Parking": 51,
+    "SITE-AMENITIES": 140,
     "SOLVER-GATES": 1,
     "SOLVER-CORES": 8,
     "SOLVER-LABELS": 7,
@@ -62,6 +63,11 @@ def write_layout_dxf(option: LayoutOption, plot: Polygon, path: str | Path) -> P
         msp.add_text(name, height=2.5, dxfattribs={"layer": "SOLVER-LABELS"}).set_placement(
             (c.x, c.y)
         )
+    for amenity in option.amenities:
+        add(amenity.shape, "SITE-AMENITIES")
+        c = amenity.shape.centroid
+        msp.add_text(amenity.name, height=2.0, dxfattribs={"layer": "SOLVER-LABELS"}
+                     ).set_placement((c.x, c.y))
     for pocket in option.open_space:
         add(pocket, "Organized Open Space")
     for tower in option.towers:
@@ -127,6 +133,13 @@ def write_layout_svg(option: LayoutOption, plot: Polygon, path: str | Path, titl
         lines.append(
             f'<text x="{(c.x - minx + pad) * scale:.1f}" y="{(maxy - c.y + pad) * scale + 70:.1f}" '
             f'font-size="10" font-weight="700" text-anchor="middle" fill="#bd3b27">{name}</text>'
+        )
+    for amenity in option.amenities:
+        c = amenity.shape.centroid
+        lines.append(f'<polygon points="{pts(amenity.shape)}" fill="#cde7ef" stroke="#3b7f96"/>')
+        lines.append(
+            f'<text x="{(c.x - minx + pad) * scale:.1f}" y="{(maxy - c.y + pad) * scale + 70:.1f}" '
+            f'font-size="9" text-anchor="middle" fill="#2b5d6e">{escape(amenity.name)}</text>'
         )
     for pocket in option.open_space:
         lines.append(f'<polygon points="{pts(pocket)}" fill="#bfdcaa" stroke="#47762c"/>')

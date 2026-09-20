@@ -1,0 +1,55 @@
+{
+  "note": "EXAMPLE amenity sizes, chosen from ordinary court and pool dimensions and from the labels on the Suchitra master plan. Every firm has its own list: replace this file per project or per client.",
+  "items": [
+    {
+      "name": "SWIMMING POOL",
+      "width_m": 25.0,
+      "depth_m": 12.5,
+      "near": "club"
+    },
+    {
+      "name": "KIDS POOL",
+      "width_m": 8.0,
+      "depth_m": 5.0,
+      "near": "club"
+    },
+    {
+      "name": "BADMINTON COURT",
+      "width_m": 13.4,
+      "depth_m": 6.1,
+      "near": "club"
+    },
+    {
+      "name": "CRICKET PRACTICE NET",
+      "width_m": 25.0,
+      "depth_m": 4.0,
+      "near": "edge"
+    },
+    {
+      "name": "CHILDRENS PLAY",
+      "width_m": 12.0,
+      "depth_m": 10.0,
+      "near": "open space",
+      "counts_as_open_space": true
+    },
+    {
+      "name": "FITNESS DECK",
+      "width_m": 9.0,
+      "depth_m": 6.0,
+      "near": "club"
+    },
+    {
+      "name": "SENIORS SEATING",
+      "width_m": 8.0,
+      "depth_m": 6.0,
+      "near": "open space",
+      "counts_as_open_space": true
+    },
+    {
+      "name": "SECURITY CABIN",
+      "width_m": 3.5,
+      "depth_m": 3.0,
+      "near": "gate"
+    }
+  ]
+}

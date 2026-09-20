@@ -29,6 +29,15 @@ from siteplan.checks import Building, Finding, Site, check_site
 from siteplan.geometry import angle_gap, opening, straight_runs
 from siteplan.library import FlatLibrary, FlatType
 from siteplan.parking import bay_area_sqm, free_for_parking, gates, surface_bays
+from siteplan.site_amenities import (
+    CLEARANCE_M as AMENITY_CLEARANCE_M,
+)
+from siteplan.site_amenities import (
+    AmenityLibrary,
+    PlacedAmenity,
+    free_for_amenities,
+    place_amenities,
+)
 from siteplan.units import sqm_to_sqft, sqm_to_sqyd
 
 EPS_M = 0.01  # added to every minimum so floating-point noise can never break a rule
@@ -108,6 +117,8 @@ class LayoutOption:
     driveway: Polygon | None = None
     parking_bays: tuple[Polygon, ...] = ()
     gates: tuple[tuple[str, Polygon], ...] = ()
+    amenities: tuple[PlacedAmenity, ...] = ()
+    amenities_missed: tuple[str, ...] = ()
 
     @property
     def flats_per_floor(self) -> dict[str, int]:
@@ -179,6 +190,8 @@ class LayoutOption:
             "club_house_footprint_sqm": round(self.club_house.area, 1) if self.club_house else 0,
             "driveway_sqm": round(self.driveway.area, 1) if self.driveway else 0,
             "surface_parking_bays": len(self.parking_bays),
+            "amenities": [a.as_dict() for a in self.amenities],
+            "amenities_with_no_room": list(self.amenities_missed),
             "rule_findings": {f.rule: f.status.value for f in self.findings},
         }
 
@@ -305,7 +318,7 @@ def open_space_pockets(envelope, towers: list[Tower], gap_m: float) -> list[Poly
 
 
 def _one_layout(plot, envelope, angle, offset, library, request, gap,
-                club=None, drive=None) -> LayoutOption | None:
+                club=None, drive=None, amenities=None) -> LayoutOption | None:
     alpha = 90 - angle  # rotate the site so the towers' long axis runs along y
     rotated = affinity.rotate(envelope, alpha, origin=(0, 0))
     minx, _, maxx, _ = rotated.bounds
@@ -337,10 +350,23 @@ def _one_layout(plot, envelope, angle, offset, library, request, gap,
         Tower(f"T{i}", t.footprint, t.flats_per_side, t.flat_outlines, t.cores)
         for i, t in enumerate(towers, 1)
     )
-    # Parking and gates come last: they use what the buildings and the tot-lot left.
-    free = free_for_parking(envelope, named, club, pockets)
-    bays = surface_bays(free, angle)
+    # The facilities are designed in, then cars park in what is left: an architect does not
+    # lose the pool because a parking bay got there first.
     frontage = max(straight_runs(plot), key=lambda r: r.length).line
+    placed_gates = gates(plot, frontage, request.driveway_width_m + gap)
+    facilities, missed = (), ()
+    if amenities is not None:
+        room = free_for_amenities(envelope, named, club, pockets, (), drive)
+        anchors = _anchors(plot, club, pockets, placed_gates)
+        found, missed_names = place_amenities(room, amenities, angle, anchors, pockets)
+        facilities, missed = tuple(found), tuple(missed_names)
+    free = free_for_parking(envelope, named, club, pockets)
+    if facilities:
+        free = free.difference(
+            unary_union([f.shape.buffer(AMENITY_CLEARANCE_M, join_style="mitre")
+                         for f in facilities])
+        )
+    bays = surface_bays(free, angle)
     return LayoutOption(
         orientation_deg=angle,
         towers=named,
@@ -352,8 +378,23 @@ def _one_layout(plot, envelope, angle, offset, library, request, gap,
         club_house_floors=request.club_house_floors,
         driveway=drive,
         parking_bays=tuple(bays),
-        gates=tuple(gates(plot, frontage, request.driveway_width_m + gap)),
+        gates=tuple(placed_gates),
+        amenities=facilities,
+        amenities_missed=missed,
     )
+
+
+def _anchors(plot, club, pockets, placed_gates) -> dict:
+    """Where each kind of facility belongs: by the club, by the gate, in the open space,
+    or out at the edge of the site."""
+    anchors = {"edge": plot.exterior.interpolate(0.0).centroid if plot else None}
+    if club is not None:
+        anchors["club"] = club.centroid
+    if pockets:
+        anchors["open space"] = max(pockets, key=lambda p: p.area).centroid
+    if placed_gates:
+        anchors["gate"] = placed_gates[0][1].centroid
+    return {k: v for k, v in anchors.items() if v is not None}
 
 
 def solve(
@@ -365,6 +406,7 @@ def solve(
     abutting_road_m: float | None = None,
     master_plan_road_m: float | None = None,
     authority: str | None = None,
+    amenities: AmenityLibrary | None = None,
 ) -> list[LayoutOption]:
     """Best distinct layouts for the plot, each already re-checked against the rules."""
     unknown = set(request.unit_mix) - library.categories
@@ -392,7 +434,7 @@ def solve(
 
     chosen: list[LayoutOption] = []
     for _ in range(AMENITY_PASSES):
-        chosen = _search(plot, envelope, library, request, gap, wanted, drive)
+        chosen = _search(plot, envelope, library, request, gap, wanted, drive, amenities)
         if not chosen or not request.club_house or request.club_house_sqm:
             break
         if max(o.total_flats for o in chosen) < rules.AMENITY_MIN_UNITS:
@@ -411,7 +453,8 @@ def solve(
     ]
 
 
-def _search(plot, envelope, library, request, gap, wanted, drive) -> list[LayoutOption]:
+def _search(plot, envelope, library, request, gap, wanted, drive,
+            amenities=None) -> list[LayoutOption]:
     """Every distinct layout worth showing, for one amenities-block size."""
     footprint = wanted / request.club_house_floors if wanted else None
     club = _place_club(plot, envelope, footprint, library, request, gap) if footprint else None
@@ -431,7 +474,7 @@ def _search(plot, envelope, library, request, gap, wanted, drive) -> list[Layout
         for angle in orientations(plot)
         for i in range(steps)
         if (option := _one_layout(plot, envelope, angle, i * SWEEP_STEP_M, library, request, gap,
-                                  club, drive))
+                                  club, drive, amenities))
     ]
     candidates.sort(key=lambda o: -o.score)
 

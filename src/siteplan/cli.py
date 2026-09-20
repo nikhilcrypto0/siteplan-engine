@@ -18,6 +18,7 @@ from siteplan.library import FlatLibrary
 from siteplan.llm import AssistantConfig
 from siteplan.project import Project
 from siteplan.runner import LAYOUT_CAVEAT, load_plot, read_survey, run_layout
+from siteplan.site_amenities import AmenityLibrary
 
 
 def _cmd_survey(args: argparse.Namespace) -> int:
@@ -82,10 +83,14 @@ def _cmd_layout(args: argparse.Namespace) -> int:
         print("The project file has no layout section.", file=sys.stderr)
         return 2
     library = FlatLibrary.model_validate_json(Path(args.library).read_text())
+    amenities = (
+        AmenityLibrary.model_validate_json(Path(args.amenities).read_text())
+        if args.amenities else None
+    )
     plot, basis = load_plot(project, args.survey)
     print(f"Layout: {project.name}\nPlot: {plot.area:,.0f} m², {basis}\n")
     out = Path(args.out)
-    summaries = run_layout(project, library, plot, project.layout, out)
+    summaries = run_layout(project, library, plot, project.layout, out, amenities)
     if not summaries:
         print("No tower fits inside the setbacks with the required open space.")
         return 1
@@ -205,6 +210,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("project")
     p.add_argument("--library", required=True, help="Flat library JSON")
     p.add_argument("--survey", help="Survey PDF/DXF, used when the project has no net_plot_m")
+    p.add_argument("--amenities", help="Amenity library JSON: pool, courts, play area, cabin")
     p.add_argument("--out", default="out/layout")
     p.set_defaults(run=_cmd_layout)
 

@@ -114,6 +114,9 @@ def write_sheet_dxf(option: LayoutOption, plot: Polygon, request: LayoutRequest,
     for name, gate in option.gates:
         poly(gate, "SOLVER-GATES")
         label(name, (gate.centroid.x, gate.centroid.y), text_h * 0.9)
+    for amenity in option.amenities:
+        poly(amenity.shape, "SITE-AMENITIES")
+        label(amenity.name, (amenity.shape.centroid.x, amenity.shape.centroid.y), text_h * 0.75)
     for pocket in option.open_space:
         poly(pocket, "Organized Open Space")
         label("TOT-LOT", (pocket.centroid.x, pocket.centroid.y), text_h * 0.8)

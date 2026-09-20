@@ -18,6 +18,7 @@ from siteplan.library import FlatLibrary
 from siteplan.pdf_survey import read_pdf_survey
 from siteplan.project import Project
 from siteplan.sheet import SheetInfo, write_sheet_dxf
+from siteplan.site_amenities import AmenityLibrary
 from siteplan.survey import Survey
 
 LAYOUT_CAVEAT = (
@@ -55,6 +56,7 @@ def run_layout(
     plot: Polygon,
     request: LayoutRequest,
     out: Path,
+    amenities: AmenityLibrary | None = None,
 ) -> list[dict]:
     site = project.to_site()
     options = solve(
@@ -65,6 +67,7 @@ def run_layout(
         abutting_road_m=site.abutting_road_m,
         master_plan_road_m=site.master_plan_road_m,
         authority=site.authority,
+        amenities=amenities,
     )
     summaries = []
     for i, option in enumerate(options, 1):
