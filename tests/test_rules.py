@@ -14,8 +14,15 @@ def test_table_iv_bands_are_above_lower_up_to_upper(height, road, open_space):
     assert (band.min_road_m, band.min_open_space_m) == (road, open_space)
 
 
-def test_above_55_m_is_not_encoded():
-    assert band_for_height(55.5) is None
+@pytest.mark.parametrize(("height", "road", "setback"), [
+    (57.0, 30, 17),     # the three bands G.O.Ms.No.50 of 2019 added above 55 m
+    (70.0, 30, 17),
+    (100.0, 30, 18),
+    (150.0, 30, 20),
+])
+def test_the_2019_bands_above_55_m_are_encoded(height, road, setback):
+    band = band_for_height(height)
+    assert (band.min_road_m, band.min_open_space_m) == (road, setback)
 
 
 def test_table_iv_has_no_gaps_or_overlaps():

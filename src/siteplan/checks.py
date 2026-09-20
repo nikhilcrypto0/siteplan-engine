@@ -303,6 +303,18 @@ def _no_geometry(rule: str, required: str, clause: str, count: int) -> Finding:
     )
 
 
+def _longest_side_m(building: Building) -> float | None:
+    """How long the building is, which decides whether the 40 m note applies."""
+    if building.footprint is None:
+        return None
+    x0, y0, x1, y1 = building.footprint.bounds
+    return max(x1 - x0, y1 - y0)
+
+
+def _needed_setback(building: Building, band) -> float:
+    return rules.setback_for(band, _longest_side_m(building))
+
+
 def _setback_findings(site, high_rise, bands) -> list[Finding]:
     if site.net_plot is None or all(b.footprint is None for b in high_rise):
         need = ", ".join(sorted({f"{bands[b.name].min_open_space_m:g} m" for b in high_rise}))
@@ -310,7 +322,13 @@ def _setback_findings(site, high_rise, bands) -> list[Finding]:
         return [_no_geometry("All-round setbacks", required, rules.TABLE_IV_CLAUSE, len(high_rise))]
     findings = []
     for b in high_rise:
-        required = f">= {bands[b.name].min_open_space_m:g} m to the net plot line"
+        need = _needed_setback(b, bands[b.name])
+        long_note = ""
+        if need > bands[b.name].min_open_space_m:
+            long_note = (f" ({bands[b.name].min_open_space_m:g} m from the table plus "
+                         f"{need - bands[b.name].min_open_space_m:.2f} m for a building "
+                         f"{_longest_side_m(b):.0f} m long)")
+        required = f">= {need:.2f} m to the net plot line{long_note}"
         if b.footprint is None or site.net_plot is None:
             findings.append(
                 Finding(
@@ -326,14 +344,14 @@ def _setback_findings(site, high_rise, bands) -> list[Finding]:
         gap = site.net_plot.exterior.distance(b.footprint)
         if not site.net_plot.contains(b.footprint):
             gap = 0.0
-        ok = gap >= bands[b.name].min_open_space_m
+        ok = gap + 1e-6 >= need
         findings.append(
             Finding(
                 f"All-round setback: {b.name}",
                 Status.PASS if ok else Status.FAIL,
                 _m(gap),
                 required,
-                rules.TABLE_IV_CLAUSE,
+                rules.LONG_BUILDING_CLAUSE if long_note else rules.TABLE_IV_CLAUSE,
                 "Front setback may also be governed by the Table III building line (not encoded).",
             )
         )
@@ -354,7 +372,7 @@ def _spacing_findings(high_rise, bands) -> list[Finding]:
         ]
     findings = []
     for a, b in pairs:
-        need = max(bands[a.name].min_open_space_m, bands[b.name].min_open_space_m)
+        need = max(_needed_setback(a, bands[a.name]), _needed_setback(b, bands[b.name]))
         rule = f"Gap between blocks: {a.name} / {b.name}"
         if a.footprint is None or b.footprint is None:
             findings.append(
@@ -362,7 +380,7 @@ def _spacing_findings(high_rise, bands) -> list[Finding]:
                     rule,
                     Status.NEEDS_INPUT,
                     "no footprint geometry",
-                    f">= {need:g} m",
+                    f">= {need:.2f} m",
                     rules.BLOCK_SPACING_CLAUSE,
                     "Needs both footprints (DWG).",
                 )

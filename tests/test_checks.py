@@ -20,13 +20,13 @@ def test_compliant_site_passes_geometry_checks():
         open_space_sqm=1300,
         net_plot=box(0, 0, 100, 100),
         open_space_pockets=(box(40, 40, 60, 60),),
-        buildings=(_tower("A", 10, 10, 30, 90), _tower("B", 70, 10, 90, 90)),
+        buildings=(_tower("A", 10, 10, 30, 50), _tower("B", 70, 10, 90, 50)),
     )
     found = _by_rule(check_site(site))
     assert found["Height class: A"].measured == "27.00 m"
     assert found["Abutting road width (for A)"].status is Status.PASS
     assert found["All-round setback: A"].status is Status.PASS
-    assert found["Gap between blocks: A / B"].measured == "40.00 m"
+    assert found["Gap between blocks: A / B"].measured == "40.00 m"  # 30 to 70
     assert found["Gap between blocks: A / B"].status is Status.PASS
     assert found["Organized open space (tot-lot)"].status is Status.PASS
     assert found["Open-space pocket 1"].status is Status.PASS
@@ -91,7 +91,7 @@ def test_partly_drawn_site_checks_what_it_can():
         net_area_sqm=10000,
         abutting_road_m=18,
         net_plot=box(0, 0, 100, 100),
-        buildings=(_tower("A", 10, 10, 30, 90), Building("B", height_m=27)),
+        buildings=(_tower("A", 10, 10, 30, 50), Building("B", height_m=27)),
     )
     found = _by_rule(check_site(site))
     assert found["All-round setback: A"].status is Status.PASS
@@ -105,9 +105,22 @@ def test_non_high_rise_is_flagged_as_not_checked():
     assert not any(rule.startswith("Abutting road") for rule in found)
 
 
-def test_tower_above_the_encoded_table_is_flagged_not_silently_skipped():
+def test_a_tower_above_55_m_is_checked_against_the_2019_bands():
     site = Site(net_area_sqm=10000, abutting_road_m=30, buildings=(Building("Tall", height_m=60),))
     found = _by_rule(check_site(site))
     assert found["Plot size for high-rise"].status is Status.PASS
-    assert found["Abutting road width (for Tall)"].status is Status.NOT_CHECKED
-    assert found["Setbacks and block gaps: Tall"].status is Status.NOT_CHECKED
+    assert found["Abutting road width (for Tall)"].status is Status.PASS   # 30 m is enough
+    assert "17" in found["All-round setbacks"].required                     # the 55 to 70 band
+
+
+def test_a_long_building_needs_more_setback_than_the_table_alone():
+    """G.O.Ms.No.50 of 2019: over 40 m, add 10% of the length minus 4 m."""
+    short = Site(net_area_sqm=10000, abutting_road_m=18, net_plot=box(0, 0, 100, 100),
+                 buildings=(_tower("A", 10, 10, 30, 50),))          # 40 m long, needs 9 m
+    long = Site(net_area_sqm=10000, abutting_road_m=18, net_plot=box(0, 0, 100, 100),
+                buildings=(_tower("A", 10, 10, 30, 90),))           # 80 m long, needs 13 m
+    assert _by_rule(check_site(short))["All-round setback: A"].status is Status.PASS
+    finding = _by_rule(check_site(long))["All-round setback: A"]
+    assert finding.status is Status.FAIL                            # 10 m is no longer enough
+    assert "13.00 m" in finding.required and "80 m long" in finding.required
+    assert finding.clause.startswith("G.O.Ms.No.50")

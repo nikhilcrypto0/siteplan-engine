@@ -115,8 +115,21 @@ def test_below_the_high_rise_threshold_it_says_so_instead_of_guessing():
     assert "not encoded" in answer["answer"]
 
 
-@pytest.mark.parametrize(("height", "setback"), [(57.0, 16.5), (60.0, 16.5), (61.0, 17.0)])
-def test_above_the_table_the_note_is_applied(height, setback):
+@pytest.mark.parametrize(("height", "setback"), [(57.0, 17.0), (100.0, 18.0), (150.0, 20.0)])
+def test_the_2019_bands_answer_for_tall_buildings(height, setback):
     answer = height_rules(height)
     assert answer["min_all_round_setback_m"] == pytest.approx(setback)
-    assert "0.5 m" in answer["clause"]
+    assert "G.O.Ms.No.50 of 2019" in answer["clause"]
+
+
+def test_a_long_building_is_told_it_needs_more():
+    answer = height_rules(27.0, longest_side_m=56.0)
+    assert answer["min_all_round_setback_m"] == pytest.approx(10.6)
+    assert "56 m long" in answer["note"]
+    assert any("G.O.Ms.No.50" in clause for clause in answer["also"])
+
+
+def test_the_tdr_band_is_flagged_rather_than_passed():
+    answer = height_rules(19.5, plot_sqm=1200)
+    assert answer["class"] == "not high-rise"
+    assert "TDR" in answer["watch"]
