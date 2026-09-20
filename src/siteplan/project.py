@@ -61,6 +61,9 @@ class SiteIn(BaseModel):
     open_space_sqft: PositiveFloat | None = None
     net_plot_m: Ring | None = None
     open_space_pockets_m: list[Ring] = []
+    authority: str | None = Field(
+        None, description="GHMC, HMDA, DTCP...; the Table V parking percentage differs by one"
+    )
 
     @model_validator(mode="after")
     def _area_text_parses(self) -> SiteIn:
@@ -119,4 +122,5 @@ class Project(BaseModel):
             net_plot=Polygon(s.net_plot_m) if s.net_plot_m else None,
             open_space_pockets=tuple(Polygon(p) for p in s.open_space_pockets_m),
             buildings=tuple(b.to_building() for b in self.buildings),
+            authority=s.authority,
         )

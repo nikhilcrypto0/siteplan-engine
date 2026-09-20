@@ -62,8 +62,12 @@ class Site:
     net_plot: Polygon | None = None
     open_space_pockets: tuple[Polygon, ...] = ()
     buildings: tuple[Building, ...] = field(default_factory=tuple)
-    club_house: Polygon | None = None
+    club_house: Polygon | None = None  # footprint
+    club_house_built_up_sqm: float | None = None  # all its floors
     driveway: Polygon | None = None
+    built_up_sqm: float | None = None  # all floors of all blocks
+    units: int | None = None
+    authority: str | None = None  # GHMC, HMDA, DTCP...; Table V differs by authority
 
 
 def _m(value: float) -> str:
@@ -108,16 +112,7 @@ def check_site(site: Site) -> list[Finding]:
     )
     findings.append(_driveway_finding(site))
     findings.append(_amenity_finding(site))
-    findings.append(
-        Finding(
-            "Parking",
-            Status.NOT_CHECKED,
-            "not modelled yet",
-            "Table V percentage of built-up area, by authority",
-            rules.PARKING_CLAUSE,
-            "Needs the authority's Table V row and a parking layout (stilt plus surface).",
-        )
-    )
+    findings.append(_parking_finding(site))
     return findings
 
 
@@ -141,27 +136,53 @@ def _driveway_finding(site: Site) -> Finding:
 
 
 def _amenity_finding(site: Site) -> Finding:
-    area = site.net_area_sqm
-    required = f">= {rules.AMENITY_MIN_FRACTION:.0%} of site area"
-    if area is None:
-        return Finding("Amenities (club house)", Status.NEEDS_INPUT, "site area unknown",
-                       required, rules.AMENITY_CLAUSE)
-    if area < rules.AMENITY_SITE_THRESHOLD_SQM:
+    required = f">= {rules.AMENITY_MIN_BUILT_UP_FRACTION:.0%} of built-up area"
+    if site.built_up_sqm is None or site.units is None:
+        return Finding("Amenities (club house)", Status.NOT_CHECKED,
+                       "built-up area or unit count unknown", required, rules.AMENITY_CLAUSE)
+    if site.units < rules.AMENITY_MIN_UNITS:
         return Finding(
-            "Amenities (club house)", Status.INFO,
-            f"site {area:,.0f} m², under the 5-acre threshold", required, rules.AMENITY_CLAUSE,
-            "The clause is written for projects over 5 acres.",
+            "Amenities (club house)", Status.INFO, f"{site.units} units",
+            required, rules.AMENITY_CLAUSE,
+            f"The clause applies from {rules.AMENITY_MIN_UNITS} units.",
         )
-    provided = site.club_house.area if site.club_house is not None else 0.0
-    share = provided / area
-    if share >= rules.AMENITY_MIN_FRACTION:
-        status, note = Status.PASS, ""
-    else:
-        status = Status.NEEDS_INPUT
-        note = ("The clause sits in the row-housing section; confirm with the firm whether it "
-                "binds a group-housing scheme before treating this as a failure.")
-    return Finding("Amenities (club house)", status, f"{provided:,.0f} m² ({_pct(share)})",
-                   required, rules.AMENITY_CLAUSE, note)
+    provided = site.club_house_built_up_sqm
+    if provided is None:
+        provided = site.club_house.area if site.club_house is not None else 0.0
+    need = rules.AMENITY_MIN_BUILT_UP_FRACTION * site.built_up_sqm
+    short = provided + 0.5 < need
+    return Finding(
+        "Amenities (club house)",
+        Status.FAIL if short else Status.PASS,
+        f"{provided:,.0f} m² ({_pct(provided / site.built_up_sqm)} of built-up)",
+        f"{required} = {need:,.0f} m²",
+        rules.AMENITY_CLAUSE,
+        "The amenities block is separate from the residential blocks, as the clause requires.",
+    )
+
+
+def _parking_finding(site: Site) -> Finding:
+    percent = rules.parking_percent(site.authority)
+    required = f">= {percent:g}% of built-up area"
+    if site.built_up_sqm is None:
+        return Finding("Parking", Status.NOT_CHECKED, "built-up area unknown", required,
+                       rules.PARKING_CLAUSE)
+    need = percent / 100 * site.built_up_sqm
+    stilt = sum(b.footprint.area for b in site.buildings if b.footprint is not None)
+    note = "Counts the stilt floor only; cellars and surface parking are not modelled."
+    if site.authority is None:
+        note += " Authority not given, so the 20% column is used; inside GHMC it is 30%."
+    if stilt + 0.5 >= need:
+        return Finding("Parking", Status.PASS, f"stilt {stilt:,.0f} m²", f"{required} = "
+                       f"{need:,.0f} m²", rules.PARKING_CLAUSE, note)
+    return Finding(
+        "Parking",
+        Status.NEEDS_INPUT,
+        f"stilt {stilt:,.0f} m², short by {need - stilt:,.0f} m²",
+        f"{required} = {need:,.0f} m²",
+        rules.PARKING_CLAUSE,
+        f"{note} Say where the rest goes (cellar, podium or surface) to settle this.",
+    )
 
 
 def _height_finding(b: Building) -> Finding:

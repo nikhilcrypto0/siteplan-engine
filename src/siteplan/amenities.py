@@ -18,19 +18,27 @@ from siteplan.geometry import straight_runs
 
 CLUB_ASPECT = 1.6  # a hall a bit longer than it is deep
 SCAN_STEP_M = 2.0
+SPREAD_M = 20.0  # candidates closer together than this are the same idea
 EPS_M = 0.01
 
 
 def club_house(envelope: Polygon, area_sqm: float) -> Polygon | None:
-    """A club-house block of *area_sqm* tucked into whichever corner of the envelope holds
-    it, aligned with the site's longest edge. None when it does not fit."""
+    """The edge-hugging position for the amenities block; None when it does not fit."""
+    positions = club_house_options(envelope, area_sqm, limit=1)
+    return positions[0] if positions else None
+
+
+def club_house_options(envelope: Polygon, area_sqm: float, limit: int = 6) -> list[Polygon]:
+    """Candidate positions for the amenities block, aligned with the site's longest edges and
+    furthest from the middle first. The solver picks between them by what they cost in towers,
+    which the shape of the site decides, not the distance from the centre."""
     if area_sqm <= 0 or envelope.is_empty:
-        return None
+        return []
     runs = sorted(straight_runs(envelope), key=lambda r: -r.length)
     angles = [run.angle_deg for run in runs[:2]] or [0.0]
     depth = sqrt(area_sqm / CLUB_ASPECT)
     width = area_sqm / depth
-    best: tuple[float, Polygon] | None = None
+    found: list[tuple[float, Polygon]] = []
     for angle in angles:
         turned = rotate(envelope, -angle, origin="centroid")
         centre = turned.centroid
@@ -44,11 +52,22 @@ def club_house(envelope: Polygon, area_sqm: float) -> Polygon | None:
                 block = box(x0, y0, x0 + width, y0 + depth)
                 if not turned.contains(block):
                     continue
-                # Push it to the edge: the middle of the site is worth more as towers.
-                score = block.centroid.distance(centre)
-                if best is None or score > best[0]:
-                    best = (score, rotate(block, angle, origin=envelope.centroid))
-    return best[1] if best else None
+                # Away from the middle first: the centre of a site is worth more as towers.
+                found.append((block.centroid.distance(centre),
+                              rotate(block, angle, origin=envelope.centroid)))
+
+    found.sort(key=lambda pair: -pair[0])
+    spread: list[Polygon] = []
+    seen: set[tuple[int, int]] = set()
+    for _, block in found:
+        cell = (int(block.centroid.x // SPREAD_M), int(block.centroid.y // SPREAD_M))
+        if cell in seen:
+            continue
+        seen.add(cell)
+        spread.append(block)
+        if len(spread) == limit:
+            break
+    return spread
 
 
 def _steps(low: float, high: float, step: float = SCAN_STEP_M) -> list[float]:

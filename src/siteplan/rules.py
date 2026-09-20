@@ -66,13 +66,26 @@ MORTGAGE_CLAUSE = "G.O.168 (mortgage clause (d), p.28)"
 DRIVEWAY_MIN_WIDTH_M = 4.5
 DRIVEWAY_CLAUSE = "G.O.168 rule 13(viii) (minimum drive way width 4.5 m)"
 
-# Rule 9(o) sits in the row-housing section but is written for "very large projects"; whether
-# it binds a group-housing scheme is for the firm to confirm, so a shortfall asks rather than fails.
-AMENITY_MIN_FRACTION = 0.05
-AMENITY_SITE_THRESHOLD_SQM = 20234.28  # 5 acres
-AMENITY_CLAUSE = "G.O.168 rule 9(o) (amenities in at least 5% of site area, projects over 5 acres)"
+# Rule 15(a)(x) is the group-housing one: 3% of built-up area, in a block of its own. (Rule 9(o)
+# asks 5% of site area but sits in the row-housing section, so it is not used as the check here.)
+AMENITY_MIN_BUILT_UP_FRACTION = 0.03
+AMENITY_MIN_UNITS = 100
+AMENITY_CLAUSE = (
+    "G.O.168 rule 15(a)(x) (group housing of 100 units or more: amenities of at least 3% of "
+    "total built-up area, in a block that is not part of the residential blocks)"
+)
 
-PARKING_CLAUSE = "G.O.168 rule 13 and Table V (parking as a percentage of built-up area)"
+# Table V row 4 covers Residential Apartment Complexes: 30% inside GHMC, 20% in every other
+# column (HMDA area, corporations, UDA areas, municipalities), so the default is the 20%.
+PARKING_PERCENT_GHMC = 30.0
+PARKING_PERCENT_ELSEWHERE = 20.0
+PARKING_CLAUSE = "G.O.168 rule 13, Table V row 4 (Residential Apartment Complexes)"
+
+
+def parking_percent(authority: str | None) -> float:
+    """The Table V percentage of built-up area to be provided as parking."""
+    inside_ghmc = (authority or "").upper() == "GHMC"
+    return PARKING_PERCENT_GHMC if inside_ghmc else PARKING_PERCENT_ELSEWHERE
 
 
 def band_for_height(height_m: float) -> HeightBand | None:

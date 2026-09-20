@@ -46,8 +46,9 @@ def test_the_drive_rings_the_buildings_inside_the_setback():
 
 
 def test_reserving_a_club_house_costs_buildable_land():
-    without = plan()[0]
+    without = plan(club_house=False)[0]
     with_club = plan(club_house_sqm=1200)[0]
+    assert without.club_house is None
     assert with_club.club_house is not None
     assert with_club.saleable_sqft < without.saleable_sqft
     assert not any(t.footprint.intersects(with_club.club_house) for t in with_club.towers)
@@ -58,32 +59,51 @@ def test_the_club_house_is_not_counted_as_open_space():
     assert not any(p.intersects(option.club_house.buffer(-0.01)) for p in option.open_space)
 
 
+def test_by_default_the_amenities_block_is_sized_from_the_rule():
+    option = plan()[0]
+    assert option.total_flats >= 100  # the clause applies from 100 units
+    assert option.club_house is not None
+    # Rule 15(a)(x): 3% of built-up area, measured on the pass before the block takes its land,
+    # so the block is a little larger than 3% of what is finally built. Erring high is safe.
+    unbuilt = plan(club_house=False)[0]
+    assert option.club_house_sqm == pytest.approx(0.03 * unbuilt.built_up_sqm, rel=0.05)
+    assert option.club_house_sqm > 0.03 * option.built_up_sqm
+    # Two storeys by default, so it only takes half that much land.
+    assert option.club_house.area == pytest.approx(option.club_house_sqm / 2, rel=0.01)
+
+
+def test_a_small_scheme_gets_no_automatic_club_house():
+    small = box(0, 0, 70, 60)
+    option = solve(small, LIBRARY, LayoutRequest(**BASE), abutting_road_m=18.0)[0]
+    assert option.total_flats < 100 and option.club_house is None
+
+
 def test_a_club_house_that_cannot_fit_is_refused_rather_than_ignored():
     with pytest.raises(ValueError, match="does not fit"):
         plan(club_house_sqm=200_000)
 
 
-@pytest.mark.parametrize(("extra", "rule", "status"), [
-    ({}, "Driveway", Status.PASS),
-    ({}, "Parking", Status.NOT_CHECKED),
-    ({}, "Amenities (club house)", Status.INFO),           # 18,000 m² is under 5 acres
+@pytest.mark.parametrize(("rule", "status"), [
+    ("Driveway", Status.PASS),
+    ("Amenities (club house)", Status.PASS),   # the default block satisfies the 3%
+    ("Parking", Status.NEEDS_INPUT),           # a stilt alone cannot reach 20% of built-up
 ])
-def test_the_new_rules_are_reported_on_every_option(extra, rule, status):
-    findings = {f.rule: f for f in plan(**extra)[0].findings}
+def test_the_new_rules_are_reported_on_every_option(rule, status):
+    findings = {f.rule: f for f in plan()[0].findings}
     assert findings[rule].status is status
     assert findings[rule].clause.startswith("G.O.168")
 
 
-def test_a_big_site_asks_for_amenities_until_they_are_provided():
-    big = box(0, 0, 200, 150)  # 30,000 m², over 5 acres
-    request = LayoutRequest(**BASE)
-    option = solve(big, LIBRARY, request, abutting_road_m=18.0)[0]
-    assert {f.rule: f.status for f in option.findings}["Amenities (club house)"] is (
-        Status.NEEDS_INPUT
-    )
+def test_leaving_the_amenities_out_of_a_big_scheme_fails_the_rule():
+    finding = {f.rule: f for f in plan(club_house=False)[0].findings}["Amenities (club house)"]
+    assert finding.status is Status.FAIL
+    assert "3%" in finding.required
 
-    with_club = solve(big, LIBRARY, LayoutRequest(**BASE | {"club_house_sqm": 1600}),
-                      abutting_road_m=18.0)[0]
-    assert {f.rule: f.status for f in with_club.findings}["Amenities (club house)"] is (
-        Status.PASS
-    )
+
+def test_parking_uses_the_ghmc_column_only_inside_ghmc():
+    def required(option):
+        return next(f.required for f in option.findings if f.rule == "Parking")
+
+    inside = solve(PLOT, LIBRARY, LayoutRequest(**BASE), abutting_road_m=18.0, authority="GHMC")[0]
+    assert "30%" in required(inside)
+    assert "20%" in required(plan()[0])

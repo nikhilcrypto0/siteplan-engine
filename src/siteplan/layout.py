@@ -23,7 +23,7 @@ from shapely.geometry import Polygon, box
 from shapely.ops import unary_union
 
 from siteplan import rules
-from siteplan.amenities import club_house, driveway_ring
+from siteplan.amenities import club_house_options, driveway_ring
 from siteplan.area_statement import AreaStatement, FloorLine, TowerGroup
 from siteplan.checks import Building, Finding, Site, check_site
 from siteplan.geometry import angle_gap, opening, straight_runs
@@ -32,6 +32,8 @@ from siteplan.units import sqm_to_sqft, sqm_to_sqyd
 
 EPS_M = 0.01  # added to every minimum so floating-point noise can never break a rule
 SWEEP_STEP_M = 1.0
+DEFAULT_DRIVEWAY_WIDTH_M = 6.0  # the rules allow 4.5; the firm's own drawings are wider
+AMENITY_PASSES = 3  # sizing the amenities block and laying out the towers each depend on the other
 
 
 class LayoutRequest(BaseModel):
@@ -44,11 +46,15 @@ class LayoutRequest(BaseModel):
         description="Share of flats per category, e.g. {'2BHK': 0.7, '3BHK': 0.3}"
     )
     common_area_pct: float = Field(22.0, ge=0, le=100)
+    club_house: bool = Field(True, description="Reserve an amenities block before the towers")
     club_house_sqm: float | None = Field(
-        None, gt=0, description="Club house / amenity block reserved before the towers"
+        None, gt=0, description="Amenities built-up area; left out, it follows rule 15(a)(x)"
+    )
+    club_house_floors: PositiveInt = Field(
+        2, description="Storeys in the amenities block; it needs a footprint of a fraction"
     )
     driveway_width_m: float = Field(
-        rules.DRIVEWAY_MIN_WIDTH_M, ge=rules.DRIVEWAY_MIN_WIDTH_M,
+        DEFAULT_DRIVEWAY_WIDTH_M, ge=rules.DRIVEWAY_MIN_WIDTH_M,
         description="Drive around the buildings, inside the setback",
     )
     max_tower_length_m: PositiveFloat = 80.0
@@ -96,7 +102,8 @@ class LayoutOption:
     unit_mix_target: dict[str, float]
     plot_area_sqm: float
     findings: tuple[Finding, ...] = ()
-    club_house: Polygon | None = None
+    club_house: Polygon | None = None  # footprint; it may have more than one floor
+    club_house_floors: int = 1
     driveway: Polygon | None = None
 
     @property
@@ -118,6 +125,16 @@ class LayoutOption:
     @property
     def built_up_sqft_per_floor(self) -> float:
         return sum(sqm_to_sqft(t.footprint.area) for t in self.towers)
+
+    @property
+    def club_house_sqm(self) -> float:
+        """The amenities block's built-up area, all its floors."""
+        return 0.0 if self.club_house is None else self.club_house.area * self.club_house_floors
+
+    @property
+    def built_up_sqm(self) -> float:
+        """Every floor of every block, amenities included: what the rules measure against."""
+        return sum(t.footprint.area for t in self.towers) * self.floors + self.club_house_sqm
 
     @property
     def open_space_sqm(self) -> float:
@@ -155,7 +172,8 @@ class LayoutOption:
             "open_space_sqm": round(self.open_space_sqm, 1),
             "open_space_share_pct": round(self.open_space_share * 100, 2),
             "mix_error": round(self.mix_error, 3),
-            "club_house_sqm": round(self.club_house.area, 1) if self.club_house else 0,
+            "club_house_sqm": round(self.club_house_sqm, 1),
+            "club_house_footprint_sqm": round(self.club_house.area, 1) if self.club_house else 0,
             "driveway_sqm": round(self.driveway.area, 1) if self.driveway else 0,
             "rule_findings": {f.rule: f.status.value for f in self.findings},
         }
@@ -323,6 +341,7 @@ def _one_layout(plot, envelope, angle, offset, library, request, gap,
         unit_mix_target=dict(request.unit_mix),
         plot_area_sqm=plot.area,
         club_house=club,
+        club_house_floors=request.club_house_floors,
         driveway=drive,
     )
 
@@ -335,6 +354,7 @@ def solve(
     gross_area_sqm: float | None = None,
     abutting_road_m: float | None = None,
     master_plan_road_m: float | None = None,
+    authority: str | None = None,
 ) -> list[LayoutOption]:
     """Best distinct layouts for the plot, each already re-checked against the rules."""
     unknown = set(request.unit_mix) - library.categories
@@ -353,9 +373,38 @@ def solve(
     if envelope.is_empty:
         return []
 
-    # Amenities take their land first, as they do on a real site plan.
+    # Amenities take their land first, as they do on a real site plan. Sized from the built-up
+    # area the site can hold, which is only known after a first pass without them.
     drive = driveway_ring(plot, envelope, request.driveway_width_m)
-    club = club_house(envelope, request.club_house_sqm) if request.club_house_sqm else None
+    wanted = request.club_house_sqm
+    if request.club_house and wanted is None:
+        wanted = _amenity_size(plot, envelope, library, request, gap)
+
+    chosen: list[LayoutOption] = []
+    for _ in range(AMENITY_PASSES):
+        chosen = _search(plot, envelope, library, request, gap, wanted, drive)
+        if not chosen or not request.club_house or request.club_house_sqm:
+            break
+        if max(o.total_flats for o in chosen) < rules.AMENITY_MIN_UNITS:
+            break  # the clause applies from 100 units
+        # The block is sized from the built-up area, which the search itself decides, so grow
+        # it and search again until the layouts satisfy the rule that sized it.
+        need = rules.AMENITY_MIN_BUILT_UP_FRACTION * max(o.built_up_sqm for o in chosen)
+        if chosen[0].club_house_sqm + EPS_M >= need:
+            break
+        wanted = need
+
+    return [
+        _with_findings(o, plot, request, gross_area_sqm, abutting_road_m, master_plan_road_m,
+                       authority)
+        for o in chosen
+    ]
+
+
+def _search(plot, envelope, library, request, gap, wanted, drive) -> list[LayoutOption]:
+    """Every distinct layout worth showing, for one amenities-block size."""
+    footprint = wanted / request.club_house_floors if wanted else None
+    club = _place_club(plot, envelope, footprint, library, request, gap) if footprint else None
     if request.club_house_sqm and club is None:
         raise ValueError(
             f"a club house of {request.club_house_sqm:,.0f} m² does not fit inside the setbacks"
@@ -386,14 +435,45 @@ def solve(
             chosen.append(option)
         if len(chosen) == request.options:
             break
-
-    return [
-        _with_findings(o, plot, request, gross_area_sqm, abutting_road_m, master_plan_road_m)
-        for o in chosen
-    ]
+    return chosen
 
 
-def _with_findings(option, plot, request, gross, road, master_road) -> LayoutOption:
+def _place_club(plot, envelope, area_sqm, library, request, gap) -> Polygon | None:
+    """Of the candidate positions, the one that costs the fewest flats. An amenities block
+    dropped in the middle of a tower row can cost a whole tower, which no rule forbids and
+    no architect would do."""
+    best: tuple[float, Polygon] | None = None
+    for block in club_house_options(envelope, area_sqm):
+        left = envelope.difference(block.buffer(gap + EPS_M, join_style="mitre"))
+        if left.is_empty:
+            continue
+        trial = _trial_fit(plot, left, library, request, gap)
+        score = trial.score if trial else 0.0
+        if best is None or score > best[0]:
+            best = (score, block)
+    return best[1] if best else None
+
+
+def _trial_fit(plot, envelope, library, request, gap) -> LayoutOption | None:
+    """One quick pass: the best orientation at offset zero. Used to compare choices, not to
+    produce an answer."""
+    return max(
+        (o for angle in orientations(plot)
+         if (o := _one_layout(plot, envelope, angle, 0.0, library, request, gap))),
+        key=lambda o: o.score, default=None,
+    )
+
+
+def _amenity_size(plot, envelope, library, request, gap) -> float | None:
+    """Rule 15(a)(x): 3% of built-up area for 100 units or more. The built-up area comes from a
+    first pass with no amenities block, which is the most the site could hold."""
+    trial = _trial_fit(plot, envelope, library, request, gap)
+    if trial is None or trial.total_flats < rules.AMENITY_MIN_UNITS:
+        return None
+    return rules.AMENITY_MIN_BUILT_UP_FRACTION * trial.built_up_sqm
+
+
+def _with_findings(option, plot, request, gross, road, master_road, authority=None) -> LayoutOption:
     site = Site(
         gross_area_sqm=gross,
         net_area_sqm=plot.area,
@@ -407,7 +487,11 @@ def _with_findings(option, plot, request, gross, road, master_road) -> LayoutOpt
             for t in option.towers
         ),
         club_house=option.club_house,
+        club_house_built_up_sqm=option.club_house_sqm,
         driveway=option.driveway,
+        built_up_sqm=option.built_up_sqm,
+        units=option.total_flats,
+        authority=authority,
     )
     return LayoutOption(**{**option.__dict__, "findings": tuple(check_site(site))})
 

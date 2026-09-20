@@ -61,6 +61,7 @@ def run_layout(
         gross_area_sqm=site.gross_area_sqm,
         abutting_road_m=site.abutting_road_m,
         master_plan_road_m=site.master_plan_road_m,
+        authority=site.authority,
     )
     summaries = []
     for i, option in enumerate(options, 1):
