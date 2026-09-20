@@ -49,6 +49,17 @@ class BuildingIn(BaseModel):
         )
 
 
+class SheetIn(BaseModel):
+    """What the drawing sheet's title block says, beyond the project name."""
+
+    client: str = ""
+    architect: str = ""
+    drawing: str = "SITE PLAN"
+    number: str = ""
+    revision: str = ""
+    drawn_by: str = ""
+
+
 class SiteIn(BaseModel):
     gross_area_text: str | None = Field(None, description="As written, e.g. '3 AC 12.50 GTS'.")
     gross_area_sqm: PositiveFloat | None = None
@@ -110,6 +121,7 @@ class Project(BaseModel):
     buildings: list[BuildingIn] = []
     area_statement: AreaStatement | None = None
     layout: LayoutRequest | None = None
+    sheet: SheetIn = Field(default_factory=lambda: SheetIn())
 
     def to_site(self) -> Site:
         s = self.site

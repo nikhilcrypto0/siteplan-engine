@@ -17,6 +17,7 @@ from siteplan.layout_export import write_layout_dxf, write_layout_svg
 from siteplan.library import FlatLibrary
 from siteplan.pdf_survey import read_pdf_survey
 from siteplan.project import Project
+from siteplan.sheet import SheetInfo, write_sheet_dxf
 from siteplan.survey import Survey
 
 LAYOUT_CAVEAT = (
@@ -67,9 +68,13 @@ def run_layout(
     for i, option in enumerate(options, 1):
         stem = out / f"option_{i}"
         write_layout_dxf(option, plot, stem.with_suffix(".dxf"))
+        write_sheet_dxf(option, plot, request, SheetInfo(project=project.name,
+                                                         **project.sheet.model_dump()),
+                        out / f"option_{i}.sheet.dxf")
         write_layout_svg(option, plot, stem.with_suffix(".svg"), f"{project.name}: option {i}")
         summary = {"option": i} | option.summary() | {
             "area_statement": render(area_statement(option, request)),
+            "sheet_dxf": str(out / f"option_{i}.sheet.dxf"),
             "flat_library_note": library.note,
             "caveat": LAYOUT_CAVEAT,
         }

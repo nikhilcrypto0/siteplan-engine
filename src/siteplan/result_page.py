@@ -41,7 +41,8 @@ CARD = """<figure>
 <img src="{svg}" alt="Option {option}">
 <figcaption><strong>Option {option}</strong>: {towers}, {flats} flats, {sqft} sft saleable,
 open space {open_pct}%<br>{verdict}<br>
-<span class="files"><a href="{dxf}">option_{option}.dxf</a> for ZWCAD</span></figcaption>
+<span class="files"><a href="{dxf}">option_{option}.dxf</a> for ZWCAD ·
+<a href="{sheet}">option_{option}.sheet.dxf</a> drawing sheet</span></figcaption>
 </figure>"""
 
 
@@ -55,7 +56,8 @@ def write_result_page(record: dict, comparison: str, out: Path) -> Path:
                    if fails else "No rule failures")
         towers = f"{option['towers']} tower" + ("" if option["towers"] == 1 else "s")
         cards.append(CARD.format(
-            option=n, svg=f"option_{n}.svg", dxf=f"option_{n}.dxf", towers=towers,
+            option=n, svg=f"option_{n}.svg", dxf=f"option_{n}.dxf",
+            sheet=f"option_{n}.sheet.dxf", towers=towers,
             flats=option["total_flats"], sqft=f"{option['saleable_sqft']:,}",
             open_pct=option["open_space_share_pct"], verdict=verdict,
         ))
