@@ -60,6 +60,19 @@ def test_a_question_finds_the_clause_that_answers_it(book):
     assert "4.5m" in hits[0].text
 
 
+def test_the_citation_is_read_off_the_document_not_composed(book):
+    hit = book.search("how wide must the driveway be")[0]
+    assert hit.section == "13. PARKING" and hit.clause == "(viii)"
+    assert hit.citation == "rule 13(viii) (page 2)"
+    assert hit.as_dict()["citation"] == hit.citation
+
+
+def test_a_section_heading_carries_on_to_later_clauses(book):
+    hit = book.search("green planting strip in the periphery")[0]
+    assert hit.section.startswith("7.")   # the clause sits under the high-rise section
+    assert hit.citation.startswith("rule 7(")
+
+
 def test_the_answer_carries_its_page_so_it_can_be_checked(book):
     hits = book.search("organized open space 10% of site area")
     assert hits[0].page == 1

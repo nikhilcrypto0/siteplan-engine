@@ -27,7 +27,7 @@ K1 = 1.2  # BM25: how quickly a repeated word stops adding to the score
 B = 0.75  # BM25: how much a passage's length counts against it
 MIN_CHUNK_CHARS = 120
 MAX_CHUNK_CHARS = 900
-CACHE_VERSION = 1
+CACHE_VERSION = 2  # passages now carry their section and clause
 
 
 @dataclass(frozen=True)
@@ -35,18 +35,40 @@ class Passage:
     page: int
     text: str
     score: float
+    section: str = ""  # the numbered heading this sits under, e.g. "13. PARKING"
+    clause: str = ""  # the marker the passage opens with, e.g. "(vii)"
+
+    @property
+    def citation(self) -> str:
+        """How to refer to this passage, built from the document, never composed by a model."""
+        number = re.match(r"\s*(\d+)\.", self.section)
+        rule = f"rule {number.group(1)}" if number else self.section or "the order"
+        if self.clause:
+            return f"{rule}{self.clause} (page {self.page})"
+        return f"{rule}, page {self.page}"
 
     def as_dict(self) -> dict:
-        return {"page": self.page, "text": self.text, "score": round(self.score, 2)}
+        return {"page": self.page, "section": self.section, "clause": self.clause,
+                "citation": self.citation, "text": self.text, "score": round(self.score, 2)}
+
+
+@dataclass(frozen=True)
+class Chunk:
+    """A passage as stored: the text with where it came from."""
+
+    page: int
+    text: str
+    section: str = ""
+    clause: str = ""
 
 
 class RuleBook:
     """The rules document, chunked into passages that can be searched and quoted."""
 
-    def __init__(self, source: str, passages: list[tuple[int, str]]) -> None:
+    def __init__(self, source: str, passages: list[Chunk]) -> None:
         self.source = source
         self.passages = passages
-        self._words = [_words(text) for _, text in passages]
+        self._words = [_words(chunk.text) for chunk in passages]
         # The order writes "drive way", people ask about a "driveway"; joining neighbouring
         # words lets one find the other without a synonym list.
         self._joined = [
@@ -73,14 +95,13 @@ class RuleBook:
             try:
                 stored = json.loads(cache.read_text())
                 if stored.get("stamp") == stamp:
-                    return cls(path.name, [(p["page"], p["text"]) for p in stored["passages"]])
-            except (json.JSONDecodeError, KeyError):
-                pass  # a broken cache is not worth a crash; rebuild it
+                    return cls(path.name, [Chunk(**p) for p in stored["passages"]])
+            except (json.JSONDecodeError, KeyError, TypeError):
+                pass  # a broken or older cache is not worth a crash; rebuild it
         passages = _read_pdf(path)
         with contextlib.suppress(OSError):  # a read-only folder just means slower next time
             cache.write_text(json.dumps(
-                {"stamp": stamp,
-                 "passages": [{"page": page, "text": text} for page, text in passages]}
+                {"stamp": stamp, "passages": [vars(chunk) for chunk in passages]}
             ))
         return cls(path.name, passages)
 
@@ -91,9 +112,7 @@ class RuleBook:
             return []
         total = len(self.passages) or 1
         found: list[Passage] = []
-        for (page, text), words, joined in zip(
-            self.passages, self._words, self._joined, strict=True
-        ):
+        for chunk, words, joined in zip(self.passages, self._words, self._joined, strict=True):
             score = 0.0
             counts = {w: float(words.count(w)) for w in set(terms) if w in words}
             # Matching a word the document spells as two ("drive way" for "driveway") is
@@ -109,10 +128,11 @@ class RuleBook:
                 score += saturated * rarity
             if len(counts) > 1:
                 score *= 1 + 0.35 * (len(counts) - 1)  # passages covering more of the question
-            if query.strip().lower() in text.lower():
+            if query.strip().lower() in chunk.text.lower():
                 score *= 2
             if score > 0:
-                found.append(Passage(page=page, text=text, score=score))
+                found.append(Passage(page=chunk.page, text=chunk.text, score=score,
+                                     section=chunk.section, clause=chunk.clause))
         found.sort(key=lambda p: (-p.score, p.page))
         return found[:limit]
 
@@ -121,33 +141,50 @@ def _words(text: str) -> list[str]:
     return [w for w in re.findall(r"[a-z0-9.]+", text.lower()) if w not in STOPWORDS]
 
 
-def _read_pdf(path: Path) -> list[tuple[int, str]]:
+SECTION_RE = re.compile(r"^(\d+)\.\s+([A-Z][A-Z /&,'-]{4,})")  # no brackets: "(viii)" follows
+CLAUSE_RE = re.compile(r"^(\([ivxlc]+\)|\([a-z]\)|\([0-9]+\))", re.I)
+
+
+def _read_pdf(path: Path) -> list[Chunk]:
     import pdfplumber  # imported here: only a rules search pays for it
 
-    passages: list[tuple[int, str]] = []
+    chunks: list[Chunk] = []
+    section = ""  # headings carry on across pages until the next one
     with pdfplumber.open(path) as pdf:
         for number, page in enumerate(pdf.pages, 1):
-            for chunk in _chunks(page.extract_text() or ""):
-                passages.append((number, chunk))
-    return passages
+            page_chunks, section = _chunks(page.extract_text() or "", section)
+            chunks += [Chunk(number, text, section_here, clause)
+                       for text, section_here, clause in page_chunks]
+    return chunks
 
 
-def _chunks(text: str) -> list[str]:
-    """Clause-sized pieces: split where a new numbered clause starts, then cap the length."""
+def _chunks(text: str, section: str) -> tuple[list[tuple[str, str, str]], str]:
+    """Clause-sized pieces, each tagged with the section heading it sits under and the clause
+    marker it opens with, so an answer can cite the document rather than guess a rule number."""
     lines = [line.strip() for line in text.splitlines() if line.strip()]
-    pieces: list[list[str]] = [[]]
+    pieces: list[tuple[list[str], str]] = [([], section)]
     for line in lines:
-        starts_clause = re.match(r"^(\(?[ivx]+\)|\(?[a-z]\)|\d+\.|TABLE|\d+\))", line, re.I)
-        if starts_clause and sum(len(x) for x in pieces[-1]) >= MIN_CHUNK_CHARS:
-            pieces.append([])
-        pieces[-1].append(line)
-    out: list[str] = []
-    for piece in pieces:
-        joined = " ".join(piece).strip()
+        heading = SECTION_RE.match(line)
+        if heading:
+            section = f"{heading.group(1)}. {heading.group(2).strip()}"
+        starts_clause = CLAUSE_RE.match(line) or heading or re.match(r"^(TABLE|\d+\))", line, re.I)
+        if starts_clause and sum(len(x) for x in pieces[-1][0]) >= MIN_CHUNK_CHARS:
+            pieces.append(([], section))
+        pieces[-1][0].append(line)
+        if heading:  # the heading belongs to the section it opens
+            pieces[-1] = (pieces[-1][0], section)
+    out: list[tuple[str, str, str]] = []
+    for lines_here, section_here in pieces:
+        joined = " ".join(lines_here).strip()
+        # A chunk may open with its section heading ("13. PARKING (viii) ..."); the clause is
+        # whatever marker follows it.
+        body = SECTION_RE.sub("", joined, count=1).lstrip()
+        opener = CLAUSE_RE.match(body)
+        clause = opener.group(1) if opener else ""
         while len(joined) > MAX_CHUNK_CHARS:
             cut = joined.rfind(" ", 0, MAX_CHUNK_CHARS)
-            out.append(joined[:cut])
-            joined = joined[cut:].strip()
+            out.append((joined[:cut], section_here, clause))
+            joined, clause = joined[cut:].strip(), ""
         if len(joined) >= 40:
-            out.append(joined)
-    return out
+            out.append((joined, section_here, clause))
+    return out, section
