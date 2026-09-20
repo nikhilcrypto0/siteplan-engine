@@ -63,6 +63,17 @@ ROAD_WIDENING_CLAUSE = "G.O.168 rule 16 (surrender free of cost; TDR, extra floo
 MORTGAGE_FRACTION = 0.10  # of built-up area, handed over by notarised affidavit
 MORTGAGE_CLAUSE = "G.O.168 (mortgage clause (d), p.28)"
 
+DRIVEWAY_MIN_WIDTH_M = 4.5
+DRIVEWAY_CLAUSE = "G.O.168 rule 13(viii) (minimum drive way width 4.5 m)"
+
+# Rule 9(o) sits in the row-housing section but is written for "very large projects"; whether
+# it binds a group-housing scheme is for the firm to confirm, so a shortfall asks rather than fails.
+AMENITY_MIN_FRACTION = 0.05
+AMENITY_SITE_THRESHOLD_SQM = 20234.28  # 5 acres
+AMENITY_CLAUSE = "G.O.168 rule 9(o) (amenities in at least 5% of site area, projects over 5 acres)"
+
+PARKING_CLAUSE = "G.O.168 rule 13 and Table V (parking as a percentage of built-up area)"
+
 
 def band_for_height(height_m: float) -> HeightBand | None:
     """The Table IV row for a building height, or None above 55 m (not encoded yet)."""

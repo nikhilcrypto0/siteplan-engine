@@ -16,6 +16,7 @@ LAYERS = {
     "Building Plan": 7,
     "Dwelling Unit": 3,
     "Organized Open Space": 94,
+    "Driveway": 253,
     "SOLVER-CORES": 8,
     "SOLVER-LABELS": 7,
 }
@@ -23,6 +24,13 @@ LAYERS = {
 
 def _ring(polygon: Polygon) -> list[tuple[float, float]]:
     return [(x, y) for x, y in list(polygon.exterior.coords)[:-1]]
+
+
+def _parts(shape) -> list[Polygon]:
+    """The driveway ring can come back as several pieces; nothing is one piece for free."""
+    if shape is None or shape.is_empty:
+        return []
+    return [shape] if isinstance(shape, Polygon) else [p for p in shape.geoms]
 
 
 def write_layout_dxf(option: LayoutOption, plot: Polygon, path: str | Path) -> Path:
@@ -36,6 +44,14 @@ def write_layout_dxf(option: LayoutOption, plot: Polygon, path: str | Path) -> P
         msp.add_lwpolyline(_ring(polygon), close=True, dxfattribs={"layer": layer})
 
     add(plot, "Plot")
+    for part in _parts(option.driveway):
+        add(part, "Driveway")
+    if option.club_house is not None:
+        add(option.club_house, "Building Plan")
+        c = option.club_house.centroid
+        msp.add_text(
+            "CLUB HOUSE", height=3.0, dxfattribs={"layer": "SOLVER-LABELS"}
+        ).set_placement((c.x, c.y))
     for pocket in option.open_space:
         add(pocket, "Organized Open Space")
     for tower in option.towers:
@@ -80,6 +96,17 @@ def write_layout_svg(option: LayoutOption, plot: Polygon, path: str | Path, titl
         f'{s["open_space_share_pct"]}% · mix {escape(str(s["unit_mix_achieved"]))}</text>',
         f'<polygon points="{pts(plot)}" fill="none" stroke="#ad2677" stroke-width="2"/>',
     ]
+    for part in _parts(option.driveway):
+        lines.append(f'<polygon points="{pts(part)}" fill="#ded9cc" stroke="#b0a894"/>')
+    if option.club_house is not None:
+        c = option.club_house.centroid
+        lines.append(
+            f'<polygon points="{pts(option.club_house)}" fill="#cfd8e8" stroke="#3a5a8c"/>'
+        )
+        lines.append(
+            f'<text x="{(c.x - minx + pad) * scale:.1f}" y="{(maxy - c.y + pad) * scale + 70:.1f}" '
+            f'font-size="11" font-weight="700" text-anchor="middle" fill="#3a5a8c">CLUB</text>'
+        )
     for pocket in option.open_space:
         lines.append(f'<polygon points="{pts(pocket)}" fill="#bfdcaa" stroke="#47762c"/>')
     for tower in option.towers:

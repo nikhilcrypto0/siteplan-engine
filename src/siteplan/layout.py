@@ -23,6 +23,7 @@ from shapely.geometry import Polygon, box
 from shapely.ops import unary_union
 
 from siteplan import rules
+from siteplan.amenities import club_house, driveway_ring
 from siteplan.area_statement import AreaStatement, FloorLine, TowerGroup
 from siteplan.checks import Building, Finding, Site, check_site
 from siteplan.geometry import angle_gap, opening, straight_runs
@@ -43,6 +44,13 @@ class LayoutRequest(BaseModel):
         description="Share of flats per category, e.g. {'2BHK': 0.7, '3BHK': 0.3}"
     )
     common_area_pct: float = Field(22.0, ge=0, le=100)
+    club_house_sqm: float | None = Field(
+        None, gt=0, description="Club house / amenity block reserved before the towers"
+    )
+    driveway_width_m: float = Field(
+        rules.DRIVEWAY_MIN_WIDTH_M, ge=rules.DRIVEWAY_MIN_WIDTH_M,
+        description="Drive around the buildings, inside the setback",
+    )
     max_tower_length_m: PositiveFloat = 80.0
     min_flats_per_side: PositiveInt = 2
     options: int = Field(3, ge=1, le=10)
@@ -88,6 +96,8 @@ class LayoutOption:
     unit_mix_target: dict[str, float]
     plot_area_sqm: float
     findings: tuple[Finding, ...] = ()
+    club_house: Polygon | None = None
+    driveway: Polygon | None = None
 
     @property
     def flats_per_floor(self) -> dict[str, int]:
@@ -145,6 +155,8 @@ class LayoutOption:
             "open_space_sqm": round(self.open_space_sqm, 1),
             "open_space_share_pct": round(self.open_space_share * 100, 2),
             "mix_error": round(self.mix_error, 3),
+            "club_house_sqm": round(self.club_house.area, 1) if self.club_house else 0,
+            "driveway_sqm": round(self.driveway.area, 1) if self.driveway else 0,
             "rule_findings": {f.rule: f.status.value for f in self.findings},
         }
 
@@ -270,7 +282,8 @@ def open_space_pockets(envelope, towers: list[Tower], gap_m: float) -> list[Poly
     return [p for p in _parts(usable) if p.area >= rules.OPEN_SPACE_MIN_POCKET_SQM + EPS_M]
 
 
-def _one_layout(plot, envelope, angle, offset, library, request, gap) -> LayoutOption | None:
+def _one_layout(plot, envelope, angle, offset, library, request, gap,
+                club=None, drive=None) -> LayoutOption | None:
     alpha = 90 - angle  # rotate the site so the towers' long axis runs along y
     rotated = affinity.rotate(envelope, alpha, origin=(0, 0))
     minx, _, maxx, _ = rotated.bounds
@@ -309,6 +322,8 @@ def _one_layout(plot, envelope, angle, offset, library, request, gap) -> LayoutO
         floors=request.floors,
         unit_mix_target=dict(request.unit_mix),
         plot_area_sqm=plot.area,
+        club_house=club,
+        driveway=drive,
     )
 
 
@@ -338,13 +353,26 @@ def solve(
     if envelope.is_empty:
         return []
 
+    # Amenities take their land first, as they do on a real site plan.
+    drive = driveway_ring(plot, envelope, request.driveway_width_m)
+    club = club_house(envelope, request.club_house_sqm) if request.club_house_sqm else None
+    if request.club_house_sqm and club is None:
+        raise ValueError(
+            f"a club house of {request.club_house_sqm:,.0f} m² does not fit inside the setbacks"
+        )
+    if club is not None:
+        envelope = envelope.difference(club.buffer(gap + EPS_M, join_style="mitre"))
+        if envelope.is_empty:
+            return []
+
     pitch = library.tower_depth_m + gap + EPS_M
     steps = max(1, int(pitch // SWEEP_STEP_M))
     candidates = [
         option
         for angle in orientations(plot)
         for i in range(steps)
-        if (option := _one_layout(plot, envelope, angle, i * SWEEP_STEP_M, library, request, gap))
+        if (option := _one_layout(plot, envelope, angle, i * SWEEP_STEP_M, library, request, gap,
+                                  club, drive))
     ]
     candidates.sort(key=lambda o: -o.score)
 
@@ -378,6 +406,8 @@ def _with_findings(option, plot, request, gross, road, master_road) -> LayoutOpt
             Building(t.name, height_m=request.height_m, footprint=t.footprint)
             for t in option.towers
         ),
+        club_house=option.club_house,
+        driveway=option.driveway,
     )
     return LayoutOption(**{**option.__dict__, "findings": tuple(check_site(site))})
 

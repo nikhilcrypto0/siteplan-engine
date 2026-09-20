@@ -62,6 +62,8 @@ class Site:
     net_plot: Polygon | None = None
     open_space_pockets: tuple[Polygon, ...] = ()
     buildings: tuple[Building, ...] = field(default_factory=tuple)
+    club_house: Polygon | None = None
+    driveway: Polygon | None = None
 
 
 def _m(value: float) -> str:
@@ -104,7 +106,62 @@ def check_site(site: Site) -> list[Finding]:
             "Needs the landscape layer from the site-plan DWG.",
         )
     )
+    findings.append(_driveway_finding(site))
+    findings.append(_amenity_finding(site))
+    findings.append(
+        Finding(
+            "Parking",
+            Status.NOT_CHECKED,
+            "not modelled yet",
+            "Table V percentage of built-up area, by authority",
+            rules.PARKING_CLAUSE,
+            "Needs the authority's Table V row and a parking layout (stilt plus surface).",
+        )
+    )
     return findings
+
+
+def _driveway_finding(site: Site) -> Finding:
+    required = f">= {rules.DRIVEWAY_MIN_WIDTH_M:g} m wide"
+    if site.driveway is None:
+        return Finding("Driveway", Status.NOT_CHECKED, "no driveway in this layout", required,
+                       rules.DRIVEWAY_CLAUSE, "Give the layout a driveway width to check it.")
+    narrow = _narrower_than(site.driveway, rules.DRIVEWAY_MIN_WIDTH_M)
+    measured = f"{site.driveway.area:,.0f} m²"
+    if narrow:
+        measured += ", narrower than the minimum in places"
+    return Finding(
+        "Driveway",
+        Status.FAIL if narrow else Status.PASS,
+        measured,
+        required,
+        rules.DRIVEWAY_CLAUSE,
+        "Ramps are not counted here; rule 13(vii) keeps those out of the mandatory setbacks.",
+    )
+
+
+def _amenity_finding(site: Site) -> Finding:
+    area = site.net_area_sqm
+    required = f">= {rules.AMENITY_MIN_FRACTION:.0%} of site area"
+    if area is None:
+        return Finding("Amenities (club house)", Status.NEEDS_INPUT, "site area unknown",
+                       required, rules.AMENITY_CLAUSE)
+    if area < rules.AMENITY_SITE_THRESHOLD_SQM:
+        return Finding(
+            "Amenities (club house)", Status.INFO,
+            f"site {area:,.0f} m², under the 5-acre threshold", required, rules.AMENITY_CLAUSE,
+            "The clause is written for projects over 5 acres.",
+        )
+    provided = site.club_house.area if site.club_house is not None else 0.0
+    share = provided / area
+    if share >= rules.AMENITY_MIN_FRACTION:
+        status, note = Status.PASS, ""
+    else:
+        status = Status.NEEDS_INPUT
+        note = ("The clause sits in the row-housing section; confirm with the firm whether it "
+                "binds a group-housing scheme before treating this as a failure.")
+    return Finding("Amenities (club house)", status, f"{provided:,.0f} m² ({_pct(share)})",
+                   required, rules.AMENITY_CLAUSE, note)
 
 
 def _height_finding(b: Building) -> Finding:
