@@ -112,9 +112,11 @@ class Workspace:
         except ValidationError as exc:
             raise ToolError(f"'{name}' is not a valid flat library ({_fields(exc)}).") from None
 
-    def listing(self) -> dict[str, list[str]]:
-        found: dict[str, list[str]] = {"projects": [], "flat_libraries": [],
-                                       "amenity_libraries": [], "surveys": []}
+    def listing(self) -> dict[str, Any]:
+        """What is in the workspace. Projects carry their names: a workspace holds several,
+        and the architect asks for one by its name, not by its file name."""
+        found: dict[str, Any] = {"projects": [], "flat_libraries": [],
+                                 "amenity_libraries": [], "surveys": [], "project_names": {}}
         files = sorted(
             p for p in self.root.rglob("*")
             if p.is_file() and not p.is_relative_to(self.out)
@@ -128,6 +130,10 @@ class Workspace:
                 kind = _json_kind(path)
                 if kind:
                     found[kind].append(name)
+                    if kind == "projects":
+                        found["project_names"][name] = Project.model_validate_json(
+                            path.read_text()
+                        ).name
         return found
 
 
@@ -173,8 +179,10 @@ def build_server(workspace: Path, out_dir: Path, approval: str = "elicit",
     server = FastMCP("siteplan", instructions=INSTRUCTIONS)
 
     @server.tool(annotations=READ_ONLY)
-    def list_files() -> dict[str, list[str]]:
-        """List the project files, survey drawings (PDF/DXF) and flat libraries available."""
+    def list_files() -> dict[str, Any]:
+        """List the project files, survey drawings (PDF/DXF) and flat libraries available.
+        `project_names` gives each project file's name: match the architect's words to a
+        name, never to a file name, and say which project you picked."""
         return ws.listing()
 
     @server.tool(annotations=READ_ONLY)

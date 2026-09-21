@@ -94,6 +94,16 @@ def test_list_files_classifies_the_workspace(ws):
     assert "assistant.config.json" not in json.dumps(found)
 
 
+def test_two_projects_with_alike_file_names_are_told_apart_by_their_names(ws):
+    """A live run picked the wrong 'dhula...' file: the model can only see what we list."""
+    other = json.loads((ws / "example.project.json").read_text()) | {"name": "Second site"}
+    (ws / "example-two.project.json").write_text(json.dumps(other))
+    found = ok(call(ws, "list_files"))
+    assert set(found["projects"]) == {"example.project.json", "example-two.project.json"}
+    assert found["project_names"]["example-two.project.json"] == "Second site"
+    assert found["project_names"]["example.project.json"] != "Second site"
+
+
 def test_survey_summary_is_computed(ws):
     square = Polygon([(0, 0), (100, 0), (100, 100), (0, 100)])
     write_survey_dxf(Survey("synthetic", square, 10000, None, (), ()), ws / "site.dxf")
