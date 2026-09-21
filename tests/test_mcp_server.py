@@ -231,3 +231,23 @@ def test_unknown_flat_category_is_refused(ws):
                   Architect())
     assert result.isError and "4BHK" in result.content[0].text
     assert nothing_drawn(ws)
+
+
+def test_the_chat_can_lay_out_the_facilities_too(ws):
+    shutil.copy(Path(__file__).parent.parent / "examples/amenities.example.json",
+                ws / "amenities.example.json")
+    found = ok(call(ws, "list_files"))
+    assert "amenities.example.json" in found["amenity_libraries"]
+    assert "amenities.example.json" not in found["flat_libraries"]  # told apart by shape
+
+    reply = ok(call(ws, "propose_layouts",
+                    LAYOUT_ARGS | {"amenities_file": "amenities.example.json"}, Architect()))
+    assert reply["solved"] is True
+    record = json.loads((Path(reply["folder"]) / "run.json").read_text())
+    assert record["options"][0]["amenities"], "the facilities belong in the record"
+
+
+def test_an_amenity_file_that_is_not_one_is_refused(ws):
+    result = call(ws, "propose_layouts",
+                  LAYOUT_ARGS | {"amenities_file": "example.project.json"}, Architect())
+    assert result.isError and "amenity library" in result.content[0].text

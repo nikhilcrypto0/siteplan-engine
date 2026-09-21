@@ -43,6 +43,7 @@ from siteplan.project import Project
 from siteplan.result_page import write_result_page
 from siteplan.rulebook import RuleBook
 from siteplan.runner import LAYOUT_CAVEAT, load_plot, read_survey, run_layout
+from siteplan.site_amenities import AmenityLibrary
 
 log = logging.getLogger("siteplan.mcp")
 
@@ -53,7 +54,8 @@ MAX_LISTED = 200
 MAX_BRIEF_CHARS = 2000
 APPROVAL_TIMEOUT_S = 300
 OPTION_KEYS = ("option", "towers", "total_flats", "saleable_sqft", "open_space_share_pct",
-               "unit_mix_achieved", "mix_error", "rule_findings")
+               "unit_mix_achieved", "mix_error", "amenities", "amenities_with_no_room",
+               "surface_parking_bays", "rule_findings")
 
 INSTRUCTIONS = (
     "Site-planning tools for Telangana group housing. Every number these tools return is "
@@ -98,6 +100,12 @@ class Workspace:
         except ValidationError as exc:
             raise ToolError(f"'{name}' is not a valid project file ({_fields(exc)}).") from None
 
+    def amenities(self, name: str) -> AmenityLibrary:
+        try:
+            return AmenityLibrary.model_validate_json(self.file(name, {".json"}).read_text())
+        except ValidationError as exc:
+            raise ToolError(f"'{name}' is not a valid amenity library ({_fields(exc)}).") from None
+
     def library(self, name: str) -> FlatLibrary:
         try:
             return FlatLibrary.model_validate_json(self.file(name, {".json"}).read_text())
@@ -105,7 +113,8 @@ class Workspace:
             raise ToolError(f"'{name}' is not a valid flat library ({_fields(exc)}).") from None
 
     def listing(self) -> dict[str, list[str]]:
-        found: dict[str, list[str]] = {"projects": [], "flat_libraries": [], "surveys": []}
+        found: dict[str, list[str]] = {"projects": [], "flat_libraries": [],
+                                       "amenity_libraries": [], "surveys": []}
         files = sorted(
             p for p in self.root.rglob("*")
             if p.is_file() and not p.is_relative_to(self.out)
@@ -128,7 +137,8 @@ def _fields(exc: ValidationError) -> str:
 
 def _json_kind(path: Path) -> str | None:
     text = path.read_text(errors="replace")
-    for kind, model in (("projects", Project), ("flat_libraries", FlatLibrary)):
+    for kind, model in (("projects", Project), ("flat_libraries", FlatLibrary),
+                        ("amenity_libraries", AmenityLibrary)):
         try:
             model.model_validate_json(text)
             return kind
@@ -230,12 +240,17 @@ def build_server(workspace: Path, out_dir: Path, approval: str = "elicit",
         floor_height_m: float | None = None,
         common_area_pct: float | None = None,
         survey_file: str | None = None,
+        amenities_file: Annotated[str | None, Field(
+            description="Amenity library: pool, courts, play area, security cabin"
+        )] = None,
     ) -> dict[str, Any]:
-        """Draw tower layout options (DXF for ZWCAD plus an SVG preview) from a brief. Pass
+        """Draw tower layout options (DXF for ZWCAD, an A1 drawing sheet and an SVG preview) from
+        a brief. Give amenities_file as well to lay out the pool, courts and play area. Pass
         only values the architect stated; leave the rest null. The architect is asked to
         approve the values before anything is drawn."""
         project = ws.project(project_file)
         library = ws.library(library_file)
+        amenities = ws.amenities(amenities_file) if amenities_file else None
         unknown = set(unit_mix_percent or {}) - set(library.categories)
         if unknown:
             raise ToolError(f"Unknown flat categories {sorted(unknown)}; the library has "
@@ -279,7 +294,7 @@ def build_server(workspace: Path, out_dir: Path, approval: str = "elicit",
         out = ws.out / run
         try:
             options = await anyio.to_thread.run_sync(
-                run_layout, project, library, plot, request, out
+                run_layout, project, library, plot, request, out, amenities
             )
         except ValueError as exc:
             return {"solved": False, "next": f"The solver refused the request: {exc}"}
