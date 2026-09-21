@@ -88,7 +88,9 @@ def test_tools_carry_honest_annotations(ws):
 def test_list_files_classifies_the_workspace(ws):
     found = ok(call(ws, "list_files"))
     assert found["projects"] == ["example.project.json"]
-    assert found["flat_libraries"] == ["flat_library.example.json"]
+    # More than one library may sit in a workspace: the illustrative one and a researched one.
+    assert "flat_library.example.json" in found["flat_libraries"]
+    assert all(name.endswith(".json") for name in found["flat_libraries"])
     assert "assistant.config.json" not in json.dumps(found)
 
 
