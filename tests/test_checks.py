@@ -1,3 +1,4 @@
+from shapely import affinity
 from shapely.geometry import box
 
 from siteplan.checks import Building, Site, Status, check_site
@@ -124,6 +125,22 @@ def test_a_long_building_needs_more_setback_than_the_table_alone():
     assert finding.status is Status.FAIL                            # 10 m is no longer enough
     assert "13.00 m" in finding.required and "80 m long" in finding.required
     assert finding.clause.startswith("G.O.Ms.No.50")
+
+
+def test_a_building_turned_to_suit_the_site_is_measured_on_its_own_axes():
+    """Turning a block does not lengthen it, and the 2019 note charges by length."""
+    straight = _tower("A", 60, 90, 140, 110)                        # 80 m long, 20 m deep
+    turned = Building("A", stilt_height_m=3, floors=8, floor_height_m=3,
+                      footprint=affinity.rotate(straight.footprint, 30))
+    plot = box(0, 0, 200, 200)
+
+    def required(building):
+        site = Site(net_area_sqm=10000, abutting_road_m=18, net_plot=plot,
+                    buildings=(building,))
+        return _by_rule(check_site(site))["All-round setback: A"].required
+
+    assert required(turned) == required(straight)
+    assert "13.00 m" in required(turned) and "80 m long" in required(turned)
 
 
 def test_the_green_strip_is_only_asked_for_where_the_setback_reaches_9_m():

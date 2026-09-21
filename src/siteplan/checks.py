@@ -9,6 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import StrEnum
 from itertools import combinations
+from math import hypot
 
 from shapely.geometry import Polygon
 
@@ -315,11 +316,19 @@ def _no_geometry(rule: str, required: str, clause: str, count: int) -> Finding:
 
 
 def _longest_side_m(building: Building) -> float | None:
-    """How long the building is, which decides whether the 40 m note applies."""
-    if building.footprint is None:
+    """How long the building is, which decides whether the 40 m note applies.
+
+    Measured on the building's own axes, not the drawing's: a block turned to suit the site
+    is no longer for it, and its bounding box would charge it setback it does not owe.
+    """
+    if building.footprint is None or building.footprint.is_empty:
         return None
-    x0, y0, x1, y1 = building.footprint.bounds
-    return max(x1 - x0, y1 - y0)
+    hull = building.footprint.convex_hull
+    if not hasattr(hull, "exterior"):  # degenerate footprint: a line or a point
+        x0, y0, x1, y1 = hull.bounds
+        return max(x1 - x0, y1 - y0)
+    x, y = hull.exterior.coords.xy
+    return max(hypot(x[i + 1] - x[i], y[i + 1] - y[i]) for i in range(len(x) - 1))
 
 
 def _needed_setback(building: Building, band) -> float:
