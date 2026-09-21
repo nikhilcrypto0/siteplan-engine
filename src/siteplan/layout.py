@@ -350,23 +350,11 @@ def _one_layout(plot, envelope, angle, offset, library, request, gap,
         Tower(f"T{i}", t.footprint, t.flats_per_side, t.flat_outlines, t.cores)
         for i, t in enumerate(towers, 1)
     )
-    # The facilities are designed in, then cars park in what is left: an architect does not
-    # lose the pool because a parking bay got there first.
+    # Gates are cheap and shape nothing else, so they are placed here. The facilities and the
+    # parking bays are not: they cost a grid search each, and only the handful of layouts that
+    # survive selection are worth furnishing (see _furnish).
     frontage = max(straight_runs(plot), key=lambda r: r.length).line
     placed_gates = gates(plot, frontage, request.driveway_width_m + gap)
-    facilities, missed = (), ()
-    if amenities is not None:
-        room = free_for_amenities(envelope, named, club, pockets, (), drive)
-        anchors = _anchors(plot, club, pockets, placed_gates)
-        found, missed_names = place_amenities(room, amenities, angle, anchors, pockets)
-        facilities, missed = tuple(found), tuple(missed_names)
-    free = free_for_parking(envelope, named, club, pockets)
-    if facilities:
-        free = free.difference(
-            unary_union([f.shape.buffer(AMENITY_CLEARANCE_M, join_style="mitre")
-                         for f in facilities])
-        )
-    bays = surface_bays(free, angle)
     return LayoutOption(
         orientation_deg=angle,
         towers=named,
@@ -377,10 +365,7 @@ def _one_layout(plot, envelope, angle, offset, library, request, gap,
         club_house=club,
         club_house_floors=request.club_house_floors,
         driveway=drive,
-        parking_bays=tuple(bays),
         gates=tuple(placed_gates),
-        amenities=facilities,
-        amenities_missed=missed,
     )
 
 
@@ -448,11 +433,46 @@ def solve(
             break
         wanted = need
 
+    furnished = [_furnish(o, plot, gap, request, amenities) for o in chosen]
     return [
         _with_findings(o, plot, request, gross_area_sqm, abutting_road_m, master_plan_road_m,
                        authority)
-        for o in chosen
+        for o in furnished
     ]
+
+
+def _furnish(option: LayoutOption, plot, gap, request, amenities) -> LayoutOption:
+    """Lay the facilities and then the parking bays into one chosen layout.
+
+    The facilities come first: an architect does not lose the pool because a parking bay got
+    there first. Neither is worth computing for a layout that will be thrown away.
+    """
+    envelope = plot.buffer(-(gap + EPS_M))
+    if option.club_house is not None:
+        envelope = envelope.difference(
+            option.club_house.buffer(gap + EPS_M, join_style="mitre")
+        )
+    facilities: tuple[PlacedAmenity, ...] = ()
+    missed: tuple[str, ...] = ()
+    if amenities is not None:
+        room = free_for_amenities(envelope, option.towers, option.club_house, option.open_space,
+                                  (), option.driveway)
+        anchors = _anchors(plot, option.club_house, option.open_space, option.gates)
+        found, missed_names = place_amenities(room, amenities, option.orientation_deg, anchors,
+                                              option.open_space)
+        facilities, missed = tuple(found), tuple(missed_names)
+    free = free_for_parking(envelope, option.towers, option.club_house, option.open_space)
+    if facilities:
+        free = free.difference(
+            unary_union([f.shape.buffer(AMENITY_CLEARANCE_M, join_style="mitre")
+                         for f in facilities])
+        )
+    return LayoutOption(**{
+        **option.__dict__,
+        "parking_bays": tuple(surface_bays(free, option.orientation_deg)),
+        "amenities": facilities,
+        "amenities_missed": missed,
+    })
 
 
 def _search(plot, envelope, library, request, gap, wanted, drive,
