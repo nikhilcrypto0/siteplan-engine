@@ -40,7 +40,7 @@ p.caveat {{ color: #7a5a1a; background: #fff8e8; border: 1px solid #f0e3c0;
 CARD = """<figure>
 <img src="{svg}" alt="Option {option}">
 <figcaption><strong>Option {option}</strong>: {towers}, {flats} flats, {sqft} sft saleable,
-open space {open_pct}%<br>{verdict}<br>
+{built_up} sft built-up, open space {open_pct}%<br>{verdict}<br>
 <span class="files"><a href="{dxf}">option_{option}.dxf</a> for ZWCAD ·
 <a href="{sheet}">option_{option}.sheet.dxf</a> drawing sheet</span></figcaption>
 </figure>"""
@@ -59,6 +59,7 @@ def write_result_page(record: dict, comparison: str, out: Path) -> Path:
             option=n, svg=f"option_{n}.svg", dxf=f"option_{n}.dxf",
             sheet=f"option_{n}.sheet.dxf", towers=towers,
             flats=option["total_flats"], sqft=f"{option['saleable_sqft']:,}",
+            built_up=f"{option.get('built_up_sqft', 0):,}",
             open_pct=option["open_space_share_pct"], verdict=verdict,
         ))
     page = PAGE.format(

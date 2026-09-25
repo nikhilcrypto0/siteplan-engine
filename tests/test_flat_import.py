@@ -9,7 +9,12 @@ import re
 import ezdxf
 import pytest
 
-from siteplan.flat_import import group_into_flats, read_rooms, to_library
+from siteplan.flat_import import (
+    BUILT_UP_FROM_CARPET,
+    group_into_flats,
+    read_rooms,
+    to_library,
+)
 
 # One 2BHK, twice (a type has to repeat), and a 3BHK, twice. Sizes in mm, as CAD draws them.
 TWO_BHK = [
@@ -82,7 +87,10 @@ def test_the_library_keeps_the_areas_and_one_depth(plan):
 
     two = next(f for f in library.flats if f.bhk == "2BHK")
     carpet_sqm = sum(_size(name)[0] * _size(name)[1] for name, _, _ in TWO_BHK)
-    assert two.saleable_sqft == pytest.approx(carpet_sqm * 10.7639 * 1.22, rel=0.01)
+    # Carpet is not what a flat sells for: walls and balconies, then the common loading.
+    built_up_sqm = carpet_sqm * BUILT_UP_FROM_CARPET
+    assert two.saleable_sqft == pytest.approx(built_up_sqm * 10.7639 * 1.22, rel=0.01)
+    assert two.saleable_sqft > carpet_sqm * 10.7639 * 1.22
     # The frontage follows the area at that depth, with an allowance for the walls.
     assert two.width_m * two.depth_m > carpet_sqm
 

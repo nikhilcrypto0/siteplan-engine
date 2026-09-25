@@ -182,6 +182,8 @@ class LayoutOption:
             "unit_mix_achieved": {k: round(v / total, 3) for k, v in sorted(counts.items())},
             "total_flats": self.total_flats,
             "saleable_sqft": round(self.saleable_sqft),
+            # The number a firm's own area statement prints, so the two can be compared.
+            "built_up_sqft": round(sqm_to_sqft(self.built_up_sqm)),
             "built_up_sqft_per_floor": round(self.built_up_sqft_per_floor),
             "open_space_sqm": round(self.open_space_sqm, 1),
             "open_space_share_pct": round(self.open_space_share * 100, 2),

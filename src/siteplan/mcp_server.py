@@ -53,7 +53,8 @@ SURVEY_TYPES = {".pdf", ".dxf"}
 MAX_LISTED = 200
 MAX_BRIEF_CHARS = 2000
 APPROVAL_TIMEOUT_S = 300
-OPTION_KEYS = ("option", "towers", "total_flats", "saleable_sqft", "open_space_share_pct",
+OPTION_KEYS = ("option", "towers", "total_flats", "saleable_sqft", "built_up_sqft",
+               "open_space_share_pct",
                "unit_mix_achieved", "mix_error", "amenities", "amenities_with_no_room",
                "surface_parking_bays", "rule_findings")
 

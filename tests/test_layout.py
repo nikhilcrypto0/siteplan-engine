@@ -9,7 +9,8 @@ from shapely.geometry import Polygon, box
 from siteplan.checks import Status
 from siteplan.layout import LayoutRequest, area_statement, free_stretches, solve
 from siteplan.layout_export import write_layout_dxf, write_layout_svg
-from siteplan.library import FlatLibrary
+from siteplan.library import FlatLibrary, FlatType
+from siteplan.units import sqm_to_sqft
 
 LIBRARY = FlatLibrary(
     flats=[
@@ -112,3 +113,18 @@ def test_exports_write_buildnow_layers_and_a_preview(tmp_path):
     assert {"Plot", "Building Plan", "Dwelling Unit", "Organized Open Space"} <= layers
     svg = write_layout_svg(option, plot, tmp_path / "o.svg", "Test <site>").read_text()
     assert svg.startswith("<svg") and "Test &lt;site&gt;" in svg
+
+
+def test_the_summary_prints_built_up_as_well_as_saleable():
+    """A firm's area statement is built-up, so a scheme can only be compared on that."""
+    plot = box(0, 0, 120, 90)
+    library = FlatLibrary(
+        flats=[FlatType(name="2BHK", bhk="2BHK", width_m=7.0, depth_m=11.0, saleable_sqft=1000)],
+        core_width_m=7.5,
+    )
+    option = solve(plot, library, LayoutRequest(floors=8, unit_mix={"2BHK": 1.0}),
+                   gross_area_sqm=plot.area, authority="HMDA", abutting_road_m=18.0)[0]
+    summary = option.summary()
+    assert summary["built_up_sqft"] > 0
+    assert summary["built_up_sqft"] == round(sqm_to_sqft(option.built_up_sqm))
+    assert summary["built_up_sqft"] != summary["saleable_sqft"]

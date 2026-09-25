@@ -33,7 +33,12 @@ NOT_A_ROOM = re.compile(
     r"CLUB|GYM|POOL|SALOON|OFFICE|SECURITY|GENERATOR|TRANSFORMER|SUMP|STP",
     re.I,
 )
-WALL_ALLOWANCE = 1.12  # room labels give clear internal sizes; walls take about 12% more
+# Three areas, and a firm sells on the third. Room labels give the clear internal size, so
+# carpet; walls and balconies make it built-up, which is the figure an area statement prints;
+# the common-area loading on top of that is what the flat is sold as. Quoting carpet as if it
+# were saleable understates a scheme by a third, which is what this engine did until a
+# comparison with the firm's own Dhulapally statement showed 325,152 sft against their 474,912.
+BUILT_UP_FROM_CARPET = 1.12
 MIN_CARPET_PER_BEDROOM_SQM = 22.0  # below this the grouping has pulled in a neighbour's room
 ROOM_REACH_M = 11.0  # a room further than this from any kitchen is not part of a flat
 PLAUSIBLE_ROOMS = range(3, 13)
@@ -85,8 +90,14 @@ class FlatPlan:
                 and self.bedrooms in PLAUSIBLE_BEDROOMS
                 and self.carpet_per_bedroom_sqm >= MIN_CARPET_PER_BEDROOM_SQM)
 
+    @property
+    def built_up_sqm(self) -> float:
+        """Carpet plus its walls and balconies: what an area statement prints."""
+        return self.carpet_sqm * BUILT_UP_FROM_CARPET
+
     def saleable_sqft(self, common_area_pct: float) -> float:
-        return self.carpet_sqm * SQM_SQFT * (1 + common_area_pct / 100)
+        """Built-up with the common-area loading: what the flat is sold as."""
+        return self.built_up_sqm * SQM_SQFT * (1 + common_area_pct / 100)
 
     @property
     def carpet_per_bedroom_sqm(self) -> float:
@@ -103,7 +114,7 @@ class FlatPlan:
         positions: a label sits wherever it fits, so the spread of labels measures the
         draughtsman's hand, not the flat. Walls are not in the room sizes, so they are
         allowed for here."""
-        return self.carpet_sqm * WALL_ALLOWANCE / depth_m
+        return self.built_up_sqm / depth_m
 
 
 def read_rooms(path: Path, text_layer: str = "A-TEXT") -> list[Room]:
