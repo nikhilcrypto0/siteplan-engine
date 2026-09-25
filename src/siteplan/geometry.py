@@ -57,6 +57,38 @@ def opening(shape, width_m: float):
     return shape.buffer(-half, join_style="mitre").buffer(half, join_style="mitre")
 
 
+def _keep_behind(polygon: Polygon, line: LineString, signed_width_m: float) -> Polygon:
+    """The polygon less a strip of that width along the line; the sign picks the side."""
+    kept = polygon.difference(line.buffer(signed_width_m, single_sided=True))
+    if kept.geom_type == "Polygon":
+        return kept
+    parts = [p for p in kept.geoms if p.geom_type == "Polygon"]
+    return max(parts, key=lambda p: p.area) if parts else polygon
+
+
+def less_road_strip(boundary: Polygon, net_area_sqm: float) -> Polygon:
+    """The plot that is left after the gross-to-net deduction.
+
+    On a Telangana site that deduction is land lost to road widening, so it comes off the
+    frontage rather than evenly all round: an even inset would leave buildings standing in
+    the strip the road will take. Which boundary faces the road is the assumption the gates
+    already make, the longest straight run.
+    """
+    if net_area_sqm >= boundary.area:
+        return boundary
+    frontage = max(straight_runs(boundary), key=lambda r: r.length).line
+    probe = min(boundary.bounds[2] - boundary.bounds[0], boundary.bounds[3] - boundary.bounds[1])
+    side = max((1.0, -1.0), key=lambda s: boundary.area - _keep_behind(boundary, frontage, s).area)
+    lo, hi = 0.0, probe
+    for _ in range(60):  # the strip width that leaves exactly the net area
+        mid = (lo + hi) / 2
+        if _keep_behind(boundary, frontage, mid * side).area > net_area_sqm:
+            lo = mid
+        else:
+            hi = mid
+    return _keep_behind(boundary, frontage, hi * side)
+
+
 def largest_polygon(segments: list[LineString]) -> Polygon | None:
     """Close a soup of line segments into polygons and return the biggest one."""
     if len(segments) < 3:

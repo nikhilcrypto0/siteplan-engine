@@ -12,6 +12,7 @@ from shapely.geometry import Polygon
 
 from siteplan.area_statement import render
 from siteplan.dxf_survey import read_dxf_survey
+from siteplan.geometry import less_road_strip
 from siteplan.layout import LayoutRequest, area_statement, solve
 from siteplan.layout_export import write_layout_dxf, write_layout_svg
 from siteplan.library import FlatLibrary
@@ -20,6 +21,8 @@ from siteplan.project import Project
 from siteplan.sheet import SheetInfo, write_sheet_dxf
 from siteplan.site_amenities import AmenityLibrary
 from siteplan.survey import Survey
+
+NET_AREA_TOLERANCE_SQM = 50.0  # drafting slop between a survey and a stated area
 
 LAYOUT_CAVEAT = (
     "Layouts are first drafts for an architect. They now include the amenities block, the "
@@ -46,6 +49,15 @@ def load_plot(project: Project, survey: str | Path | None) -> tuple[Polygon, str
         return Polygon(project.site.net_plot_m), "net plot from the project file"
     if survey:
         boundary = read_survey(Path(survey)).boundary
+        net = project.site.net_sqm()
+        if net and net < boundary.area - NET_AREA_TOLERANCE_SQM:
+            plot = less_road_strip(boundary, net)
+            return plot, (
+                f"surveyed boundary {boundary.area:,.0f} m², less the "
+                f"{boundary.area - net:,.0f} m² the project states is deducted. ASSUMED: it "
+                "comes off the longest boundary as a road-widening strip. Give net_plot_m "
+                "for the real shape."
+            )
         return boundary, "surveyed boundary (road-widening strip, if any, NOT deducted)"
     raise ValueError("Give a survey file, or net_plot_m in the project file.")
 
