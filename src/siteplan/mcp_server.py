@@ -225,11 +225,19 @@ def build_server(workspace: Path, out_dir: Path, approval: str = "elicit",
         if book is None:
             raise ToolError("No rules document is loaded; start the server with --rules <pdf>.")
         hits = book.search(question, limit=max(1, min(limit, 8)))
+        repealed = [hit for hit in hits if hit.superseded_by]
+        warning = ""
+        if repealed:
+            warning = ("WARNING: " + " ".join(sorted({hit.superseded_by for hit in repealed}))
+                       + " Do not quote the superseded passage as the rule in force.")
         return {
             "source": book.source,
+            "warning": warning,
             "passages": [hit.as_dict() for hit in hits],
-            "next": ("Quote the passage and its page. If this is empty, say the document does "
-                     "not answer it rather than answering from memory."),
+            "next": ("Quote the passage and its page. A passage whose still_in_force is false "
+                     "has been replaced by a later order: say so and give the replacement "
+                     "instead. If this is empty, say the document does not answer it rather "
+                     "than answering from memory."),
         }
 
     @server.tool(annotations=WRITES_FILES)

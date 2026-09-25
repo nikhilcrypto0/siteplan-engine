@@ -139,6 +139,8 @@ def _cmd_rules(args: argparse.Namespace) -> int:
         return 1
     for hit in hits:
         print(f"\n--- page {hit.page} ---\n{hit.text}")
+        if hit.superseded_by:
+            print(f"\n!! SUPERSEDED: {hit.superseded_by}")
     return 0
 
 

@@ -30,6 +30,26 @@ MAX_CHUNK_CHARS = 900
 CACHE_VERSION = 2  # passages now carry their section and clause
 
 
+# The 2012 order is the only one we can search: the amending orders are scanned images with
+# no text to index. So its superseded passages have to announce themselves, or the search
+# hands back a repealed rule with a real page number, which is the most convincing way to be
+# wrong. Each pattern is the wording as it appears in the 2012 text.
+SUPERSEDED = (
+    (re.compile(r"TABLE\s*[–—-]\s*IV", re.I),
+     "G.O.Ms.No.50 of 2019 substituted this table. Call rules_for_height for what is in force."),
+    (re.compile(r"high[-\s]rise building.{0,60}?18\s*m|below\s*18\s*m\s+in height", re.I | re.S),
+     "G.O.Ms.No.95 of 2026 raised the high-rise threshold to 21 m."),
+    (re.compile(r"green planting strip", re.I),
+     "G.O.Ms.No.7 of 2016 limited this to sides where the setback is 9 m or more."),
+)
+
+
+def _superseded_by(text: str) -> str:
+    """What later order replaced this passage, if any."""
+    notes = [note for pattern, note in SUPERSEDED if pattern.search(text)]
+    return " ".join(notes)
+
+
 @dataclass(frozen=True)
 class Passage:
     page: int
@@ -37,6 +57,7 @@ class Passage:
     score: float
     section: str = ""  # the numbered heading this sits under, e.g. "13. PARKING"
     clause: str = ""  # the marker the passage opens with, e.g. "(vii)"
+    superseded_by: str = ""  # set when a later order replaced this wording
 
     @property
     def citation(self) -> str:
@@ -49,7 +70,9 @@ class Passage:
 
     def as_dict(self) -> dict:
         return {"page": self.page, "section": self.section, "clause": self.clause,
-                "citation": self.citation, "text": self.text, "score": round(self.score, 2)}
+                "citation": self.citation, "text": self.text, "score": round(self.score, 2),
+                "superseded_by": self.superseded_by,
+                "still_in_force": not self.superseded_by}
 
 
 @dataclass(frozen=True)
@@ -132,7 +155,8 @@ class RuleBook:
                 score *= 2
             if score > 0:
                 found.append(Passage(page=chunk.page, text=chunk.text, score=score,
-                                     section=chunk.section, clause=chunk.clause))
+                                     section=chunk.section, clause=chunk.clause,
+                                     superseded_by=_superseded_by(chunk.text)))
         found.sort(key=lambda p: (-p.score, p.page))
         return found[:limit]
 

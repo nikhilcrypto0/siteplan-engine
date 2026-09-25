@@ -25,6 +25,12 @@ PAGES = [
         "space of 3.6m for movement of vehicles.",
     ],
     [
+        "5. SETBACKS AND HEIGHT",
+        "TABLE - IV Height of building, minimum abutting road width, minimum",
+        "all round open space. Up to 21m: 12m road and 7m open space.",
+        "(f) 'High-Rise Building' means a building with 18m or more in height.",
+    ],
+    [
         "16. ROAD WIDENING",
         "(a) The land affected in road widening shall be surrendered free of cost",
         "to the sanctioning authority before the building permission is issued.",
@@ -65,6 +71,32 @@ def test_the_citation_is_read_off_the_document_not_composed(book):
     assert hit.section == "13. PARKING" and hit.clause == "(viii)"
     assert hit.citation == "rule 13(viii) (page 2)"
     assert hit.as_dict()["citation"] == hit.citation
+
+
+def test_the_replaced_table_admits_it_has_been_replaced(book):
+    """A live search answered a setback question from the 2012 table, which 2019 replaced."""
+    hit = next(h for h in book.search("table IV abutting road width", limit=5) if "TABLE" in h.text)
+    assert hit.superseded_by.startswith("G.O.Ms.No.50 of 2019")
+    assert "rules_for_height" in hit.superseded_by
+    assert hit.as_dict()["still_in_force"] is False
+
+
+def test_the_old_high_rise_threshold_is_flagged(book):
+    hit = next(h for h in book.search("high rise building means 18m", limit=5)
+               if "High-Rise Building" in h.text)
+    assert "21 m" in hit.superseded_by and "2026" in hit.superseded_by
+
+
+def test_the_green_strip_clause_carries_its_2016_amendment(book):
+    hit = next(h for h in book.search("green planting strip periphery", limit=5)
+               if "green planting strip" in h.text)
+    assert "G.O.Ms.No.7 of 2016" in hit.superseded_by
+
+
+def test_a_clause_still_in_force_is_left_alone(book):
+    hit = book.search("how wide must the driveway be")[0]
+    assert hit.superseded_by == ""
+    assert hit.as_dict()["still_in_force"] is True
 
 
 def test_a_section_heading_carries_on_to_later_clauses(book):

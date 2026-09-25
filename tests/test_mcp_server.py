@@ -19,6 +19,7 @@ from shapely.geometry import Polygon
 from siteplan.approval import ApprovalDesk
 from siteplan.dxf_export import write_survey_dxf
 from siteplan.mcp_server import build_server
+from siteplan.rulebook import Chunk, RuleBook
 from siteplan.survey import Survey
 
 EXAMPLES = Path(__file__).parent.parent / "examples"
@@ -54,10 +55,11 @@ def ws(tmp_path):
 
 
 def call(ws, tool, args=None, architect=None, approval="elicit", desk=None, wait=5.0,
-         opened=None):
+         opened=None, book=None):
     async def go():  # opened=None: no browser window is ever opened during tests
         server = build_server(ws, ws / "out", approval, desk, wait,
-                              open_result=None if opened is None else opened.append)
+                              open_result=None if opened is None else opened.append,
+                              book=book)
         async with create_connected_server_and_client_session(
             server, elicitation_callback=architect
         ) as client:
@@ -191,6 +193,25 @@ def test_a_height_question_is_answered_from_the_table_with_its_clause(ws):
 def test_rule_search_refuses_rather_than_improvising_when_no_document_is_loaded(ws):
     result = call(ws, "search_rules", {"question": "how wide must the driveway be"})
     assert result.isError and "--rules" in result.content[0].text
+
+
+def test_a_search_that_lands_on_a_replaced_clause_warns_the_model(ws):
+    """The amending orders are scans we cannot index, so the 2012 text must own up."""
+    book = RuleBook("G.O.168 of 2012", [
+        Chunk(page=13, text="TABLE - IV Height of building and minimum abutting road width.",
+              section="5. SETBACKS", clause=""),
+        Chunk(page=19, text="(viii) The minimum width of the drive way shall be 4.5m.",
+              section="13. PARKING", clause="(viii)"),
+    ])
+    answer = ok(call(ws, "search_rules", {"question": "table IV abutting road width"},
+                     book=book))
+    assert "G.O.Ms.No.50 of 2019" in answer["warning"]
+    assert answer["passages"][0]["still_in_force"] is False
+
+    clean = ok(call(ws, "search_rules", {"question": "how wide must the drive way be"},
+                    book=book))
+    assert clean["warning"] == ""
+    assert clean["passages"][0]["still_in_force"] is True
 
 
 def test_missing_values_come_back_without_asking(ws):
