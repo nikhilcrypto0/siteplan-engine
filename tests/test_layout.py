@@ -115,6 +115,16 @@ def test_exports_write_buildnow_layers_and_a_preview(tmp_path):
     assert svg.startswith("<svg") and "Test &lt;site&gt;" in svg
 
 
+def test_the_flats_are_visible_in_the_preview(tmp_path):
+    """Unfilled hairlines vanish on a 300px card and the towers read as empty blocks."""
+    plot = box(0, 0, 150, 100)
+    option = solve(plot, LIBRARY, REQUEST)[0]
+    svg = write_layout_svg(option, plot, tmp_path / "o.svg", "t").read_text()
+    drawn = sum(len(t.flat_outlines) for t in option.towers)
+    assert drawn > 0
+    assert svg.count('fill="#f7f4ea"') == drawn  # every flat is filled, not just outlined
+
+
 def test_the_summary_prints_built_up_as_well_as_saleable():
     """A firm's area statement is built-up, so a scheme can only be compared on that."""
     plot = box(0, 0, 120, 90)

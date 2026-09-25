@@ -146,8 +146,11 @@ def write_layout_svg(option: LayoutOption, plot: Polygon, path: str | Path, titl
     for tower in option.towers:
         lines.append(f'<polygon points="{pts(tower.footprint)}" fill="#e8e4d6" stroke="#333"/>')
         for flat in tower.flat_outlines:
+            # Filled, not just outlined: on a 300px card an unfilled hairline disappears and
+            # the towers read as empty blocks. The flats are the point of the drawing.
             lines.append(
-                f'<polygon points="{pts(flat)}" fill="none" stroke="#777" stroke-width="0.6"/>'
+                f'<polygon points="{pts(flat)}" fill="#f7f4ea" stroke="#5b5b5b" '
+                f'stroke-width="1.1"/>'
             )
         for core in tower.cores:
             lines.append(f'<polygon points="{pts(core)}" fill="#8a8a8a"/>')
