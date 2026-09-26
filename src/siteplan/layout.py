@@ -133,8 +133,32 @@ class LayoutOption:
         return sum(self.flats_per_floor.values()) * self.floors
 
     @property
+    def residential_plate_sqm(self) -> float:
+        """Every floor of every tower. The amenities block is common, and is not sold."""
+        return sum(t.footprint.area for t in self.towers) * self.floors
+
+    @property
     def saleable_sqft(self) -> float:
+        """What the flats sell for, which is the plate.
+
+        A flat is sold on its super built-up area: its own walls plus its share of the
+        corridor, the lift core and the staircase. Nobody gives that ground away, so every
+        square foot of a residential plate is loaded onto some flat and the sold area is the
+        plate itself. Summing the flats' own footprints instead reported 364,192 sft of
+        sales on 455,518 sft of building, which is less floor sold than drawn.
+        """
+        return sqm_to_sqft(self.residential_plate_sqm)
+
+    @property
+    def flat_footprint_sqft(self) -> float:
+        """The flats' own areas, without their share of the corridor and the cores."""
         return sum(t.saleable_sqft_per_floor() for t in self.towers) * self.floors
+
+    @property
+    def loading_pct(self) -> float:
+        """How much of the sold area is common: the plate over the flats' own footprints."""
+        own = self.flat_footprint_sqft
+        return (self.saleable_sqft / own - 1) * 100 if own else 0.0
 
     @property
     def built_up_sqft_per_floor(self) -> float:
@@ -182,6 +206,8 @@ class LayoutOption:
             "unit_mix_achieved": {k: round(v / total, 3) for k, v in sorted(counts.items())},
             "total_flats": self.total_flats,
             "saleable_sqft": round(self.saleable_sqft),
+            "flat_footprint_sqft": round(self.flat_footprint_sqft),
+            "loading_pct": round(self.loading_pct, 1),
             # The number a firm's own area statement prints, so the two can be compared.
             "built_up_sqft": round(sqm_to_sqft(self.built_up_sqm)),
             "built_up_sqft_per_floor": round(self.built_up_sqft_per_floor),

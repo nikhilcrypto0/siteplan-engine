@@ -115,6 +115,22 @@ def test_exports_write_buildnow_layers_and_a_preview(tmp_path):
     assert svg.startswith("<svg") and "Test &lt;site&gt;" in svg
 
 
+def test_every_square_foot_of_a_plate_is_sold():
+    """A flat is sold on its share of the corridor and the cores as well as its own walls.
+
+    Summing the flats' own footprints instead reported 364,192 sft of sales on a 455,518 sft
+    building, less floor sold than drawn, and no test noticed.
+    """
+    plot = box(0, 0, 150, 100)
+    option = solve(plot, LIBRARY, REQUEST)[0]
+    summary = option.summary()
+    assert summary["saleable_sqft"] == round(sqm_to_sqft(option.residential_plate_sqm))
+    assert summary["saleable_sqft"] > summary["flat_footprint_sqft"]
+    assert summary["loading_pct"] > 0
+    # The amenities block is common ground, so it is built but never sold.
+    assert summary["built_up_sqft"] >= summary["saleable_sqft"]
+
+
 def test_the_flats_are_visible_in_the_preview(tmp_path):
     """Unfilled hairlines vanish on a 300px card and the towers read as empty blocks."""
     plot = box(0, 0, 150, 100)
