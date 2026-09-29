@@ -2,12 +2,13 @@
 
 Every number here was read from a primary document, and each carries the clause it came from.
 The base text is the Telangana Building Rules 2012 (G.O.Ms.No.168, MA&UD, 07-04-2012), read
-on 2026-09-18. Two amendments were read from the orders themselves on 2026-09-20 and are
-applied here: G.O.Ms.No.50 (22-04-2019), which substitutes Table IV and adds the note on
-buildings longer than 40 m, and G.O.Ms.No.95 (21-03-2026), which makes a high-rise 21 m.
+on 2026-09-18. Three amendments were read from the orders themselves: G.O.Ms.No.7
+(05-01-2016), which rewrites the green strip, road-widening concessions, amenities and EWS
+rules; G.O.Ms.No.50 (22-04-2019), which substitutes Table IV and adds the note on buildings
+longer than 40 m; and G.O.Ms.No.95 (21-03-2026), which makes a high-rise 21 m.
 
-Known gap: G.O.Ms.No.7 of 05-01-2016 has not been read, so nothing here can be called a
-complete account of the amendments between 2012 and 2019.
+`inventory.py` lists how each rule here was read, including those the engine leaves out.
+Still unread: G.O.Ms.No.245 of 2012, G.O.Ms.No.103 of 2021 and G.O.Ms.No.16 of 2026.
 """
 
 from __future__ import annotations
@@ -97,21 +98,28 @@ PARKING_FLOOR_HEIGHT_CLAUSE = (
 )
 
 BLOCK_SPACING_CLAUSE = "G.O.168 rule 7(a)(xii) (same as Table IV column 4)"
-ROAD_WIDENING_CLAUSE = "G.O.168 rule 16 (surrender free of cost; TDR, extra floor or setbacks)"
+ROAD_WIDENING_CLAUSE = (
+    "G.O.168 rule 16 as substituted by G.O.Ms.No.7 of 2016 (surrender free of cost; TDR, extra "
+    "floors or setback concessions)"
+)
 
 MORTGAGE_FRACTION = 0.10  # of built-up area, handed over by notarised affidavit
-MORTGAGE_CLAUSE = "G.O.168 (mortgage clause (d), p.28)"
+MORTGAGE_CLAUSE = "G.O.168 rule 25(d), p.28 (10% of built-up area handed over by affidavit)"
 
 DRIVEWAY_MIN_WIDTH_M = 4.5
-DRIVEWAY_CLAUSE = "G.O.168 rule 13(viii) (minimum drive way width 4.5 m)"
+DRIVEWAY_CLAUSE = "G.O.168 rule 13(c)(viii) (minimum drive way width 4.5 m)"
 
 # Rule 15(a)(x) is the group-housing one: 3% of built-up area, in a block of its own. (Rule 9(o)
 # asks 5% of site area but sits in the row-housing section, so it is not used as the check here.)
+# G.O.Ms.No.7 of 2016, Amendment 15, rewrote it as "upto 3% of the total built up area (or)
+# 50,000 Sft. whichever is lower". The check still applies the 2012 minimum of 3% with no cap
+# until a sanctioned plan shows how the new wording is read (inventory.py flags it).
 AMENITY_MIN_BUILT_UP_FRACTION = 0.03
 AMENITY_MIN_UNITS = 100
 AMENITY_CLAUSE = (
-    "G.O.168 rule 15(a)(x) (group housing of 100 units or more: amenities of at least 3% of "
-    "total built-up area, in a block that is not part of the residential blocks)"
+    "G.O.168 rule 15(a)(x) as substituted by G.O.Ms.No.7 of 2016 (group housing of 100 units "
+    "or more: 'upto 3% of the total built up area (or) 50,000 Sft. whichever is lower', in a "
+    "block that is not part of the residential blocks)"
 )
 
 # Table V row 4 covers Residential Apartment Complexes: 30% inside GHMC, 20% in every other

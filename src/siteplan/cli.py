@@ -1,4 +1,4 @@
-"""Command line: survey, check, area-statement, layout, assist."""
+"""Command line: survey, check, area-statement, layout, rules, inventory, assist."""
 
 from __future__ import annotations
 
@@ -144,6 +144,13 @@ def _cmd_rules(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_inventory(args: argparse.Namespace) -> int:
+    from siteplan.inventory import render_markdown, render_text
+
+    print(render_markdown() if args.markdown else render_text())
+    return 0
+
+
 def _ask_architect(question: dict) -> dict:
     """Show the interpreted request and get an explicit decision. There is no skip flag."""
     print("\nThe assistant read the brief as:")
@@ -250,6 +257,10 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--document", default="fixtures/rules/go168-2012.pdf")
     p.add_argument("--limit", type=int, default=3)
     p.set_defaults(run=_cmd_rules)
+
+    p = sub.add_parser("inventory", help="Every rule the engine applies, and how it was read.")
+    p.add_argument("--markdown", action="store_true", help="A table to share with the firm")
+    p.set_defaults(run=_cmd_inventory)
 
     p = sub.add_parser("assist", help="Plain-English brief -> approved request -> layouts.")
     p.add_argument("project")
