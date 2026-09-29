@@ -101,3 +101,41 @@ def test_a_site_area_in_square_yards_picks_the_net_plot_over_an_older_outline(tm
     assert survey.area_sqm == pytest.approx(10000, rel=1e-6)
     assert survey.stated_area_sqm == pytest.approx(10000, rel=1e-4)
     assert survey.warnings == ()
+
+
+def test_a_boundary_drawn_inside_a_block_is_read_where_the_block_places_it(tmp_path):
+    """A block is placed by its own position, scale and rotation; its 50 m square, placed at
+    twice the size, is a 100 m plot, and its layer-0 lines take the block's layer."""
+    doc = ezdxf.new("R2018")
+    doc.header["$INSUNITS"] = 6
+    block = doc.blocks.new("PLOT")
+    block.add_lwpolyline([(0, 0), (50, 0), (50, 50), (0, 50)], close=True)
+    block.add_text("AREA: 2 AC 18.84 GTS").set_placement((5, 5))  # 10,000 m²
+    ref = doc.modelspace().add_blockref("PLOT", (1000, 500),
+                                        dxfattribs={"layer": "SITE-BOUNDARY", "rotation": 30})
+    ref.dxf.xscale = ref.dxf.yscale = 2.0
+    doc.saveas(tmp_path / "block.dxf")
+    survey = read_dxf_survey(tmp_path / "block.dxf", DxfProfile(boundary_layer="SITE-BOUNDARY"))
+    assert survey.area_sqm == pytest.approx(10000, rel=1e-6)
+    assert survey.stated_area_sqm == pytest.approx(10000, rel=1e-3)
+    assert survey.warnings == ()
+
+
+def test_a_level_in_a_mirrored_block_lands_on_the_right_side(tmp_path):
+    """Mirroring turns a block's own coordinate system over. Read raw, this level sits 30 m
+    west of the plot; in world coordinates it is 30 m inside it."""
+    doc = ezdxf.new("R2018")
+    doc.header["$INSUNITS"] = 6
+    msp = doc.modelspace()
+    msp.add_lwpolyline([(0, 0), (100, 0), (100, 100), (0, 100)], close=True,
+                       dxfattribs={"layer": "PLOT"})
+    msp.add_text("AREA: 2 AC 18.84 GTS").set_placement((5, 5))
+    level = doc.blocks.new("LEVEL")
+    level.add_text("587.50").set_placement((30, 0))
+    for x in (60, 160):  # lands at 30 m (on the plot) and 130 m (off it)
+        msp.add_blockref("LEVEL", (x, 50)).dxf.xscale = -1.0
+    doc.saveas(tmp_path / "mirrored.dxf")
+    survey = read_dxf_survey(tmp_path / "mirrored.dxf")
+    on_site = [lv for lv in survey.levels if lv.on_site]
+    assert len(survey.levels) == 2 and len(on_site) == 1
+    assert on_site[0].x == pytest.approx(30.0) and on_site[0].z == 587.5

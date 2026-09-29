@@ -1,8 +1,10 @@
 """Read a surveyor's DXF (or a DWG saved as DXF in ZWCAD) into a Survey.
 
-DXF carries real units, so no scale calibration is needed. Layer names differ between
-surveyors, so the boundary is chosen by the area written on the drawing when there is
-one, then by layer-name hints, then by size.
+DXF carries real units, so no scale calibration is needed: the file's header says what one
+unit is. Everything is read in world coordinates with every block opened out by its own
+placement (dxf_entities.py), so a boundary, a level or a road drawn inside a block counts.
+Layer names differ between surveyors, so the boundary is chosen by the area written on the
+drawing when there is one, then by layer-name hints, then by size.
 """
 
 from __future__ import annotations
@@ -14,11 +16,20 @@ from pathlib import Path
 import ezdxf
 from shapely.geometry import LineString, Point, Polygon
 
+from siteplan.dxf_entities import (
+    TEXT_TYPES,
+    Drawn,
+    declared_metres_per_unit,
+    has_arcs,
+    is_closed,
+    open_blocks,
+    polyline_points,
+    text_of,
+    text_position,
+)
 from siteplan.survey import SpotLevel, Survey
 from siteplan.units import site_area
 
-# $INSUNITS code -> metres per drawing unit (0 means "unitless").
-_METRES_PER_UNIT = {1: 0.0254, 2: 0.3048, 4: 0.001, 5: 0.01, 6: 1.0}
 _BOUNDARY_HINT = re.compile(r"BOUND|PLOT|SITE", re.IGNORECASE)
 _LEVEL = re.compile(r"\d+\.\d+")
 
@@ -32,45 +43,60 @@ class DxfProfile:
     metres_per_unit_if_unset: float | None = None
 
 
-def _closed_polylines(msp) -> list[tuple[str, Polygon, bool]]:
+def _is_polyline(entity) -> bool:
+    kind = entity.dxftype()
+    return kind == "LWPOLYLINE" or (
+        kind == "POLYLINE" and (entity.is_2d_polyline or entity.is_3d_polyline)
+    )
+
+
+def _closed_polylines(drawn: tuple[Drawn, ...]) -> list[tuple[str, Polygon, bool]]:
     found = []
-    for e in msp.query("LWPOLYLINE"):
-        if e.closed and len(e) >= 3:
-            points = e.get_points("xyb")
-            has_arcs = any(bulge for *_, bulge in points)
-            found.append((e.dxf.layer, Polygon([(x, y) for x, y, _ in points]), has_arcs))
-    for e in msp.query("POLYLINE"):
-        if e.is_closed and len(e) >= 3:
-            ring = [tuple(v.dxf.location)[:2] for v in e.vertices]
-            has_arcs = any(v.dxf.bulge for v in e.vertices)
-            found.append((e.dxf.layer, Polygon(ring), has_arcs))
+    for d in drawn:
+        if _is_polyline(d.entity) and is_closed(d.entity):
+            points = polyline_points(d.entity)
+            if len(points) >= 3:
+                found.append((d.layer, Polygon(points), has_arcs(d.entity)))
     return [(layer, poly, arcs) for layer, poly, arcs in found if poly.is_valid and poly.area > 0]
 
 
-def _texts(msp) -> list[tuple[str, tuple[float, float]]]:
-    texts = [(e.dxf.text, tuple(e.dxf.insert)[:2]) for e in msp.query("TEXT")]
-    texts += [(e.plain_text(), tuple(e.dxf.insert)[:2]) for e in msp.query("MTEXT")]
+def _texts(drawn: tuple[Drawn, ...]) -> list[tuple[str, tuple[float, float]]]:
+    texts = []
+    for d in drawn:
+        if d.entity.dxftype() in TEXT_TYPES:
+            where = text_position(d.entity)
+            if where is not None:
+                texts.append((text_of(d.entity), where))
     return texts
 
 
-def _open_lines(msp, hint: str) -> list[list[tuple[float, float]]]:
+def _open_lines(drawn: tuple[Drawn, ...], hint: str) -> list[list[tuple[float, float]]]:
     lines = []
-    for e in msp.query("LINE"):
-        if hint in e.dxf.layer.upper():
-            lines.append([tuple(e.dxf.start)[:2], tuple(e.dxf.end)[:2]])
-    for e in msp.query("LWPOLYLINE"):
-        if hint in e.dxf.layer.upper() and not e.closed:
-            lines.append([(x, y) for x, y in e.get_points("xy")])
+    for d in drawn:
+        if hint not in d.layer.upper():
+            continue
+        if d.entity.dxftype() == "LINE":
+            start, end = d.entity.dxf.start, d.entity.dxf.end
+            lines.append([(start.x, start.y), (end.x, end.y)])
+        elif _is_polyline(d.entity) and not is_closed(d.entity):
+            lines.append(polyline_points(d.entity))
     return [line for line in lines if len(line) >= 2]
 
 
 def read_dxf_survey(path: str | Path, profile: DxfProfile | None = None) -> Survey:
     profile = profile or DxfProfile()
     doc = ezdxf.readfile(str(path))
-    msp = doc.modelspace()
+    opened = open_blocks(doc.modelspace())
+    drawn = opened.drawn
     warnings = []
+    if opened.missing_blocks:
+        warnings.append("Blocks referenced but missing from the file, so not read: "
+                        f"{', '.join(opened.missing_blocks)}.")
+    if opened.skipped:
+        warnings.append(f"{opened.skipped} pieces inside blocks could not be placed (text "
+                        "scaled unevenly, for example) and were left out.")
 
-    k = _METRES_PER_UNIT.get(doc.header.get("$INSUNITS", 0))
+    k = declared_metres_per_unit(doc)
     if k is None:
         if profile.metres_per_unit_if_unset is None:
             raise ValueError(
@@ -80,9 +106,9 @@ def read_dxf_survey(path: str | Path, profile: DxfProfile | None = None) -> Surv
         k = profile.metres_per_unit_if_unset
         warnings.append(f"Drawing units not set in the file; assumed 1 unit = {k:g} m.")
 
-    texts = _texts(msp)
+    texts = _texts(drawn)
     stated = site_area([text for text, _ in texts])
-    candidates = _closed_polylines(msp)
+    candidates = _closed_polylines(drawn)
     if profile.boundary_layer:
         candidates = [c for c in candidates if c[0] == profile.boundary_layer]
     if not candidates:
@@ -114,7 +140,7 @@ def read_dxf_survey(path: str | Path, profile: DxfProfile | None = None) -> Surv
     # Surveyed points carry the true position; text labels sit beside them. Prefer points,
     # and fall back to labels only when the file has no levelled points.
     lo, hi = profile.level_range
-    raw = [tuple(e.dxf.location) for e in msp.query("POINT")]
+    raw = [tuple(d.entity.dxf.location) for d in drawn if d.entity.dxftype() == "POINT"]
     raw = [(x, y, z) for x, y, z in raw if lo <= z <= hi]
     if not raw:
         raw = [
@@ -128,7 +154,7 @@ def read_dxf_survey(path: str | Path, profile: DxfProfile | None = None) -> Surv
     ]
 
     def lines(hint: str) -> tuple[LineString, ...]:
-        return tuple(LineString([to_m(x, y) for x, y in ln]) for ln in _open_lines(msp, hint))
+        return tuple(LineString([to_m(x, y) for x, y in ln]) for ln in _open_lines(drawn, hint))
 
     return Survey(
         source=str(path),

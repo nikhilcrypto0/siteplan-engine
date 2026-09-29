@@ -42,6 +42,7 @@ NOT_ROOMS = [("OPEN TO SKY 3000X3000", 40.0, 40.0), ("STAIRCASE 2000X4000", 44.0
 
 def _draw(path, flats, noise=NOT_ROOMS, layer="A-TEXT"):
     doc = ezdxf.new()
+    doc.header["$INSUNITS"] = 4  # millimetres, as the firm's floor plans declare
     doc.layers.add(layer)
     msp = doc.modelspace()
     for origin_x, rooms in flats:
@@ -112,3 +113,43 @@ def test_a_grouping_that_swallowed_a_neighbour_room_is_not_used(tmp_path):
     flats = group_into_flats(read_rooms(path))
     assert any(not f.plausible for f in flats)
     assert {f.bhk for f in to_library(flats).flats} == {"2BHK"}
+
+
+def test_a_plan_drawn_in_inches_is_read_in_its_own_unit(tmp_path):
+    """The importer once assumed millimetres; the firm's Dhulapally site plan is in inches, so
+    its room positions would have come out 25.4 times too far apart."""
+    doc = ezdxf.new()
+    doc.header["$INSUNITS"] = 1
+    doc.layers.add("A-TEXT")
+    for origin_x, rooms in [(0.0, TWO_BHK), (40.0, TWO_BHK)]:
+        for name, x, y in rooms:
+            doc.modelspace().add_text(name, dxfattribs={"layer": "A-TEXT"}).set_placement(
+                ((origin_x + x) / 0.0254, y / 0.0254))
+    doc.saveas(tmp_path / "inches.dxf")
+    rooms = read_rooms(tmp_path / "inches.dxf")
+    kitchen = next(r for r in rooms if r.name.startswith("KITCHEN"))
+    assert (kitchen.x, kitchen.y) == pytest.approx((2.0, 2.0))
+    assert len(group_into_flats(rooms)) == 2
+
+
+def test_a_flat_drawn_once_as_a_block_counts_every_time_it_is_placed(tmp_path):
+    doc = ezdxf.new()
+    doc.header["$INSUNITS"] = 4
+    doc.layers.add("A-TEXT")
+    flat = doc.blocks.new("FLAT-2BHK")
+    for name, x, y in TWO_BHK:
+        flat.add_text(name, dxfattribs={"layer": "A-TEXT"}).set_placement((x * 1000, y * 1000))
+    for origin_x in (0.0, 40.0, 80.0):
+        doc.modelspace().add_blockref("FLAT-2BHK", (origin_x * 1000, 0))
+    doc.saveas(tmp_path / "blocks.dxf")
+    assert len(group_into_flats(read_rooms(tmp_path / "blocks.dxf"))) == 3
+
+
+def test_a_plan_that_does_not_say_its_unit_is_refused_rather_than_guessed(tmp_path):
+    doc = ezdxf.new()
+    doc.header["$INSUNITS"] = 0
+    doc.modelspace().add_text("KITCHEN 3000X2500", dxfattribs={"layer": "A-TEXT"})
+    doc.saveas(tmp_path / "unitless.dxf")
+    with pytest.raises(ValueError, match="units are not set"):
+        read_rooms(tmp_path / "unitless.dxf")
+    assert len(read_rooms(tmp_path / "unitless.dxf", metres_per_unit=0.001)) == 1

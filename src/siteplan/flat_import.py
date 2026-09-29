@@ -20,9 +20,16 @@ from statistics import median
 
 import ezdxf
 
+from siteplan.dxf_entities import (
+    TEXT_TYPES,
+    declared_metres_per_unit,
+    open_blocks,
+    text_of,
+    text_position,
+)
 from siteplan.library import FlatLibrary, FlatType
 
-MM_M = 0.001
+MM_M = 0.001  # room sizes are written in millimetres, whatever the drawing unit
 SQM_SQFT = 10.7639
 ROOM_SIZE = re.compile(r"(\d{3,5})\s*[xX]\s*(\d{3,5})")
 KITCHEN = re.compile(r"\bKITCHEN\b", re.I)
@@ -117,20 +124,31 @@ class FlatPlan:
         return self.built_up_sqm / depth_m
 
 
-def read_rooms(path: Path, text_layer: str = "A-TEXT") -> list[Room]:
-    """Every labelled room in a floor-plan DXF, with the size the architect wrote on it."""
+def read_rooms(path: Path, text_layer: str = "A-TEXT",
+               metres_per_unit: float | None = None) -> list[Room]:
+    """Every labelled room in a floor-plan DXF, with the size the architect wrote on it.
+
+    Where a label sits is in the drawing's own unit, which its header declares (Suchitra's
+    says millimetres; the firm's Dhulapally site plan says inches). The size in the label is
+    millimetres whatever the drawing unit, as architects write it. Labels inside blocks count:
+    a flat drawn once and placed many times is still many flats.
+    """
     doc = ezdxf.readfile(path)
+    k = metres_per_unit or declared_metres_per_unit(doc)
+    if k is None:
+        raise ValueError(f"{path}: drawing units are not set ($INSUNITS). "
+                         "Say what one drawing unit is with metres_per_unit.")
     rooms = []
-    for entity in doc.modelspace().query("TEXT MTEXT"):
-        if entity.dxf.layer != text_layer:
+    for drawn in open_blocks(doc.modelspace()).drawn:
+        entity = drawn.entity
+        if entity.dxftype() not in TEXT_TYPES or drawn.layer != text_layer:
             continue
-        raw = entity.plain_text() if hasattr(entity, "plain_text") else entity.dxf.text
-        name = " ".join(str(raw).split())
+        name = text_of(entity)
         size = ROOM_SIZE.search(name)
-        point = entity.dxf.get("insert", None) or entity.dxf.get("align_point", None)
+        point = text_position(entity)
         if not size or point is None or NOT_A_ROOM.search(name):
             continue
-        rooms.append(Room(name, point[0] * MM_M, point[1] * MM_M,
+        rooms.append(Room(name, point[0] * k, point[1] * k,
                           int(size.group(1)) * MM_M, int(size.group(2)) * MM_M))
     return rooms
 
