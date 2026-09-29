@@ -17,7 +17,9 @@ FLATS = FlatLibrary(
 )
 REQUEST = LayoutRequest(floors=8, unit_mix={"2BHK": 0.7, "3BHK": 0.3})
 AMENITIES = AmenityLibrary(items=[
-    {"name": "SWIMMING POOL", "width_m": 20.0, "depth_m": 10.0, "near": "club"},
+    # 12 x 6 m: with the true Table IV setbacks this made-up site packs six towers, and a
+    # 20 x 10 m pool no longer finds ground; the placement rule is what is under test.
+    {"name": "SWIMMING POOL", "width_m": 12.0, "depth_m": 6.0, "near": "club"},
     {"name": "CHILDRENS PLAY", "width_m": 10.0, "depth_m": 8.0, "near": "open space"},
     {"name": "SECURITY CABIN", "width_m": 3.5, "depth_m": 3.0, "near": "gate"},
 ])

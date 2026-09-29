@@ -194,6 +194,9 @@ INVENTORY: tuple[Entry, ...] = (
         "Setbacks", "Open space to be left around each building, by its height.",
         _setbacks(), rules.TABLE_IV_CLAUSE, Reading.AS_WRITTEN, (*_BOTH, Where.FLOORS),
         ("TABLE_IV", "TABLE_IV_CLAUSE", "band_for_height"),
+        choice="A building's length does not add to it. The note G.O.Ms.No.50 put under the "
+               "table for buildings longer than 40 m was deleted by G.O.Ms.No.65 of 31.05.2019, "
+               "five weeks later; the engine applied it until 2026-09-29.",
     ),
     Entry(
         "Setbacks", "The table figure is kept on every side, the front included.",
@@ -204,20 +207,6 @@ INVENTORY: tuple[Entry, ...] = (
                "line for the road (3 to 7.5 m). That exceeds column 4 only for a building up to "
                "21 m on a road wider than 30 m (7.5 m against 7), which the engine misses.",
         settles="A sanctioned plan on a road wider than 30 m.",
-    ),
-    Entry(
-        "Setbacks", "A building longer than 40 m adds to its setback.",
-        f"+ {rules.LONG_BUILDING_FRACTION:g} x length - {rules.LONG_BUILDING_DEDUCTION_M:g} m "
-        f"above {rules.LONG_BUILDING_FROM_M:g} m; total at most {rules.SETBACK_CAP_M:g} m",
-        rules.LONG_BUILDING_CLAUSE, Reading.INTERPRETED, _BOTH,
-        ("LONG_BUILDING_FROM_M", "LONG_BUILDING_FRACTION", "LONG_BUILDING_DEDUCTION_M",
-         "SETBACK_CAP_M", "LONG_BUILDING_CLAUSE", "setback_for"),
-        choice="Read as 10% of the length less 4 m, which is zero at exactly 40 m, rather than "
-               "10% of (length - 4 m), which would jump 3.6 m at 40 m. The 20 m cap is on the "
-               "total, like the top row. Length is the longest side of the building's outline, "
-               "on its own axes.",
-        settles="A sanctioned block longer than 40 m and its approved setback. Dhulapally's "
-                "blocks, 49 to 73 m long, keep the table figure with no addition.",
     ),
     Entry(
         "Setbacks", "The whole footprint, balconies included, is kept out of the setback.",
@@ -264,14 +253,13 @@ INVENTORY: tuple[Entry, ...] = (
     Entry(
         "Spacing", "Two high-rise blocks stand at least their setback apart, and the gap is not "
                    "counted as tot-lot.",
-        "the larger of the two blocks' setbacks, 40 m addition included",
+        "the larger of the two blocks' setbacks",
         rules.BLOCK_SPACING_CLAUSE, Reading.INTERPRETED, _BOTH,
-        ("BLOCK_SPACING_CLAUSE", "setback_for"),
+        ("BLOCK_SPACING_CLAUSE", "band_for_height"),
         choice="The text asks for 'the open space mentioned in Col. 4' without saying which block "
-               "sets it when their heights differ, or whether the 40 m addition applies to the "
-               "gap. The engine takes the larger, addition included.",
-        settles="A sanctioned plan with two blocks of different height or length. Dhulapally "
-                "spaces its blocks 8 m apart, the table figure without its stilt.",
+               "sets it when their heights differ. The engine takes the larger.",
+        settles="A sanctioned plan with two blocks of different heights. Dhulapally spaces its "
+                "blocks 8 m apart, the table figure for its blocks without their stilt.",
     ),
     # Open space
     Entry(

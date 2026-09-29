@@ -9,7 +9,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import StrEnum
 from itertools import combinations
-from math import hypot, inf
 
 from shapely.geometry import Polygon
 
@@ -114,7 +113,7 @@ def _green_strip_finding(site: Site, high_rise, bands) -> Finding:
     from_m = rules.PERIPHERAL_GREEN_STRIP_FROM_SETBACK_M
     required = (f">= {rules.PERIPHERAL_GREEN_STRIP_M:g} m on sides with a setback of "
                 f"{from_m:g} m or more")
-    setbacks = [_needed_setback(b, bands[b.name]) for b in high_rise] if high_rise else []
+    setbacks = [bands[b.name].min_open_space_m for b in high_rise]
     if setbacks and max(setbacks) < from_m:
         return Finding(
             "Peripheral green strip", Status.INFO,
@@ -315,40 +314,6 @@ def _no_geometry(rule: str, required: str, clause: str, count: int) -> Finding:
     )
 
 
-def _longest_side_m(building: Building) -> float | None:
-    """How long the building is, which decides whether the 40 m note applies.
-
-    Measured on the building's own axes, not the drawing's: a block turned to suit the site
-    is no longer for it, and its bounding box would charge it setback it does not owe. The
-    length is the long side of the smallest rectangle round the outline, one of whose sides
-    lies along an edge of its hull. The longest edge itself will not do: a drawn long side with
-    a jog in it is several edges, none of them the building's length.
-    """
-    if building.footprint is None or building.footprint.is_empty:
-        return None
-    hull = building.footprint.convex_hull
-    if not hasattr(hull, "exterior"):  # degenerate footprint: a line or a point
-        x0, y0, x1, y1 = hull.bounds
-        return max(x1 - x0, y1 - y0)
-    points = list(zip(*hull.exterior.coords.xy, strict=True))
-    smallest, length = inf, 0.0
-    for (x0, y0), (x1, y1) in zip(points, points[1:], strict=False):
-        edge = hypot(x1 - x0, y1 - y0)
-        if edge == 0:
-            continue
-        ux, uy = (x1 - x0) / edge, (y1 - y0) / edge
-        along = [px * ux + py * uy for px, py in points]
-        across = [py * ux - px * uy for px, py in points]
-        sides = (max(along) - min(along), max(across) - min(across))
-        if sides[0] * sides[1] < smallest:
-            smallest, length = sides[0] * sides[1], max(sides)
-    return length
-
-
-def _needed_setback(building: Building, band) -> float:
-    return rules.setback_for(band, _longest_side_m(building))
-
-
 def _setback_findings(site, high_rise, bands) -> list[Finding]:
     if site.net_plot is None or all(b.footprint is None for b in high_rise):
         need = ", ".join(sorted({f"{bands[b.name].min_open_space_m:g} m" for b in high_rise}))
@@ -356,13 +321,8 @@ def _setback_findings(site, high_rise, bands) -> list[Finding]:
         return [_no_geometry("All-round setbacks", required, rules.TABLE_IV_CLAUSE, len(high_rise))]
     findings = []
     for b in high_rise:
-        need = _needed_setback(b, bands[b.name])
-        long_note = ""
-        if need > bands[b.name].min_open_space_m:
-            long_note = (f" ({bands[b.name].min_open_space_m:g} m from the table plus "
-                         f"{need - bands[b.name].min_open_space_m:.2f} m for a building "
-                         f"{_longest_side_m(b):.0f} m long)")
-        required = f">= {need:.2f} m to the net plot line{long_note}"
+        need = bands[b.name].min_open_space_m
+        required = f">= {need:.2f} m to the net plot line"
         if b.footprint is None or site.net_plot is None:
             findings.append(
                 Finding(
@@ -385,7 +345,7 @@ def _setback_findings(site, high_rise, bands) -> list[Finding]:
                 Status.PASS if ok else Status.FAIL,
                 _m(gap),
                 required,
-                rules.LONG_BUILDING_CLAUSE if long_note else rules.TABLE_IV_CLAUSE,
+                rules.TABLE_IV_CLAUSE,
                 "Front setback may also be governed by the Table III building line (not encoded).",
             )
         )
@@ -406,7 +366,7 @@ def _spacing_findings(high_rise, bands) -> list[Finding]:
         ]
     findings = []
     for a, b in pairs:
-        need = max(_needed_setback(a, bands[a.name]), _needed_setback(b, bands[b.name]))
+        need = max(bands[a.name].min_open_space_m, bands[b.name].min_open_space_m)
         rule = f"Gap between blocks: {a.name} / {b.name}"
         if a.footprint is None or b.footprint is None:
             findings.append(

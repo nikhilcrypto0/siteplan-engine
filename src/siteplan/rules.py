@@ -4,8 +4,9 @@ Every number here was read from a primary document, and each carries the clause 
 The base text is the Telangana Building Rules 2012 (G.O.Ms.No.168, MA&UD, 07-04-2012), read
 on 2026-09-18. Three amendments were read from the orders themselves: G.O.Ms.No.7
 (05-01-2016), which rewrites the green strip, road-widening concessions, amenities and EWS
-rules; G.O.Ms.No.50 (22-04-2019), which substitutes Table IV and adds the note on buildings
-longer than 40 m; and G.O.Ms.No.95 (21-03-2026), which makes a high-rise 21 m.
+rules; G.O.Ms.No.50 (22-04-2019), which substitutes Table IV; G.O.Ms.No.65 (31-05-2019), which
+deletes the note G.O.Ms.No.50 had put under it for buildings longer than 40 m; and
+G.O.Ms.No.95 (21-03-2026), which makes a high-rise 21 m.
 
 `inventory.py` lists how each rule here was read, including those the engine leaves out.
 Still unread: G.O.Ms.No.245 of 2012, G.O.Ms.No.103 of 2021 and G.O.Ms.No.16 of 2026.
@@ -50,14 +51,13 @@ TABLE_IV = (
 )
 TABLE_IV_CLAUSE = "G.O.168 rule 7(a)(x), Table IV as substituted by G.O.Ms.No.50 of 2019"
 
-# The second note under the substituted Table IV: "If the length of depth of the building
-# exceeds 40 m add to Col (4) ten percent of length or depth of building minus 4.0 m subject to
-# maximum requirement of 20 m." At exactly 40 m the addition is zero, which is how we read it.
-LONG_BUILDING_FROM_M = 40.0
-LONG_BUILDING_FRACTION = 0.10
-LONG_BUILDING_DEDUCTION_M = 4.0
-SETBACK_CAP_M = 20.0
-LONG_BUILDING_CLAUSE = "G.O.Ms.No.50 of 2019, note under Table IV (buildings longer than 40 m)"
+# G.O.Ms.No.50 of 2019 also put a note under Table IV adding setback for a building longer than
+# 40 m. G.O.Ms.No.65 (MA&UD, 31-05-2019) deleted it five weeks later: "The foot note under the
+# Table IV ... which stipulates that 'If the length or depth of the building exceeds 40 m, add to
+# Col (4) ten percent of length or depth of building minus 4.0 m subject to maximum requirement
+# of 20 m' is deleted." Read from the order on 2026-09-29. The engine applied it until then,
+# asking up to 3.3 m more of every long block than the law does. A building's length no longer
+# changes its setback.
 
 # Rule 2(f) as substituted by G.O.Ms.No.95 (MA&UD, 21-03-2026), amendment 5(i): "High-Rise
 # Building means a building with 21m or more in height." Read from the order on 2026-09-20.
@@ -175,20 +175,7 @@ def tdr_extra_floors(plot_sqm: float, road_m: float) -> int:
     return next((n for width, n in TDR_EXTRA_FLOORS_BY_ROAD_M if road_m >= width), 0)
 
 
-def setback_for(band: HeightBand, longest_side_m: float | None = None) -> float:
-    """The all-round setback: the Table IV figure, plus the addition a long building attracts.
-
-    A 56 m slab needs 1.6 m more than the table alone, which is the difference between a
-    layout an authority accepts and one it returns.
-    """
-    setback = band.min_open_space_m
-    if longest_side_m and longest_side_m > LONG_BUILDING_FROM_M:
-        setback += LONG_BUILDING_FRACTION * longest_side_m - LONG_BUILDING_DEDUCTION_M
-    return min(setback, SETBACK_CAP_M)
-
-
-def height_rules(height_m: float, longest_side_m: float | None = None,
-                 plot_sqm: float | None = None) -> dict:
+def height_rules(height_m: float, plot_sqm: float | None = None) -> dict:
     """What the rules require of a building of this height, with the clause for each value."""
     if height_m < HIGH_RISE_THRESHOLD_M:
         answer = (f"Below {HIGH_RISE_THRESHOLD_M:g} m the Table III setbacks of rule 5 apply, "
@@ -205,25 +192,15 @@ def height_rules(height_m: float, longest_side_m: float | None = None,
             out["also"] = [TDR_BAND_CLAUSE]
         return out
     band = band_for_height(height_m)
-    setback = setback_for(band, longest_side_m)
-    out = {
+    return {
         "height_m": height_m,
         "class": "high-rise",
         "band": f"{band.above_m:g} to {band.up_to_m:g} m",
         "min_abutting_road_m": band.min_road_m,
-        "min_all_round_setback_m": setback,
-        "min_gap_between_blocks_m": setback,
+        "min_all_round_setback_m": band.min_open_space_m,
+        "min_gap_between_blocks_m": band.min_open_space_m,
         "clause": TABLE_IV_CLAUSE,
         "also": [BLOCK_SPACING_CLAUSE, OPEN_SPACE_CLAUSE, PERIPHERAL_GREEN_STRIP_CLAUSE],
+        "note": "A building's length does not change its setback: the 2019 note that added "
+                "setback above 40 m was deleted by G.O.Ms.No.65 of 31.05.2019.",
     }
-    if longest_side_m and longest_side_m > LONG_BUILDING_FROM_M:
-        out["note"] = (
-            f"{band.min_open_space_m:g} m from the table, plus "
-            f"{setback - band.min_open_space_m:.2f} m because the building is "
-            f"{longest_side_m:g} m long."
-        )
-        out["also"] = [LONG_BUILDING_CLAUSE, *out["also"]]
-    elif longest_side_m is None:
-        out["note"] = ("Give the building's length to include the addition a building longer "
-                       f"than {LONG_BUILDING_FROM_M:g} m attracts.")
-    return out

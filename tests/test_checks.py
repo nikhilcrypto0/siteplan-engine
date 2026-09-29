@@ -1,5 +1,4 @@
-from shapely import affinity
-from shapely.geometry import Polygon, box
+from shapely.geometry import box
 
 from siteplan.checks import Building, Site, Status, check_site
 
@@ -114,53 +113,20 @@ def test_a_tower_above_55_m_is_checked_against_the_2019_bands():
     assert "17" in found["All-round setbacks"].required                     # the 55 to 70 band
 
 
-def test_a_long_building_needs_more_setback_than_the_table_alone():
-    """G.O.Ms.No.50 of 2019: over 40 m, add 10% of the length minus 4 m."""
-    short = Site(net_area_sqm=10000, abutting_road_m=18, net_plot=box(0, 0, 100, 100),
-                 buildings=(_tower("A", 10, 10, 30, 50),))          # 40 m long, needs 9 m
+def test_a_long_building_needs_no_more_setback_than_the_table():
+    """G.O.Ms.No.50 of 2019 added setback for buildings over 40 m long; G.O.Ms.No.65 deleted the
+    note five weeks later. An 80 m block 10 m from the line passes, as a 40 m one does."""
     long = Site(net_area_sqm=10000, abutting_road_m=18, net_plot=box(0, 0, 100, 100),
-                buildings=(_tower("A", 10, 10, 30, 90),))           # 80 m long, needs 13 m
-    assert _by_rule(check_site(short))["All-round setback: A"].status is Status.PASS
+                buildings=(_tower("A", 10, 10, 30, 90),))           # 80 m long, 27 m tall
     finding = _by_rule(check_site(long))["All-round setback: A"]
-    assert finding.status is Status.FAIL                            # 10 m is no longer enough
-    assert "13.00 m" in finding.required and "80 m long" in finding.required
-    assert finding.clause.startswith("G.O.Ms.No.50")
-
-
-def test_a_building_turned_to_suit_the_site_is_measured_on_its_own_axes():
-    """Turning a block does not lengthen it, and the 2019 note charges by length."""
-    straight = _tower("A", 60, 90, 140, 110)                        # 80 m long, 20 m deep
-    turned = Building("A", stilt_height_m=3, floors=8, floor_height_m=3,
-                      footprint=affinity.rotate(straight.footprint, 30))
-    plot = box(0, 0, 200, 200)
-
-    def required(building):
-        site = Site(net_area_sqm=10000, abutting_road_m=18, net_plot=plot,
-                    buildings=(building,))
-        return _by_rule(check_site(site))["All-round setback: A"].required
-
-    assert required(turned) == required(straight)
-    assert "13.00 m" in required(turned) and "80 m long" in required(turned)
-
-
-def test_a_block_whose_long_sides_jog_is_still_measured_end_to_end():
-    """A real outline's long side is rarely one straight edge. The firm's Dhulapally blocks were
-    charged as 59-67 m long when drawn 66-73 m, because the longest single edge of the outline
-    stops at the first jog; the length is the outline's extent along the building's own axis."""
-    jogged = Polygon([(0, 0), (29, 0), (29, -1), (31, -1), (31, 0), (60, 0), (60, 20),
-                      (31, 20), (31, 21), (29, 21), (29, 20), (0, 20)])  # 60 m, longest edge 29 m
-    building = Building("A", stilt_height_m=3, floors=8, floor_height_m=3,
-                        footprint=affinity.translate(jogged, 50, 50))
-    site = Site(net_area_sqm=10000, abutting_road_m=18, net_plot=box(0, 0, 200, 200),
-                buildings=(building,))
-    required = _by_rule(check_site(site))["All-round setback: A"].required
-    assert "11.00 m" in required and "60 m long" in required   # 9 m + (10% of 60 - 4 m)
+    assert finding.status is Status.PASS
+    assert finding.required.startswith(">= 9.00 m") and "long" not in finding.required
 
 
 def test_the_gap_between_blocks_is_quoted_to_the_centimetre():
     site = Site(net_area_sqm=10000, abutting_road_m=18, net_plot=box(0, 0, 300, 200),
                 buildings=(_tower("A", 20, 20, 83, 43), _tower("B", 20, 50, 83, 73)))
-    assert _by_rule(check_site(site))["Gap between blocks: A / B"].required == ">= 11.30 m"
+    assert _by_rule(check_site(site))["Gap between blocks: A / B"].required == ">= 9.00 m"
 
 
 def test_the_green_strip_is_only_asked_for_where_the_setback_reaches_9_m():

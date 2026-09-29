@@ -433,9 +433,7 @@ def solve(
     band = rules.band_for_height(height)
     if band is None:
         raise ValueError(f"{height:g} m is above the encoded Table IV rows (55 m)")
-    # The setback depends on how long the towers are (the 2019 note), and the towers are not
-    # placed yet, so the whole envelope is set out for the longest tower the request allows.
-    gap = rules.setback_for(band, request.max_tower_length_m)
+    gap = band.min_open_space_m  # all round, and between blocks: length no longer adds to it
     envelope = plot.buffer(-(gap + EPS_M))
     if envelope.is_empty:
         return []

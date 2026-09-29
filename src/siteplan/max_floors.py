@@ -43,7 +43,7 @@ class FloorLimit:
     limited_by: str
     floors_stilt_counted: int | None  # None when the road sets no limit
     floors_stilt_not_counted: int | None
-    setback_m: float | None  # Table IV all round at the maximum height, before a 40 m addition
+    setback_m: float | None  # Table IV all round, and between blocks, at the maximum height
     tdr_extra_floors: int
     notes: tuple[str, ...]
 
@@ -131,8 +131,7 @@ def max_floors(plot_sqm: float, road_m: float, floor_height_m: float = 3.0,
            f"{beyond.up_to_m:g} m needs {beyond.min_road_m:g} m of road ({rules.TABLE_IV_CLAUSE})")
     setback = rules.band_for_height(height).min_open_space_m
     notes.append(f"At {height:g} m each tower needs {setback:g} m open all round and between "
-                 f"blocks, more when it is longer than {rules.LONG_BUILDING_FROM_M:g} m "
-                 f"({rules.LONG_BUILDING_CLAUSE}).")
+                 f"blocks ({rules.TABLE_IV_CLAUSE}), whatever its length.")
     counted, not_counted = _floors_up_to(height, floor_height_m, stilt_height_m)
     return FloorLimit(plot_sqm, road_m, floor_height_m, stilt_height_m, True, height, why,
                       counted, not_counted, setback, extra, (*notes, _UNCHECKED_NOTE))

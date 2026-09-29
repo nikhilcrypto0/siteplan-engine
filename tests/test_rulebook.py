@@ -177,11 +177,10 @@ def test_the_2019_bands_answer_for_tall_buildings(height, setback):
     assert "G.O.Ms.No.50 of 2019" in answer["clause"]
 
 
-def test_a_long_building_is_told_it_needs_more():
-    answer = height_rules(27.0, longest_side_m=56.0)
-    assert answer["min_all_round_setback_m"] == pytest.approx(10.6)
-    assert "56 m long" in answer["note"]
-    assert any("G.O.Ms.No.50" in clause for clause in answer["also"])
+def test_a_height_answer_says_length_no_longer_adds_setback():
+    answer = height_rules(27.0)
+    assert answer["min_all_round_setback_m"] == 9.0
+    assert "G.O.Ms.No.65" in answer["note"]
 
 
 def test_the_tdr_band_is_flagged_rather_than_passed():
