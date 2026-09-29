@@ -1,5 +1,5 @@
 from shapely import affinity
-from shapely.geometry import box
+from shapely.geometry import Polygon, box
 
 from siteplan.checks import Building, Site, Status, check_site
 
@@ -141,6 +141,26 @@ def test_a_building_turned_to_suit_the_site_is_measured_on_its_own_axes():
 
     assert required(turned) == required(straight)
     assert "13.00 m" in required(turned) and "80 m long" in required(turned)
+
+
+def test_a_block_whose_long_sides_jog_is_still_measured_end_to_end():
+    """A real outline's long side is rarely one straight edge. The firm's Dhulapally blocks were
+    charged as 59-67 m long when drawn 66-73 m, because the longest single edge of the outline
+    stops at the first jog; the length is the outline's extent along the building's own axis."""
+    jogged = Polygon([(0, 0), (29, 0), (29, -1), (31, -1), (31, 0), (60, 0), (60, 20),
+                      (31, 20), (31, 21), (29, 21), (29, 20), (0, 20)])  # 60 m, longest edge 29 m
+    building = Building("A", stilt_height_m=3, floors=8, floor_height_m=3,
+                        footprint=affinity.translate(jogged, 50, 50))
+    site = Site(net_area_sqm=10000, abutting_road_m=18, net_plot=box(0, 0, 200, 200),
+                buildings=(building,))
+    required = _by_rule(check_site(site))["All-round setback: A"].required
+    assert "11.00 m" in required and "60 m long" in required   # 9 m + (10% of 60 - 4 m)
+
+
+def test_the_gap_between_blocks_is_quoted_to_the_centimetre():
+    site = Site(net_area_sqm=10000, abutting_road_m=18, net_plot=box(0, 0, 300, 200),
+                buildings=(_tower("A", 20, 20, 83, 43), _tower("B", 20, 50, 83, 73)))
+    assert _by_rule(check_site(site))["Gap between blocks: A / B"].required == ">= 11.30 m"
 
 
 def test_the_green_strip_is_only_asked_for_where_the_setback_reaches_9_m():

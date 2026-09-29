@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import StrEnum
 from itertools import combinations
-from math import hypot
+from math import hypot, inf
 
 from shapely.geometry import Polygon
 
@@ -319,7 +319,10 @@ def _longest_side_m(building: Building) -> float | None:
     """How long the building is, which decides whether the 40 m note applies.
 
     Measured on the building's own axes, not the drawing's: a block turned to suit the site
-    is no longer for it, and its bounding box would charge it setback it does not owe.
+    is no longer for it, and its bounding box would charge it setback it does not owe. The
+    length is the long side of the smallest rectangle round the outline, one of whose sides
+    lies along an edge of its hull. The longest edge itself will not do: a drawn long side with
+    a jog in it is several edges, none of them the building's length.
     """
     if building.footprint is None or building.footprint.is_empty:
         return None
@@ -327,8 +330,19 @@ def _longest_side_m(building: Building) -> float | None:
     if not hasattr(hull, "exterior"):  # degenerate footprint: a line or a point
         x0, y0, x1, y1 = hull.bounds
         return max(x1 - x0, y1 - y0)
-    x, y = hull.exterior.coords.xy
-    return max(hypot(x[i + 1] - x[i], y[i + 1] - y[i]) for i in range(len(x) - 1))
+    points = list(zip(*hull.exterior.coords.xy, strict=True))
+    smallest, length = inf, 0.0
+    for (x0, y0), (x1, y1) in zip(points, points[1:], strict=False):
+        edge = hypot(x1 - x0, y1 - y0)
+        if edge == 0:
+            continue
+        ux, uy = (x1 - x0) / edge, (y1 - y0) / edge
+        along = [px * ux + py * uy for px, py in points]
+        across = [py * ux - px * uy for px, py in points]
+        sides = (max(along) - min(along), max(across) - min(across))
+        if sides[0] * sides[1] < smallest:
+            smallest, length = sides[0] * sides[1], max(sides)
+    return length
 
 
 def _needed_setback(building: Building, band) -> float:
@@ -412,7 +426,7 @@ def _spacing_findings(high_rise, bands) -> list[Finding]:
                 rule,
                 Status.PASS if gap >= need else Status.FAIL,
                 _m(gap),
-                f">= {need:g} m",
+                f">= {need:.2f} m",
                 rules.BLOCK_SPACING_CLAUSE,
                 "This gap does not count towards the tot-lot.",
             )
