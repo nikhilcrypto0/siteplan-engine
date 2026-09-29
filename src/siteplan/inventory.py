@@ -147,9 +147,20 @@ INVENTORY: tuple[Entry, ...] = (
         choice="Rule 2(c) settles that a campus of 4,000 m² or more with apartment blocks or "
                "high-rises is a Group Development Scheme, so rule 8(m) applies. The engine still "
                "draws a driveway ring to rule 13(c)(viii) (4.5 m minimum, 6 m by default). Open: "
-               "whether the firm's '23 ft wide driveway' is a rule 8(m) internal road or a "
-               "driveway.",
+               "whether the firm's '23 ft wide driveway' (7.0 m) is a rule 8(m) internal road, a "
+               "driveway, or the 7 m rule 13(c)(vii) keeps for fire vehicles.",
         settles="The internal road widths on a sanctioned Group Development plan.",
+    ),
+    Entry(
+        "Road", "The street a high-rise stands on joins a street at least 12 m wide at one end, "
+                "and ends in a dead end only if the building is residential and 30 m or lower.",
+        "12 m street at one end; no dead end above 30 m",
+        "NBC 2016 Part 3 4.6(a), (b); G.O.168 rule 15(b)(iv)", Reading.NOT_MODELLED,
+        choice="Where a road leads is not on a survey, so neither is checked and the floors "
+               "calculator does not warn. It bites above 30 m: Dhulapally's survey draws its "
+               "roads ending at the plot, so floors above 30 m, TDR floors included, would need a "
+               "road that runs on; whether the 40 ft road along the east will is a site fact.",
+        settles="The fire NOC of a sanctioned residential high-rise above 30 m.",
     ),
     # Plot
     Entry(
@@ -305,16 +316,33 @@ INVENTORY: tuple[Entry, ...] = (
     Entry(
         "Access", "The layout draws the driveway wider than the minimum.",
         "6 m", "none (layout.DEFAULT_DRIVEWAY_WIDTH_M)", Reading.ASSUMED, (Where.LAYOUT,),
-        choice="Wider than the 4.5 m minimum, as the firm's drives are, but the firm's own "
-               "drawings run 23 ft (7.0 m), so this is still narrower than theirs.",
+        choice="Wider than the 4.5 m minimum, as the firm's drives are, and the width NBC asks "
+               "of the fire-tender approach round a high-rise; the firm's own drawings run 23 ft "
+               "(7.0 m), so this is still narrower than theirs.",
         settles="The drive width on the firm's sanctioned plans.",
     ),
     Entry(
-        "Access", "Fire-tender access, turning and hard standing around a high-rise.",
-        "7 m clear side and rear in G.O.168; the rest is in NBC Part 4",
-        "G.O.168 rules 15(a)(i), 15(b)(iv); NBC Part 4", Reading.NOT_MODELLED,
-        choice="The NBC volume we hold is Volume 2 (Parts 7-12); fire access is in Part 4, "
-               "Volume 1. The setbacks already give 7 m or more, but a fire NOC may ask more.",
+        "Access", "The entry and exit gates are wide enough for a fire engine.",
+        f"{rules.GATE_MIN_WIDTH_M:g} m", rules.GATE_CLAUSE, Reading.AS_WRITTEN, (Where.LAYOUT,),
+        ("GATE_MIN_WIDTH_M", "GATE_CLAUSE"),
+        choice="The gates are drawn at the minimum on every scheme. The gate folding back "
+               "against the compound wall, and 4.5 m clear under anything built over the "
+               "entrance, are not drawn.",
+    ),
+    Entry(
+        "Access", "Fire tenders reach a high-rise and drive round it: the approach and the open "
+                  "spaces on all its sides stay motorable, carry a 45 t tender, and are never "
+                  "used for parking.",
+        "6 m wide on all sides, 9 m turning radius, 45 t",
+        "G.O.168 rule 15(b)(iv); NBC 2016 Part 4 3.4.4.1 note; Part 3 4.6(c)",
+        Reading.NOT_MODELLED,
+        choice="Rule 15(b)(iv) holds a high-rise to NBC's fire protection requirements, and NBC "
+               "Part 4 leaves fire-vehicle clearances to Part 3, which sets these figures. "
+               "G.O.168's own figure is wider: a ramp may take a setback only after leaving 7 m "
+               "for fire vehicles (rule 13(c)(vii)). The layout's 6 m drive runs in setbacks of "
+               "7 m or more with no parking in them, which gives the width; the 9 m turn is not "
+               "drawn, and the checker asks only 4.5 m of a drive.",
+        settles="The fire NOC and the drive on a sanctioned high-rise.",
     ),
     # Parking
     Entry(

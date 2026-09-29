@@ -123,6 +123,13 @@ MORTGAGE_CLAUSE = "G.O.168 rule 25(d), p.28 (10% of built-up area handed over by
 DRIVEWAY_MIN_WIDTH_M = 4.5
 DRIVEWAY_CLAUSE = "G.O.168 rule 13(c)(viii) (minimum drive way width 4.5 m)"
 
+# Rule 15(b)(iv) holds a high-rise to NBC's fire protection requirements, and NBC 2016 Part 4
+# (3.4.4.1, note) leaves fire-vehicle clearances to Part 3, whose 4.6(d) asks an entrance of at
+# least 6 m for the fire engine, a gate that folds back against the compound wall, and 4.5 m
+# clear under anything built over the entrance.
+GATE_MIN_WIDTH_M = 6.0
+GATE_CLAUSE = "NBC 2016 Part 3 4.6(d), through G.O.168 rule 15(b)(iv) (entrance 6 m minimum)"
+
 # Rule 15(a)(x) is the group-housing one: 3% of built-up area, in a block of its own. (Rule 9(o)
 # asks 5% of site area but sits in the row-housing section, so it is not used as the check here.)
 # G.O.Ms.No.7 of 2016, Amendment 15, rewrote it as "upto 3% of the total built up area (or)

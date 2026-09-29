@@ -13,10 +13,11 @@ from shapely.affinity import rotate
 from shapely.geometry import LineString, Polygon, box
 from shapely.ops import unary_union
 
+from siteplan import rules
+
 BAY_WIDTH_M = 2.5
 BAY_DEPTH_M = 5.0
 AISLE_M = 6.0
-GATE_WIDTH_M = 6.0
 MAX_BAYS = 600  # a site plan stops being readable long before this
 EPS_M = 0.01
 
@@ -60,7 +61,7 @@ def gates(plot: Polygon, frontage: LineString, depth_m: float) -> list[tuple[str
     for name, position in (("ENTRY", 1 / 3), ("EXIT", 2 / 3)):
         centre = frontage.interpolate(position, normalized=True)
         along = _unit(frontage)
-        half = GATE_WIDTH_M / 2
+        half = rules.GATE_MIN_WIDTH_M / 2
         corners = [
             (centre.x - along[0] * half, centre.y - along[1] * half),
             (centre.x + along[0] * half, centre.y + along[1] * half),
