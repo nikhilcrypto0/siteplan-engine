@@ -4,7 +4,7 @@ Both are reserved before any tower is placed, because on a real site plan they t
 land first. The club house sits inside the setback envelope, so it is subtracted from the
 land the solver may build on. The driveway runs in the setback band outside the envelope,
 which is where the studied drawings put it and where the rules allow it (ramps are the
-exception: rule 13(vii) keeps those out of the mandatory setbacks).
+exception: rule 13(c)(vii) keeps those out of the mandatory setbacks).
 """
 
 from __future__ import annotations

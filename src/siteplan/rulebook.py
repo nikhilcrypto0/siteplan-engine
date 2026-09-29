@@ -41,6 +41,16 @@ SUPERSEDED = (
      "G.O.Ms.No.95 of 2026 raised the high-rise threshold to 21 m."),
     (re.compile(r"green planting strip", re.I),
      "G.O.Ms.No.7 of 2016 limited this to sides where the setback is 9 m or more."),
+    (re.compile(r"minimum\s+3\s*%\s*of\s+the\s+total\s+built", re.I),
+     "G.O.Ms.No.7 of 2016 rewrote this as 'upto 3% of the total built up area (or) 50,000 Sft. "
+     "whichever is lower'."),
+    (re.compile(r"other\s+than\s+the\s+front\s+set\s*-?\s*back|extra\s+floor\s+with\s+an\s+"
+                r"equivalent", re.I),
+     "G.O.Ms.No.7 of 2016 rewrote rule 16 and deleted 16(e): a high-rise that surrenders land may "
+     "take setback concessions on all sides, front included, keeping 7 m clear on all sides."),
+    (re.compile(r"20\s*%\s*of\s+developed\s+land", re.I),
+     "G.O.Ms.No.7 of 2016 replaced this with a shelter fee on 20% of the site area; no land is "
+     "set aside."),
 )
 
 

@@ -38,6 +38,16 @@ PAGES = [
         "widened to the width shown in the master plan wherever a wide road is",
         "proposed, and the road width shall be measured at the site.",
     ],
+    [
+        "15. GENERAL CONDITIONS",
+        "(x) In case of Group Housing Buildings where there are 100 units and above,",
+        "a minimum 3% of the total built up area shall be planned and developed",
+        "for common amenities and facilities like club house and gymnasium.",
+        "(e) In case of High Rise Buildings the concessions in setbacks, other than",
+        "the front setback would be considered subject to a clear setback of 7m.",
+        "(a) In HMDA area where the site for residential projects is 4000sq.m and",
+        "above, the developer shall provide 20% of developed land for EWS housing.",
+    ],
 ]
 
 
@@ -91,6 +101,19 @@ def test_the_green_strip_clause_carries_its_2016_amendment(book):
     hit = next(h for h in book.search("green planting strip periphery", limit=5)
                if "green planting strip" in h.text)
     assert "G.O.Ms.No.7 of 2016" in hit.superseded_by
+
+
+@pytest.mark.parametrize(("question", "marker", "note"), [
+    ("club house amenities percentage of built up area", "minimum 3%", "50,000 Sft"),
+    ("setback concessions for high rise other than the front", "other than",
+     "all sides, front included"),
+    ("EWS housing developed land", "developed land", "shelter fee"),
+])
+def test_the_clauses_rewritten_in_2016_say_so(book, question, marker, note):
+    """The amenities, road-widening and EWS clauses all changed in 2016; the 2012 text is not
+    the rule in force, and a search that quotes it must say so."""
+    hit = next(h for h in book.search(question, limit=8) if marker in h.text)
+    assert "G.O.Ms.No.7 of 2016" in hit.superseded_by and note in hit.superseded_by
 
 
 def test_a_clause_still_in_force_is_left_alone(book):

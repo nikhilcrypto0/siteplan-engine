@@ -144,7 +144,7 @@ def _driveway_finding(site: Site) -> Finding:
         measured,
         required,
         rules.DRIVEWAY_CLAUSE,
-        "Ramps are not counted here; rule 13(vii) keeps those out of the mandatory setbacks.",
+        "Ramps are not counted here; rule 13(c)(vii) keeps those out of the mandatory setbacks.",
     )
 
 
