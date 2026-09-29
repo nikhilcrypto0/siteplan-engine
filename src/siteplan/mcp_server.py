@@ -190,7 +190,9 @@ def build_server(workspace: Path, out_dir: Path, approval: str = "elicit",
     @server.tool(annotations=READ_ONLY)
     def read_survey_drawing(survey_file: str) -> dict[str, Any]:
         """Read a survey drawing (vector PDF or DXF): plot area, how well it agrees with the
-        stated area, the drawing scale, spot levels and slope, and any warnings."""
+        stated area, the drawing scale, spot levels and slope, the roads next to the plot with
+        their drawn widths, and any warnings. A road's width is as drawn (it may be the
+        carriageway alone): quote it as that, and ask the architect for the legal width."""
         try:
             return read_survey(ws.file(survey_file, SURVEY_TYPES)).summary()
         except ValueError as exc:

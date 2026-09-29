@@ -128,6 +128,8 @@ class Survey:
 
     def summary(self) -> dict:
         """Plain numbers for people and for the LLM to quote. No model estimates anything here."""
+        from siteplan.roads import roads_near  # roads.py reads a Survey, so import it here
+
         terrain = self.terrain()
         cal = self.calibration
         return {
@@ -167,7 +169,7 @@ class Survey:
                 "average_slope_pct": round(terrain.slope_pct, 2),
                 "falls_towards": terrain.falls_towards,
             },
-            "roads": len(self.roads),
+            "roads": [road.as_dict() for road in roads_near(self)],
             "contours": len(self.contours),
             "warnings": list(self.warnings),
         }

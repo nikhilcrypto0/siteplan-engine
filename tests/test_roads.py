@@ -69,5 +69,13 @@ def test_roads_are_listed_nearest_first_and_far_ones_are_left_out():
     assert [round(r.distance_m) for r in found] == [1, 30]
 
 
+def test_the_survey_summary_lists_the_roads_for_the_model_to_quote():
+    survey = _survey(LineString([(-20, -2), (120, -2)]), LineString([(-20, -14), (120, -14)]))
+    [road] = survey.summary()["roads"]
+    assert road["side"] == "S" and road["drawn_width_m"] == pytest.approx(12.0, abs=0.05)
+    assert road["drawn_width_ft"] == pytest.approx(39.4, abs=0.2)
+    assert "legal road width" in road["note"]
+
+
 def test_a_lone_line_is_not_a_road():
     assert roads_near(_survey(LineString([(-20, -3), (120, -3)]))) == ()
