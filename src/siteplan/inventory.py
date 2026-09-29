@@ -77,7 +77,8 @@ INVENTORY: tuple[Entry, ...] = (
                "buildings below high-rise; rule 7(xvi) of 2016 leaves out only parking floors "
                "above the ground floor.",
         settles="A sanctioned stilt + N floors high-rise whose approved setback or road width "
-                "fits one reading and not the other.",
+                "fits one reading and not the other. The firm's own Dhulapally drawing (not "
+                "sanctioned) keeps the setbacks of its blocks without their stilt.",
     ),
     Entry(
         "Height", "Parking floors above the ground floor are left out of the height that picks "
@@ -213,7 +214,8 @@ INVENTORY: tuple[Entry, ...] = (
                "10% of (length - 4 m), which would jump 3.6 m at 40 m. The 20 m cap is on the "
                "total, like the top row. Length is the longest side of the building's outline, "
                "on its own axes.",
-        settles="A sanctioned block longer than 40 m and its approved setback.",
+        settles="A sanctioned block longer than 40 m and its approved setback. Dhulapally's "
+                "blocks, 49 to 73 m long, keep the table figure with no addition.",
     ),
     Entry(
         "Setbacks", "The whole footprint, balconies included, is kept out of the setback.",
@@ -266,7 +268,8 @@ INVENTORY: tuple[Entry, ...] = (
         choice="The text asks for 'the open space mentioned in Col. 4' without saying which block "
                "sets it when their heights differ, or whether the 40 m addition applies to the "
                "gap. The engine takes the larger, addition included.",
-        settles="A sanctioned plan with two blocks of different height or length.",
+        settles="A sanctioned plan with two blocks of different height or length. Dhulapally "
+                "spaces its blocks 8 m apart, the table figure without its stilt.",
     ),
     # Open space
     Entry(
@@ -307,7 +310,8 @@ INVENTORY: tuple[Entry, ...] = (
     Entry(
         "Access", "The layout draws the driveway wider than the minimum.",
         "6 m", "none (layout.DEFAULT_DRIVEWAY_WIDTH_M)", Reading.ASSUMED, (Where.LAYOUT,),
-        choice="The firm's own drawings run wider drives than the 4.5 m minimum.",
+        choice="Wider than the 4.5 m minimum, as the firm's drives are, but the firm's own "
+               "drawings run 23 ft (7.0 m), so this is still narrower than theirs.",
         settles="The drive width on the firm's sanctioned plans.",
     ),
     Entry(
