@@ -1,4 +1,4 @@
-"""Command line: survey, check, area-statement, layout, rules, inventory, assist."""
+"""Command line: survey, check, area-statement, layout, rules, inventory, cases, assist."""
 
 from __future__ import annotations
 
@@ -151,6 +151,20 @@ def _cmd_inventory(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_cases(args: argparse.Namespace) -> int:
+    from siteplan.cases import load_cases, render, review
+
+    folder = Path(args.folder)
+    if not folder.is_dir():
+        raise FileNotFoundError(f"no case folder at {folder}")
+    reviews = [review(case) for case in load_cases(folder)]
+    if not reviews:
+        print(f"No *.case.json files in {folder}.")
+        return 1
+    print(render(reviews))
+    return 0 if all(r.settled for r in reviews) else 1
+
+
 def _ask_architect(question: dict) -> dict:
     """Show the interpreted request and get an explicit decision. There is no skip flag."""
     print("\nThe assistant read the brief as:")
@@ -261,6 +275,10 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("inventory", help="Every rule the engine applies, and how it was read.")
     p.add_argument("--markdown", action="store_true", help="A table to share with the firm")
     p.set_defaults(run=_cmd_inventory)
+
+    p = sub.add_parser("cases", help="Check the rules against real schemes (sanctioned plans).")
+    p.add_argument("folder", nargs="?", default="fixtures/cases", help="Folder of *.case.json")
+    p.set_defaults(run=_cmd_cases)
 
     p = sub.add_parser("assist", help="Plain-English brief -> approved request -> layouts.")
     p.add_argument("project")
