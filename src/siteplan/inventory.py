@@ -133,18 +133,23 @@ INVENTORY: tuple[Entry, ...] = (
         "Road", "A campus with no road along any side gives a 12 m public road along one edge.",
         "12 m, two lanes", "G.O.168 rule 8(k) as substituted by G.O.Ms.No.7 of 2016",
         Reading.NOT_MODELLED,
-        choice="Not drawn. It does not apply where an existing road runs along a side, and a "
-               "road-widening concession may be taken in its place.",
+        choice="Not drawn. Where no existing road runs along any side, the campus gives a 12 m, "
+               "two-lane public road along one edge, and the road-widening concessions (TDR, "
+               "setback relaxation or extra floors) are granted for it. Dhulapally fits: its "
+               "roads all end at the plot, and the firm's plan gives a 40 ft (12.2 m) road along "
+               "the east, the 1,163 m² cut from the surveyed land.",
     ),
     Entry(
         "Road", "Internal roads of a campus scheme.",
         "9-18 m main approach, 9 m other and loop roads, 8 m cul-de-sacs",
         "G.O.168 rule 8(m); rule 2(c) (a campus of 4,000 m² or more)", Reading.INTERPRETED,
         _BOTH,
-        choice="The engine draws a driveway ring to rule 13(c)(viii) (4.5 m minimum) instead. "
-               "Rule 2(c) says a campus of apartment blocks or high-rises can be a Group "
-               "Development Scheme, and rule 8(m) then asks 9 m for internal and loop roads.",
-        settles="The internal road width on the firm's sanctioned campus plans.",
+        choice="Rule 2(c) settles that a campus of 4,000 m² or more with apartment blocks or "
+               "high-rises is a Group Development Scheme, so rule 8(m) applies. The engine still "
+               "draws a driveway ring to rule 13(c)(viii) (4.5 m minimum, 6 m by default). Open: "
+               "whether the firm's '23 ft wide driveway' is a rule 8(m) internal road or a "
+               "driveway.",
+        settles="The internal road widths on a sanctioned Group Development plan.",
     ),
     # Plot
     Entry(
@@ -209,12 +214,12 @@ INVENTORY: tuple[Entry, ...] = (
         settles="A sanctioned plan on a road wider than 30 m.",
     ),
     Entry(
-        "Setbacks", "The whole footprint, balconies included, is kept out of the setback.",
-        "no projection into the setback", "G.O.168 rule 7(a)(xiv)", Reading.INTERPRETED, _BOTH,
-        choice="Rule 7(a)(xiv) lets balconies project up to 2 m into the open space from 6 m "
-               "height up. The engine does not use that, so it is stricter than the rule by up "
-               "to 2 m a side.",
-        settles="A sanctioned plan: is its setback dimensioned to the wall or to the balcony?",
+        "Setbacks", "Balconies may project into the open space from 6 m height up.",
+        "up to 2 m", "G.O.168 rule 7(a)(xiv)", Reading.NOT_MODELLED,
+        choice="Not used: the engine keeps whole footprints, balconies included, out of the "
+               "setback, stricter than the rule by up to 2 m a side, because its flat library "
+               "does not record balcony depths. The setback is measured to the wall. Where a "
+               "side takes the 2019 note's 1 m reduction, no further projection is allowed.",
     ),
     Entry(
         "Setbacks", "Up to 30 m, up to 2 m of setback may move from one side to another, keeping "
