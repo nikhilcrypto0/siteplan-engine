@@ -44,8 +44,11 @@ class Calibration:
 
     @property
     def max_deviation_pct(self) -> float:
+        """0 when no labels set the scale (it came from the written area instead)."""
         return max(
-            abs(e.metres_per_unit / self.fitted_metres_per_unit - 1) * 100 for e in self.agreeing
+            (abs(e.metres_per_unit / self.fitted_metres_per_unit - 1) * 100
+             for e in self.agreeing),
+            default=0.0,
         )
 
 

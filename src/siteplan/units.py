@@ -13,11 +13,20 @@ SQM_PER_ACRE = SQYD_PER_ACRE * SQM_PER_SQYD
 SQM_PER_GUNTA = SQYD_PER_GUNTA * SQM_PER_SQYD
 M_PER_FT = 0.3048
 
-# Matches "3 AC 12.50 GTS", "3 Acres 12.50 Guntas", "3AC-12.50GTS".
+# A written number, with Indian or western digit grouping: "22,686", "1,23,456", "8,063.80".
+_NUM = r"\d{1,3}(?:,\d{2,3})+(?:\.\d+)?|\d+(?:\.\d+)?"
+_SQYD = r"(?:SQ\.?\s*YDS?\.?|SQ\.?\s*YARDS?|SQYDS?)"
+_SQM = r"(?:SQ\.?\s*M(?:TS|TRS?|ETERS?|ETRES?)?\.?|SQM|M2|M²)(?![A-Z])"
+
+# Matches "3 AC 12.50 GTS", "3 Acres 12.50 Guntas", "3AC-12.50GTS" and, as surveyors write the
+# remainder, "1 ACR 39 GTS 85 Sq yds".
 _ACRE_GUNTA = re.compile(
-    r"(\d+(?:\.\d+)?)\s*(?:AC|ACRES?)\b[\s\-]*(\d+(?:\.\d+)?)\s*(?:GTS?|GUNTAS?)\b",
+    rf"(\d+(?:\.\d+)?)\s*(?:ACRES?|ACR|AC)\b[\s\-]*(\d+(?:\.\d+)?)\s*(?:GUNTAS?|GTS?)\b"
+    rf"(?:[\s,+\-]*({_NUM})\s*{_SQYD})?",
     re.IGNORECASE,
 )
+_SQM_AREA = re.compile(rf"({_NUM})\s*{_SQM}", re.IGNORECASE)
+_SQYD_AREA = re.compile(rf"({_NUM})\s*{_SQYD}", re.IGNORECASE)
 
 
 def acres_guntas_to_sqm(acres: float, guntas: float = 0.0) -> float:
@@ -44,12 +53,40 @@ def ft_to_m(feet: float) -> float:
     return feet * M_PER_FT
 
 
+def _number(text: str) -> float:
+    return float(text.replace(",", ""))
+
+
+def _acre_gunta_sqm(match: re.Match) -> float:
+    sqm = acres_guntas_to_sqm(float(match.group(1)), float(match.group(2)))
+    return sqm + (sqyd_to_sqm(_number(match.group(3))) if match.group(3) else 0.0)
+
+
 def parse_acre_gunta(text: str) -> float | None:
     """Return the area in m² for the first "<n> AC <n> GTS" phrase in text, else None."""
     match = _ACRE_GUNTA.search(text)
-    if match is None:
-        return None
-    return acres_guntas_to_sqm(float(match.group(1)), float(match.group(2)))
+    return _acre_gunta_sqm(match) if match else None
+
+
+def written_areas(text: str) -> list[float]:
+    """Every land area written in text, in m²: acres and guntas, square metres, square yards.
+
+    Square feet are left out on purpose: sheets use them for flats and tot-lots, never for the
+    land itself, so a flat's "1,190 SFT" can never pass for the site.
+    """
+    areas = [_acre_gunta_sqm(m) for m in _ACRE_GUNTA.finditer(text)]
+    rest = _ACRE_GUNTA.sub(" ", text)
+    areas += [_number(m.group(1)) for m in _SQM_AREA.finditer(rest)]
+    areas += [sqyd_to_sqm(_number(m.group(1))) for m in _SQYD_AREA.finditer(rest)]
+    return areas
+
+
+def site_area(texts: list[str]) -> float | None:
+    """The land area a sheet states: the largest one written on it. A survey also writes the
+    small strips it carves off (a road-affected corner of 141 sq yd), never anything larger
+    than the land itself."""
+    areas = [area for text in texts for area in written_areas(text)]
+    return max(areas) if areas else None
 
 
 def format_acre_gunta(sqm: float) -> str:

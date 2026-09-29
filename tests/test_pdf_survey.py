@@ -106,3 +106,69 @@ def test_sheet_without_dimension_labels_is_refused(tmp_path):
     c.save()
     with pytest.raises(ValueError, match="dimension labels"):
         read_pdf_survey(path)
+
+
+# A survey drawn like the firm's Suchitra sheet: no dimension labels at all, the area written
+# as "1 ACR 39 GTS 85 Sq yds. (8063.799 Sq mts.)", levels on a local benchmark of 100.000
+# (not metres above sea level), a black sheet frame and black title panels, and the plot
+# boundary itself in black. The reader once took the frame for the plot and scaled it from two
+# level readings.
+PENTAGON_M = [(0, 0), (95, 0), (110, 60), (50, 100), (-10, 55)]  # 8,725 m² before scaling
+STATED_SQM = 8063.799
+
+
+def _unlabelled_sheet(path, with_area=True):
+    shrink = math.sqrt(STATED_SQM / 8725)
+    shape = [(x * shrink, y * shrink) for x, y in PENTAGON_M]
+    _pt = _to_pt(750)
+    c = canvas.Canvas(str(path), pagesize=landscape(A3))
+    width, height = landscape(A3)
+    c.setStrokeColorRGB(0, 0.584, 0.584)
+    c.rect(8, 8, width - 16, height - 16)  # outer frame
+    c.setStrokeColorRGB(0, 0, 0)
+    c.rect(20, 20, width - 40, height - 40)  # inner frame, the boundary's own colour
+    for top in (120, 260, 420):  # title panels, also black
+        c.rect(width - 250, top, 220, 120)
+    c.setFillColorRGB(0, 0, 0)
+    c.drawString(width - 240, 470, "Site Boundary ......")
+    if with_area:
+        c.setStrokeColorRGB(1, 0, 1)
+        c.rect(40, height - 110, 200, 70)
+        c.drawString(50, height - 70, "Area :-")
+        c.drawString(50, height - 85, "1 ACR 39 GTS 85 Sq yds.")
+        c.drawString(50, height - 100, f"({STATED_SQM} Sq mts.)")
+        c.drawString(*_pt(60, -30), "Area :- 141 Sq yds.")
+    c.drawString(*_pt(-40, -40), "All Levels are in metres w.r.t. BM 100")
+    c.setStrokeColorRGB(0, 0, 0)
+    ring = shape + [shape[0]]
+    for a, b in zip(ring, ring[1:], strict=False):
+        c.line(*_pt(*a), *_pt(*b))
+    c.setFillColorRGB(0, 0, 1)  # site levels, falling from north (98.9) to south (97.1)
+    for x, y in [(10, 10), (40, 15), (80, 10), (30, 45), (60, 50), (90, 45), (40, 75), (60, 85)]:
+        c.drawString(*_pt(x * shrink, y * shrink), f"{97.1 + 1.8 * y / 100:.2f}")
+    c.setFillColorRGB(1, 0, 0)  # road levels, off site
+    for x, y, z in [(120, 20, "99.90"), (130, 70, "100.17"), (-30, 0, "99.50")]:
+        c.drawString(*_pt(x, y), z)
+    c.save()
+    return path
+
+
+def test_a_sheet_without_dimension_labels_is_scaled_from_its_written_area(tmp_path):
+    survey = read_pdf_survey(_unlabelled_sheet(tmp_path / "unlabelled.pdf"))
+    assert len(survey.boundary.exterior.coords) - 1 == 5  # the plot, not a rectangle of the sheet
+    assert survey.area_sqm == pytest.approx(STATED_SQM, rel=1e-6)
+    assert survey.stated_area_sqm == pytest.approx(STATED_SQM)
+    assert survey.calibration.metres_per_unit == pytest.approx(750 * 0.0254 / 72, rel=1e-3)
+    assert any("no dimension labels" in w.lower() for w in survey.warnings)
+
+
+def test_levels_on_a_local_benchmark_are_read_as_levels(tmp_path):
+    survey = read_pdf_survey(_unlabelled_sheet(tmp_path / "benchmark.pdf"))
+    assert sum(lv.on_site for lv in survey.levels) == 8
+    assert sum(not lv.on_site for lv in survey.levels) == 3
+    assert survey.terrain().falls_towards == "S"
+
+
+def test_without_labels_or_a_written_area_the_sheet_is_refused(tmp_path):
+    with pytest.raises(ValueError, match="dimension labels"):
+        read_pdf_survey(_unlabelled_sheet(tmp_path / "bare.pdf", with_area=False))

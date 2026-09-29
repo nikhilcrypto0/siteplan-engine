@@ -13,21 +13,26 @@ from __future__ import annotations
 
 import math
 import re
+from collections.abc import Callable
 from dataclasses import dataclass, replace
 from pathlib import Path
 
 import pdfplumber
 from shapely.geometry import LineString, Point, Polygon
-from shapely.ops import linemerge, unary_union
+from shapely.ops import linemerge, polygonize, unary_union
 
-from siteplan.geometry import angle_gap, largest_polygon, straight_runs
+from siteplan.geometry import angle_gap, straight_runs
 from siteplan.survey import Calibration, ScaleEstimate, SpotLevel, Survey, calibrate
-from siteplan.units import parse_acre_gunta
+from siteplan.units import site_area
 
 Colour = tuple[float, ...]
 _NUMBER = re.compile(r"\d+\.\d+|\d+")
 _METRES_PER_POINT_AT_1_TO_1 = 0.0254 / 72
 STANDARD_SCALES = (100, 200, 250, 300, 400, 500, 750, 1000, 1250, 1500, 2000, 2500, 5000)
+LEVEL_WINDOW_M = 15.0  # the spot levels of one site sit within a few metres of each other
+MIN_LEVELS = 8  # that many decimals that close together are the sheet's levels
+MIN_LEVELS_ON_PLOT = 3  # with no labels, the plot must hold at least this many levels
+FRAME_SPAN = 0.8  # a shape this wide AND this tall on the page is the sheet's frame
 
 
 def snap_to_standard_scale(cal: Calibration, tolerance_pct: float) -> Calibration:
@@ -198,18 +203,72 @@ class _Candidate:
     dimension_tokens: frozenset[int]  # id() of tokens used as dimension labels
 
 
+def _level_band(numbers: list[tuple[float, Token]]) -> tuple[float, float] | None:
+    """Where this sheet's spot levels sit: the densest run of decimals within a few metres.
+
+    Some surveys level from sea level (583 m at Dhulapally), others from a local benchmark
+    (100.000 at Suchitra), so no fixed range finds both. A fixed range read none of Suchitra's
+    36 levels, and let two of them pass for dimension labels."""
+    values = sorted(v for v, t in numbers if "." in t.text)
+    best, span, start = 0, None, 0
+    for end, value in enumerate(values):
+        while value - values[start] > LEVEL_WINDOW_M:
+            start += 1
+        if end - start + 1 > best:
+            best, span = end - start + 1, (values[start], value)
+    return span if best >= MIN_LEVELS else None
+
+
+def _level_tests(
+    numbers: list[tuple[float, Token]], profile: PdfProfile
+) -> tuple[Callable[[float], bool], Callable[[float], bool]]:
+    """(is_level, is_ambiguous): a level lies in the profile's range or this sheet's own band;
+    an ambiguous number could be a level or a dimension, so it may only confirm a scale."""
+    lo, hi = profile.level_range
+    band = _level_band(numbers)
+
+    def in_band(value: float) -> bool:
+        return band is not None and band[0] <= value <= band[1]
+
+    return (lambda v: lo <= v <= hi or in_band(v)), (lambda v: v >= lo or in_band(v))
+
+
+def _plot_shapes(
+    shapes: dict[Colour, list[LineString]], width: float, height: float, profile: PdfProfile
+) -> list[tuple[Colour, Polygon]]:
+    """Every closed shape that could be the plot: each face the sheet's lines close, in every
+    colour, filled in, less the sheet's own frame. Keeping only the largest shape of each
+    colour once took Suchitra's black sheet frame for its black plot boundary."""
+    found = []
+    for colour, segs in shapes.items():
+        if len(segs) < 3:
+            continue
+        for face in polygonize(unary_union(segs)):
+            filled = Polygon(face.exterior)
+            fraction = filled.area / (width * height)
+            x0, y0, x1, y1 = filled.bounds
+            frame = x1 - x0 >= FRAME_SPAN * width and y1 - y0 >= FRAME_SPAN * height
+            if profile.min_polygon_page_fraction <= fraction <= 0.9 and not frame:
+                found.append((colour, filled))
+    return found
+
+
 def _calibrate_candidate(
-    polygon: Polygon, numbers: list[tuple[float, Token]], profile: PdfProfile
+    polygon: Polygon,
+    numbers: list[tuple[float, Token]],
+    ambiguous: Callable[[float], bool],
+    profile: PdfProfile,
 ) -> tuple[Calibration, frozenset[int]] | None:
-    """Calibrate from dimension labels. Small numbers can only be dimensions, so they set the
-    scale. Numbers in the level range count as dimensions only if they sit along an edge AND
-    agree with that scale, so a 450 m edge label is used, and never mistaken for a level."""
-    lo = profile.level_range[0]
-    small = _scale_estimates(polygon, [(v, t) for v, t in numbers if 0 < v < lo], profile)
+    """Calibrate from dimension labels. Unambiguous numbers can only be dimensions, so they set
+    the scale. A number that could be a level counts as a dimension only if it sits along an
+    edge AND agrees with that scale, so a 450 m edge label is used, and never mistaken for a
+    level."""
+    small = [(v, t) for v, t in numbers if v > 0 and not ambiguous(v)]
+    small = _scale_estimates(polygon, small, profile)
     cal = calibrate([e for e, _ in small], profile.scale_agreement_pct)
     if cal is None:
         return None
-    large = _scale_estimates(polygon, [(v, t) for v, t in numbers if v >= lo], profile)
+    large = _scale_estimates(polygon, [(v, t) for v, t in numbers if ambiguous(v)], profile)
     tolerance = profile.scale_agreement_pct / 100
     large = [
         (e, t)
@@ -232,37 +291,60 @@ def read_pdf_survey(path: str | Path, profile: PdfProfile | None = None) -> Surv
         tokens, runs = read_text(page)
         shapes = _segments_by_colour(page, include_rects=True)
         segments = _segments_by_colour(page, include_rects=False)
-        page_area = float(page.width * page.height)
+        plots = _plot_shapes(shapes, float(page.width), float(page.height), profile)
 
-    stated = next((a for a in (parse_acre_gunta(r) for r in runs) if a), None)
+    stated = site_area(runs)
     numbers = [(float(t.text), t) for t in tokens if _NUMBER.fullmatch(t.text)]
+    is_level, ambiguous = _level_tests(numbers, profile)
 
     candidates = []
-    for colour, segs in shapes.items():
-        polygon = largest_polygon(segs)
-        if polygon is None:
-            continue
-        fraction = polygon.area / page_area
-        if not profile.min_polygon_page_fraction <= fraction <= 0.9:
-            continue
-        found = _calibrate_candidate(polygon, numbers, profile)
+    for colour, polygon in plots:
+        found = _calibrate_candidate(polygon, numbers, ambiguous, profile)
         if found is not None:
             cal, dimension_tokens = found
             area = polygon.area * cal.metres_per_unit**2
             candidates.append(_Candidate(colour, polygon, cal, area, dimension_tokens))
-    if not candidates:
-        raise ValueError(
-            f"{path}: no closed boundary with at least two matching dimension labels was found"
-        )
 
-    if stated:
+    if candidates and stated:
         best = min(candidates, key=lambda c: abs(c.area_sqm / stated - 1))
-    else:
+    elif candidates:
         best = max(candidates, key=lambda c: (len(c.calibration.agreeing), c.area_sqm))
-    return _build_survey(str(path), best, stated, numbers, segments, profile)
+    elif stated:
+        best = _scaled_by_written_area(plots, numbers, is_level, stated)
+        if best is None:
+            raise ValueError(
+                f"{path}: the sheet has no dimension labels, and no closed shape holds its spot "
+                "levels, so the plot cannot be told from the rest of the drawing"
+            )
+    else:
+        raise ValueError(
+            f"{path}: no closed boundary with at least two matching dimension labels was found, "
+            "and no area is written to scale one from"
+        )
+    return _build_survey(str(path), best, stated, numbers, segments, is_level, profile)
 
 
-def _build_survey(source, best, stated, numbers, segments, profile) -> Survey:
+def _scaled_by_written_area(
+    plots: list[tuple[Colour, Polygon]],
+    numbers: list[tuple[float, Token]],
+    is_level: Callable[[float], bool],
+    stated: float,
+) -> _Candidate | None:
+    """With no dimension labels, the plot is the tightest shape round the spot levels, and the
+    written area is the only scale there is. A surveyor levels the land being surveyed."""
+    points = [Point(t.x, t.y) for v, t in numbers if "." in t.text and is_level(v)]
+    held = [(sum(polygon.contains(p) for p in points), -polygon.area, colour, polygon)
+            for colour, polygon in plots]
+    if not held:
+        return None
+    count, _, colour, polygon = max(held, key=lambda h: (h[0], h[1]))
+    if count < MIN_LEVELS_ON_PLOT:
+        return None
+    k = math.sqrt(stated / polygon.area)
+    return _Candidate(colour, polygon, Calibration(k, (), (), k), stated, frozenset())
+
+
+def _build_survey(source, best, stated, numbers, segments, is_level, profile) -> Survey:
     k = best.calibration.metres_per_unit
     minx, _, _, maxy = best.polygon.bounds
 
@@ -271,11 +353,10 @@ def _build_survey(source, best, stated, numbers, segments, profile) -> Survey:
 
     boundary_page = best.polygon
     boundary = Polygon([to_m(x, y) for x, y in boundary_page.exterior.coords])
-    lo, hi = profile.level_range
     levels = tuple(
         SpotLevel(*to_m(t.x, t.y), z=v, on_site=boundary_page.contains(Point(t.x, t.y)))
         for v, t in numbers
-        if lo <= v <= hi and "." in t.text and id(t) not in best.dimension_tokens
+        if is_level(v) and "." in t.text and id(t) not in best.dimension_tokens
     )
 
     def lines_of(colour: Colour | None) -> tuple[LineString, ...]:
@@ -288,7 +369,15 @@ def _build_survey(source, best, stated, numbers, segments, profile) -> Survey:
         return tuple(LineString([to_m(x, y) for x, y in p.coords]) for p in parts)
 
     warnings = []
-    if stated is None:
+    if not best.calibration.agreeing:
+        plotted_at = k / _METRES_PER_POINT_AT_1_TO_1
+        warnings.append(
+            "The sheet has no dimension labels, so the scale comes from the written area "
+            f"(about 1:{plotted_at:,.0f}) and the area cannot be checked against the drawing. "
+            "The plot is taken as the tightest shape round the spot levels. Confirm one "
+            "boundary length before relying on the dimensions."
+        )
+    elif stated is None:
         warnings.append(
             "No area was written on the sheet; boundary chosen by label agreement only."
         )

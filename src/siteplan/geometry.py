@@ -6,7 +6,6 @@ import math
 from dataclasses import dataclass
 
 from shapely.geometry import LineString, Polygon
-from shapely.ops import polygonize, unary_union
 
 
 @dataclass(frozen=True)
@@ -87,11 +86,3 @@ def less_road_strip(boundary: Polygon, net_area_sqm: float) -> Polygon:
         else:
             hi = mid
     return _keep_behind(boundary, frontage, hi * side)
-
-
-def largest_polygon(segments: list[LineString]) -> Polygon | None:
-    """Close a soup of line segments into polygons and return the biggest one."""
-    if len(segments) < 3:
-        return None
-    polygons = list(polygonize(unary_union(segments)))
-    return max(polygons, key=lambda p: p.area) if polygons else None

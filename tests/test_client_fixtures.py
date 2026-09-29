@@ -35,6 +35,20 @@ def test_survey_matches_the_surveyors_area(expect):
     assert survey.terrain().falls_towards == expect["falls_towards"]
 
 
+def test_every_other_survey_lands_on_its_printed_area(expect):
+    """Suchitra's survey has no dimension labels and levels on a local benchmark; the reader
+    once returned its sheet frame, 7,239 m², for a plot printed as 8,063.799 m²."""
+    for sheet in expect.get("surveys", []):
+        survey = read_pdf_survey(FIXTURES / "workspace" / sheet["file"])
+        name = sheet["file"]
+        assert abs(survey.area_sqm / sheet["printed_sqm"] - 1) * 100 < sheet[
+            "max_area_difference_pct"], name
+        assert len(survey.boundary.exterior.coords) - 1 >= sheet["min_corners"], name
+        assert sum(lv.on_site for lv in survey.levels) >= sheet["min_on_site_levels"], name
+        assert survey.terrain().falls_towards == sheet["falls_towards"], name
+        assert any(sheet["warning"] in w.lower() for w in survey.warnings), name
+
+
 def test_area_statement_reproduces_the_drawing(expect):
     project = Project.model_validate_json((FIXTURES / expect["project"]).read_text())
     statement = project.area_statement

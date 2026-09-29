@@ -15,7 +15,7 @@ import ezdxf
 from shapely.geometry import LineString, Point, Polygon
 
 from siteplan.survey import SpotLevel, Survey
-from siteplan.units import parse_acre_gunta
+from siteplan.units import site_area
 
 # $INSUNITS code -> metres per drawing unit (0 means "unitless").
 _METRES_PER_UNIT = {1: 0.0254, 2: 0.3048, 4: 0.001, 5: 0.01, 6: 1.0}
@@ -81,7 +81,7 @@ def read_dxf_survey(path: str | Path, profile: DxfProfile | None = None) -> Surv
         warnings.append(f"Drawing units not set in the file; assumed 1 unit = {k:g} m.")
 
     texts = _texts(msp)
-    stated = next((a for a in (parse_acre_gunta(t) for t, _ in texts) if a), None)
+    stated = site_area([text for text, _ in texts])
     candidates = _closed_polylines(msp)
     if profile.boundary_layer:
         candidates = [c for c in candidates if c[0] == profile.boundary_layer]

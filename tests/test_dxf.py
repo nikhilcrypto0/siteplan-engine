@@ -81,3 +81,23 @@ def test_arcs_in_legacy_polylines_are_warned_about(tmp_path):
     doc.saveas(tmp_path / "arc.dxf")
     survey = read_dxf_survey(tmp_path / "arc.dxf")
     assert any("arcs" in w for w in survey.warnings)
+
+
+def test_a_site_area_in_square_yards_picks_the_net_plot_over_an_older_outline(tmp_path):
+    """The firm's Dhulapally DWG holds two outlines, 19,944 m² on A-BOUNDARY and the net plot of
+    18,969 m² on layer 0, and writes "TOTAL SITE AREA: 22,686 SQYDS". Reading only acres and
+    guntas, the reader missed the written area and took the older outline."""
+    doc = ezdxf.new("R2018")
+    doc.header["$INSUNITS"] = 6
+    msp = doc.modelspace()
+    net = [(0, 0), (120, 0), (120, 60), (70, 60), (70, 100), (0, 100)]  # 10,000 m²
+    msp.add_lwpolyline([(-6, 0), *net[1:5], (-6, 100)], close=True,
+                       dxfattribs={"layer": "A-BOUNDARY"})  # 600 m² more: strip not yet cut
+    msp.add_lwpolyline(net, close=True, dxfattribs={"layer": "0"})
+    msp.add_text(f"TOTAL SITE AREA: {10000 / 0.83612736:,.0f} SQYDS").set_placement((10, 10))
+    msp.add_text("FLAT AREA: 1,190 SFT").set_placement((20, 20))
+    doc.saveas(tmp_path / "siteplan.dxf")
+    survey = read_dxf_survey(tmp_path / "siteplan.dxf")
+    assert survey.area_sqm == pytest.approx(10000, rel=1e-6)
+    assert survey.stated_area_sqm == pytest.approx(10000, rel=1e-4)
+    assert survey.warnings == ()
