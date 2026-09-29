@@ -13,6 +13,7 @@ Still unread: G.O.Ms.No.245 of 2012, G.O.Ms.No.103 of 2021 and G.O.Ms.No.16 of 2
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 
 RULES_SOURCE = "Telangana Building Rules 2012, G.O.Ms.No.168 (HMDA consolidated text)"
@@ -68,6 +69,19 @@ HIGH_RISE_CLAUSE = "G.O.168 rule 2(f) as substituted by G.O.Ms.No.95 of 2026 (21
 TDR_BAND_M = (18.0, 21.0)
 TDR_PLOT_RANGE_SQM = (750.0, 2000.0)
 TDR_BAND_CLAUSE = "G.O.Ms.No.95 of 2026, rule 17(d)(viii) (18-21 m on 750-2000 m² needs TDR)"
+
+# Same order, 5(v), inserting rule 17(d)(xii): "In plots above 2000 sq.m: (a) Up to 3
+# additional floors may be permitted in plots abutting 40 ft road (b) Up to 4 additional floors
+# in plots abutting 60 ft road (c) Up to 5 additional floors in plots abutting 80 ft road
+# subject to utilization of TDR and compliance with Fire, Airport and other norms." Read from
+# the scanned order on 2026-09-29. It "modifies existing provisions", which are unread. The
+# 40, 60 and 80 ft roads are taken as the 12, 18 and 24 m of Table IV, as Hyderabad names them.
+TDR_EXTRA_FLOORS_BY_ROAD_M = ((24.0, 5), (18.0, 4), (12.0, 3))
+TDR_EXTRA_FLOORS_ABOVE_PLOT_SQM = 2000.0
+TDR_EXTRA_FLOORS_CLAUSE = (
+    "G.O.Ms.No.95 of 2026, rule 17(d)(xii) (up to 3, 4 or 5 more floors through TDR on plots "
+    "above 2000 m² abutting 40, 60 or 80 ft roads)"
+)
 
 MIN_HIGH_RISE_PLOT_SQM = 2000.0
 MIN_HIGH_RISE_PLOT_CLAUSE = "G.O.168 rule 7(a)(ii)"
@@ -138,6 +152,27 @@ def parking_percent(authority: str | None) -> float:
 def band_for_height(height_m: float) -> HeightBand | None:
     """The Table IV row for a building height."""
     return next((band for band in TABLE_IV if band.contains(height_m)), None)
+
+
+def max_height_for_road(road_m: float) -> float | None:
+    """The tallest high-rise a road this wide can serve, from Table IV column 3.
+
+    None when the road is narrower than even the first row asks (no high-rise at all), and
+    infinity when it meets every row: from 30 m of road the table sets no height limit.
+    """
+    served = [band for band in TABLE_IV if road_m >= band.min_road_m]
+    if not served:
+        return None
+    if len(served) == len(TABLE_IV):
+        return math.inf
+    return served[-1].up_to_m
+
+
+def tdr_extra_floors(plot_sqm: float, road_m: float) -> int:
+    """How many more floors TDR may buy (rule 17(d)(xii)); 0 when the plot or road is too small."""
+    if plot_sqm <= TDR_EXTRA_FLOORS_ABOVE_PLOT_SQM:
+        return 0
+    return next((n for width, n in TDR_EXTRA_FLOORS_BY_ROAD_M if road_m >= width), 0)
 
 
 def setback_for(band: HeightBand, longest_side_m: float | None = None) -> float:

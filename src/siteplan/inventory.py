@@ -28,6 +28,7 @@ class Where(StrEnum):
     CHECKER = "checker"
     LAYOUT = "layout"
     LOOKUP = "height lookup"  # `siteplan rules --height` and the rules_for_height tool
+    FLOORS = "floors calculator"  # `siteplan floors` and the max_floors tool
 
 
 @dataclass(frozen=True)
@@ -65,17 +66,17 @@ INVENTORY: tuple[Entry, ...] = (
     Entry(
         "Height", "A building is high-rise, and Table IV applies to it, from this height.",
         f"{rules.HIGH_RISE_THRESHOLD_M:g} m or more", rules.HIGH_RISE_CLAUSE,
-        Reading.AS_WRITTEN, _BOTH, ("HIGH_RISE_THRESHOLD_M", "HIGH_RISE_CLAUSE"),
+        Reading.AS_WRITTEN, (*_BOTH, Where.FLOORS), ("HIGH_RISE_THRESHOLD_M", "HIGH_RISE_CLAUSE"),
     ),
     Entry(
         "Height", "Height is measured from the abutting road, and the stilt floor counts in it.",
         "stilt + floors x floor-to-floor height",
         "G.O.168 rule 2(e) (the stilt exclusion in rule 5(c) is written for Table III)",
-        Reading.INTERPRETED, _BOTH,
+        Reading.INTERPRETED, (*_BOTH, Where.FLOORS),
         choice="The stilt counts. Rule 2(e) leaves out only the parapet, staircase head room, "
                "lift room and water tank; the one stilt exclusion, rule 5(c), covers the Table III "
                "buildings below high-rise; rule 7(xvi) of 2016 leaves out only parking floors "
-               "above the ground floor.",
+               "above the ground floor. The floors calculator gives the answer both ways.",
         settles="A sanctioned stilt + N floors high-rise whose approved setback or road width "
                 "fits one reading and not the other. The firm's own Dhulapally drawing (not "
                 "sanctioned) keeps the setbacks of its blocks without their stilt.",
@@ -98,7 +99,7 @@ INVENTORY: tuple[Entry, ...] = (
         "Height", "On a mid-sized plot, a building just below high-rise is allowed only through "
                   "TDR.",
         f"{_TDR_LOW:g}-{_TDR_HIGH:g} m on {_TDR_SMALL:,.0f}-{_TDR_LARGE:,.0f} m²",
-        rules.TDR_BAND_CLAUSE, Reading.AS_WRITTEN, (Where.LOOKUP,),
+        rules.TDR_BAND_CLAUSE, Reading.AS_WRITTEN, (Where.LOOKUP, Where.FLOORS),
         ("TDR_BAND_M", "TDR_PLOT_RANGE_SQM", "TDR_BAND_CLAUSE"),
         choice="Raised as a question by the height lookup; the checker does not examine "
                "buildings below 21 m.",
@@ -106,8 +107,9 @@ INVENTORY: tuple[Entry, ...] = (
     # Road
     Entry(
         "Road", "The abutting road must be at least this wide for the building's height.",
-        _road_widths(), rules.TABLE_IV_CLAUSE, Reading.AS_WRITTEN, (Where.CHECKER,),
-        ("TABLE_IV", "TABLE_IV_CLAUSE", "band_for_height"),
+        _road_widths(), rules.TABLE_IV_CLAUSE, Reading.AS_WRITTEN,
+        (Where.CHECKER, Where.FLOORS),
+        ("TABLE_IV", "TABLE_IV_CLAUSE", "band_for_height", "max_height_for_road"),
         choice="Table II gives the same widths up to 30 m.",
     ),
     Entry(
@@ -148,7 +150,7 @@ INVENTORY: tuple[Entry, ...] = (
     Entry(
         "Plot", "A high-rise needs a plot of at least this size.",
         f"{rules.MIN_HIGH_RISE_PLOT_SQM:,.0f} m²", rules.MIN_HIGH_RISE_PLOT_CLAUSE,
-        Reading.INTERPRETED, (Where.CHECKER,),
+        Reading.INTERPRETED, (Where.CHECKER, Where.FLOORS),
         ("MIN_HIGH_RISE_PLOT_SQM", "MIN_HIGH_RISE_PLOT_CLAUSE"),
         choice="Tested on the net plot (after road widening) when one is given, otherwise the "
                "gross.",
@@ -190,7 +192,7 @@ INVENTORY: tuple[Entry, ...] = (
     # Setbacks
     Entry(
         "Setbacks", "Open space to be left around each building, by its height.",
-        _setbacks(), rules.TABLE_IV_CLAUSE, Reading.AS_WRITTEN, _BOTH,
+        _setbacks(), rules.TABLE_IV_CLAUSE, Reading.AS_WRITTEN, (*_BOTH, Where.FLOORS),
         ("TABLE_IV", "TABLE_IV_CLAUSE", "band_for_height"),
     ),
     Entry(
@@ -387,10 +389,14 @@ INVENTORY: tuple[Entry, ...] = (
     ),
     Entry(
         "Handover and fees", "On plots over 2,000 m², TDR buys extra floors by road width.",
-        "up to 3, 4 or 5 floors on 40, 60 or 80 ft roads",
-        "G.O.Ms.No.95 of 2026, rule 17(d)(xii)", Reading.NOT_MODELLED,
-        choice="An option the owner buys, not a requirement; the engine designs to the base "
-               "height.",
+        "up to 3, 4 or 5 floors on 40, 60 or 80 ft roads", rules.TDR_EXTRA_FLOORS_CLAUSE,
+        Reading.INTERPRETED, (Where.FLOORS,),
+        ("TDR_EXTRA_FLOORS_BY_ROAD_M", "TDR_EXTRA_FLOORS_ABOVE_PLOT_SQM",
+         "TDR_EXTRA_FLOORS_CLAUSE", "tdr_extra_floors"),
+        choice="Shown by the floors calculator beside its answer, never in it: an option the "
+               "owner buys. The 40, 60 and 80 ft roads are taken as Table IV's 12, 18 and 24 m, "
+               "as Hyderabad names them. The rule modifies earlier provisions that are unread.",
+        settles="A sanctioned scheme that used TDR floors, and the provisions this one modifies.",
     ),
 )
 

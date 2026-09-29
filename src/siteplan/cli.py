@@ -1,4 +1,4 @@
-"""Command line: survey, check, area-statement, layout, rules, inventory, cases, assist."""
+"""Command line: survey, check, area-statement, layout, rules, inventory, floors, cases, assist."""
 
 from __future__ import annotations
 
@@ -151,6 +151,35 @@ def _cmd_inventory(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_floors(args: argparse.Namespace) -> int:
+    from siteplan.max_floors import describe, max_floors
+    from siteplan.roads import roads_near
+    from siteplan.units import ft_to_m, sqyd_to_sqm
+
+    road_m = ft_to_m(args.road_ft) if args.road_ft else args.road_m
+    if args.survey:
+        survey = read_survey(Path(args.survey))
+        plot_sqm = survey.stated_area_sqm or survey.area_sqm
+        print(f"Plot from {args.survey}: {plot_sqm:,.0f} m²")
+        for road in roads_near(survey):
+            limit = max_floors(plot_sqm, road.width_m, args.floor_m, args.stilt_m)
+            reach = f"up to {limit.max_height_m:g} m" if limit.max_height_m else (
+                "no road limit" if limit.high_rise else "no high-rise")
+            print(f"  road to the {road.side}, {road.distance_m:.1f} m off: drawn "
+                  f"{road.width_m:.2f} m ({road.width_ft:.0f} ft) -> {reach}")
+        if road_m is None:
+            print("\nDrawn widths may be the carriageway alone. Give the legal width with "
+                  "--road-m or --road-ft for the full answer.")
+            return 0
+        print()
+    else:
+        plot_sqm = sqyd_to_sqm(args.plot_sqyd) if args.plot_sqyd else args.plot_sqm
+    if road_m is None:
+        raise ValueError("Give the road width with --road-m or --road-ft.")
+    print(describe(max_floors(plot_sqm, road_m, args.floor_m, args.stilt_m)))
+    return 0
+
+
 def _cmd_cases(args: argparse.Namespace) -> int:
     from siteplan.cases import load_cases, render, review
 
@@ -275,6 +304,18 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("inventory", help="Every rule the engine applies, and how it was read.")
     p.add_argument("--markdown", action="store_true", help="A table to share with the firm")
     p.set_defaults(run=_cmd_inventory)
+
+    p = sub.add_parser("floors", help="The most floors a plot can take, from its area and road.")
+    plot = p.add_mutually_exclusive_group(required=True)
+    plot.add_argument("--plot-sqm", type=float, help="Net plot area in m²")
+    plot.add_argument("--plot-sqyd", type=float, help="Net plot area in square yards")
+    plot.add_argument("--survey", help="Take the area, and list the roads, from a survey")
+    road = p.add_mutually_exclusive_group()
+    road.add_argument("--road-m", type=float, help="Legal width of the abutting road, metres")
+    road.add_argument("--road-ft", type=float, help="Legal width of the abutting road, feet")
+    p.add_argument("--floor-m", type=float, default=3.0, help="Floor-to-floor height")
+    p.add_argument("--stilt-m", type=float, default=3.0, help="Stilt height")
+    p.set_defaults(run=_cmd_floors)
 
     p = sub.add_parser("cases", help="Check the rules against real schemes (sanctioned plans).")
     p.add_argument("folder", nargs="?", default="fixtures/cases", help="Folder of *.case.json")

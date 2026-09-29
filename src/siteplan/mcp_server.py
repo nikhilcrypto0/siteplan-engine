@@ -39,6 +39,7 @@ from siteplan.checks import check_site
 from siteplan.guards import sanitize_brief
 from siteplan.layout import LayoutRequest
 from siteplan.library import FlatLibrary
+from siteplan.max_floors import max_floors as floor_limit
 from siteplan.project import Project
 from siteplan.result_page import write_result_page
 from siteplan.rulebook import RuleBook
@@ -221,6 +222,21 @@ def build_server(workspace: Path, out_dir: Path, approval: str = "elicit",
         if height_m <= 0:
             raise ToolError("Give the building height in metres, stilt included.")
         return rules.height_rules(height_m)
+
+    @server.tool(annotations=READ_ONLY)
+    def max_floors(plot_area_sqm: float, road_width_m: float, floor_height_m: float = 3.0,
+                   stilt_height_m: float = 3.0) -> dict[str, Any]:
+        """The most floors the rules allow on a plot: whether it can be high-rise, the maximum
+        height and the rule that stops it there, the floors above the stilt both ways the stilt
+        may be counted, and the extra floors TDR could buy, each with its clause. road_width_m
+        must be the LEGAL width of the road the site takes its access from, which the
+        architect confirms: a width from read_survey_drawing is as drawn and may be the
+        carriageway alone. Quote both stilt answers and the notes; never choose between them."""
+        try:
+            return floor_limit(plot_area_sqm, road_width_m, floor_height_m,
+                               stilt_height_m).as_dict()
+        except ValueError as exc:
+            raise ToolError(str(exc)) from None
 
     @server.tool(annotations=READ_ONLY)
     def search_rules(question: str, limit: int = 3) -> dict[str, Any]:

@@ -32,7 +32,7 @@ LAYOUT_ARGS = {
     "unit_mix_percent": {"2BHK": 70, "3BHK": 30},
 }
 READ_TOOLS = {"list_files", "read_survey_drawing", "check_rules", "area_statement",
-              "rules_for_height", "search_rules"}
+              "rules_for_height", "search_rules", "max_floors"}
 
 
 class Architect:
@@ -188,6 +188,15 @@ def test_a_height_question_is_answered_from_the_table_with_its_clause(ws):
     answer = ok(call(ws, "rules_for_height", {"height_m": 35.0}))
     assert answer["min_abutting_road_m"] == 24.0 and answer["min_all_round_setback_m"] == 11.0
     assert answer["clause"].startswith("G.O.168")
+
+
+def test_max_floors_gives_both_stilt_answers_and_the_rule_that_stops_it(ws):
+    answer = ok(call(ws, "max_floors", {"plot_area_sqm": 18969, "road_width_m": 18.28}))
+    assert answer["max_height_m"] == 30.0 and answer["extra_floors_through_tdr"] == 4
+    assert sorted(answer["floors_above_stilt"].values()) == [9, 10]
+    assert "Table IV" in answer["limited_by"]
+    bad = call(ws, "max_floors", {"plot_area_sqm": 18969, "road_width_m": 0})
+    assert bad.isError
 
 
 def test_rule_search_refuses_rather_than_improvising_when_no_document_is_loaded(ws):

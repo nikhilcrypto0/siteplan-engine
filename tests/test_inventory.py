@@ -16,6 +16,7 @@ SOURCES = {
         (SRC / name).read_text() for name in ("layout.py", "amenities.py", "parking.py")
     ),
     Where.LOOKUP: inspect.getsource(rules.height_rules),
+    Where.FLOORS: (SRC / "max_floors.py").read_text(),
 }
 
 
