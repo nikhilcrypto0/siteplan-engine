@@ -286,7 +286,8 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("layout", help="Generate tower layout options for a project.")
     p.add_argument("project")
     p.add_argument("--library", required=True, help="Flat library JSON")
-    p.add_argument("--survey", help="Survey PDF/DXF, used when the project has no net_plot_m")
+    p.add_argument("--survey", help="Survey or site-plan PDF/DXF (a site plan's outline is the "
+                   "net plot), used when the project has no net_plot_m")
     p.add_argument("--amenities", help="Amenity library JSON: pool, courts, play area, cabin")
     p.add_argument("--out", default="out/layout")
     p.set_defaults(run=_cmd_layout)
@@ -330,7 +331,8 @@ def main(argv: list[str] | None = None) -> int:
     brief = p.add_mutually_exclusive_group(required=True)
     brief.add_argument("--brief", help="The brief, in plain English")
     brief.add_argument("--brief-file", help="A text file holding the brief")
-    p.add_argument("--survey", help="Survey PDF/DXF, used when the project has no net_plot_m")
+    p.add_argument("--survey", help="Survey or site-plan PDF/DXF (a site plan's outline is the "
+                   "net plot), used when the project has no net_plot_m")
     p.add_argument("--config", help="Assistant config JSON (model endpoint, budgets)")
     p.add_argument("--out", default="out/assist")
     p.set_defaults(run=_cmd_assist)

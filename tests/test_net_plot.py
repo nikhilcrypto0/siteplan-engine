@@ -59,3 +59,12 @@ def test_load_plot_leaves_the_boundary_alone_when_no_net_area_is_stated(tmp_path
     plot, basis = load_plot(_project(tmp_path, authority="HMDA"), "survey.pdf")
     assert plot.area == pytest.approx(6_000)
     assert "NOT deducted" in basis
+
+
+def test_a_site_plan_whose_outline_is_already_net_is_taken_as_it_is(tmp_path, monkeypatch):
+    """The firm's site-plan DXF: its outline has the road strip cut already, where they drew it."""
+    monkeypatch.setattr("siteplan.runner.read_survey",
+                        lambda path: type("S", (), {"boundary": PLOT})())
+    plot, basis = load_plot(_project(tmp_path, net_area_sqm=6_010, authority="HMDA"), "plan.dxf")
+    assert plot is PLOT
+    assert "taken as the net plot" in basis and "NOT deducted" not in basis

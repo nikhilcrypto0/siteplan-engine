@@ -55,9 +55,13 @@ def load_plot(project: Project, survey: str | Path | None) -> tuple[Polygon, str
             return plot, (
                 f"surveyed boundary {boundary.area:,.0f} m², less the "
                 f"{boundary.area - net:,.0f} m² the project states is deducted. ASSUMED: it "
-                "comes off the longest boundary as a road-widening strip. Give net_plot_m "
-                "for the real shape."
+                "comes off the longest boundary as a road-widening strip. For the real shape, "
+                "give the architect's site-plan DXF as the survey (its plot outline is the net "
+                "plot, strip already cut) or net_plot_m in the project file."
             )
+        if net and abs(net - boundary.area) <= NET_AREA_TOLERANCE_SQM:
+            return boundary, (f"plot outline {boundary.area:,.0f} m², matching the {net:,.0f} m² "
+                              "the project states is net: taken as the net plot")
         return boundary, "surveyed boundary (road-widening strip, if any, NOT deducted)"
     raise ValueError("Give a survey file, or net_plot_m in the project file.")
 
