@@ -106,3 +106,65 @@ def test_suchitra_road_is_a_drawing_value_and_its_floors_only_proposed():
     # the drawings propose stilt + 10 where a 12.4 m road allows stilt + 7 or 8
     limit = max_floors(project.site.net_sqm(), project.site.abutting_road_m)
     assert max(limit.floors_stilt_counted, limit.floors_stilt_not_counted) < 10
+
+
+# The acceptance run, kept as the permanent regression test: the raw survey and the answers in,
+# the firm's plan read only to compare. The same path `siteplan acceptance` runs.
+SURVEY = FIXTURES / "workspace" / "dhulapally_survey.pdf"
+ANSWERS = FIXTURES / "acceptance" / "dhulapally.answers.json"
+FIRM_CASE = FIXTURES / "cases" / "dhulapally.case.json"
+
+
+@pytest.fixture(scope="module")
+def dhulapally_run(tmp_path_factory):
+    from siteplan.acceptance import generate
+
+    if not (SURVEY.exists() and ANSWERS.exists()):
+        pytest.skip("the Dhulapally survey or its answers are not present")
+    out = tmp_path_factory.mktemp("acceptance")
+    return generate(SURVEY, json.loads(ANSWERS.read_text()), out, FIXTURES / "workspace")
+
+
+def test_dhulapally_from_the_survey_alone_finds_the_height_the_law_and_the_ground_allow(
+        dhulapally_run):
+    found = dhulapally_run.found
+    top = found.results[0]
+    assert (top.floors, top.verdict) == (10, "FAIL (law)")  # a 60 ft road stops at 30 m
+    assert "Abutting road width" in top.reasons()[0]
+    assert found.max_legal_floors == 9
+    assert found.max_feasible_floors is not None and found.max_feasible_floors <= 9
+
+
+def test_dhulapally_offers_three_different_layouts_that_pass_every_rule(dhulapally_run):
+    from siteplan.layout import same_idea
+
+    options = dhulapally_run.found.options
+    assert len(options) >= 3
+    assert all(not option.fails for option in options)
+    assert not any(same_idea(a, b) for i, a in enumerate(options) for b in options[i + 1:])
+    for option in options:
+        assert option.parking.laid_out_sqm >= option.parking.required_sqm - 0.5
+        assert option.open_space_sqm >= 0.10 * dhulapally_run.plot.area
+
+
+def test_dhulapally_is_generated_without_its_own_flats_or_plan(dhulapally_run):
+    # A library sized from Dhulapally's own statement would leak the answer into the layout.
+    assert "calibrated" not in dhulapally_run.standards["flat_library"]
+    assert not any(path.suffix == ".dxf" and "SITE_PLAN" in path.name.upper()
+                   for path in dhulapally_run.out.iterdir())
+
+
+def test_dhulapally_report_carries_every_section_and_the_comparison(dhulapally_run):
+    from siteplan.acceptance import compare, report
+    from siteplan.cases import Case
+
+    if not FIRM_CASE.exists():
+        pytest.skip("the firm's case is not present")
+    rows = compare(dhulapally_run, Case.model_validate_json(FIRM_CASE.read_text()))
+    text = report(dhulapally_run, rows)
+    for heading in ("1. EXTRACTED FROM THE SURVEY", "2. INPUTS AND HOW FAR EACH IS TRUSTED",
+                    "3. UNRESOLVED FACTS AND ASSUMPTIONS", "Maximum legally allowed",
+                    "Maximum geometrically feasible", "5. LAYOUTS THAT PASS",
+                    "6. REJECTED CANDIDATES", "7. COMPARED WITH THE FIRM'S PLAN"):
+        assert heading in text, heading
+    assert "BHADURPALLE" in text  # the place as the survey writes it, not the ward assumed

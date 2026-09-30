@@ -228,7 +228,9 @@ def _heights(generated: Generated) -> list[str]:
     def height(floors: int | None) -> str:
         return "none" if floors is None else f"stilt + {floors} ({stilt + floors * floor_h:g} m)"
 
-    lines = [f"  Maximum legally allowed: {height(legal)}; the floors calculator: stilt + "
+    road_status = generated.project.get("status", {}).get("abutting_road", "not recorded")
+    lines = [f"  Maximum legally allowed: {height(legal)}, resting on the abutting road's width "
+             f"[{road_status}]; the floors calculator: stilt + "
              f"{limit.floors_stilt_counted} if the stilt counts, stilt + "
              f"{limit.floors_stilt_not_counted} if not, stopped by {limit.limited_by}",
              f"  Maximum geometrically feasible: {height(feasible)}",
