@@ -31,6 +31,9 @@ def angle_gap(a_deg: float, b_deg: float) -> float:
 
 
 def straight_runs(polygon: Polygon, tolerance_deg: float = 3.0) -> list[Run]:
+    """The straight stretches of the outline, of every piece when a nala splits the shape."""
+    if polygon.geom_type == "MultiPolygon":
+        return [run for part in polygon.geoms for run in straight_runs(part, tolerance_deg)]
     coords = list(polygon.exterior.coords)[:-1]
     edges = [(coords[i], coords[(i + 1) % len(coords)]) for i in range(len(coords))]
     edges = [e for e in edges if e[0] != e[1]]

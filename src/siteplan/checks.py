@@ -15,6 +15,8 @@ from shapely.geometry import Polygon
 from siteplan import rules
 from siteplan.geometry import opening
 
+WATER_OVERLAP_SQM = 0.01  # less than this inside a water buffer is floating-point, not a block
+
 
 class Status(StrEnum):
     PASS = "PASS"
@@ -69,6 +71,7 @@ class Site:
     surface_parking_sqm: float = 0.0
     units: int | None = None
     authority: str | None = None  # GHMC, HMDA, DTCP...; Table V differs by authority
+    water_buffer: Polygon | None = None  # lake, nala or river with its rule 3(a)(ii) buffer
 
 
 def _m(value: float) -> str:
@@ -105,7 +108,29 @@ def check_site(site: Site) -> list[Finding]:
     findings.append(_driveway_finding(site, high_rise=bool(all_high_rise)))
     findings.append(_amenity_finding(site))
     findings.append(_parking_finding(site))
+    if site.water_buffer is not None:
+        findings.append(_water_finding(site))
     return findings
+
+
+def _water_finding(site: Site) -> Finding:
+    """No building within a water body's buffer; the buffer may be open space, not setback."""
+    required = "no building within the water body's buffer"
+    placed = [b for b in site.buildings if b.footprint is not None]
+    # Standing on the buffer's edge is exactly the distance the rule asks, so only overlap counts
+    inside = [b.name for b in placed
+              if b.footprint.intersection(site.water_buffer).area > WATER_OVERLAP_SQM]
+    if not placed:
+        return Finding("Water-body buffer", Status.NOT_CHECKED, "no building outlines", required,
+                       rules.WATER_BUFFER_CLAUSE)
+    return Finding(
+        "Water-body buffer",
+        Status.FAIL if inside else Status.PASS,
+        f"inside it: {', '.join(inside)}" if inside else "every block clear of it",
+        required,
+        rules.WATER_BUFFER_CLAUSE,
+        "The buffer may count as tot-lot or organised open space, never as the setback.",
+    )
 
 
 def _green_strip_finding(site: Site, high_rise, bands) -> Finding:

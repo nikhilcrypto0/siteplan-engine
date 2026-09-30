@@ -50,6 +50,7 @@ class PdfProfile:
 
     road_colour: Colour | None = (1.0, 0.0, 0.0)
     contour_colour: Colour | None = (1.0, 0.498, 0.0)
+    water_colour: Colour | None = None  # as the project states it: surveyors differ
     level_range: tuple[float, float] = (400.0, 900.0)  # metres above MSL around Hyderabad
     label_angle_tolerance_deg: float = 8.0
     label_distance_em: float = 4.0  # how far a dimension label may sit from its edge
@@ -400,5 +401,6 @@ def _build_survey(source, best, stated, numbers, segments, is_level, profile) ->
         levels=levels,
         roads=lines_of(profile.road_colour),
         contours=lines_of(profile.contour_colour),
+        water=lines_of(profile.water_colour),
         warnings=tuple(warnings),
     )

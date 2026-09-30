@@ -43,7 +43,7 @@ from siteplan.max_floors import max_floors as floor_limit
 from siteplan.project import Project
 from siteplan.result_page import write_result_page
 from siteplan.rulebook import RuleBook
-from siteplan.runner import LAYOUT_CAVEAT, load_plot, read_survey, run_layout
+from siteplan.runner import LAYOUT_CAVEAT, load_plot, load_water, read_survey, run_layout
 from siteplan.site_amenities import AmenityLibrary
 
 log = logging.getLogger("siteplan.mcp")
@@ -320,10 +320,13 @@ def build_server(workspace: Path, out_dir: Path, approval: str = "elicit",
         survey = ws.file(survey_file, SURVEY_TYPES) if survey_file else None
         try:
             plot, basis = load_plot(project, survey)
+            keep_out, water = load_water(project, survey)
         except ValueError as exc:
             raise ToolError(str(exc)) from None
 
         plot_text = f"plot {plot.area:,.0f} m², {basis}"
+        if water:
+            plot_text += f"; {water}"
         title, lines = approval_request(project.name, plot_text, request, reading)
         refusal = await _refusal(ctx, approval, desk, title, lines, approval_timeout)
         if refusal:
@@ -333,7 +336,7 @@ def build_server(workspace: Path, out_dir: Path, approval: str = "elicit",
         out = ws.out / run
         try:
             options = await anyio.to_thread.run_sync(
-                run_layout, project, library, plot, request, out, amenities
+                run_layout, project, library, plot, request, out, amenities, keep_out
             )
         except ValueError as exc:
             return {"solved": False, "next": f"The solver refused the request: {exc}"}

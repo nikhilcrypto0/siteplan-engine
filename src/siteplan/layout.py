@@ -420,8 +420,10 @@ def solve(
     master_plan_road_m: float | None = None,
     authority: str | None = None,
     amenities: AmenityLibrary | None = None,
+    keep_out: Polygon | None = None,
 ) -> list[LayoutOption]:
-    """Best distinct layouts for the plot, each already re-checked against the rules."""
+    """Best distinct layouts for the plot, each already re-checked against the rules.
+    keep_out is land nothing may stand on (a water body's buffer): no tower, facility or bay."""
     unknown = set(request.unit_mix) - library.categories
     if unknown:
         raise ValueError(f"unit_mix asks for {sorted(unknown)}, not in the flat library")
@@ -434,7 +436,7 @@ def solve(
     if band is None:
         raise ValueError(f"{height:g} m is above the encoded Table IV rows (55 m)")
     gap = band.min_open_space_m  # all round, and between blocks: length no longer adds to it
-    envelope = plot.buffer(-(gap + EPS_M))
+    envelope = _less(plot.buffer(-(gap + EPS_M)), keep_out)
     if envelope.is_empty:
         return []
 
@@ -459,21 +461,25 @@ def solve(
             break
         wanted = need
 
-    furnished = [_furnish(o, plot, gap, request, amenities) for o in chosen]
+    furnished = [_furnish(o, plot, gap, request, amenities, keep_out) for o in chosen]
     return [
         _with_findings(o, plot, request, gross_area_sqm, abutting_road_m, master_plan_road_m,
-                       authority)
+                       authority, keep_out)
         for o in furnished
     ]
 
 
-def _furnish(option: LayoutOption, plot, gap, request, amenities) -> LayoutOption:
+def _less(shape: Polygon, keep_out: Polygon | None) -> Polygon:
+    return shape.difference(keep_out) if keep_out is not None else shape
+
+
+def _furnish(option: LayoutOption, plot, gap, request, amenities, keep_out=None) -> LayoutOption:
     """Lay the facilities and then the parking bays into one chosen layout.
 
     The facilities come first: an architect does not lose the pool because a parking bay got
     there first. Neither is worth computing for a layout that will be thrown away.
     """
-    envelope = plot.buffer(-(gap + EPS_M))
+    envelope = _less(plot.buffer(-(gap + EPS_M)), keep_out)
     if option.club_house is not None:
         envelope = envelope.difference(
             option.club_house.buffer(gap + EPS_M, join_style="mitre")
@@ -574,7 +580,8 @@ def _amenity_size(plot, envelope, library, request, gap) -> float | None:
     return rules.AMENITY_MIN_BUILT_UP_FRACTION * trial.built_up_sqm
 
 
-def _with_findings(option, plot, request, gross, road, master_road, authority=None) -> LayoutOption:
+def _with_findings(option, plot, request, gross, road, master_road, authority=None,
+                   keep_out=None) -> LayoutOption:
     site = Site(
         gross_area_sqm=gross,
         net_area_sqm=plot.area,
@@ -594,6 +601,7 @@ def _with_findings(option, plot, request, gross, road, master_road, authority=No
         surface_parking_sqm=bay_area_sqm(len(option.parking_bays)),
         units=option.total_flats,
         authority=authority,
+        water_buffer=keep_out,
     )
     return LayoutOption(**{**option.__dict__, "findings": tuple(check_site(site))})
 

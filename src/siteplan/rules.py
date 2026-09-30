@@ -146,6 +146,23 @@ GATE_CLAUSE = (
     "G.O.168 rule 15(b)(iv), bringing in NBC 2016 Part 3 4.6(d) (entrance at least 6 m wide)"
 )
 
+# Rule 3(a)(ii): no building within these distances of a water body, measured from a lake's Full
+# Tank Level or a nala's or river's defined boundary; the river clause is the one G.O.Ms.No.7 of
+# 2016 substituted (50 m within municipal, HMDA and UDA limits). The buffer may count as tot-lot
+# or organised open space, never as the setback (rule 3(a)(iii)(3)). Which class a water body is
+# in (a nala wider than 10 m, a lake of 10 ha or more) is the architect's to say.
+WATER_BUFFER_M = {
+    "river": 50.0,
+    "lake_10ha_or_more": 30.0,
+    "lake_under_10ha": 9.0,
+    "nala_over_10m": 9.0,
+    "nala_up_to_10m": 2.0,
+}
+WATER_BUFFER_CLAUSE = (
+    "G.O.168 rule 3(a)(ii), the river clause as substituted by G.O.Ms.No.7 of 2016; rule "
+    "3(a)(iii)(3)"
+)
+
 # Rule 15(a)(x) is the group-housing one: 3% of built-up area, in a block of its own. (Rule 9(o)
 # asks 5% of site area but sits in the row-housing section, so it is not used as the check here.)
 # G.O.Ms.No.7 of 2016, Amendment 15, rewrote it as "upto 3% of the total built up area (or)

@@ -40,6 +40,7 @@ class DxfProfile:
     boundary_layer: str | None = None  # force a layer when the heuristics pick wrong
     road_layer_hint: str = "ROAD"
     contour_layer_hint: str = "CONTOUR"
+    water_layer_hint: str | None = None  # as the project states it: surveyors differ
     metres_per_unit_if_unset: float | None = None
 
 
@@ -70,7 +71,9 @@ def _texts(drawn: tuple[Drawn, ...]) -> list[tuple[str, tuple[float, float]]]:
     return texts
 
 
-def _open_lines(drawn: tuple[Drawn, ...], hint: str) -> list[list[tuple[float, float]]]:
+def _open_lines(drawn: tuple[Drawn, ...], hint: str,
+                closed_too: bool = False) -> list[list[tuple[float, float]]]:
+    """Lines on layers whose name holds the hint; closed shapes too if asked (a nala's channel)."""
     lines = []
     for d in drawn:
         if hint not in d.layer.upper():
@@ -80,6 +83,9 @@ def _open_lines(drawn: tuple[Drawn, ...], hint: str) -> list[list[tuple[float, f
             lines.append([(start.x, start.y), (end.x, end.y)])
         elif _is_polyline(d.entity) and not is_closed(d.entity):
             lines.append(polyline_points(d.entity))
+        elif _is_polyline(d.entity) and closed_too:
+            points = polyline_points(d.entity)
+            lines.append([*points, points[0]])
     return [line for line in lines if len(line) >= 2]
 
 
@@ -153,9 +159,11 @@ def read_dxf_survey(path: str | Path, profile: DxfProfile | None = None) -> Surv
         for x, y, z in raw
     ]
 
-    def lines(hint: str) -> tuple[LineString, ...]:
-        return tuple(LineString([to_m(x, y) for x, y in ln]) for ln in _open_lines(drawn, hint))
+    def lines(hint: str, closed_too: bool = False) -> tuple[LineString, ...]:
+        return tuple(LineString([to_m(x, y) for x, y in ln])
+                     for ln in _open_lines(drawn, hint, closed_too))
 
+    water = profile.water_layer_hint
     return Survey(
         source=str(path),
         boundary=boundary,
@@ -164,5 +172,6 @@ def read_dxf_survey(path: str | Path, profile: DxfProfile | None = None) -> Surv
         levels=tuple(levels),
         roads=lines(profile.road_layer_hint),
         contours=lines(profile.contour_layer_hint),
+        water=lines(water.upper(), closed_too=True) if water else (),
         warnings=tuple(warnings),
     )

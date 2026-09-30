@@ -18,7 +18,7 @@ from siteplan.dxf_export import write_survey_dxf
 from siteplan.library import FlatLibrary
 from siteplan.llm import AssistantConfig
 from siteplan.project import Project
-from siteplan.runner import LAYOUT_CAVEAT, load_plot, read_survey, run_layout
+from siteplan.runner import LAYOUT_CAVEAT, load_plot, load_water, read_survey, run_layout
 from siteplan.site_amenities import AmenityLibrary
 from siteplan.wizard import build_project, collect
 
@@ -90,9 +90,12 @@ def _cmd_layout(args: argparse.Namespace) -> int:
         if args.amenities else None
     )
     plot, basis = load_plot(project, args.survey)
+    keep_out, water = load_water(project, args.survey)
     print(f"Layout: {project.name}\nPlot: {plot.area:,.0f} m², {basis}\n")
+    if water:
+        print(f"Water: {water}; {plot.intersection(keep_out).area:,.0f} m² of the plot\n")
     out = Path(args.out)
-    summaries = run_layout(project, library, plot, project.layout, out, amenities)
+    summaries = run_layout(project, library, plot, project.layout, out, amenities, keep_out)
     if not summaries:
         print("No tower fits inside the setbacks with the required open space.")
         return 1
@@ -239,9 +242,11 @@ def _cmd_assist(args: argparse.Namespace) -> int:
     project = _load_project(args.project)
     library = FlatLibrary.model_validate_json(Path(args.library).read_text())
     plot, basis = load_plot(project, args.survey)
+    keep_out, _ = load_water(project, args.survey)
     brief = args.brief if args.brief else Path(args.brief_file).read_text()
     out = Path(args.out)
-    assistant = Assistant(OpenAICompatibleModel(config), config, project, library, plot, out)
+    assistant = Assistant(OpenAICompatibleModel(config), config, project, library, plot, out,
+                          keep_out)
     print(f"Assistant: {project.name} | plot {plot.area:,.0f} m², {basis} | model {config.model}")
 
     result = assistant.start(brief)

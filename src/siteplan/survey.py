@@ -111,6 +111,7 @@ class Survey:
     levels: tuple[SpotLevel, ...] = ()
     roads: tuple[LineString, ...] = ()
     contours: tuple[LineString, ...] = ()
+    water: tuple[LineString, ...] = ()  # only when asked for: its colour or layer is not standard
     warnings: tuple[str, ...] = ()
 
     @property

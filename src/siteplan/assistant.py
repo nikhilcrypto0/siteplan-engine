@@ -143,6 +143,7 @@ class Assistant:
     library: FlatLibrary
     plot: Polygon
     out_dir: Path
+    keep_out: Polygon | None = None  # a water body's buffer: no block may stand on it
     meter: Meter = field(init=False)
     thread_id: str = field(default_factory=lambda: uuid.uuid4().hex)
 
@@ -294,7 +295,8 @@ class Assistant:
     def _solve(self, state: State) -> dict:
         request = LayoutRequest.model_validate(state["request"])
         try:
-            options = run_layout(self.project, self.library, self.plot, request, self.out_dir)
+            options = run_layout(self.project, self.library, self.plot, request, self.out_dir,
+                                 keep_out=self.keep_out)
         except ValueError as exc:
             return {"status": f"The solver refused the request: {exc}"}
         if not options:

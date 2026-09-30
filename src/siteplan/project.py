@@ -7,15 +7,19 @@ asked to produce from a plain-English brief.
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, Field, PositiveFloat, PositiveInt, model_validator
 from shapely.geometry import Polygon
 
+from siteplan import rules
 from siteplan.area_statement import AreaStatement
 from siteplan.checks import Building, Site
 from siteplan.layout import LayoutRequest
 from siteplan.units import ft_to_m, parse_acre_gunta, sqft_to_sqm, sqyd_to_sqm
 
 Ring = list[tuple[float, float]]
+WaterKind = Literal[tuple(rules.WATER_BUFFER_M)]  # the classes rule 3(a)(ii) gives buffers for
 
 
 def _ft(value: float | None) -> float | None:
@@ -60,6 +64,22 @@ class SheetIn(BaseModel):
     drawn_by: str = ""
 
 
+class WaterIn(BaseModel):
+    """A lake, nala or river the survey draws, and the class that sets its buffer (rule 3(a)(ii)).
+    The class is the architect's to say: a drawn channel does not show a nala's defined width."""
+
+    kind: WaterKind
+    survey_colour: str | None = Field(
+        None, pattern=r"^#[0-9A-Fa-f]{6}$", description="Its line colour on a PDF survey")
+    survey_layer: str | None = Field(None, description="Its layer on a DXF survey")
+
+    @model_validator(mode="after")
+    def _one_way_to_find_it(self) -> WaterIn:
+        if (self.survey_colour is None) == (self.survey_layer is None):
+            raise ValueError("Give the water body's survey_colour (PDF) or survey_layer (DXF).")
+        return self
+
+
 class SiteIn(BaseModel):
     gross_area_text: str | None = Field(None, description="As written, e.g. '3 AC 12.50 GTS'.")
     gross_area_sqm: PositiveFloat | None = None
@@ -72,6 +92,7 @@ class SiteIn(BaseModel):
     open_space_sqft: PositiveFloat | None = None
     net_plot_m: Ring | None = None
     open_space_pockets_m: list[Ring] = []
+    water: list[WaterIn] = []
     authority: str | None = Field(
         None, description="GHMC, HMDA, DTCP...; the Table V parking percentage differs by one"
     )

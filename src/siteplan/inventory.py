@@ -206,9 +206,23 @@ INVENTORY: tuple[Entry, ...] = (
         settles="The road-widening line on the survey or the sanction plan.",
     ),
     Entry(
-        "Plot", "No building within the buffers of lakes, nalas, rivers, railways, power lines "
-                "and protected monuments.",
-        "e.g. 9 m from a nala wider than 10 m, 2 m from a narrower one",
+        "Plot", "No building within a water body's buffer, which may be open space but never "
+                "the setback.",
+        ", ".join(f"{kind.replace('_', ' ')} {m:g} m" for kind, m in rules.WATER_BUFFER_M.items()),
+        rules.WATER_BUFFER_CLAUSE, Reading.INTERPRETED, _BOTH,
+        ("WATER_BUFFER_M", "WATER_BUFFER_CLAUSE"),
+        choice="The architect names the water body's class and the colour or layer the survey "
+               "draws it in: a drawn channel does not show a nala's defined width, and surveyors "
+               "use no standard colour. The buffer is measured from the lines drawn (a centreline "
+               "would understate it by half the channel) and kept free of towers, facilities and "
+               "parking; it is not counted as tot-lot, though the rule allows it. The firm's "
+               "Suchitra drawing keeps a 9.4 m strip beside a 9.6 m channel: the 9 m class.",
+        settles="A sanctioned plan beside a nala or lake: which class, and what it deducted.",
+    ),
+    Entry(
+        "Plot", "No building within the buffers of railways, power lines and protected "
+                "monuments.",
+        "e.g. 3 m clear of a high-tension line; 100 m from a protected monument",
         "G.O.168 rule 3, as amended by G.O.Ms.No.7 of 2016", Reading.NOT_MODELLED,
         choice="The survey reader does not look for these features, so their buffers are not "
                "checked.",
