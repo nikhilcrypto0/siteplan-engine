@@ -72,17 +72,24 @@ def _count(n: int, noun: str) -> str:
 def _print_options(summaries: list[dict]) -> None:
     tried = summaries[0].get("heights_tried") if summaries else None
     if tried:
-        print("Heights tried: " + "; ".join(
-            f"stilt + {t['floors_above_stilt']}: best {t['best_saleable_sqft']:,} sft"
-            for t in tried) + f". Kept stilt + {summaries[0]['floors_above_stilt']}.\n")
+        print("Heights, top down:")
+        for t in tried:
+            print(f"  stilt + {t['floors_above_stilt']} ({t['height_m']:g} m): {t['verdict']}")
+            for reason in t["reasons"]:
+                print(f"    - {reason}")
+        print()
     for summary in summaries:
-        fails = [rule for rule, status in summary["rule_findings"].items() if status == "FAIL"]
+        open_ = [rule for rule, status in summary["rule_findings"].items()
+                 if status in ("UNVERIFIED", "NOT_CHECKED")]
+        parking = summary.get("parking", {})
         print(
-            f"Option {summary['option']}: {_count(summary['towers'], 'tower')}, "
-            f"{summary['total_flats']} flats, {summary['saleable_sqft']:,} sft saleable, "
-            f"open space {summary['open_space_share_pct']}%, mix {summary['unit_mix_achieved']}"
+            f"Option {summary['option']}: stilt + {summary['floors_above_stilt']}, "
+            f"{_count(summary['towers'], 'tower')}, {summary['total_flats']} flats, "
+            f"{summary['saleable_sqft']:,} sft saleable (flats), {summary['tower_floor_sqft']:,} "
+            f"sft tower floor, tot-lot {summary['open_space_share_pct']}%, mix "
+            f"{summary['unit_mix_achieved']}, {parking.get('cellar_levels', 0)} cellar level(s)"
         )
-        print(f"          rule FAILs: {', '.join(fails) or 'none'}")
+        print(f"          every rule passes; open: {', '.join(open_) or 'none'}")
 
 
 def _cmd_layout(args: argparse.Namespace) -> int:
@@ -168,7 +175,7 @@ def _cmd_start(args: argparse.Namespace) -> int:
     print(f"Wrote {out}")
     if project["layout"].get("maximise"):
         print(f"The most floors the rules allow here: stilt + {project['layout']['floors']}. "
-              "Layouts also try the two heights below and keep the one that sells most.")
+              "Layouts try every height from one above it down, and keep those that pass.")
     print(f"\nNext: uv run siteplan layout {out} --survey {survey}")
     return 0
 
@@ -181,16 +188,17 @@ def _cmd_acceptance(args: argparse.Namespace) -> int:
     out = Path(args.out)
     generated = generate(Path(args.survey), json.loads(Path(args.answers).read_text()), out,
                          Path(args.workspace) if args.workspace else None)
-    if not generated.options:
-        print("No tower fits inside the setbacks with the required open space.")
-        return 1
-    case = Case.model_validate_json(Path(args.firm_case).read_text())  # read only now
-    statement = (Project.model_validate_json(Path(args.firm_project).read_text()).area_statement
-                 if args.firm_project else None)
-    text = report(generated, compare(generated, case, statement))
+    rows = []
+    if generated.options:
+        case = Case.model_validate_json(Path(args.firm_case).read_text())  # read only now
+        statement = (Project.model_validate_json(Path(args.firm_project).read_text())
+                     .area_statement if args.firm_project else None)
+        rows = compare(generated, case, statement)
+    text = report(generated, rows or [("No layout passed", "-", "-")])
+    out.mkdir(parents=True, exist_ok=True)
     (out / "acceptance.txt").write_text(text + "\n")
     print(text + f"\n\nWrote the options and acceptance.txt to {out}/")
-    return 0
+    return 0 if generated.options else 1
 
 
 def _cmd_new(args: argparse.Namespace) -> int:

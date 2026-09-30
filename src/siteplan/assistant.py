@@ -314,9 +314,14 @@ class Assistant:
         comparison = compare_options(facts)
         if not self.config.model_commentary:
             return {"explanation": comparison, "explanation_source": "code"}
+        # Every rule is checked on every option; the model sees only those not passing, which
+        # keeps the prompt inside its budget.
+        shown = [{k: v for k, v in f.items() if k != "rule_findings"}
+                 | {"rules_not_passing": [r for r, s in f["rule_findings"].items()
+                                          if s not in ("PASS", "INFO")]} for f in facts]
         messages = [
             {"role": "system", "content": COMMENTARY_PROMPT},
-            {"role": "user", "content": comparison + "\n\n" + json.dumps(facts)},
+            {"role": "user", "content": comparison + "\n\n" + json.dumps(shown)},
         ]
         for attempt in range(1, self.config.retries + 2):
             allowance = min(
@@ -325,7 +330,7 @@ class Assistant:
             text, usage = self.model.complete(messages, None, allowance)
             self.meter.charge("explain", usage)
             text = text.strip()
-            bad = ungrounded_numbers(text, facts)
+            bad = ungrounded_numbers(text, shown)
             ranks = RANKING_WORDS.findall(text)
             if text and not bad and not ranks:
                 return {
@@ -354,7 +359,7 @@ def compare_options(facts: list[dict]) -> str:
     ]
     for f in facts:
         fails = [r for r, s in f["rule_findings"].items() if s == "FAIL"]
-        waiting = [r for r, s in f["rule_findings"].items() if s in {"NEEDS_INPUT", "NOT_CHECKED"}]
+        waiting = [r for r, s in f["rule_findings"].items() if s in {"UNVERIFIED", "NOT_CHECKED"}]
         lines.append(
             f"Option {f['option']}: {f['towers']} tower{'' if f['towers'] == 1 else 's'}, "
             f"{f['total_flats']} flats, {f['saleable_sqft']:,} sft, open space "

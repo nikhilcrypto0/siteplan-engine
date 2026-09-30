@@ -6,7 +6,6 @@ Shared by `siteplan layout` and the assistant, so both produce identical outputs
 from __future__ import annotations
 
 import json
-import math
 from pathlib import Path
 
 from shapely.geometry import Polygon
@@ -16,11 +15,13 @@ from siteplan import rules
 from siteplan.area_statement import render
 from siteplan.dxf_survey import DxfProfile, read_dxf_survey
 from siteplan.geometry import less_road_strip
-from siteplan.layout import LayoutRequest, area_statement, solve
+from siteplan.heights import HeightSearch, search_heights
+from siteplan.layout import LayoutRequest, SiteFacts, area_statement
 from siteplan.layout_export import write_layout_dxf, write_layout_svg
 from siteplan.library import FlatLibrary
 from siteplan.pdf_survey import PdfProfile, read_pdf_survey
 from siteplan.project import Project, WaterIn
+from siteplan.provenance import confirmed
 from siteplan.sheet import SheetInfo, write_sheet_dxf
 from siteplan.site_amenities import AmenityLibrary
 from siteplan.survey import Survey
@@ -28,10 +29,12 @@ from siteplan.survey import Survey
 NET_AREA_TOLERANCE_SQM = 50.0  # drafting slop between a survey and a stated area
 
 LAYOUT_CAVEAT = (
-    "Layouts are first drafts for an architect. They now include the amenities block, the "
-    "drive, surface parking bays and the gates, but the entry and exit assume the longest "
-    "boundary faces the road, and cellar or podium parking, ramps and landscaping are not "
-    "modelled. They use whatever flat library they are given."
+    "Layouts are first drafts for an architect. Each carries the rule 8(m) internal roads, the "
+    "NBC fire lanes with their 9 m turns, the tot-lot, the club house, the cellars and ramp that "
+    "Table V's parking needs, the facilities and surface bays, and has passed every rule the "
+    "checker applies. Not modelled: podium parking (unsupported), blocks of mixed heights, "
+    "landscaping, and the 45 t specification of the paving and the cellar roof. They use "
+    "whatever flat library they are given."
 )
 
 
@@ -97,6 +100,27 @@ def load_plot(project: Project, survey: str | Path | None) -> tuple[Polygon, str
     raise ValueError("Give a survey file, or net_plot_m in the project file.")
 
 
+def site_facts(project: Project, keep_out: Polygon | None = None) -> SiteFacts:
+    """What the project knows about the site besides its shape, as the layout needs it. Whose
+    rules apply counts as settled only when the answers behind it are confirmed."""
+    s, site = project.site, project.to_site()
+    settled = all(confirmed(project.status.get(key)) for key in ("authority", "inside_cure")
+                  if key in project.status)
+    return SiteFacts(
+        gross_area_sqm=site.gross_area_sqm, abutting_road_m=site.abutting_road_m,
+        master_plan_road_m=site.master_plan_road_m, authority=site.authority,
+        inside_cure=site.inside_cure, keep_out=keep_out, access_side=s.access_side,
+        road_dead_end=s.road_dead_end, street_joins_12m=s.street_joins_12m,
+        jurisdiction_confirmed=settled, site_coordinates=s.site_coordinates,
+    )
+
+
+def run_search(project: Project, library: FlatLibrary, plot: Polygon, request: LayoutRequest,
+               amenities: AmenityLibrary | None = None,
+               keep_out: Polygon | None = None) -> HeightSearch:
+    return search_heights(plot, library, request, site_facts(project, keep_out), amenities)
+
+
 def run_layout(
     project: Project,
     library: FlatLibrary,
@@ -106,36 +130,33 @@ def run_layout(
     amenities: AmenityLibrary | None = None,
     keep_out: Polygon | None = None,
 ) -> list[dict]:
-    site = project.to_site()
+    found = run_search(project, library, plot, request, amenities, keep_out)
+    return write_options(found, project, library, plot, request, out)
 
-    def at(floors: int) -> tuple[LayoutRequest, list]:
-        req = request.model_copy(update={"floors": floors})
-        return req, solve(plot, library, req, gross_area_sqm=site.gross_area_sqm,
-                          abutting_road_m=site.abutting_road_m,
-                          master_plan_road_m=site.master_plan_road_m, authority=site.authority,
-                          amenities=amenities, keep_out=keep_out, inside_cure=site.inside_cure)
 
-    tried: list[dict] = []
-    if request.maximise:
-        # Taller blocks need wider setbacks and gaps, so the most floors need not sell most.
-        runs = [at(floors) for floors in heights_to_try(request)]
-        tried = [{"floors_above_stilt": r.floors, "options": len(o),
-                  "best_saleable_sqft": round(max((x.saleable_sqft for x in o), default=0))}
-                 for r, o in runs]
-        request, options = max(runs, key=lambda run: max(
-            (x.saleable_sqft for x in run[1]), default=-1))
-    else:
-        request, options = at(request.floors)
+def heights_table(found: HeightSearch) -> list[dict]:
+    """One row per height tried: the verdict and, when it fails, exactly why."""
+    return [{"floors_above_stilt": r.floors, "height_m": round(r.height_m, 2),
+             "verdict": r.verdict, "reasons": r.reasons(),
+             "best_saleable_sqft": round(max((o.saleable_sqft for o in r.options), default=0))}
+            for r in found.results]
+
+
+def write_options(found: HeightSearch, project: Project, library: FlatLibrary, plot: Polygon,
+                  request: LayoutRequest, out: Path) -> list[dict]:
+    """Every option's drawings and summary, each at its own height."""
+    tried = heights_table(found) if request.maximise else []
     summaries = []
-    for i, option in enumerate(options, 1):
+    for i, option in enumerate(found.options, 1):
+        at = request.model_copy(update={"floors": option.floors})
         stem = out / f"option_{i}"
         write_layout_dxf(option, plot, stem.with_suffix(".dxf"))
-        write_sheet_dxf(option, plot, request, SheetInfo(project=project.name,
-                                                         **project.sheet.model_dump()),
+        write_sheet_dxf(option, plot, at, SheetInfo(project=project.name,
+                                                    **project.sheet.model_dump()),
                         out / f"option_{i}.sheet.dxf")
         write_layout_svg(option, plot, stem.with_suffix(".svg"), f"{project.name}: option {i}")
-        summary = {"option": i, "floors_above_stilt": request.floors} | option.summary() | {
-            "area_statement": render(area_statement(option, request)),
+        summary = {"option": i, "floors_above_stilt": option.floors} | option.summary() | {
+            "area_statement": render(area_statement(option, at)),
             "sheet_dxf": str(out / f"option_{i}.sheet.dxf"),
             "flat_library_note": library.note,
             "caveat": LAYOUT_CAVEAT,
@@ -143,13 +164,3 @@ def run_layout(
         stem.with_suffix(".json").write_text(json.dumps(summary, indent=2))
         summaries.append(summary)
     return summaries
-
-
-HEIGHTS_TRIED = 3  # the most floors, and the two below it
-
-
-def heights_to_try(request: LayoutRequest) -> list[int]:
-    """From the most floors down, never below a high-rise (layouts are high-rise only)."""
-    lowest = math.ceil((rules.HIGH_RISE_THRESHOLD_M - request.stilt_height_m)
-                       / request.floor_height_m - 1e-9)
-    return [f for f in range(request.floors, request.floors - HEIGHTS_TRIED, -1) if f >= lowest]

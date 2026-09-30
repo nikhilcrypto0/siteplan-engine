@@ -86,7 +86,8 @@ INVENTORY: tuple[Entry, ...] = (
                   "the Table IV row.",
         "left out of the height", rules.PARKING_FLOOR_HEIGHT_CLAUSE, Reading.NOT_MODELLED,
         uses=("PARKING_FLOOR_HEIGHT_CLAUSE",),
-        choice="The engine draws no parking above the ground floor, so it never has one to leave "
+        choice="Podium and upper-floor parking are unsupported: the layout parks in the stilt, "
+               "on the surface and in cellars only, so it never has a parking floor to leave "
                "out. Needed once a scheme parks on a podium or upper floors.",
     ),
     Entry(
@@ -140,35 +141,59 @@ INVENTORY: tuple[Entry, ...] = (
                "the east, the 1,163 m² cut from the surveyed land.",
     ),
     Entry(
-        "Road", "Internal roads of a campus scheme.",
-        "9-18 m main approach, 9 m other and loop roads, 8 m cul-de-sacs",
-        "G.O.168 rule 8(m); rule 2(c) (a campus of 4,000 m² or more)", Reading.INTERPRETED,
-        _BOTH,
-        choice="Rule 2(c) settles that a campus of 4,000 m² or more with apartment blocks or "
-               "high-rises is a Group Development Scheme, so rule 8(m) applies. The engine still "
-               "draws a driveway ring to rule 13(c)(viii) (at least 4.5 m, or 6 m round a "
-               "high-rise; 6 m by default). Open: "
-               "whether the firm's '23 ft wide driveway' (7.0 m) is a rule 8(m) internal road, a "
-               "driveway, or the 7 m rule 13(c)(vii) keeps for fire vehicles.",
-        settles="The internal road widths on a sanctioned Group Development plan.",
+        "Road", "Internal roads of a group development scheme: a main approach road, other and "
+                "looped roads, cul-de-sacs. A driveway is not one of them.",
+        f"main approach {rules.MAIN_APPROACH_ROAD_M[0]:g}-{rules.MAIN_APPROACH_ROAD_M[1]:g} m "
+        f"(drawn at {rules.MAIN_APPROACH_ROAD_M[0]:g}), other and looped "
+        f"{rules.INTERNAL_ROAD_M:g} m, cul-de-sacs {rules.CUL_DE_SAC_WIDTH_M:g} m for "
+        f"{rules.CUL_DE_SAC_LENGTH_M[0]:g}-{rules.CUL_DE_SAC_LENGTH_M[1]:g} m with a "
+        f"{rules.CUL_DE_SAC_HEAD_RADIUS_M:g} m radius head",
+        f"{rules.INTERNAL_ROAD_CLAUSE}; rule 2(c) (a campus of 4,000 m² or more)",
+        Reading.INTERPRETED, _BOTH,
+        ("MAIN_APPROACH_ROAD_M", "INTERNAL_ROAD_M", "CUL_DE_SAC_WIDTH_M", "CUL_DE_SAC_LENGTH_M",
+         "CUL_DE_SAC_HEAD_RADIUS_M", "INTERNAL_ROAD_CLAUSE"),
+        choice="Rule 2(c) makes a campus of 4,000 m² or more with apartment blocks a Group "
+               "Development Scheme, so 8(m) applies. The layout lays these before any tower: a "
+               "9 m loop road just inside the green strip, the 9 m main approach road from the "
+               "entrance, and a 9 m road in every corridor between tower columns, from the loop "
+               "to the loop, so none is a dead end; towers stand where that leaves room. The "
+               "order gives 9 to 18 m for a main approach road with no test for which, so it is "
+               "drawn at 9 m and the authority may ask for more. The checker fails a road "
+               "narrower than its width and a dead end without the cul-de-sac form, and never "
+               "counts a driveway (rule 13(c)(viii), 4.5 m) as an internal road.",
+        settles="The internal roads on a sanctioned Group Development plan, and whether the "
+                "authority treats the firm's '23 ft wide driveway' (7.0 m) as an 8(m) road.",
+    ),
+    Entry(
+        "Road", "A block above 12 m opens onto an internal road; 6 m pathways serve only lower "
+                "blocks.",
+        f"blocks above {rules.PATHWAY_MAX_BLOCK_HEIGHT_M:g} m on a road", rules.PATHWAY_CLAUSE,
+        Reading.INTERPRETED, (Where.CHECKER,),
+        ("PATHWAY_MAX_BLOCK_HEIGHT_M", "PATHWAY_CLAUSE"),
+        choice="Rule 8(l) allows 6 m pathways for blocks up to 12 m high; read the other way, a "
+               "taller block needs a road. Every tower the layout places touches the loop or a "
+               "corridor road, and the checker fails one that does not.",
+        settles="A sanctioned high-rise plan whose blocks are reached only by pathways.",
     ),
     Entry(
         "Road", "A residential building above this height may not stand on a road that ends at "
                 "the plot.",
         f"{rules.DEAD_END_MAX_HEIGHT_M:g} m, the stilt included", rules.DEAD_END_CLAUSE,
-        Reading.AS_WRITTEN, (Where.FLOORS,), ("DEAD_END_MAX_HEIGHT_M", "DEAD_END_CLAUSE"),
+        Reading.AS_WRITTEN, (Where.FLOORS, Where.CHECKER, Where.LAYOUT),
+        ("DEAD_END_MAX_HEIGHT_M", "DEAD_END_CLAUSE"),
         choice="A survey does not show where a road leads, so the architect says whether it ends "
                "at the plot: then every answer, TDR floors included, stops at 30 m; left unsaid, "
-               "the floors calculator warns whenever an answer passes 30 m. Dhulapally's survey "
-               "draws its roads ending at the plot; whether the 40 ft road along the east will "
-               "run on is a site fact.",
+               "the floors calculator warns, and the height search and the checker report a "
+               "height above 30 m UNVERIFIED, never PASS. Dhulapally's survey draws its roads "
+               "ending at the plot; whether the 40 ft road along the east will run on is a site "
+               "fact.",
     ),
     Entry(
         "Road", "The street a high-rise stands on joins a street at least 12 m wide at one end.",
-        "12 m", "G.O.168 rule 15(b)(iv), bringing in NBC 2016 Part 3 4.6(a)",
-        Reading.NOT_MODELLED,
-        choice="Where a road leads is not on a survey, so it is not checked; Table IV already "
-               "asks 12 m or more of the road a high-rise stands on.",
+        f"{rules.FIRE_STREET_JOIN_M:g} m", rules.FIRE_STREET_CLAUSE, Reading.AS_WRITTEN,
+        (Where.CHECKER,), ("FIRE_STREET_JOIN_M", "FIRE_STREET_CLAUSE"),
+        choice="Where a road leads is not on a survey, so the architect answers yes, no or "
+               "unknown; unknown is reported UNVERIFIED, never PASS.",
     ),
     # Plot
     Entry(
@@ -202,7 +227,7 @@ INVENTORY: tuple[Entry, ...] = (
         "the side the architect names, else the longest straight run",
         "none (runner.load_plot)", Reading.ASSUMED, (Where.LAYOUT,),
         choice="Cut at an even width along every run facing the side named; with no side, the "
-               "longest run, which the gates also take as the road frontage. On Dhulapally "
+               "longest run. On Dhulapally "
                "neither matches the drawn strip (a 40 ft road along part of the east side), "
                "which is why a drawn net plot, or the site plan read as the survey, is better.",
         settles="The road-widening line on the survey or the sanction plan.",
@@ -311,8 +336,9 @@ INVENTORY: tuple[Entry, ...] = (
         rules.OPEN_SPACE_CLAUSE, Reading.INTERPRETED, _BOTH,
         ("OPEN_SPACE_MIN_FRACTION", "OPEN_SPACE_MIN_WIDTH_M", "OPEN_SPACE_MIN_POCKET_SQM",
          "OPEN_SPACE_CLAUSE"),
-        choice="The text says 'total site area' without saying gross or net. The checker tests "
-               "both and asks when they disagree; the layout aims at 10% of the net plot.",
+        choice="The text says 'total site area' without saying gross or net. The layout meets "
+               "10% of the larger of the two, so it passes on either reading; the checker tests "
+               "both. The tot-lot keeps off the roads, the fire lanes and the block gaps.",
         settles="A sanctioned plan's tot-lot share and the site area it was taken of.",
     ),
     Entry(
@@ -326,90 +352,145 @@ INVENTORY: tuple[Entry, ...] = (
         "Open space", "A continuous green planting strip inside the setback.",
         f"{rules.PERIPHERAL_GREEN_STRIP_M:g} m wide, where the setback is "
         f"{rules.PERIPHERAL_GREEN_STRIP_FROM_SETBACK_M:g} m or more",
-        rules.PERIPHERAL_GREEN_STRIP_CLAUSE, Reading.AS_WRITTEN, (Where.CHECKER,),
+        rules.PERIPHERAL_GREEN_STRIP_CLAUSE, Reading.AS_WRITTEN, _BOTH,
         ("PERIPHERAL_GREEN_STRIP_M", "PERIPHERAL_GREEN_STRIP_FROM_SETBACK_M",
          "PERIPHERAL_GREEN_STRIP_CLAUSE"),
-        choice="The checker says whether it applies but does not look for the strip on the "
-               "drawing.",
+        choice="Reserved along the whole boundary where the setback is 9 m or more, broken only "
+               "by the entrance; nothing drives, parks or is built on it, and the loop road runs "
+               "just inside it.",
     ),
     # Access and fire
     Entry(
-        "Access", "Minimum driveway width.", f"{rules.DRIVEWAY_MIN_WIDTH_M:g} m",
-        rules.DRIVEWAY_CLAUSE, Reading.AS_WRITTEN, _BOTH,
-        ("DRIVEWAY_MIN_WIDTH_M", "DRIVEWAY_CLAUSE"),
+        "Access", "Minimum driveway width, where a driveway is drawn.",
+        f"{rules.DRIVEWAY_MIN_WIDTH_M:g} m", rules.DRIVEWAY_CLAUSE, Reading.AS_WRITTEN,
+        (Where.CHECKER,), ("DRIVEWAY_MIN_WIDTH_M", "DRIVEWAY_CLAUSE"),
+        choice="The layout needs none: every stilt and the ramp open straight onto an internal "
+               "road. A driveway is never counted as an internal road.",
     ),
     Entry(
-        "Access", "The layout draws the driveway wider than the minimum.",
-        "6 m", "none (layout.DEFAULT_DRIVEWAY_WIDTH_M)", Reading.ASSUMED, (Where.LAYOUT,),
-        choice="Wider than the 4.5 m minimum, as the firm's drives are, and the width NBC asks "
-               "of the fire-tender approach round a high-rise; the firm's own drawings run 23 ft "
-               "(7.0 m), so this is still narrower than theirs.",
-        settles="The drive width on the firm's sanctioned plans.",
+        "Access", "The main entrance is wide enough for a fire engine, with room under anything "
+                  "built over it.",
+        f"{rules.GATE_MIN_WIDTH_M:g} m wide; {rules.ENTRANCE_CLEAR_HEIGHT_M:g} m clear",
+        rules.GATE_CLAUSE, Reading.AS_WRITTEN, (Where.CHECKER,),
+        ("GATE_MIN_WIDTH_M", "ENTRANCE_CLEAR_HEIGHT_M", "GATE_CLAUSE"),
+        choice="The entrance is the 9 m main approach road, on the side the access road runs, "
+               "with nothing built over it. The gate folding back against the compound wall is "
+               "a detail drawing.",
     ),
     Entry(
-        "Access", "The entry and exit gates are wide enough for a fire engine.",
-        f"{rules.GATE_MIN_WIDTH_M:g} m", rules.GATE_CLAUSE, Reading.AS_WRITTEN, (Where.LAYOUT,),
-        ("GATE_MIN_WIDTH_M", "GATE_CLAUSE"),
-        choice="The gates are drawn at the minimum on every scheme. The gate folding back "
-               "against the compound wall, and 4.5 m clear under anything built over the "
-               "entrance, are not drawn.",
-    ),
-    Entry(
-        "Access", "A high-rise's drive is wide enough for fire tenders.",
-        f"{rules.FIRE_TENDER_MIN_WIDTH_M:g} m", rules.FIRE_TENDER_CLAUSE, Reading.INTERPRETED,
-        (Where.CHECKER,), ("FIRE_TENDER_MIN_WIDTH_M", "FIRE_TENDER_CLAUSE"),
-        choice="Asked of the drive once any block is a high-rise in the state's sense (21 m), "
-               "where rule 15(b)(iv) brings NBC in (NBC Part 4 3.4.4.1's note leaves "
-               "fire-vehicle clearances to Part 3). NBC's own high-rise starts at 15 m, and rule "
-               "15(a)(i) may bring 4.6 in from there.",
-        settles="The drive on a sanctioned building of 15 to 21 m, and the fire NOC of a "
-                "sanctioned high-rise.",
-    ),
-    Entry(
-        "Access", "Fire tenders drive round a high-rise: the open space on all its sides stays "
-                  "motorable, carries a 45 t tender, turns at 9 m and is never parked in.",
-        "all sides; 9 m turning radius; 45 t",
-        "G.O.168 rule 15(b)(iv), bringing in NBC 2016 Part 3 4.6(c)", Reading.NOT_MODELLED,
-        choice="Setbacks of 7 m or more with no parking in them give the width all round, and "
-               "G.O.168's own figure is wider still: a ramp may take a side or rear setback only "
-               "after leaving 7 m for fire vehicles (rule 13(c)(vii)). The 9 m turn and the 45 t "
-               "loading are not drawn.",
-        settles="The fire NOC of a sanctioned high-rise.",
+        "Access", "Fire tenders reach and drive round every high-rise: 6 m of motorable open "
+                  "space on all its sides, a 9 m turning radius, nothing built or parked in it, "
+                  "a 45 t hard surface.",
+        f"{rules.FIRE_TENDER_MIN_WIDTH_M:g} m on all sides; a {rules.FIRE_TURNING_RADIUS_M:g} m "
+        "turn at every corner and every bend; 45 t",
+        rules.FIRE_ACCESS_CLAUSE, Reading.INTERPRETED, _BOTH,
+        ("FIRE_TENDER_MIN_WIDTH_M", "FIRE_TURNING_RADIUS_M", "FIRE_ACCESS_CLAUSE"),
+        choice="Every high-rise keeps 6.88 m of clear, motorable ground on every side, a road or "
+               "a fire lane, which is what a 6 m lane needs to turn round a square corner. The "
+               "turns at every tower corner and every bend of the loop road are checked as the "
+               "swept sectors themselves, and the lanes as one network from the entrance. No "
+               "bay, facility, ramp or tot-lot stands in them. The order does not say where the "
+               "9 m is measured: read as the tender's turning circle, the outer edge of the "
+               "lane, which fits the state's 7 m minimum setback and the 7 m rule 13(c)(vii) "
+               "keeps for fire vehicles (a 9 m centreline would need 7.76 m). Asked once a block "
+               "is a high-rise in the state's sense (21 m); NBC's own starts at 15 m. The 45 t "
+               "surface is a specification and is reported UNVERIFIED.",
+        settles="The fire NOC of a sanctioned high-rise, or the layout agreed with the Chief "
+                "Fire Officer, which 4.6(c) asks for.",
     ),
     # Parking
     Entry(
         "Parking", "Parking area as a share of the total built-up area.",
         f"{rules.PARKING_PERCENT_GHMC:g}% inside GHMC or anywhere in CURE, "
         f"{rules.PARKING_PERCENT_ELSEWHERE:g}% elsewhere in HMDA",
-        f"{rules.PARKING_CLAUSE}; {rules.CURE_RULES_CLAUSE}", Reading.INTERPRETED,
-        (Where.CHECKER,),
+        f"{rules.PARKING_CLAUSE}; {rules.CURE_RULES_CLAUSE}", Reading.INTERPRETED, _BOTH,
         ("PARKING_PERCENT_GHMC", "PARKING_PERCENT_ELSEWHERE", "PARKING_CLAUSE",
          "CURE_RULES_CLAUSE", "parking_percent"),
-        choice="Counts the whole stilt footprint and the surface bays as parking. The text does "
-               "not say whether the built-up area it is a share of includes the stilt. Inside "
-               "CURE the GHMC column applies whichever corporation the site now falls in "
-               "(Cyberabad, since G.O.Ms.No.55 of 2026, for Qutbullapur zone).",
+        choice="Provided = the stilt less its cores, the surface bays, and as many cellar levels "
+               "as it takes, each the plot under its setback less the cores, the ramp and the "
+               "utilities share. The layout adds cellars until it passes and drops a tower when "
+               "even the deepest allowed do not. When whose rules apply is not settled (an answer "
+               "marked unverified, or CURE not known) the stricter GHMC column is planned, so a "
+               "PASS holds either way. The cars that fit in bays and aisles are counted on every "
+               "floor. Inside CURE the GHMC column applies whichever corporation the site now "
+               "falls in (Cyberabad, since G.O.Ms.No.55 of 2026, for Qutbullapur zone).",
         settles="The parking statement on a sanctioned plan.",
     ),
     Entry(
         "Parking", "Visitors' parking, marked on the ground.",
-        "at least 10% of the Table V area", "G.O.168 rule 13(c)(xii)", Reading.NOT_MODELLED,
-        choice="Not counted separately.",
+        f"at least {rules.VISITOR_PARKING_FRACTION:.0%} of the Table V area",
+        rules.VISITOR_PARKING_CLAUSE, Reading.INTERPRETED, (Where.CHECKER,),
+        ("VISITOR_PARKING_FRACTION", "VISITOR_PARKING_CLAUSE"),
+        choice="Read as parking at ground level, the stilt or the surface, which a visitor can "
+               "reach from the entrance; which bays are marked for visitors is for the detailed "
+               "drawing.",
+        settles="The visitors' parking on a sanctioned plan: marked in the stilt or only in "
+                "the open.",
     ),
     Entry(
-        "Parking", "Cellars and ramps.",
-        "cellar 3 m from the property line on sites over 2,000 m², +0.5 m per extra cellar; "
-        "ramps 2 x 3.6 m or 1 x 5.4 m at 1 in 8, never in the front setback or building line, "
-        "and in a side or rear setback only after leaving 7 m for fire vehicles",
-        "G.O.168 rule 13(c)(vii), 13(c)(x)", Reading.NOT_MODELLED,
-        choice="Cellar and podium parking are not modelled, so a parking shortfall is reported "
-               "as NEEDS_INPUT.",
+        "Parking", "Cellar ramps.",
+        f"one ramp of {rules.RAMP_SINGLE_MIN_WIDTH_M:g} m or two of "
+        f"{rules.RAMP_PAIR_MIN_WIDTH_M:g} m at 1 in 8; never in the front setback or building "
+        "line, and in a side or rear setback only after leaving 7 m for fire vehicles",
+        rules.RAMP_CLAUSE, Reading.AS_WRITTEN, _BOTH,
+        ("RAMP_SINGLE_MIN_WIDTH_M", "RAMP_PAIR_MIN_WIDTH_M", "RAMP_MAX_GRADIENT", "RAMP_CLAUSE"),
+        choice="The layout draws the single 5.4 m ramp, as long as the cellar storey times 8, "
+               "with its top on a road, outside every setback (stricter than the side and rear "
+               "allowance) and out of the fire lanes. Each cellar level loses one ramp's "
+               "footprint.",
     ),
     Entry(
-        "Parking", "Size of a surface parking bay and its aisle.",
+        "Parking", "How far a cellar keeps from the property line.",
+        "1.5, 2 or 3 m for sites up to 1,000, up to 2,000 and above 2,000 m²; 0.5 m more for "
+        "every cellar beyond the first",
+        rules.CELLAR_SETBACK_CLAUSE, Reading.INTERPRETED, _BOTH,
+        ("CELLAR_SETBACK_BY_SITE_SQM", "CELLAR_EXTRA_SETBACK_PER_LEVEL_M",
+         "CELLAR_SETBACK_CLAUSE", "cellar_setback_m"),
+        choice="The extra 0.5 m per cellar is applied to every level, since the cellars are one "
+               "box: the stricter reading. Measured from the net plot line.",
+        settles="The cellar section on a sanctioned plan with two or more cellars.",
+    ),
+    Entry(
+        "Parking", "Part of a cellar may hold utilities rather than cars.",
+        f"up to {rules.CELLAR_UTILITIES_MAX_FRACTION:.0%}", rules.CELLAR_UTILITIES_CLAUSE,
+        Reading.ASSUMED, _BOTH,
+        ("CELLAR_UTILITIES_MAX_FRACTION", "CELLAR_UTILITIES_CLAUSE"),
+        choice="Taken in full (the STP, DG sets and electrical rooms have to go somewhere), so "
+               "the parking a cellar gives is not overstated. The firm can set its own share.",
+        settles="The utilities the firm puts in its cellars.",
+    ),
+    Entry(
+        "Parking", "Cellar ventilation openings.",
+        "at least 2.5% of each cellar floor", "G.O.168 rule 13(c)(iii)", Reading.NOT_MODELLED,
+        choice="Not drawn: the openings do not take parking floor, only a detail of the "
+               "cellar's edge.",
+    ),
+    Entry(
+        "Parking", "A cellar storey's height, which sets the ramp's length, and the most cellars "
+                   "the search will dig.",
+        "3 m; 3 levels", "none (the firm's standards in siteplan.workspace.json)",
+        Reading.ASSUMED, (Where.LAYOUT,),
+        choice="Engine defaults until the firm sets its own, and reported ASSUMED_FOR_TEST. No "
+               "order limits the number of cellars.",
+        settles="The firm's cellar sections.",
+    ),
+    Entry(
+        "Parking", "Size of a parking bay and its aisle.",
         "2.5 x 5 m bays, 6 m aisles", "none (parking.py)", Reading.ASSUMED, (Where.LAYOUT,),
-        choice="The rules give no bay or aisle size.",
+        choice="The rules give no bay or aisle size. Used to lay out the surface bays and to "
+               "count the cars each floor holds.",
         settles="The bay size on the firm's drawings.",
+    ),
+    # Towers
+    Entry(
+        "Towers", "How long a block may be.",
+        "no limit: whole stretches, 60 m and 45 m blocks are all tried",
+        "none (G.O.Ms.No.65 of 2019 deleted the 40 m note)", Reading.INTERPRETED,
+        (Where.LAYOUT,),
+        choice="No order limits a block's length and the firm has set no standard, so the "
+               "search explores lengths and keeps what the rules and the ground allow. A firm "
+               "standard, once set in the workspace, is used instead.",
+        settles="The firm's longest block, if it has one (max_tower_length_m in the workspace).",
     ),
     # Amenities
     Entry(

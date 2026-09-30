@@ -24,6 +24,7 @@ from siteplan import rules
 from siteplan.max_floors import max_floors
 from siteplan.pdf_survey import PdfProfile, colour_hex
 from siteplan.project import Project
+from siteplan.provenance import Provenance
 from siteplan.roads import Road, roads_near
 from siteplan.runner import read_survey
 from siteplan.survey import LineGroup
@@ -50,14 +51,39 @@ WATER_CLASSES = "river, lake 10 ha or more, lake under 10 ha, nala over 10 m, na
 
 
 class WorkspaceDefaults(BaseModel):
-    """What a firm sets once for every project: its flats, its amenities, its floor heights."""
+    """What a firm sets once for every project: its flats, its amenities, its floor heights and
+    its parking standards. These are the firm's choices, never Telangana law; what the rules
+    fix is in rules.py. A standard the file leaves out is the engine's default, and is reported
+    as ASSUMED_FOR_TEST until the firm sets it."""
 
     flat_library: str | None = None
     amenities: str | None = None
     floor_height_m: PositiveFloat = 3.0
     stilt_height_m: PositiveFloat = 3.0
     common_area_pct: float = 22.0
-    max_tower_length_m: PositiveFloat | None = None  # the firm's longest block; else the engine's
+    cellar_floor_height_m: PositiveFloat = 3.0
+    cellar_utilities_pct: float = rules.CELLAR_UTILITIES_MAX_FRACTION * 100
+    max_cellars: int = 3
+    # The firm's longest block, if it has one. No rule limits length (the 40 m note was deleted
+    # by G.O.Ms.No.65 of 2019), so without it the layout explores lengths.
+    max_tower_length_m: PositiveFloat | None = None
+    status: dict[str, Provenance] = {}  # how far each standard is confirmed, when the file says
+
+    def standard_status(self, key: str) -> Provenance:
+        if key in self.status:
+            return self.status[key]
+        if key in self.model_fields_set:
+            return Provenance.USER_CONFIRMED
+        return Provenance.ASSUMED_FOR_TEST
+
+
+STANDARDS = ("flat_library", "amenities", "floor_height_m", "stilt_height_m", "common_area_pct",
+             "cellar_floor_height_m", "cellar_utilities_pct", "max_cellars")
+# Answer keys that name a value by another key in the project's sources.
+STATUS_KEYS = {"main_road": "access_side", "road_row": "abutting_road",
+               "road_row_source": "abutting_road", "dead_end": "road_dead_end",
+               "street_join": "street_joins_12m", "surrender": "net_area_sqm",
+               "mix": "unit_mix"}
 
 
 def load_defaults(folder: str | Path) -> WorkspaceDefaults:
@@ -198,6 +224,10 @@ def _road_questions(draft: Draft) -> list[Question]:
     ), Question(
         "dead_end", "Does that road end at the plot (yes, no or unknown)? Above 30 m a "
         "residential block may not stand on a dead end", default="unknown", parse=_tristate,
+    ), Question(
+        "street_join", "Does that road join a road at least 12 m wide at one end (yes, no or "
+        "unknown)? A high-rise needs it for fire engines (NBC 4.6(a))", default="unknown",
+        parse=_tristate,
     )]
 
 
@@ -251,56 +281,103 @@ def missing(draft: Draft, answers: dict[str, str]) -> list[str]:
     return problems
 
 
-def build_project(draft: Draft, answers: dict[str, str],
-                  defaults: WorkspaceDefaults | None = None) -> dict:
-    """The project file from the survey and the answers, with every value's source noted."""
+def build_project(draft: Draft, answers: dict, defaults: WorkspaceDefaults | None = None) -> dict:
+    """The project file from the survey and the answers, with every value's source noted and
+    how far it can be trusted. `answers` may carry a `_status` map that relabels a value, keyed
+    as asked or as the sources are (e.g. {"authority": "UNVERIFIED"})."""
     defaults = defaults or WorkspaceDefaults()
     problems = missing(draft, answers)
     if problems:
         raise ValueError("Unanswered or unclear: " + "; ".join(problems))
     given = {q.key: (answers.get(q.key) or q.default).strip() for q in questions(draft)}
-    site, sources = _road_site(draft, given)
+    site, sources, status = _road_site(draft, given)
     surrender = _surrender(given["surrender"])
     site["gross_area_sqm"] = round(draft.area_sqm, 1)
     sources["gross_area_sqm"] = "survey: written area" if draft.written_area_sqm else (
         "survey: drawn boundary")
+    status["gross_area_sqm"] = Provenance.EXTRACTED
     if surrender:
         kind, area, side = surrender
         site["net_area_sqm"] = round(area if kind == "net" else draft.area_sqm - area, 1)
         sources["net_area_sqm"] = f"architect: {given['surrender']}"
+        status["net_area_sqm"] = Provenance.USER_CONFIRMED
         if side:
             site["road_strip_side"] = side
     water = _water(given["water"])
     if water:
         site["water"] = water
-        sources["water"] = f"architect: {given['water']}"
+    sources["water"] = f"architect: {given['water']}"
+    status["water"] = Provenance.USER_CONFIRMED
     if given["authority"].upper() != "OTHER":
         site["authority"] = given["authority"].upper()
+    sources["authority"] = f"architect: {given['authority']}"
+    status["authority"] = Provenance.USER_CONFIRMED
     site["inside_cure"] = TRISTATE[given["inside_cure"].lower()]
+    sources["inside_cure"] = f"architect: {given['inside_cure']}"
+    status["inside_cure"] = _answered(site["inside_cure"])
+    sources["site_coordinates"] = "not given"
+    status["site_coordinates"] = Provenance.UNVERIFIED
     layout = {
         "unit_mix": parse_mix(given["mix"]),
         "floor_height_m": defaults.floor_height_m,
         "stilt_height_m": defaults.stilt_height_m,
         "common_area_pct": defaults.common_area_pct,
+        "cellar_floor_height_m": defaults.cellar_floor_height_m,
+        "cellar_utilities_pct": defaults.cellar_utilities_pct,
+        "max_cellars": defaults.max_cellars,
         "club_house": _yes_no(given["club_house"]),
         "options": 3,
     }
+    for key in ("mix", "floors", "club_house"):
+        sources[STATUS_KEYS.get(key, key)] = f"architect: {given[key]}"
+        status[STATUS_KEYS.get(key, key)] = Provenance.USER_CONFIRMED
+    for key in STANDARDS:
+        sources[key] = "firm standard (workspace)" if key in defaults.model_fields_set else (
+            "engine default")
+        status[key] = defaults.standard_status(key)
     if defaults.max_tower_length_m:
         layout["max_tower_length_m"] = defaults.max_tower_length_m
+        sources["max_tower_length_m"] = "firm standard (workspace)"
+        status["max_tower_length_m"] = defaults.standard_status("max_tower_length_m")
     if given["floors"].lower() == "max":
         layout["floors"] = _most_floors(site, draft, defaults)
         layout["maximise"] = True
     else:
         layout["floors"] = int(given["floors"])
-    project = {"name": given["name"], "site": site, "layout": layout, "sources": sources}
+    for key, value in (answers.get("_status") or {}).items():
+        status[STATUS_KEYS.get(key, key)] = Provenance(value)
+    project = {"name": given["name"], "site": site, "layout": layout, "sources": sources,
+               "status": {k: v.value for k, v in status.items()}}
     Project.model_validate(project)  # an impossible answer fails here, not in the solver
     return project
 
 
-def _road_site(draft: Draft, given: dict[str, str]) -> tuple[dict, dict[str, str]]:
+def _answered(value: bool | None) -> Provenance:
+    return Provenance.UNVERIFIED if value is None else Provenance.USER_CONFIRMED
+
+
+ROW_STATUS = {"CERTIFIED_ROW": Provenance.VERIFIED,
+              "DECLARED_ON_SITE_PLAN": Provenance.USER_CONFIRMED,
+              "UNVERIFIED_DRAWING_VALUE": Provenance.UNVERIFIED}
+
+
+def _road_site(draft: Draft, given: dict[str, str]
+               ) -> tuple[dict, dict[str, str], dict[str, Provenance]]:
     road = draft.roads[int(given["main_road"]) - 1] if draft.roads else None
-    site: dict = {"road_dead_end": TRISTATE[given["dead_end"].lower()]}
-    sources: dict[str, str] = {}
+    site: dict = {"road_dead_end": TRISTATE[given["dead_end"].lower()],
+                  "street_joins_12m": TRISTATE[given["street_join"].lower()]}
+    sources = {"road_dead_end": f"architect: {given['dead_end']}",
+               "street_joins_12m": f"architect: {given['street_join']}"}
+    status = {"road_dead_end": _answered(site["road_dead_end"]),
+              "street_joins_12m": _answered(site["street_joins_12m"])}
+    if road is not None:
+        site["access_side"] = road.side
+        sources["access_side"] = f"survey: road {given['main_road']}, to the {road.side}"
+        status["access_side"] = Provenance.EXTRACTED
+    else:
+        site["access_side"] = _side(given["main_road"])
+        sources["access_side"] = f"architect: {given['main_road']}"
+        status["access_side"] = Provenance.USER_CONFIRMED
     if _as_drawn(given["road_row"]):
         if road is None:
             raise ValueError("No road was measured on the survey, so give its width.")
@@ -312,11 +389,13 @@ def _road_site(draft: Draft, given: dict[str, str]) -> tuple[dict, dict[str, str
         site[f"abutting_road_{unit}"] = width
         site["abutting_road_status"] = ROW_SOURCES[int(given.get("road_row_source") or 3) - 1]
         sources["abutting_road"] = f"architect: {given['road_row']}"
+    status["abutting_road"] = ROW_STATUS[site["abutting_road_status"]]
     if road is not None:
         site["measured_carriageway_m"] = round(road.width_m, 2)
         sources["measured_carriageway_m"] = (
             f"survey: the road to the {road.side}, {road.distance_m:.1f} m off")
-    return site, sources
+        status["measured_carriageway_m"] = Provenance.EXTRACTED
+    return site, sources, status
 
 
 def _most_floors(site: dict, draft: Draft, defaults: WorkspaceDefaults) -> int:

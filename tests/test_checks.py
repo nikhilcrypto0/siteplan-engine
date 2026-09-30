@@ -58,7 +58,7 @@ def test_setback_and_spacing_failures_are_measured():
 def test_open_space_that_passes_on_one_basis_only_asks_which_basis():
     site = Site(gross_area_sqm=10000, net_area_sqm=9400, open_space_sqm=960)
     finding = _by_rule(check_site(site))["Organized open space (tot-lot)"]
-    assert finding.status is Status.NEEDS_INPUT
+    assert finding.status is Status.UNVERIFIED
     assert "10.21% of net" in finding.measured
     assert "9.60% of gross" in finding.measured
 
@@ -79,11 +79,11 @@ def test_missing_inputs_are_reported_not_guessed():
     site = Site(buildings=(Building("A", height_m=27), Building("B", height_m=27)))
     found = _by_rule(check_site(site))
     assert found["Height class: A"].status is Status.INFO
-    assert found["Abutting road width (for A)"].status is Status.NEEDS_INPUT
-    assert found["All-round setbacks"].status is Status.NEEDS_INPUT
-    assert found["Gaps between blocks"].status is Status.NEEDS_INPUT
+    assert found["Abutting road width (for A)"].status is Status.UNVERIFIED
+    assert found["All-round setbacks"].status is Status.UNVERIFIED
+    assert found["Gaps between blocks"].status is Status.UNVERIFIED
     assert "1 to check" in found["Gaps between blocks"].measured
-    assert found["Organized open space (tot-lot)"].status is Status.NEEDS_INPUT
+    assert found["Organized open space (tot-lot)"].status is Status.UNVERIFIED
 
 
 def test_partly_drawn_site_checks_what_it_can():
@@ -95,8 +95,8 @@ def test_partly_drawn_site_checks_what_it_can():
     )
     found = _by_rule(check_site(site))
     assert found["All-round setback: A"].status is Status.PASS
-    assert found["All-round setback: B"].status is Status.NEEDS_INPUT
-    assert found["Gap between blocks: A / B"].status is Status.NEEDS_INPUT
+    assert found["All-round setback: B"].status is Status.UNVERIFIED
+    assert found["Gap between blocks: A / B"].status is Status.UNVERIFIED
 
 
 def test_non_high_rise_is_flagged_as_not_checked():
@@ -141,20 +141,25 @@ def test_the_green_strip_is_only_asked_for_where_the_setback_reaches_9_m():
     assert _by_rule(check_site(deep))["Peripheral green strip"].status is Status.NOT_CHECKED
 
 
-def test_a_high_rise_needs_a_drive_6_m_wide_for_fire_tenders():
-    drive = box(0, 0, 100, 5)
-    tall = _by_rule(check_site(Site(driveway=drive, buildings=(Building("A", height_m=27),))))
-    low = _by_rule(check_site(Site(driveway=drive, buildings=(Building("Villa", height_m=10),))))
-    assert tall["Driveway"].status is Status.FAIL and tall["Driveway"].required == ">= 6 m wide"
-    assert "15(b)(iv)" in tall["Driveway"].clause
-    assert low["Driveway"].status is Status.PASS and low["Driveway"].required == ">= 4.5 m wide"
+def test_without_a_drawn_road_layout_roads_and_fire_access_are_not_passed():
+    """A project checked on its own has no roads drawn: that is NOT_CHECKED, never a PASS, and
+    where the street leads stays UNVERIFIED until the architect says."""
+    found = _by_rule(check_site(Site(buildings=(Building("A", height_m=27),))))
+    assert found["Internal roads"].status is Status.NOT_CHECKED
+    assert found["Fire access: around each block"].status is Status.NOT_CHECKED
+    joins = found["Fire access: the street joins a 12 m street"]
+    assert joins.status is Status.UNVERIFIED and "4.6(a)" in joins.clause
+    told = _by_rule(check_site(Site(street_joins_12m=True,
+                                    buildings=(Building("A", height_m=27),))))
+    assert told["Fire access: the street joins a 12 m street"].status is Status.PASS
 
 
 def test_anywhere_in_cure_takes_the_ghmc_parking_column():
     """G.O.Ms.No.45 of 2026: GHMC's building rules across CURE, now split into corporations."""
     base = dict(built_up_sqm=10_000, buildings=(_tower("A", 10, 10, 30, 50),))
-    hmda = _by_rule(check_site(Site(authority="HMDA", **base)))["Parking"]
-    cmc = _by_rule(check_site(Site(authority="CMC", inside_cure=True, **base)))["Parking"]
+    hmda = _by_rule(check_site(Site(authority="HMDA", **base)))["Parking (Table V)"]
+    cmc = _by_rule(check_site(Site(authority="CMC", inside_cure=True, **base)))[
+        "Parking (Table V)"]
     assert hmda.required.startswith(">= 20%") and cmc.required.startswith(">= 30%")
     assert "G.O.Ms.No.45" in cmc.clause and "G.O.Ms.No.45" not in hmda.clause
 

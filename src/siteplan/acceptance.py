@@ -1,11 +1,12 @@
 """Acceptance: the whole flow on a real site, with the firm's own plan kept out until the end.
 
-raw survey -> extract -> the architect's answers -> project -> the most floors -> layouts, each
-re-checked -> compared with the firm's plan. `generate` is given the survey, the answers and
-the firm's standard libraries, never its plan for this site; `compare` reads the plan (a case
-traced from the firm's drawing, and its area statement) only once the layouts exist, so the
-expected answer cannot leak into them. Setbacks and gaps are measured from the DXF each option
-is delivered as, the file the firm would open.
+raw survey -> extract -> the architect's answers -> project -> every height from above the legal
+limit down, each laid out with every requirement active -> the layouts that pass the checker ->
+compared with the firm's plan. `generate` is given the survey, the answers and the firm's standard
+libraries, never its plan for this site; `compare` reads the plan (a case traced from the firm's
+drawing, and its area statement) only once the layouts exist, so the expected answer cannot leak
+into them. Setbacks and gaps are measured from the DXF each option is delivered as, the file the
+firm would open.
 """
 
 from __future__ import annotations
@@ -20,35 +21,55 @@ from shapely.geometry import Point, Polygon
 
 from siteplan.area_statement import AreaStatement
 from siteplan.cases import Case
-from siteplan.intake import build_project, extract, load_defaults, save
+from siteplan.findings import Status
+from siteplan.heights import HeightSearch
+from siteplan.intake import Draft, build_project, extract, load_defaults, save
+from siteplan.intake import render as render_draft
+from siteplan.layout import LayoutOption
 from siteplan.library import FlatLibrary
 from siteplan.max_floors import FloorLimit, max_floors
 from siteplan.project import Project
-from siteplan.runner import load_plot, load_water, run_layout
+from siteplan.provenance import Provenance
+from siteplan.runner import load_plot, load_water, run_search, write_options
 from siteplan.site_amenities import AmenityLibrary
 
 BUILDING_LAYER = "Building Plan"  # the BuildNow layer the towers are delivered on
 TOWER_NAME = re.compile(r"T\d+")
+# How the engine reads what the orders leave open; each is in the inventory with what settles it.
+READINGS = (
+    "The stilt counts in the height (rule 2(e)); the firm's drawing behaves as if it does not.",
+    "NBC 4.6(c)'s 9 m turning radius is the outer edge of the 6 m fire lane.",
+    "Rule 8(m) gives 9 to 18 m for a main approach road with no test for which: drawn at 9 m.",
+    "Every cellar keeps the setback of the deepest (rule 13(c)(x)), and 10% of each cellar is "
+    "kept for utilities, the most rule 13(c)(xi) allows.",
+    "Table V's parking area is the parking floor less cores, ramp and utilities; visitors' "
+    "parking (13(c)(xii)) is read as parking at ground level.",
+    "The tot-lot is measured against the larger of the net and the gross site area.",
+    "No rule limits a block's length, so lengths were explored rather than asked.",
+)
 
 
 @dataclass(frozen=True)
 class Generated:
+    draft: Draft
     project: dict
     plot: Polygon
     basis: str
     limit: FloorLimit
-    options: list[dict]
+    found: HeightSearch
+    options: list[dict]  # the summaries written beside each option's drawings
     out: Path
+    library_note: str = ""
 
 
-def generate(survey: Path, answers: dict[str, str], out: Path,
-             workspace: Path | None = None) -> Generated:
+def generate(survey: Path, answers: dict, out: Path, workspace: Path | None = None) -> Generated:
     """Everything the engine produces from the raw survey and the answers alone."""
     workspace = workspace or survey.parent
     defaults = load_defaults(workspace)
     if not defaults.flat_library:
         raise ValueError(f"Set the firm's flat_library in {workspace}/siteplan.workspace.json.")
-    project_dict = build_project(extract(survey), answers, defaults)
+    draft = extract(survey)
+    project_dict = build_project(draft, answers, defaults)
     save(project_dict, out / "project.json")
     project = Project.model_validate(project_dict)
     plot, basis = load_plot(project, survey)
@@ -59,8 +80,9 @@ def generate(survey: Path, answers: dict[str, str], out: Path,
     library = FlatLibrary.model_validate_json((workspace / defaults.flat_library).read_text())
     amenities = (AmenityLibrary.model_validate_json((workspace / defaults.amenities).read_text())
                  if defaults.amenities else None)
-    options = run_layout(project, library, plot, project.layout, out, amenities, keep_out)
-    return Generated(project_dict, plot, basis, limit, options, out)
+    found = run_search(project, library, plot, project.layout, amenities, keep_out)
+    options = write_options(found, project, library, plot, project.layout, out)
+    return Generated(draft, project_dict, plot, basis, limit, found, options, out, library.note)
 
 
 def towers_in(dxf: Path) -> list[Polygon]:
@@ -108,14 +130,14 @@ def compare(generated: Generated, case: Case,
         ("Flats", str(best["total_flats"]), "not in the area statement"),
     ]
     if statement is not None:
-        ours = best["saleable_sqft"]  # the plates: every square foot of tower floor
+        ours = best["tower_floor_sqft"]
         firm_area = sum(g.subtotal_sqft for g in statement.groups)
         loading = statement.groups[0].common_area_pct
         rows += [
             ("Tower floor area, all floors, no loading", f"{ours:,} sft",
              f"{firm_area:,.0f} sft (engine {(ours / firm_area - 1) * 100:+.1f}%)"),
-            (f"The same with the firm's {loading:g}% loading",
-             f"{ours * (1 + loading / 100):,.0f} sft", f"{statement.total_sqft:,} sft"),
+            (f"Firm's total with its {loading:g}% loading; engine's saleable from its flats",
+             f"{best['saleable_sqft']:,} sft", f"{statement.total_sqft:,} sft"),
         ]
     fails = [rule for rule, status in best["rule_findings"].items() if status == "FAIL"]
     rows.append(("Rule FAILs (engine's checker)", ", ".join(fails) or "none",
@@ -125,25 +147,158 @@ def compare(generated: Generated, case: Case,
 
 def report(generated: Generated, rows: list[tuple[str, str, str]]) -> str:
     """Plain text for the terminal and the report file."""
-    limit = generated.limit
-    tried = generated.options[0].get("heights_tried", [])
+    project = generated.project
     lines = [
-        f"Plot: {generated.plot.area:,.0f} m², {generated.basis}",
-        f"Most floors: stilt + {limit.floors_stilt_counted} if the stilt counts, stilt + "
-        f"{limit.floors_stilt_not_counted} if not; stopped by {limit.limited_by}",
+        f"ACCEPTANCE: {project['name']}",
+        "The generator saw the raw survey, the answers and the firm's standard libraries; the "
+        "firm's plan for this site was read only for the comparison at the end.",
+        "",
+        "1. EXTRACTED FROM THE SURVEY",
+        *("  " + line.strip() for line in render_draft(generated.draft).splitlines()[1:]),
+        f"  plot planned on: {generated.plot.area:,.0f} m², {generated.basis}",
+        "",
+        "2. INPUTS AND HOW FAR EACH IS TRUSTED",
+        *_inputs(project),
+        "",
+        "3. UNRESOLVED FACTS AND ASSUMPTIONS",
+        *_unresolved(project),
+        "  The engine's readings of what the orders leave open:",
+        *(f"    - {reading}" for reading in READINGS),
+        "",
+        "4. HEIGHT",
+        *_heights(generated),
+        "",
+        "5. LAYOUTS THAT PASS",
     ]
-    if tried:
-        lines.append("Heights tried: " + "; ".join(
-            f"stilt + {t['floors_above_stilt']}: best {t['best_saleable_sqft']:,} sft"
-            for t in tried))
-    lines.append("")
-    for option in generated.options:
-        fails = [r for r, s in option["rule_findings"].items() if s == "FAIL"]
-        lines.append(f"Option {option['option']}: {option['towers']} towers at stilt + "
-                     f"{option['floors_above_stilt']}, {option['total_flats']} flats, "
-                     f"{option['saleable_sqft']:,} sft of tower floor, mix "
-                     f"{option['unit_mix_achieved']}, FAILs: {', '.join(fails) or 'none'}")
+    if not generated.found.options:
+        lines.append("  None: no height has a layout that passes every rule.")
+    for summary, option in zip(generated.options, generated.found.options, strict=True):
+        lines += _option(summary, option, generated.plot)
+    lines += ["", "6. REJECTED CANDIDATES", *_rejected(generated.found)]
     width = max(len(r[0]) for r in rows)
-    lines += ["", f"{'Compared with the firm (read only now)':<{width}}  Engine  |  Firm"]
-    lines += [f"{name:<{width}}  {ours}  |  {theirs}" for name, ours, theirs in rows]
+    lines += ["", "7. COMPARED WITH THE FIRM'S PLAN (read only now)",
+              f"  {'':<{width}}  Engine  |  Firm"]
+    lines += [f"  {name:<{width}}  {ours}  |  {theirs}" for name, ours, theirs in rows]
     return "\n".join(lines)
+
+
+def _inputs(project: dict) -> list[str]:
+    site, layout = project["site"], project["layout"]
+    values = {**site, **layout,
+              "abutting_road": (f"{site['abutting_road_ft']:g} ft" if "abutting_road_ft" in site
+                                else f"{site.get('abutting_road_m', 0):g} m")
+              + f" ({site.get('abutting_road_status', '')})",
+              "floors": ("max: stilt + " if layout.get("maximise") else "stilt + ")
+              + str(layout["floors"])}
+    out = []
+    for key, status in project.get("status", {}).items():
+        value = values.get(key, "")
+        if isinstance(value, dict):
+            value = ", ".join(f"{k} {v:.0%}" if isinstance(v, float) else f"{k} {v}"
+                              for k, v in value.items())
+        if value in (None, ""):
+            value = "not known" if status == Provenance.UNVERIFIED else "-"
+        source = project.get("sources", {}).get(key, "")
+        out.append(f"  {key}: {value}  [{status}]  {source}")
+    return out
+
+
+def _unresolved(project: dict) -> list[str]:
+    weak = [(k, s) for k, s in project.get("status", {}).items()
+            if s in (Provenance.UNVERIFIED, Provenance.ASSUMED_FOR_TEST)]
+    if not weak:
+        return ["  Every input is confirmed."]
+    return [f"  - {key}: {status}" for key, status in weak]
+
+
+def _heights(generated: Generated) -> list[str]:
+    found, limit = generated.found, generated.limit
+    legal, feasible = found.max_legal_floors, found.max_feasible_floors
+    stilt = generated.project["layout"]["stilt_height_m"]
+    floor_h = generated.project["layout"]["floor_height_m"]
+
+    def height(floors: int | None) -> str:
+        return "none" if floors is None else f"stilt + {floors} ({stilt + floors * floor_h:g} m)"
+
+    lines = [f"  Maximum legally allowed: {height(legal)}; the floors calculator: stilt + "
+             f"{limit.floors_stilt_counted} if the stilt counts, stilt + "
+             f"{limit.floors_stilt_not_counted} if not, stopped by {limit.limited_by}",
+             f"  Maximum geometrically feasible: {height(feasible)}",
+             "  Height by height, top down:"]
+    for r in found.results:
+        lines.append(f"    stilt + {r.floors} ({r.height_m:g} m): {r.verdict}"
+                     + (f", {len(r.options)} passing layout{'s' if len(r.options) != 1 else ''}"
+                        if r.options else ""))
+        lines += [f"      - {reason}" for reason in r.reasons()]
+    return lines
+
+
+def _option(summary: dict, option: LayoutOption, plot: Polygon) -> list[str]:
+    parking = summary["parking"]
+    towers = ", ".join(f"{t.name} {t.length_m:.0f} m" for t in option.towers)
+    by_type = ", ".join(f"{k} {n}" for k, n in summary["flats_by_type"].items())
+    asked = ", ".join(f"{k} {v:.0%}" for k, v in sorted(option.unit_mix_target.items()))
+    got = ", ".join(f"{k} {v:.1%}" for k, v in summary["unit_mix_achieved"].items())
+    setback, gap = spacing(plot, [t.footprint for t in option.towers])
+    roads = summary["roads"]
+    kinds = {}
+    for road in roads:
+        kinds.setdefault(road["kind"], []).append(road)
+    road_line = "; ".join(f"{kind} {rs[0]['width_m']:g} m" + (f" x {len(rs)}" if len(rs) > 1
+                                                              else "")
+                          for kind, rs in kinds.items())
+    fire = [f for f in option.findings if f.rule.startswith("Fire access")]
+    counts = {s: sum(f.status is s for f in option.findings) for s in Status}
+    lines = [
+        "",
+        f"  Option {summary['option']}: stilt + {option.floors} ({option.height_m:g} m), "
+        f"{summary['towers']} towers ({towers})",
+        f"    Flats: {summary['total_flats']} ({by_type}); mix {got} against {asked}",
+        f"    Areas: tower floor {summary['tower_floor_sqft']:,} sft = flats' own "
+        f"{summary['flats_own_sqft']:,} + common and core {summary['common_core_sqft']:,} "
+        f"({summary['core_share_pct']}%); saleable {summary['saleable_sqft']:,} sft "
+        f"({summary['saleable_basis']}); club house {summary['amenity_sqft']:,} sft; parking "
+        f"{summary['parking_sqft']:,} sft",
+        f"    Roads: {road_line}; entrance {option.entrance.note if option.entrance else '-'}",
+        f"    Fire access: {sum(f.status is Status.PASS for f in fire)} of {len(fire)} checks "
+        "pass; " + "; ".join(f"{f.rule.removeprefix('Fire access: ')} {f.status.value}"
+                            for f in fire if f.status is not Status.PASS),
+        f"    Parking: required {parking.get('required_sqm', 0):,} m² "
+        f"({parking.get('percent', 0):g}%, {parking.get('basis', '')}); provided "
+        f"{parking.get('provided_sqm', 0):,} m² = stilt {parking.get('stilt_sqm', 0):,} + surface "
+        f"{parking.get('surface_sqm', 0):,} + {parking.get('cellar_levels', 0)} cellar level(s) x "
+        f"{parking.get('cellar_sqm_per_level', 0):,}; ramp {parking.get('ramp', 'none')}; cars "
+        f"{parking.get('cars', {})}",
+        f"    Tot-lot: {summary['open_space_sqm']:,.0f} m² in {len(option.open_space)} pocket(s), "
+        f"{summary['open_space_share_pct']}% of the net plot",
+        f"    Club house: {summary['club_house_sqm']:,.0f} m² built-up on "
+        f"{summary['club_house_footprint_sqm']:,.0f} m²; facilities placed: "
+        f"{', '.join(a['name'] for a in summary['amenities']) or 'none'}"
+        + (f"; no room for: {', '.join(summary['amenities_with_no_room'])}"
+           if summary["amenities_with_no_room"] else ""),
+        f"    Setbacks and spacing: least setback {setback:.2f} m, least gap "
+        + (f"{gap:.2f} m" if gap is not None else "- (one tower)"),
+        f"    Rules: {counts[Status.PASS]} PASS, {counts[Status.FAIL]} FAIL, "
+        f"{counts[Status.UNVERIFIED] + counts[Status.NOT_CHECKED]} UNVERIFIED",
+    ]
+    for f in option.findings:
+        if f.status is Status.INFO:
+            continue
+        shown = "UNVERIFIED" if f.status is Status.NOT_CHECKED else f.status.value
+        lines.append(f"      {shown:<10} {f.rule}: {f.measured} (needs {f.required})")
+    return lines
+
+
+def _rejected(found: HeightSearch) -> list[str]:
+    lines = []
+    for r in found.results:
+        if r.search is None or not r.search.rejected:
+            continue
+        lines.append(f"  stilt + {r.floors}: {len(r.search.rejected)} candidate"
+                     f"{'s' if len(r.search.rejected) != 1 else ''} drawn and failed")
+        for rejected in r.search.rejected[:3]:
+            sale = (f", {rejected.saleable_sqft:,.0f} sft saleable" if rejected.saleable_sqft
+                    else "")
+            lines.append(f"    {rejected.towers} towers at {rejected.orientation_deg:.0f}°"
+                         f"{sale}: " + "; ".join(rejected.reasons[:3]))
+    return lines or ["  None: every candidate drawn exactly passed the checker."]

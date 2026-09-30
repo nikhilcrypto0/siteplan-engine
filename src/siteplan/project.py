@@ -16,6 +16,7 @@ from siteplan import rules
 from siteplan.area_statement import AreaStatement
 from siteplan.checks import Building, Site
 from siteplan.layout import LayoutRequest
+from siteplan.provenance import Provenance
 from siteplan.units import ft_to_m, parse_acre_gunta, sqft_to_sqm, sqyd_to_sqm
 
 Ring = list[tuple[float, float]]
@@ -113,6 +114,12 @@ class SiteIn(BaseModel):
     road_dead_end: bool | None = Field(
         None, description="Does the access road end at the plot? Leave out when not known: a "
         "survey line stopping at the boundary does not prove it")
+    access_side: Literal["N", "NE", "E", "SE", "S", "SW", "W", "NW"] | None = Field(
+        None, description="The side of the plot the access road runs along: the main entrance "
+        "goes there")
+    street_joins_12m: bool | None = Field(
+        None, description="Does the access road join a street at least 12 m wide at one end "
+        "(NBC 4.6(a))? Leave out when not known")
     proposed_floors: PositiveInt | None = Field(
         None, description="Floors above the stilt the firm's drawings propose")
     sanctioned_floors: PositiveInt | None = Field(
@@ -171,6 +178,8 @@ class Project(BaseModel):
     sources: dict[str, str] = Field(
         default_factory=dict, description="Where each site value came from: the survey, or the "
         "architect's answer")
+    status: dict[str, Provenance] = Field(
+        default_factory=dict, description="How far each value can be trusted, keyed as sources")
 
     def to_site(self) -> Site:
         s = self.site
@@ -187,4 +196,6 @@ class Project(BaseModel):
             inside_cure=s.inside_cure,
             abutting_road_status=s.abutting_road_status,
             measured_carriageway_m=s.measured_carriageway_m,
+            road_dead_end=s.road_dead_end,
+            street_joins_12m=s.street_joins_12m,
         )

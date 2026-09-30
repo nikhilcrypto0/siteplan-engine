@@ -38,6 +38,7 @@ from siteplan.area_statement import render
 from siteplan.assistant import Assistant, BriefExtraction, compare_options
 from siteplan.checks import check_site
 from siteplan.guards import sanitize_brief
+from siteplan.heights import heights_to_try
 from siteplan.intake import WORKSPACE_FILE, build_project, extract, load_defaults, questions, save
 from siteplan.layout import LayoutRequest
 from siteplan.library import FlatLibrary
@@ -47,7 +48,6 @@ from siteplan.result_page import write_result_page
 from siteplan.rulebook import RuleBook
 from siteplan.runner import (
     LAYOUT_CAVEAT,
-    heights_to_try,
     load_plot,
     load_water,
     read_survey,
@@ -64,11 +64,10 @@ PROJECTS = "projects"  # where finish_project writes, inside the runs folder
 MAX_LISTED = 200
 MAX_BRIEF_CHARS = 2000
 APPROVAL_TIMEOUT_S = 300
-OPTION_KEYS = ("option", "towers", "total_flats", "saleable_sqft", "built_up_sqft",
-               "loading_pct",
-               "open_space_share_pct",
-               "unit_mix_achieved", "mix_error", "amenities", "amenities_with_no_room",
-               "surface_parking_bays", "rule_findings")
+OPTION_KEYS = ("option", "floors_above_stilt", "towers", "total_flats", "flats_by_type",
+               "saleable_sqft", "tower_floor_sqft", "common_core_sqft", "built_up_sqft",
+               "open_space_share_pct", "unit_mix_achieved", "mix_error", "parking", "roads",
+               "amenities", "amenities_with_no_room", "surface_parking_bays", "rule_findings")
 
 INSTRUCTIONS = (
     "Site-planning tools for Telangana group housing. Every number these tools return is "
@@ -179,9 +178,10 @@ def approval_request(project: str, plot: str, request: LayoutRequest, reading: d
     mix = ", ".join(f"{k} {v * 100:.0f}%" for k, v in sorted(request.unit_mix.items()))
     floors = f"Floors above the stilt: {request.floors} (height {request.height_m:g} m)"
     if request.maximise:
-        tried = ", ".join(f"stilt + {f}" for f in heights_to_try(request))
+        tried = heights_to_try(request)
         floors = (f"Floors above the stilt: the most the rules allow, {request.floors} (height "
-                  f"{request.height_m:g} m); tries {tried} and keeps the one that sells most")
+                  f"{request.height_m:g} m); tests every height from stilt + {tried[0]} down to "
+                  f"stilt + {tried[-1]} and keeps the layouts that pass")
     lines = [
         f"Plot: {plot}",
         floors,

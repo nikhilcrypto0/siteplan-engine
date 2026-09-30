@@ -11,10 +11,14 @@ from siteplan.inventory import INVENTORY, Reading, Where, render_markdown, rende
 
 SRC = Path(siteplan.__file__).parent
 SOURCES = {
-    Where.CHECKER: (SRC / "checks.py").read_text(),
+    Where.CHECKER: "".join(
+        (SRC / name).read_text()
+        for name in ("checks.py", "access_checks.py", "parking_checks.py")
+    ),
     Where.LAYOUT: "".join(  # runner.py builds the land the layout keeps off (water buffers)
         (SRC / name).read_text()
-        for name in ("layout.py", "amenities.py", "parking.py", "runner.py")
+        for name in ("layout.py", "towers.py", "grounds.py", "access.py", "parking.py",
+                     "heights.py", "runner.py")
     ),
     Where.LOOKUP: inspect.getsource(rules.height_rules),
     Where.FLOORS: (SRC / "max_floors.py").read_text(),

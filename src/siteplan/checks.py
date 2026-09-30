@@ -1,39 +1,23 @@
 """Check a proposed site against the encoded Telangana rules.
 
 Each finding says what was measured, what the rule requires and which clause says so.
-When an input is missing the finding says so (NEEDS_INPUT) rather than guessing.
+When an input is missing the finding says so (UNVERIFIED) rather than guessing.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from enum import StrEnum
 from itertools import combinations
 
 from shapely.geometry import Polygon
 
 from siteplan import rules
-from siteplan.geometry import opening
+from siteplan.access_checks import fire_findings, road_findings
+from siteplan.findings import Finding, Status, narrower_than
+from siteplan.parking_checks import parking_findings
 
 WATER_OVERLAP_SQM = 0.01  # less than this inside a water buffer is floating-point, not a block
-
-
-class Status(StrEnum):
-    PASS = "PASS"
-    FAIL = "FAIL"
-    NEEDS_INPUT = "NEEDS_INPUT"
-    NOT_CHECKED = "NOT_CHECKED"
-    INFO = "INFO"  # a classification that drives other checks, not a verdict
-
-
-@dataclass(frozen=True)
-class Finding:
-    rule: str
-    status: Status
-    measured: str
-    required: str
-    clause: str
-    note: str = ""
+__all__ = ["Building", "Finding", "Site", "Status", "check_site"]
 
 
 @dataclass(frozen=True)
@@ -66,7 +50,6 @@ class Site:
     buildings: tuple[Building, ...] = field(default_factory=tuple)
     club_house: Polygon | None = None  # footprint
     club_house_built_up_sqm: float | None = None  # all its floors
-    driveway: Polygon | None = None
     built_up_sqm: float | None = None  # all floors of all blocks
     surface_parking_sqm: float = 0.0
     units: int | None = None
@@ -75,6 +58,15 @@ class Site:
     abutting_road_status: str | None = None  # how the abutting road's width is known
     measured_carriageway_m: float | None = None  # the survey's measure; never used by the rules
     water_buffer: Polygon | None = None  # lake, nala or river with its rule 3(a)(ii) buffer
+    # A drawn layout's access and parking, measured again here (access.py, parking.py).
+    roads: tuple = ()  # access.RoadPiece: the internal road network, by kind
+    entrance: object | None = None  # access.Entrance: the gate and the main approach road
+    fire_lanes: Polygon | None = None  # clear bands round high-rises that are not road
+    green_strip: Polygon | None = None
+    obstructions: tuple[Polygon, ...] = ()  # what a fire tender cannot drive over or through
+    parking_plan: object | None = None  # parking.ParkingPlan
+    road_dead_end: bool | None = None  # does the access road end at the plot
+    street_joins_12m: bool | None = None  # does it join a street at least 12 m wide
 
 
 def _m(value: float) -> str:
@@ -108,9 +100,10 @@ def check_site(site: Site) -> list[Finding]:
         findings += _spacing_findings(encoded, bands)
     findings += _open_space_findings(site)
     findings.append(_green_strip_finding(site, encoded, bands))
-    findings.append(_driveway_finding(site, high_rise=bool(all_high_rise)))
+    findings += road_findings(site)
+    findings += fire_findings(site, all_high_rise)
     findings.append(_amenity_finding(site))
-    findings.append(_parking_finding(site))
+    findings += parking_findings(site)
     if site.water_buffer is not None:
         findings.append(_water_finding(site))
     return findings
@@ -149,34 +142,18 @@ def _green_strip_finding(site: Site, high_rise, bands) -> Finding:
             rules.PERIPHERAL_GREEN_STRIP_CLAUSE,
             f"The strip is required only where the setback reaches {from_m:g} m.",
         )
+    if site.green_strip is not None and site.net_plot is not None:
+        thin = narrower_than(site.green_strip, rules.PERIPHERAL_GREEN_STRIP_M - 0.02)
+        return Finding(
+            "Peripheral green strip", Status.FAIL if thin else Status.PASS,
+            f"{site.green_strip.area:,.0f} m² along the boundary, broken only at the entrance",
+            required, rules.PERIPHERAL_GREEN_STRIP_CLAUSE,
+            "Soft planting: nothing drives, parks or is built on it.",
+        )
     return Finding(
-        "Peripheral green strip", Status.NOT_CHECKED, "not modelled yet", required,
+        "Peripheral green strip", Status.NOT_CHECKED, "not drawn", required,
         rules.PERIPHERAL_GREEN_STRIP_CLAUSE,
         "Needs the landscape layer from the site-plan DWG.",
-    )
-
-
-def _driveway_finding(site: Site, high_rise: bool) -> Finding:
-    """4.5 m for any drive; 6 m where a high-rise needs its fire-tender approach."""
-    width, clause = rules.DRIVEWAY_MIN_WIDTH_M, rules.DRIVEWAY_CLAUSE
-    if high_rise:
-        width, clause = rules.FIRE_TENDER_MIN_WIDTH_M, rules.FIRE_TENDER_CLAUSE
-    required = f">= {width:g} m wide"
-    if site.driveway is None:
-        return Finding("Driveway", Status.NOT_CHECKED, "no driveway in this layout", required,
-                       clause, "Give the layout a driveway width to check it.")
-    narrow = _narrower_than(site.driveway, width)
-    measured = f"{site.driveway.area:,.0f} m²"
-    if narrow:
-        measured += ", narrower than the minimum in places"
-    return Finding(
-        "Driveway",
-        Status.FAIL if narrow else Status.PASS,
-        measured,
-        required,
-        clause,
-        "Ramps are not counted here; rule 13(c)(vii) lets one into a side or rear setback only "
-        "after leaving 7 m for fire vehicles. The 9 m turning radius is not checked.",
     )
 
 
@@ -206,41 +183,12 @@ def _amenity_finding(site: Site) -> Finding:
     )
 
 
-def _parking_finding(site: Site) -> Finding:
-    percent = rules.parking_percent(site.authority, site.inside_cure)
-    required = f">= {percent:g}% of built-up area"
-    clause = rules.PARKING_CLAUSE
-    if site.inside_cure:
-        clause = f"{clause}; {rules.CURE_RULES_CLAUSE}"
-    if site.built_up_sqm is None:
-        return Finding("Parking", Status.NOT_CHECKED, "built-up area unknown", required, clause)
-    need = percent / 100 * site.built_up_sqm
-    stilt = sum(b.footprint.area for b in site.buildings if b.footprint is not None)
-    provided = stilt + site.surface_parking_sqm
-    measured = f"stilt {stilt:,.0f} m² + surface {site.surface_parking_sqm:,.0f} m²"
-    note = "Cellars and podium parking are not modelled."
-    if site.authority is None and site.inside_cure is None:
-        note += (" Authority not given, so the 20% column is used; inside GHMC or anywhere in "
-                 "CURE it is 30%.")
-    if provided + 0.5 >= need:
-        return Finding("Parking", Status.PASS, measured, f"{required} = {need:,.0f} m²",
-                       clause, note)
-    return Finding(
-        "Parking",
-        Status.NEEDS_INPUT,
-        f"{measured}, short by {need - provided:,.0f} m²",
-        f"{required} = {need:,.0f} m²",
-        clause,
-        f"{note} Say where the rest goes (cellar or podium) to settle this.",
-    )
-
-
 def _height_finding(b: Building) -> Finding:
     height = b.resolved_height()
     if height is None:
         return Finding(
             f"Height class: {b.name}",
-            Status.NEEDS_INPUT,
+            Status.UNVERIFIED,
             "unknown",
             "total height including stilt",
             rules.HIGH_RISE_CLAUSE,
@@ -306,7 +254,7 @@ def _road_finding(site: Site, tallest: str, band: rules.HeightBand) -> Finding:
             "Counts only if the road-widening strip is surrendered.",
         )
     if site.abutting_road_m is None:
-        return Finding(rule, Status.NEEDS_INPUT, "unknown", required, rules.TABLE_IV_CLAUSE)
+        return Finding(rule, Status.UNVERIFIED, "unknown", required, rules.TABLE_IV_CLAUSE)
     ok = site.abutting_road_m >= band.min_road_m
     advice = "" if ok else "If the master plan widens this road, re-run with master_plan_road_m."
     return Finding(
@@ -336,7 +284,7 @@ def _plot_size_finding(site: Site) -> Finding:
     if area is None:
         return Finding(
             "Plot size for high-rise",
-            Status.NEEDS_INPUT,
+            Status.UNVERIFIED,
             "unknown",
             required,
             rules.MIN_HIGH_RISE_PLOT_CLAUSE,
@@ -354,7 +302,7 @@ def _plot_size_finding(site: Site) -> Finding:
 def _no_geometry(rule: str, required: str, clause: str, count: int) -> Finding:
     return Finding(
         rule,
-        Status.NEEDS_INPUT,
+        Status.UNVERIFIED,
         f"no footprint geometry ({count} to check)",
         required,
         clause,
@@ -375,7 +323,7 @@ def _setback_findings(site, high_rise, bands) -> list[Finding]:
             findings.append(
                 Finding(
                     f"All-round setback: {b.name}",
-                    Status.NEEDS_INPUT,
+                    Status.UNVERIFIED,
                     "no footprint geometry",
                     required,
                     rules.TABLE_IV_CLAUSE,
@@ -420,7 +368,7 @@ def _spacing_findings(high_rise, bands) -> list[Finding]:
             findings.append(
                 Finding(
                     rule,
-                    Status.NEEDS_INPUT,
+                    Status.UNVERIFIED,
                     "no footprint geometry",
                     f">= {need:.2f} m",
                     rules.BLOCK_SPACING_CLAUSE,
@@ -442,17 +390,11 @@ def _spacing_findings(high_rise, bands) -> list[Finding]:
     return findings
 
 
-def _narrower_than(shape: Polygon, width_m: float) -> bool:
-    """True if any part of the shape is narrower than width_m (a noticeable share of its
-    area disappears when every part thinner than the width is removed)."""
-    return opening(shape, width_m).area < shape.area * 0.98
-
-
 def _open_space_findings(site: Site) -> list[Finding]:
     rule = "Organized open space (tot-lot)"
     required = f">= {rules.OPEN_SPACE_MIN_FRACTION:.0%} of site area, over and above setbacks"
     if site.open_space_sqm is None:
-        return [Finding(rule, Status.NEEDS_INPUT, "unknown", required, rules.OPEN_SPACE_CLAUSE)]
+        return [Finding(rule, Status.UNVERIFIED, "unknown", required, rules.OPEN_SPACE_CLAUSE)]
     shares = {
         name: site.open_space_sqm / area
         for name, area in (("net", site.net_area_sqm), ("gross", site.gross_area_sqm))
@@ -460,7 +402,7 @@ def _open_space_findings(site: Site) -> list[Finding]:
     }
     if not shares:
         clause = rules.OPEN_SPACE_CLAUSE
-        return [Finding(rule, Status.NEEDS_INPUT, "no site area", required, clause)]
+        return [Finding(rule, Status.UNVERIFIED, "no site area", required, clause)]
     measured = ", ".join(f"{_pct(v)} of {k}" for k, v in shares.items())
     passing = [v >= rules.OPEN_SPACE_MIN_FRACTION for v in shares.values()]
     if all(passing):
@@ -468,13 +410,13 @@ def _open_space_findings(site: Site) -> list[Finding]:
     elif not any(passing):
         status, note = Status.FAIL, ""
     else:
-        status = Status.NEEDS_INPUT
+        status = Status.UNVERIFIED
         note = "Passes on one site-area basis only. Confirm whether the rule uses net or gross."
     findings = [Finding(rule, status, measured, required, rules.OPEN_SPACE_CLAUSE, note)]
 
     for i, pocket in enumerate(site.open_space_pockets, 1):
         too_small = pocket.area < rules.OPEN_SPACE_MIN_POCKET_SQM
-        too_narrow = _narrower_than(pocket, rules.OPEN_SPACE_MIN_WIDTH_M)
+        too_narrow = narrower_than(pocket, rules.OPEN_SPACE_MIN_WIDTH_M)
         findings.append(
             Finding(
                 f"Open-space pocket {i}",

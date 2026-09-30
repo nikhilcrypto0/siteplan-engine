@@ -21,7 +21,7 @@ from shapely.geometry import Polygon
 
 from siteplan.area_statement import render
 from siteplan.layout import LayoutOption, LayoutRequest, area_statement
-from siteplan.layout_export import LAYERS, _parts, _ring
+from siteplan.layout_export import LAYERS, ROAD_LABELS, _parts, _ring
 
 STANDARD_SCALES = (100, 150, 200, 250, 300, 400, 500, 750, 1000, 1250, 1500, 2000)
 SHEET_MM = (841.0, 594.0)  # A1 landscape
@@ -107,13 +107,31 @@ def write_sheet_dxf(option: LayoutOption, plot: Polygon, request: LayoutRequest,
 
     # --- the drawing itself ------------------------------------------------------
     poly(plot, "Plot")
-    for part in _parts(option.driveway):
-        poly(part, "Driveway")
+    for part in _parts(option.green_strip):
+        poly(part, "SOLVER-GREEN-STRIP")
+    for road in option.roads:
+        for part in _parts(road.shape):
+            poly(part, "SOLVER-ROADS")
+        biggest = max(_parts(road.shape), key=lambda p: p.area, default=None)
+        if biggest is not None:
+            at = biggest.representative_point()
+            label(f"{ROAD_LABELS.get(road.kind, road.kind.upper())} {road.width_m:g} M",
+                  (at.x, at.y), text_h * 0.8)
+    for part in _parts(option.fire_lanes):
+        poly(part, "SOLVER-FIRE-LANES")
+    if option.entrance is not None:
+        for part in _parts(option.entrance.gate):
+            poly(part, "SOLVER-ENTRANCE")
+        centre = option.entrance.gate.centroid
+        label("MAIN ENTRANCE", (centre.x, centre.y), text_h * 0.9)
+    if option.parking is not None and option.parking.cellar_outline is not None:
+        for part in _parts(option.parking.cellar_outline):
+            poly(part, "SOLVER-CELLAR")
+    for ramp in option.ramps:
+        poly(ramp, "SOLVER-RAMPS")
+        label("RAMP 1:8", (ramp.centroid.x, ramp.centroid.y), text_h * 0.7)
     for bay in option.parking_bays:
         poly(bay, "Parking")
-    for name, gate in option.gates:
-        poly(gate, "SOLVER-GATES")
-        label(name, (gate.centroid.x, gate.centroid.y), text_h * 0.9)
     for amenity in option.amenities:
         poly(amenity.shape, "SITE-AMENITIES")
         label(amenity.name, (amenity.shape.centroid.x, amenity.shape.centroid.y), text_h * 0.75)

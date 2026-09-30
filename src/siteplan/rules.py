@@ -137,14 +137,49 @@ DEAD_END_CLAUSE = (
     "residential building above 30 m)"
 )
 FIRE_TENDER_MIN_WIDTH_M = 6.0
-FIRE_TENDER_CLAUSE = (
-    "G.O.168 rule 15(b)(iv), bringing in NBC 2016 Part 3 4.6(c) (fire-tender approach at least "
-    "6 m wide)"
-)
 GATE_MIN_WIDTH_M = 6.0
 GATE_CLAUSE = (
     "G.O.168 rule 15(b)(iv), bringing in NBC 2016 Part 3 4.6(d) (entrance at least 6 m wide)"
 )
+# 4.6(c) itself, read on the page image of NBC 2016 Part 3 p.18 on 2026-09-30: "The approach to
+# the building and open spaces on all its sides shall be not less than 6 m in width, and a turning
+# radius of minimum 9 m shall be provided for fire tender movement ... which shall be kept free of
+# obstructions and shall be motorable. The compulsory open spaces around the building shall not
+# be used for parking." It does not say where the 9 m is measured. We take it as the tender's own
+# turning circle, the outer edge of the 6 m lane (inner edge 3 m): that is what lets a lane turn
+# round a corner inside the 7 m the state keeps for fire vehicles (rule 13(c)(vii)) and its 7 m
+# high-rise minimum setback, which a 9 m centreline could not.
+FIRE_TURNING_RADIUS_M = 9.0
+FIRE_ACCESS_CLAUSE = (
+    "G.O.168 rule 15(b)(iv), bringing in NBC 2016 Part 3 4.6(c) (6 m of motorable open space "
+    "on all sides, a 9 m turning radius, free of obstructions, never parked in)"
+)
+# 4.6(a): "one end of this street shall join another street not less than 12 m in width". Where
+# a road leads is not on a survey, so it is the architect's to say.
+FIRE_STREET_JOIN_M = 12.0
+FIRE_STREET_CLAUSE = (
+    "G.O.168 rule 15(b)(iv), bringing in NBC 2016 Part 3 4.6(a) (the street joins a street at "
+    "least 12 m wide at one end)"
+)
+ENTRANCE_CLEAR_HEIGHT_M = 4.5  # 4.6(d): under anything built over the main entrance
+
+# Rule 8(m), read from the 2012 text on 2026-09-30 (G.O.Ms.No.7 of 2016 substituted 8(k) and
+# 8(n), not 8(m)): "9m to 18m for main internal approach roads; 9m for other internal roads and
+# also for looped roads. 8m for cul-de-sacs roads (with a minimum radius 9m.) between 50-100m
+# length." The order gives no test for where in 9 to 18 m a main approach road falls, so the
+# layout draws the least the order allows and says so. Rule 8(l) lets 6 m pathways serve only
+# blocks up to 12 m high, so every high-rise block has to be served by a road of 8(m)'s width.
+MAIN_APPROACH_ROAD_M = (9.0, 18.0)
+INTERNAL_ROAD_M = 9.0
+CUL_DE_SAC_WIDTH_M = 8.0
+CUL_DE_SAC_LENGTH_M = (50.0, 100.0)
+CUL_DE_SAC_HEAD_RADIUS_M = 9.0
+INTERNAL_ROAD_CLAUSE = (
+    "G.O.168 rule 8(m) (internal roads of a group development scheme: main approach 9-18 m, "
+    "other and looped roads 9 m, cul-de-sacs 8 m for 50-100 m with a 9 m radius head)"
+)
+PATHWAY_MAX_BLOCK_HEIGHT_M = 12.0
+PATHWAY_CLAUSE = "G.O.168 rule 8(l) (6 m pathways only for blocks up to 12 m high)"
 
 # Rule 3(a)(ii): no building within these distances of a water body, measured from a lake's Full
 # Tank Level or a nala's or river's defined boundary; the river clause is the one G.O.Ms.No.7 of
@@ -181,6 +216,38 @@ AMENITY_CLAUSE = (
 PARKING_PERCENT_GHMC = 30.0
 PARKING_PERCENT_ELSEWHERE = 20.0
 PARKING_CLAUSE = "G.O.168 rule 13, Table V row 4 (Residential Apartment Complexes)"
+
+# Rule 13(c), read from the 2012 text on 2026-09-30 (G.O.Ms.No.7 of 2016 does not amend rule 13).
+# (vii): "at least two ramps of minimum 3.6m width or one ramp of minimum 5.4m width and adequate
+# slope 1 in 8 ... not allowed in mandatory setbacks including building line, however they may be
+# permitted in the side and rear setbacks after leaving minimum 7m of setback for movement of
+# fire-fighting vehicles."
+RAMP_SINGLE_MIN_WIDTH_M = 5.4
+RAMP_PAIR_MIN_WIDTH_M = 3.6
+RAMP_MAX_GRADIENT = 1 / 8
+RAMP_CLAUSE = "G.O.168 rule 13(c)(vii) (ramps: one of 5.4 m or two of 3.6 m, 1 in 8)"
+# (x): "Cellar shall be with a setback of at least 1.5m in the sites of extent of up to 1000sq.m,
+# 2m ... more than 1000sq.m and up to 2000sq.m, and 3m in the sites of extent of more than
+# 2000sq.m from the property line. In case of more than one cellar, 0.5m additional setback for
+# every additional cellar floor shall be insisted."
+CELLAR_SETBACK_BY_SITE_SQM = ((1000.0, 1.5), (2000.0, 2.0), (math.inf, 3.0))
+CELLAR_EXTRA_SETBACK_PER_LEVEL_M = 0.5
+CELLAR_SETBACK_CLAUSE = "G.O.168 rule 13(c)(x) (cellar setback from the property line)"
+# (xi): "Up to 10% of cellar may be utilised for utilities and non-habitation purpose".
+CELLAR_UTILITIES_MAX_FRACTION = 0.10
+CELLAR_UTILITIES_CLAUSE = "G.O.168 rule 13(c)(xi) (up to 10% of a cellar for utilities)"
+# (xii): "Visitors' parking shall be provided with minimum 10% of the parking area mentioned in
+# Table-V ... properly demarcated on ground."
+VISITOR_PARKING_FRACTION = 0.10
+VISITOR_PARKING_CLAUSE = "G.O.168 rule 13(c)(xii) (visitors' parking, 10% of the Table V area)"
+
+
+def cellar_setback_m(site_sqm: float, levels: int) -> float:
+    """How far every cellar floor stays from the property line (rule 13(c)(x)). The order adds
+    0.5 m for every cellar beyond the first; the extra is applied to all of them, since the
+    cellars are one box, which is the stricter reading."""
+    base = next(m for up_to, m in CELLAR_SETBACK_BY_SITE_SQM if site_sqm <= up_to)
+    return base + CELLAR_EXTRA_SETBACK_PER_LEVEL_M * max(0, levels - 1)
 
 
 # G.O.Ms.No.45 of 05.02.2026 brought the Core Urban Region (CURE) under GHMC: "Building Rules ...

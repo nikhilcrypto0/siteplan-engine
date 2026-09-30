@@ -1,49 +1,55 @@
-"""Stage 2a layout solver: place slab towers built from a flat library inside the rules envelope.
+"""Stage 2a layout solver: towers from the flat library, placed with every site requirement active.
 
-A deterministic "test-fit" search. No language model is involved and no geometry is guessed:
-1. envelope = plot shrunk by the Table IV open space for the requested height;
-2. for orientations aligned with the plot's longest edges, and for column offsets swept
-   across one pitch, lay parallel slab columns spaced by the Table IV block gap;
-3. fill every free stretch of each column with towers made of flats and cores, choosing
-   each next flat by how far its category is below the requested unit mix;
-4. reserve organized open space: drop the smallest towers until the leftover pockets
-   (at least 3 m wide, 50 m² each) reach 10% of the plot;
-5. rank by saleable area discounted by unit-mix error, keep distinct options, and
-   re-check every option with the Stage 1 rule checker.
+A deterministic test-fit search. No language model is involved and no geometry is guessed:
+1. for the height asked, `grounds.frame` fixes the towers' land (the plot less the Table IV
+   setback, or less the green strip and the 9 m loop road where those need more), the loop road,
+   the main entrance on the access side and the green strip;
+2. for orientations along the plot's longest edges, column offsets swept across one pitch, and
+   tower lengths explored (no rule and no firm standard limits a block's length), columns of
+   towers are laid a corridor apart, each corridor a 9 m internal road (rule 8(m));
+3. `grounds.lay` gives the fire bands, the club house, the cellars and ramp and the tot-lot their
+   land on what the roads leave, dropping the smallest tower until all of them fit;
+4. the best placements are laid exactly, furnished with the facilities and surface bays, and
+   checked by the rule checker, which measures the drawing again. A layout that fails any rule is
+   a rejected candidate, never an option. The options are the best that pass, each genuinely
+   different from the others.
 """
 
 from __future__ import annotations
 
-import math
-from dataclasses import dataclass
+from collections import Counter
+from dataclasses import dataclass, field
 
 from pydantic import BaseModel, Field, PositiveFloat, PositiveInt, model_validator
-from shapely import affinity
-from shapely.geometry import Polygon, box
+from shapely.geometry import Polygon
 from shapely.ops import unary_union
 
 from siteplan import rules
-from siteplan.amenities import club_house_options, driveway_ring
+from siteplan.access import Entrance, RoadPiece
 from siteplan.area_statement import AreaStatement, FloorLine, TowerGroup
-from siteplan.checks import Building, Finding, Site, check_site
-from siteplan.geometry import angle_gap, opening, straight_runs
-from siteplan.library import FlatLibrary, FlatType
-from siteplan.parking import bay_area_sqm, free_for_parking, gates, surface_bays
-from siteplan.site_amenities import (
-    CLEARANCE_M as AMENITY_CLEARANCE_M,
+from siteplan.checks import Building, Finding, Site, Status, check_site
+from siteplan.grounds import Context, Frame, Ground, cellar_levels_floor, frame, lay
+from siteplan.library import FlatLibrary
+from siteplan.parking import (
+    ParkingPlan,
+    ParkingStandards,
+    bay_area_sqm,
+    count_bays,
+    parking_percent,
+    surface_bays,
 )
-from siteplan.site_amenities import (
-    AmenityLibrary,
-    PlacedAmenity,
-    free_for_amenities,
-    place_amenities,
-)
+from siteplan.site_amenities import CLEARANCE_M as AMENITY_CLEARANCE_M
+from siteplan.site_amenities import AmenityLibrary, PlacedAmenity, place_amenities
+from siteplan.towers import Placement, Tower, orientations, place
 from siteplan.units import sqm_to_sqft, sqm_to_sqyd
 
-EPS_M = 0.01  # added to every minimum so floating-point noise can never break a rule
-SWEEP_STEP_M = 1.0
-DEFAULT_DRIVEWAY_WIDTH_M = 6.0  # the rules allow 4.5; the firm's own drawings are wider
-AMENITY_PASSES = 3  # sizing the amenities block and laying out the towers each depend on the other
+EPS_M = 0.01
+SWEEP_STEP_M = 2.0
+# No order limits a block's length (G.O.Ms.No.65 of 2019 deleted the 40 m note) and the firm has
+# set none, so the search tries whole free stretches and two shorter caps.
+EXPLORED_TOWER_LENGTHS_M: tuple[float | None, ...] = (None, 60.0, 45.0)
+SHORTLIST = 10  # placements laid exactly, of the hundreds ranked by area alone
+SAME_IDEA_OVERLAP = 0.7  # two layouts sharing this much tower ground are one idea
 
 
 class LayoutRequest(BaseModel):
@@ -63,16 +69,22 @@ class LayoutRequest(BaseModel):
     club_house_floors: PositiveInt = Field(
         2, description="Storeys in the amenities block; it needs a footprint of a fraction"
     )
-    driveway_width_m: float = Field(
-        DEFAULT_DRIVEWAY_WIDTH_M, ge=rules.DRIVEWAY_MIN_WIDTH_M,
-        description="Drive around the buildings, inside the setback",
-    )
-    max_tower_length_m: PositiveFloat = 80.0
+    max_tower_length_m: PositiveFloat | None = Field(
+        None, description="The firm's longest block, if it has one; left out, lengths are "
+        "explored, since no rule limits them")
     min_flats_per_side: PositiveInt = 2
+    cellar_floor_height_m: PositiveFloat = Field(
+        3.0, description="Floor to floor of a cellar: the rise each 1 in 8 ramp climbs")
+    cellar_utilities_pct: float = Field(
+        rules.CELLAR_UTILITIES_MAX_FRACTION * 100, ge=0,
+        le=rules.CELLAR_UTILITIES_MAX_FRACTION * 100,
+        description="Share of each cellar kept for utilities; rule 13(c)(xi) allows up to 10%")
+    max_cellars: int = Field(3, ge=0, le=6, description="The deepest the search will dig: a "
+                             "search bound, not a rule")
     options: int = Field(3, ge=1, le=10)
     maximise: bool = Field(
-        False, description="floors is the most the rules allow; also try lower heights and keep "
-        "the one that sells most (taller blocks need wider setbacks and gaps)")
+        False, description="floors is the most the rules allow; search every height from there "
+        "down and keep the layouts that pass")
 
     @model_validator(mode="after")
     def _mix_adds_up(self) -> LayoutRequest:
@@ -89,21 +101,20 @@ class LayoutRequest(BaseModel):
 
 
 @dataclass(frozen=True)
-class Tower:
-    name: str
-    footprint: Polygon
-    flats_per_side: tuple[FlatType, ...]  # along one side; the other side mirrors it
-    flat_outlines: tuple[Polygon, ...]
-    cores: tuple[Polygon, ...]
+class SiteFacts:
+    """What the site brings to a layout besides its shape."""
 
-    def flats_per_floor(self) -> dict[str, int]:
-        counts: dict[str, int] = {}
-        for flat in self.flats_per_side:
-            counts[flat.bhk] = counts.get(flat.bhk, 0) + 2
-        return counts
-
-    def saleable_sqft_per_floor(self) -> float:
-        return 2 * sum(f.saleable_sqft for f in self.flats_per_side)
+    gross_area_sqm: float | None = None
+    abutting_road_m: float | None = None
+    master_plan_road_m: float | None = None
+    authority: str | None = None
+    inside_cure: bool | None = None
+    keep_out: Polygon | None = None
+    access_side: str | None = None
+    road_dead_end: bool | None = None
+    street_joins_12m: bool | None = None
+    jurisdiction_confirmed: bool = True
+    site_coordinates: tuple[float, float] | None = None
 
 
 @dataclass(frozen=True)
@@ -117,11 +128,17 @@ class LayoutOption:
     findings: tuple[Finding, ...] = ()
     club_house: Polygon | None = None  # footprint; it may have more than one floor
     club_house_floors: int = 1
-    driveway: Polygon | None = None
     parking_bays: tuple[Polygon, ...] = ()
-    gates: tuple[tuple[str, Polygon], ...] = ()
     amenities: tuple[PlacedAmenity, ...] = ()
     amenities_missed: tuple[str, ...] = ()
+    roads: tuple[RoadPiece, ...] = ()
+    fire_lanes: Polygon | None = None
+    green_strip: Polygon | None = None
+    entrance: Entrance | None = None
+    ramps: tuple[Polygon, ...] = ()
+    parking: ParkingPlan | None = None
+    height_m: float = 0.0
+    dropped: tuple[str, ...] = ()  # why towers were dropped while the ground was laid
 
     @property
     def flats_per_floor(self) -> dict[str, int]:
@@ -136,32 +153,26 @@ class LayoutOption:
         return sum(self.flats_per_floor.values()) * self.floors
 
     @property
-    def residential_plate_sqm(self) -> float:
-        """Every floor of every tower. The amenities block is common, and is not sold."""
+    def tower_floor_sqm(self) -> float:
+        """Every floor of every tower, wall to wall: the gross residential floor area."""
         return sum(t.footprint.area for t in self.towers) * self.floors
 
     @property
+    def flats_own_sqm(self) -> float:
+        """The flats' own outlines, every floor: what is left of the plate without the corridor,
+        the lifts and the stairs."""
+        return sum(sum(f.area for f in t.flat_outlines) for t in self.towers) * self.floors
+
+    @property
+    def common_core_sqm(self) -> float:
+        """Corridors, lift and stair cores: the plate less the flats."""
+        return self.tower_floor_sqm - self.flats_own_sqm
+
+    @property
     def saleable_sqft(self) -> float:
-        """What the flats sell for, which is the plate.
-
-        A flat is sold on its super built-up area: its own walls plus its share of the
-        corridor, the lift core and the staircase. Nobody gives that ground away, so every
-        square foot of a residential plate is loaded onto some flat and the sold area is the
-        plate itself. Summing the flats' own footprints instead reported 364,192 sft of
-        sales on 455,518 sft of building, which is less floor sold than drawn.
-        """
-        return sqm_to_sqft(self.residential_plate_sqm)
-
-    @property
-    def flat_footprint_sqft(self) -> float:
-        """The flats' own areas, without their share of the corridor and the cores."""
+        """What the flats sell as: each flat's own sale area from the flat library, times the
+        flats placed. The plate is not saleable area; the flats are."""
         return sum(t.saleable_sqft_per_floor() for t in self.towers) * self.floors
-
-    @property
-    def loading_pct(self) -> float:
-        """How much of the sold area is common: the plate over the flats' own footprints."""
-        own = self.flat_footprint_sqft
-        return (self.saleable_sqft / own - 1) * 100 if own else 0.0
 
     @property
     def built_up_sqft_per_floor(self) -> float:
@@ -175,7 +186,7 @@ class LayoutOption:
     @property
     def built_up_sqm(self) -> float:
         """Every floor of every block, amenities included: what the rules measure against."""
-        return sum(t.footprint.area for t in self.towers) * self.floors + self.club_house_sqm
+        return self.tower_floor_sqm + self.club_house_sqm
 
     @property
     def open_space_sqm(self) -> float:
@@ -188,427 +199,294 @@ class LayoutOption:
     @property
     def mix_error(self) -> float:
         """Half the summed gap between achieved and requested shares (0 = exact, 1 = disjoint)."""
-        counts = self.flats_per_floor
-        total = sum(counts.values()) or 1
-        keys = set(counts) | set(self.unit_mix_target)
-        return 0.5 * sum(
-            abs(counts.get(k, 0) / total - self.unit_mix_target.get(k, 0)) for k in keys
-        )
+        return mix_error(self.flats_per_floor, self.unit_mix_target)
 
     @property
     def score(self) -> float:
         return self.saleable_sqft * (1 - self.mix_error)
 
+    @property
+    def fails(self) -> list[Finding]:
+        return [f for f in self.findings if f.status is Status.FAIL]
+
     def summary(self) -> dict:
         counts = self.flats_per_floor
         total = sum(counts.values()) or 1
+        tower_floor = sqm_to_sqft(self.tower_floor_sqm)
         return {
             "orientation_deg": round(self.orientation_deg, 1),
+            "height_m": round(self.height_m, 2),
             "towers": len(self.towers),
+            "tower_lengths_m": [round(t.length_m, 1) for t in self.towers],
             "flats_per_floor": counts,
+            "flats_by_type": {k: n * self.floors for k, n in sorted(counts.items())},
             "unit_mix_achieved": {k: round(v / total, 3) for k, v in sorted(counts.items())},
             "total_flats": self.total_flats,
+            # The four areas are not interchangeable (see AGENTS.md).
+            "tower_floor_sqft": round(tower_floor),
+            "flats_own_sqft": round(sqm_to_sqft(self.flats_own_sqm)),
+            "common_core_sqft": round(sqm_to_sqft(self.common_core_sqm)),
+            "core_share_pct": round(self.common_core_sqm / self.tower_floor_sqm * 100, 1)
+            if self.tower_floor_sqm else 0.0,
             "saleable_sqft": round(self.saleable_sqft),
-            "flat_footprint_sqft": round(self.flat_footprint_sqft),
-            "loading_pct": round(self.loading_pct, 1),
-            # The number a firm's own area statement prints, so the two can be compared.
+            "saleable_basis": "each flat's sale area in the flat library, times the flats placed",
             "built_up_sqft": round(sqm_to_sqft(self.built_up_sqm)),
             "built_up_sqft_per_floor": round(self.built_up_sqft_per_floor),
+            "amenity_sqft": round(sqm_to_sqft(self.club_house_sqm)),
             "open_space_sqm": round(self.open_space_sqm, 1),
             "open_space_share_pct": round(self.open_space_share * 100, 2),
             "mix_error": round(self.mix_error, 3),
             "club_house_sqm": round(self.club_house_sqm, 1),
             "club_house_footprint_sqm": round(self.club_house.area, 1) if self.club_house else 0,
-            "driveway_sqm": round(self.driveway.area, 1) if self.driveway else 0,
+            "roads": [r.as_dict() for r in self.roads],
+            "fire_lanes_sqm": round(self.fire_lanes.area, 1) if self.fire_lanes else 0,
+            "parking": self.parking.as_dict() if self.parking else {},
+            "parking_sqft": round(sqm_to_sqft(self.parking.provided_sqm)) if self.parking else 0,
             "surface_parking_bays": len(self.parking_bays),
             "amenities": [a.as_dict() for a in self.amenities],
             "amenities_with_no_room": list(self.amenities_missed),
             "rule_findings": {f.rule: f.status.value for f in self.findings},
+            "towers_dropped_because": list(self.dropped),
         }
 
 
-def orientations(plot: Polygon) -> list[float]:
-    """Tower directions worth trying: along and across the plot's three longest edges."""
-    angles: list[float] = []
-    for run in sorted(straight_runs(plot), key=lambda r: -r.length)[:3]:
-        for angle in (run.angle_deg, (run.angle_deg + 90) % 180):
-            if all(angle_gap(angle, other) > 5 for other in angles):
-                angles.append(angle)
-    return angles
+def mix_error(counts: dict[str, int], target: dict[str, float]) -> float:
+    total = sum(counts.values()) or 1
+    keys = set(counts) | set(target)
+    return 0.5 * sum(abs(counts.get(k, 0) / total - target.get(k, 0)) for k in keys)
 
 
-def _parts(geometry) -> list[Polygon]:
-    parts = getattr(geometry, "geoms", [geometry])
-    return [p for p in parts if isinstance(p, Polygon) and not p.is_empty]
+@dataclass(frozen=True)
+class Rejected:
+    """A layout that was drawn and failed, or could not be drawn at all, and why."""
+
+    towers: int
+    orientation_deg: float
+    reasons: tuple[str, ...]
+    saleable_sqft: float = 0.0
 
 
-def free_stretches(envelope, x0: float, width: float) -> list[tuple[float, float]]:
-    """Y-ranges where a full-width strip [x0, x0 + width] lies inside the envelope.
-
-    Exact for axis-aligned rectangles: anything of the strip outside the envelope blocks
-    its whole y-range, because a tower spans the strip's full width."""
-    _, miny, _, maxy = envelope.bounds
-    strip = box(x0, miny - 1, x0 + width, maxy + 1)
-    blocked = sorted((p.bounds[1], p.bounds[3]) for p in _parts(strip.difference(envelope)))
-    stretches, y = [], miny - 1
-    for lo, hi in blocked:
-        if lo > y:
-            stretches.append((y, lo))
-        y = max(y, hi)
-    if y < maxy + 1:
-        stretches.append((y, maxy + 1))
-    return [(a, b) for a, b in stretches if b - a > 0]
+@dataclass
+class Search:
+    options: list[LayoutOption] = field(default_factory=list)
+    rejected: list[Rejected] = field(default_factory=list)
+    considered: int = 0  # placements ranked
+    problem: str = ""  # why there is nothing at all, when there is nothing
 
 
-class _MixTracker:
-    def __init__(self, target: dict[str, float]):
-        self.target = target
-        self.counts = {k: 0 for k in target}
-
-    def next_choices(self, library: FlatLibrary, pending: dict[str, int]) -> list[FlatType]:
-        """Flats in the order to try: most under-represented category first, then the flat
-        that sells the most area per metre of corridor."""
-        counts = {k: self.counts.get(k, 0) + pending.get(k, 0) for k in self.target}
-        total = sum(counts.values()) + 2
-        wanted = [f for f in library.flats if self.target.get(f.bhk, 0) > 0]
-        return sorted(
-            wanted,
-            key=lambda f: (
-                -(self.target[f.bhk] - counts[f.bhk] / total),
-                -f.saleable_sqft / f.width_m,
-            ),
-        )
+def solve(plot: Polygon, library: FlatLibrary, request: LayoutRequest, *,
+          amenities: AmenityLibrary | None = None, standards: ParkingStandards | None = None,
+          **facts) -> list[LayoutOption]:
+    """The best distinct layouts for the plot that pass every rule the checker applies."""
+    return search(plot, library, request, SiteFacts(**facts), amenities, standards).options
 
 
-def _length(flats: list[FlatType], library: FlatLibrary) -> float:
-    cores = math.ceil(len(flats) / library.flats_per_core_per_side)
-    return sum(f.width_m for f in flats) + cores * library.core_width_m
-
-
-def compose_tower(
-    available_m: float, library: FlatLibrary, mix: _MixTracker, min_per_side: int
-) -> list[FlatType] | None:
-    flats: list[FlatType] = []
-    pending: dict[str, int] = {}
-    while True:
-        for flat in mix.next_choices(library, pending):
-            if _length([*flats, flat], library) <= available_m + 1e-9:
-                flats.append(flat)
-                pending[flat.bhk] = pending.get(flat.bhk, 0) + 2
-                break
-        else:
-            break
-    if len(flats) < min_per_side:
-        return None
-    for bhk, n in pending.items():
-        mix.counts[bhk] = mix.counts.get(bhk, 0) + n
-    return flats
-
-
-def _build_tower(
-    name: str, x0: float, y0: float, flats: list[FlatType], library: FlatLibrary, alpha: float
-) -> Tower:
-    """Lay out one tower in the rotated frame, then rotate it back onto the site."""
-    depth = flats[0].depth_m
-    width = library.tower_depth_m
-    k = library.flats_per_core_per_side
-    groups = [flats[i : i + k] for i in range(0, len(flats), k)]
-    outlines, cores, y = [], [], y0
-    for group in groups:
-        half = math.ceil(len(group) / 2)
-        for position, flat in enumerate(group):
-            if position == half:
-                cores.append(box(x0, y, x0 + width, y + library.core_width_m))
-                y += library.core_width_m
-            outlines.append(box(x0, y, x0 + depth, y + flat.width_m))
-            outlines.append(box(x0 + width - depth, y, x0 + width, y + flat.width_m))
-            y += flat.width_m
-        if half >= len(group):
-            cores.append(box(x0, y, x0 + width, y + library.core_width_m))
-            y += library.core_width_m
-
-    def back(p: Polygon) -> Polygon:
-        return affinity.rotate(p, -alpha, origin=(0, 0))
-
-    return Tower(
-        name=name,
-        footprint=back(box(x0, y0, x0 + width, y)),
-        flats_per_side=tuple(flats),
-        flat_outlines=tuple(back(p) for p in outlines),
-        cores=tuple(back(p) for p in cores),
-    )
-
-
-def open_space_pockets(envelope, towers: list[Tower], gap_m: float) -> list[Polygon]:
-    """Organized open space left over: inside the setback envelope, outside the block
-    gaps (which may not count as tot-lot), at least 3 m wide and 50 m² per pocket."""
-    taken = unary_union([t.footprint.buffer(gap_m / 2, join_style="mitre") for t in towers])
-    free = envelope.difference(taken) if towers else envelope
-    usable = opening(free, rules.OPEN_SPACE_MIN_WIDTH_M + 2 * EPS_M)
-    return [p for p in _parts(usable) if p.area >= rules.OPEN_SPACE_MIN_POCKET_SQM + EPS_M]
-
-
-def _one_layout(plot, envelope, angle, offset, library, request, gap,
-                club=None, drive=None, amenities=None) -> LayoutOption | None:
-    alpha = 90 - angle  # rotate the site so the towers' long axis runs along y
-    rotated = affinity.rotate(envelope, alpha, origin=(0, 0))
-    minx, _, maxx, _ = rotated.bounds
-    width = library.tower_depth_m
-    mix = _MixTracker(request.unit_mix)
-    towers: list[Tower] = []
-    x = minx + offset
-    while x + width <= maxx + 1e-9:
-        for lo, hi in free_stretches(rotated, x, width):
-            y = lo
-            while hi - y > 0:
-                available = min(hi - y, request.max_tower_length_m)
-                flats = compose_tower(available, library, mix, request.min_flats_per_side)
-                if flats is None:
-                    break
-                tower = _build_tower(f"T{len(towers) + 1}", x, y, flats, library, alpha)
-                towers.append(tower)
-                y += _length(flats, library) + gap + EPS_M
-        x += width + gap + EPS_M
-
-    pockets = open_space_pockets(envelope, towers, gap)
-    target = rules.OPEN_SPACE_MIN_FRACTION * plot.area
-    while towers and sum(p.area for p in pockets) < target:
-        towers.remove(min(towers, key=lambda t: t.saleable_sqft_per_floor()))
-        pockets = open_space_pockets(envelope, towers, gap)
-    if not towers:
-        return None
-    named = tuple(
-        Tower(f"T{i}", t.footprint, t.flats_per_side, t.flat_outlines, t.cores)
-        for i, t in enumerate(towers, 1)
-    )
-    # Gates are cheap and shape nothing else, so they are placed here. The facilities and the
-    # parking bays are not: they cost a grid search each, and only the handful of layouts that
-    # survive selection are worth furnishing (see _furnish).
-    frontage = max(straight_runs(plot), key=lambda r: r.length).line
-    placed_gates = gates(plot, frontage, request.driveway_width_m + gap)
-    return LayoutOption(
-        orientation_deg=angle,
-        towers=named,
-        open_space=tuple(pockets),
-        floors=request.floors,
-        unit_mix_target=dict(request.unit_mix),
-        plot_area_sqm=plot.area,
-        club_house=club,
-        club_house_floors=request.club_house_floors,
-        driveway=drive,
-        gates=tuple(placed_gates),
-    )
-
-
-def _anchors(plot, club, pockets, placed_gates) -> dict:
-    """Where each kind of facility belongs: by the club, by the gate, in the open space,
-    or out at the edge of the site."""
-    anchors = {"edge": plot.exterior.interpolate(0.0).centroid if plot else None}
-    if club is not None:
-        anchors["club"] = club.centroid
-    if pockets:
-        anchors["open space"] = max(pockets, key=lambda p: p.area).centroid
-    if placed_gates:
-        anchors["gate"] = placed_gates[0][1].centroid
-    return {k: v for k, v in anchors.items() if v is not None}
-
-
-def solve(
-    plot: Polygon,
-    library: FlatLibrary,
-    request: LayoutRequest,
-    *,
-    gross_area_sqm: float | None = None,
-    abutting_road_m: float | None = None,
-    master_plan_road_m: float | None = None,
-    authority: str | None = None,
-    amenities: AmenityLibrary | None = None,
-    keep_out: Polygon | None = None,
-    inside_cure: bool | None = None,
-) -> list[LayoutOption]:
-    """Best distinct layouts for the plot, each already re-checked against the rules.
-    keep_out is land nothing may stand on (a water body's buffer): no tower, facility or bay."""
+def search(plot: Polygon, library: FlatLibrary, request: LayoutRequest, facts: SiteFacts,
+           amenities: AmenityLibrary | None = None,
+           standards: ParkingStandards | None = None) -> Search:
+    """Every passing layout worth showing at this height, and the candidates that failed."""
     unknown = set(request.unit_mix) - library.categories
     if unknown:
         raise ValueError(f"unit_mix asks for {sorted(unknown)}, not in the flat library")
     height = request.height_m
     if height < rules.HIGH_RISE_THRESHOLD_M:
-        raise ValueError(
-            f"{height:g} m is not high-rise; Table III setbacks are not encoded yet"
-        )
+        raise ValueError(f"{height:g} m is not high-rise; Table III setbacks are not encoded yet")
     band = rules.band_for_height(height)
     if band is None:
-        raise ValueError(f"{height:g} m is above the encoded Table IV rows (55 m)")
-    gap = band.min_open_space_m  # all round, and between blocks: length no longer adds to it
-    envelope = _less(plot.buffer(-(gap + EPS_M)), keep_out)
-    if envelope.is_empty:
-        return []
-
-    # Amenities take their land first, as they do on a real site plan. Sized from the built-up
-    # area the site can hold, which is only known after a first pass without them.
-    drive = driveway_ring(plot, envelope, request.driveway_width_m)
-    wanted = request.club_house_sqm
-    if request.club_house and wanted is None:
-        wanted = _amenity_size(plot, envelope, library, request, gap)
-
-    chosen: list[LayoutOption] = []
-    for _ in range(AMENITY_PASSES):
-        chosen = _search(plot, envelope, library, request, gap, wanted, drive, amenities)
-        if not chosen or not request.club_house or request.club_house_sqm:
-            break
-        if max(o.total_flats for o in chosen) < rules.AMENITY_MIN_UNITS:
-            break  # the clause applies from 100 units
-        # The block is sized from the built-up area, which the search itself decides, so grow
-        # it and search again until the layouts satisfy the rule that sized it.
-        need = rules.AMENITY_MIN_BUILT_UP_FRACTION * max(o.built_up_sqm for o in chosen)
-        if chosen[0].club_house_sqm + EPS_M >= need:
-            break
-        wanted = need
-
-    furnished = [_furnish(o, plot, gap, request, amenities, keep_out) for o in chosen]
-    return [
-        _with_findings(o, plot, request, gross_area_sqm, abutting_road_m, master_plan_road_m,
-                       authority, keep_out, inside_cure)
-        for o in furnished
-    ]
-
-
-def _less(shape: Polygon, keep_out: Polygon | None) -> Polygon:
-    return shape.difference(keep_out) if keep_out is not None else shape
+        raise ValueError(f"{height:g} m is above the encoded Table IV rows")
+    fr = frame(plot, band.min_open_space_m, facts.gross_area_sqm, facts.keep_out,
+               facts.access_side)
+    if fr is None:
+        return Search(problem="no land for towers inside the setbacks and the loop road")
+    percent, basis = parking_percent(facts.authority, facts.inside_cure,
+                                     facts.jurisdiction_confirmed)
+    standards = standards or ParkingStandards(
+        cellar_floor_height_m=request.cellar_floor_height_m,
+        utilities_fraction=request.cellar_utilities_pct / 100, max_cellars=request.max_cellars)
+    ctx = Context(request.floors, request.club_house, request.club_house_sqm,
+                  request.club_house_floors, percent, basis, standards)
+    ranked, failures = _rank(fr, library, request, ctx)
+    result = Search(considered=len(ranked))
+    if not ranked:
+        common = "; ".join(reason for reason, _ in failures.most_common(2))
+        result.problem = ("no placement keeps a tower once the roads, fire lanes and the rest "
+                          f"are laid: {common or 'no tower fits the towers land'}")
+    passing: list[LayoutOption] = []
+    for placement in _shortlist(ranked, request):
+        ground, reasons = lay(fr, placement, ctx)
+        if ground is None:
+            result.rejected.append(Rejected(len(placement.towers), placement.angle_deg,
+                                            tuple(reasons)))
+            continue
+        option = _furnish(fr, ground, placement.angle_deg, request, amenities, ctx, facts)
+        if option.fails:
+            result.rejected.append(Rejected(
+                len(option.towers), option.orientation_deg,
+                tuple(f"{f.rule}: {f.measured}" for f in option.fails), option.saleable_sqft))
+        else:
+            passing.append(option)
+    result.options = pick_distinct(passing, request.options)
+    return result
 
 
-def _furnish(option: LayoutOption, plot, gap, request, amenities, keep_out=None) -> LayoutOption:
-    """Lay the facilities and then the parking bays into one chosen layout.
-
-    The facilities come first: an architect does not lose the pool because a parking bay got
-    there first. Neither is worth computing for a layout that will be thrown away.
-    """
-    envelope = _less(plot.buffer(-(gap + EPS_M)), keep_out)
-    if option.club_house is not None:
-        envelope = envelope.difference(
-            option.club_house.buffer(gap + EPS_M, join_style="mitre")
-        )
-    facilities: tuple[PlacedAmenity, ...] = ()
-    missed: tuple[str, ...] = ()
-    if amenities is not None:
-        room = free_for_amenities(envelope, option.towers, option.club_house, option.open_space,
-                                  (), option.driveway)
-        anchors = _anchors(plot, option.club_house, option.open_space, option.gates)
-        found, missed_names = place_amenities(room, amenities, option.orientation_deg, anchors,
-                                              option.open_space)
-        facilities, missed = tuple(found), tuple(missed_names)
-    free = free_for_parking(envelope, option.towers, option.club_house, option.open_space)
-    if facilities:
-        free = free.difference(
-            unary_union([f.shape.buffer(AMENITY_CLEARANCE_M, join_style="mitre")
-                         for f in facilities])
-        )
-    return LayoutOption(**{
-        **option.__dict__,
-        "parking_bays": tuple(surface_bays(free, option.orientation_deg)),
-        "amenities": facilities,
-        "amenities_missed": missed,
-    })
-
-
-def _search(plot, envelope, library, request, gap, wanted, drive,
-            amenities=None) -> list[LayoutOption]:
-    """Every distinct layout worth showing, for one amenities-block size."""
-    footprint = wanted / request.club_house_floors if wanted else None
-    club = _place_club(plot, envelope, footprint, library, request, gap) if footprint else None
-    if request.club_house_sqm and club is None:
-        raise ValueError(
-            f"a club house of {request.club_house_sqm:,.0f} m² does not fit inside the setbacks"
-        )
-    if club is not None:
-        envelope = envelope.difference(club.buffer(gap + EPS_M, join_style="mitre"))
-        if envelope.is_empty:
-            return []
-
-    pitch = library.tower_depth_m + gap + EPS_M
+def _rank(fr: Frame, library: FlatLibrary, request: LayoutRequest, ctx: Context
+          ) -> tuple[list[tuple[float, Placement]], Counter]:
+    """Every placement, its towers cut down until the ground fits by area, best first; and
+    why the placements that kept no tower lost their last one."""
+    pitch = library.tower_depth_m + fr.corridor_m + EPS_M
     steps = max(1, int(pitch // SWEEP_STEP_M))
-    candidates = [
-        option
-        for angle in orientations(plot)
-        for i in range(steps)
-        if (option := _one_layout(plot, envelope, angle, i * SWEEP_STEP_M, library, request, gap,
-                                  club, drive, amenities))
-    ]
-    candidates.sort(key=lambda o: -o.score)
+    caps = ((request.max_tower_length_m,) if request.max_tower_length_m
+            else EXPLORED_TOWER_LENGTHS_M)
+    ranked: list[tuple[float, Placement]] = []
+    failures: Counter = Counter()
+    for angle in orientations(fr.plot):
+        for i in range(steps):
+            for cap in caps:
+                placement = place(fr.envelope, angle, i * SWEEP_STEP_M, library,
+                                  request.unit_mix, request.min_flats_per_side, fr.corridor_m,
+                                  cap)
+                if not placement.towers:
+                    continue
+                ground, reasons = lay(fr, placement, ctx, quick=True)
+                if ground is None:
+                    failures[reasons[-1] if reasons else "no tower fits"] += 1
+                    continue
+                kept = Placement(placement.angle_deg, ground.towers, placement.columns,
+                                 placement.depth_m, placement.corridor_m)
+                ranked.append((_placement_score(kept, request), kept))
+    ranked.sort(key=lambda pair: -pair[0])
+    return ranked, failures
 
-    # Options must differ in substance, not just by a few degrees of rotation.
-    chosen: list[LayoutOption] = []
+
+def _placement_score(placement: Placement, request: LayoutRequest) -> float:
+    counts: dict[str, int] = {}
+    for tower in placement.towers:
+        for bhk, n in tower.flats_per_floor().items():
+            counts[bhk] = counts.get(bhk, 0) + n
+    sale = sum(t.saleable_sqft_per_floor() for t in placement.towers) * request.floors
+    return sale * (1 - mix_error(counts, request.unit_mix))
+
+
+def _shortlist(ranked, request: LayoutRequest) -> list[Placement]:
+    """The best placements that differ in towers, sale area or direction."""
     seen: set[tuple] = set()
-    for option in candidates:
-        signature = (len(option.towers), option.total_flats, round(option.saleable_sqft, -3))
-        if signature not in seen:
-            seen.add(signature)
-            chosen.append(option)
-        if len(chosen) == request.options:
+    chosen: list[Placement] = []
+    for score, placement in ranked:
+        key = (len(placement.towers), round(score, -3), round(placement.angle_deg))
+        if key in seen:
+            continue
+        seen.add(key)
+        chosen.append(placement)
+        if len(chosen) == max(SHORTLIST, request.options * 3):
             break
     return chosen
 
 
-def _place_club(plot, envelope, area_sqm, library, request, gap) -> Polygon | None:
-    """Of the candidate positions, the one that costs the fewest flats. An amenities block
-    dropped in the middle of a tower row can cost a whole tower, which no rule forbids and
-    no architect would do."""
-    best: tuple[float, Polygon] | None = None
-    for block in club_house_options(envelope, area_sqm):
-        left = envelope.difference(block.buffer(gap + EPS_M, join_style="mitre"))
-        if left.is_empty:
+def pick_distinct(options: list[LayoutOption], count: int) -> list[LayoutOption]:
+    """The best options that are genuinely different: another tower count, or towers that
+    share less than SAME_IDEA_OVERLAP of their ground with every option already kept."""
+    chosen: list[LayoutOption] = []
+    for option in sorted(options, key=lambda o: -o.score):
+        if any(same_idea(option, kept) for kept in chosen):
             continue
-        trial = _trial_fit(plot, left, library, request, gap)
-        score = trial.score if trial else 0.0
-        if best is None or score > best[0]:
-            best = (score, block)
-    return best[1] if best else None
+        chosen.append(option)
+        if len(chosen) == count:
+            break
+    return chosen
 
 
-def _trial_fit(plot, envelope, library, request, gap) -> LayoutOption | None:
-    """One quick pass: the best orientation at offset zero. Used to compare choices, not to
-    produce an answer."""
-    return max(
-        (o for angle in orientations(plot)
-         if (o := _one_layout(plot, envelope, angle, 0.0, library, request, gap))),
-        key=lambda o: o.score, default=None,
+def same_idea(a: LayoutOption, b: LayoutOption) -> bool:
+    if len(a.towers) != len(b.towers) or a.floors != b.floors:
+        return False
+    ground_a = unary_union([t.footprint for t in a.towers])
+    ground_b = unary_union([t.footprint for t in b.towers])
+    union = ground_a.union(ground_b).area
+    return union > 0 and ground_a.intersection(ground_b).area / union >= SAME_IDEA_OVERLAP
+
+
+def _furnish(fr: Frame, ground: Ground, angle: float, request: LayoutRequest,
+             amenities: AmenityLibrary | None, ctx: Context, facts: SiteFacts) -> LayoutOption:
+    """Lay the facilities and the surface bays on what is left, count the cars, and check."""
+    towers = tuple(Tower(**{**t.__dict__, "name": f"T{i}"}) for i, t in enumerate(ground.towers, 1))
+    road_land = unary_union([r.shape for r in ground.roads])
+    facilities: tuple[PlacedAmenity, ...] = ()
+    missed: tuple[str, ...] = ()
+    free = ground.free
+    if amenities is not None and free is not None:
+        anchors = {"gate": fr.entrance.gate.centroid, "edge": fr.plot.exterior.interpolate(0.0)}
+        if ground.club is not None:
+            anchors["club"] = ground.club.centroid
+        if ground.tot_lot:
+            anchors["open space"] = max(ground.tot_lot, key=lambda p: p.area).centroid
+        found, missed_names = place_amenities(free, amenities, angle, anchors, ground.tot_lot)
+        facilities, missed = tuple(found), tuple(missed_names)
+        if facilities:
+            free = free.difference(unary_union(
+                [f.shape.buffer(AMENITY_CLEARANCE_M, join_style="mitre") for f in facilities]))
+    reachable = [p for p in _parts(free) if p.distance(road_land) <= 0.5]
+    bays = tuple(surface_bays(unary_union(reachable), angle)) if reachable else ()
+
+    plan = ground.parking
+    cars = {"stilt": sum(count_bays(t.footprint.difference(unary_union(t.cores)), angle)
+                         for t in towers)}
+    floor = cellar_levels_floor(fr, ground)
+    if floor is not None:
+        per_level = int(count_bays(floor, angle) * (1 - plan.utilities_fraction))
+        for level in range(1, plan.cellar_levels + 1):
+            cars[f"cellar {level}"] = per_level
+    if bays:
+        cars["surface"] = len(bays)
+    plan = ParkingPlan(**{**plan.__dict__, "surface_sqm": bay_area_sqm(len(bays)), "cars": cars})
+
+    option = LayoutOption(
+        orientation_deg=angle, towers=towers, open_space=ground.tot_lot, floors=request.floors,
+        unit_mix_target=dict(request.unit_mix), plot_area_sqm=fr.plot.area,
+        club_house=ground.club, club_house_floors=request.club_house_floors,
+        parking_bays=bays, amenities=facilities, amenities_missed=missed, roads=ground.roads,
+        fire_lanes=ground.fire_lanes, green_strip=fr.green, entrance=fr.entrance,
+        ramps=plan.ramps, parking=plan, height_m=request.height_m, dropped=ground.dropped,
     )
+    return LayoutOption(**{**option.__dict__, "findings": tuple(_check(option, fr, facts))})
 
 
-def _amenity_size(plot, envelope, library, request, gap) -> float | None:
-    """Rule 15(a)(x): 3% of built-up area for 100 units or more. The built-up area comes from a
-    first pass with no amenities block, which is the most the site could hold."""
-    trial = _trial_fit(plot, envelope, library, request, gap)
-    if trial is None or trial.total_flats < rules.AMENITY_MIN_UNITS:
-        return None
-    return rules.AMENITY_MIN_BUILT_UP_FRACTION * trial.built_up_sqm
+def _parts(shape) -> list[Polygon]:
+    if shape is None or shape.is_empty:
+        return []
+    return [shape] if isinstance(shape, Polygon) else [p for p in getattr(shape, "geoms", [])
+                                                       if isinstance(p, Polygon)]
 
 
-def _with_findings(option, plot, request, gross, road, master_road, authority=None,
-                   keep_out=None, inside_cure=None) -> LayoutOption:
+def _check(option: LayoutOption, fr: Frame, facts: SiteFacts) -> list[Finding]:
+    obstructions = (*(a.shape for a in option.amenities), *option.parking_bays,
+                    *option.open_space, *option.ramps)
     site = Site(
-        gross_area_sqm=gross,
-        net_area_sqm=plot.area,
-        abutting_road_m=road,
-        master_plan_road_m=master_road,
+        gross_area_sqm=facts.gross_area_sqm,
+        net_area_sqm=fr.plot.area,
+        abutting_road_m=facts.abutting_road_m,
+        master_plan_road_m=facts.master_plan_road_m,
         open_space_sqm=option.open_space_sqm,
-        net_plot=plot,
+        net_plot=fr.plot,
         open_space_pockets=option.open_space,
-        buildings=tuple(
-            Building(t.name, height_m=request.height_m, footprint=t.footprint)
-            for t in option.towers
-        ),
+        buildings=tuple(Building(t.name, height_m=option.height_m, footprint=t.footprint)
+                        for t in option.towers),
         club_house=option.club_house,
         club_house_built_up_sqm=option.club_house_sqm,
-        driveway=option.driveway,
         built_up_sqm=option.built_up_sqm,
         surface_parking_sqm=bay_area_sqm(len(option.parking_bays)),
         units=option.total_flats,
-        authority=authority,
-        inside_cure=inside_cure,
-        water_buffer=keep_out,
+        authority=facts.authority,
+        inside_cure=facts.inside_cure,
+        water_buffer=facts.keep_out,
+        roads=option.roads,
+        entrance=option.entrance,
+        fire_lanes=option.fire_lanes,
+        green_strip=option.green_strip,
+        obstructions=obstructions,
+        parking_plan=option.parking,
+        road_dead_end=facts.road_dead_end,
+        street_joins_12m=facts.street_joins_12m,
     )
-    return LayoutOption(**{**option.__dict__, "findings": tuple(check_site(site))})
+    return check_site(site)
 
 
 def area_statement(option: LayoutOption, request: LayoutRequest) -> AreaStatement:

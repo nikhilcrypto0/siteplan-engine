@@ -5,11 +5,13 @@ import ezdxf
 import pytest
 from pydantic import ValidationError
 from shapely.geometry import Polygon, box
+from shapely.ops import unary_union
 
 from siteplan.checks import Status
-from siteplan.layout import LayoutRequest, area_statement, free_stretches, solve
+from siteplan.layout import LayoutRequest, area_statement, solve
 from siteplan.layout_export import write_layout_dxf, write_layout_svg
 from siteplan.library import FlatLibrary, FlatType
+from siteplan.towers import free_stretches
 from siteplan.units import sqm_to_sqft
 
 LIBRARY = FlatLibrary(
@@ -38,6 +40,37 @@ def test_every_option_passes_the_layout_rules(plot):
         assert all(f.status is Status.PASS for f in findings), [
             (f.rule, f.measured) for f in findings if f.status is not Status.PASS
         ]
+
+
+@pytest.mark.parametrize("plot", [box(0, 0, 150, 100), L_PLOT], ids=["rectangle", "L-shape"])
+def test_no_option_fails_any_rule_the_checker_applies(plot):
+    """A candidate that fails a mandatory rule is rejected, never offered."""
+    for option in solve(plot, LIBRARY, REQUEST):
+        assert option.fails == [], [(f.rule, f.measured) for f in option.fails]
+        rules = {f.rule for f in option.findings}
+        assert {"Internal roads: main approach", "Internal roads: every block served",
+                "Fire access: reached from the entrance", "Parking (Table V)"} <= rules
+
+
+def test_nothing_stands_on_a_road_or_fire_lane_and_every_block_is_on_a_road():
+    for option in solve(L_PLOT, LIBRARY, REQUEST):
+        roads = unary_union([r.shape for r in option.roads])
+        lanes = unary_union([roads, option.fire_lanes])
+        things = [*(a.shape for a in option.amenities), *option.parking_bays,
+                  *option.open_space, *option.ramps]
+        if option.club_house is not None:
+            things.append(option.club_house)
+        assert all(t.intersection(lanes).area < 0.5 for t in things)
+        assert all(t.footprint.distance(roads) < 0.5 for t in option.towers)
+        assert {r.kind for r in option.roads} >= {"loop", "main approach"}
+
+
+def test_without_a_firm_standard_tower_length_is_explored_and_a_standard_is_obeyed():
+    free = solve(box(0, 0, 150, 100), LIBRARY, REQUEST)
+    assert max(t.length_m for o in free for t in o.towers) > 45
+    capped = solve(box(0, 0, 150, 100), LIBRARY,
+                   REQUEST.model_copy(update={"max_tower_length_m": 40.0}))
+    assert capped and all(t.length_m <= 40.0 + 1e-6 for o in capped for t in o.towers)
 
 
 def test_geometry_is_honest_independently_of_the_checker():
@@ -110,25 +143,28 @@ def test_exports_write_buildnow_layers_and_a_preview(tmp_path):
     option = solve(plot, LIBRARY, REQUEST)[0]
     doc = ezdxf.readfile(write_layout_dxf(option, plot, tmp_path / "o.dxf"))
     layers = {e.dxf.layer for e in doc.modelspace()}
-    assert {"Plot", "Building Plan", "Dwelling Unit", "Organized Open Space"} <= layers
+    assert {"Plot", "Building Plan", "Dwelling Unit", "Organized Open Space", "SOLVER-ROADS",
+            "SOLVER-ENTRANCE"} <= layers
     svg = write_layout_svg(option, plot, tmp_path / "o.svg", "Test <site>").read_text()
     assert svg.startswith("<svg") and "Test &lt;site&gt;" in svg
 
 
-def test_every_square_foot_of_a_plate_is_sold():
-    """A flat is sold on its share of the corridor and the cores as well as its own walls.
-
-    Summing the flats' own footprints instead reported 364,192 sft of sales on a 455,518 sft
-    building, less floor sold than drawn, and no test noticed.
-    """
+def test_the_areas_are_kept_apart_and_saleable_comes_from_the_flats():
+    """The plate is tower floor, not saleable area: saleable is each flat's own sale area from
+    the library times the flats placed, and the corridor and cores are counted on their own."""
     plot = box(0, 0, 150, 100)
     option = solve(plot, LIBRARY, REQUEST)[0]
     summary = option.summary()
-    assert summary["saleable_sqft"] == round(sqm_to_sqft(option.residential_plate_sqm))
-    assert summary["saleable_sqft"] > summary["flat_footprint_sqft"]
-    assert summary["loading_pct"] > 0
+    assert summary["tower_floor_sqft"] == round(sqm_to_sqft(option.tower_floor_sqm))
+    parts = summary["flats_own_sqft"] + summary["common_core_sqft"]
+    assert abs(parts - summary["tower_floor_sqft"]) <= 1
+    sale = {f.name: f.saleable_sqft for f in LIBRARY.flats}
+    placed = sum(2 * sale[f.name] for t in option.towers for f in t.flats_per_side)
+    assert summary["saleable_sqft"] == round(placed * option.floors)
+    assert summary["common_core_sqft"] > 0
     # The amenities block is common ground, so it is built but never sold.
-    assert summary["built_up_sqft"] >= summary["saleable_sqft"]
+    assert summary["built_up_sqft"] > summary["tower_floor_sqft"]
+    assert summary["amenity_sqft"] > 0 and summary["parking_sqft"] > 0
 
 
 def test_the_flats_are_visible_in_the_preview(tmp_path):

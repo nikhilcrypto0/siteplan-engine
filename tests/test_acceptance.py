@@ -50,7 +50,10 @@ def generated(tmp_path_factory):
 
 def test_generation_needs_only_the_survey_the_answers_and_the_firms_libraries(generated):
     assert generated.options and generated.limit.floors_stilt_counted == 9  # a 60 ft road
-    assert generated.options[0]["heights_tried"][0]["floors_above_stilt"] == 9
+    tried = generated.options[0]["heights_tried"]
+    assert (tried[0]["floors_above_stilt"], tried[0]["verdict"]) == (10, "FAIL (law)")
+    assert "Abutting road width" in tried[0]["reasons"][0]
+    assert tried[1]["floors_above_stilt"] == 9
     assert (generated.out / "project.json").exists()
 
 
@@ -61,7 +64,22 @@ def test_the_comparison_reads_the_firms_plan_only_now_and_measures_both_the_same
     assert rows["Least setback from the plot line"][1] == "8.00 m"
     ours = float(rows["Least setback from the plot line"][0].split()[0])
     assert ours >= 9.99  # 30 m of building asks 10 m (Table IV), measured off the DXF
-    assert "Compared with the firm" in report(generated, compare(generated, _firm_case()))
+    assert "COMPARED WITH THE FIRM'S PLAN" in report(generated, compare(generated, _firm_case()))
+
+
+def test_the_report_carries_every_section_the_acceptance_asks_for(generated):
+    text = report(generated, compare(generated, _firm_case()))
+    for heading in ("1. EXTRACTED FROM THE SURVEY", "2. INPUTS AND HOW FAR EACH IS TRUSTED",
+                    "3. UNRESOLVED FACTS AND ASSUMPTIONS", "4. HEIGHT",
+                    "Maximum legally allowed", "Maximum geometrically feasible",
+                    "5. LAYOUTS THAT PASS", "6. REJECTED CANDIDATES",
+                    "7. COMPARED WITH THE FIRM'S PLAN"):
+        assert heading in text, heading
+    for line in ("Flats:", "Areas: tower floor", "Roads:", "Fire access:", "Parking: required",
+                 "Tot-lot:", "Club house:", "Setbacks and spacing:", "Rules:"):
+        assert line in text, line
+    assert "[UNVERIFIED]" in text  # the dead end and the coordinates were not given
+    assert " FAIL " not in text.split("5. LAYOUTS THAT PASS")[1].split("6. REJECTED")[0]
 
 
 def test_towers_are_read_back_from_the_delivered_dxf(generated):

@@ -16,13 +16,19 @@ LAYERS = {
     "Building Plan": 7,
     "Dwelling Unit": 3,
     "Organized Open Space": 94,
-    "Driveway": 253,
     "Parking": 51,
     "SITE-AMENITIES": 140,
-    "SOLVER-GATES": 1,
+    "SOLVER-ROADS": 253,
+    "SOLVER-FIRE-LANES": 30,
+    "SOLVER-GREEN-STRIP": 82,
+    "SOLVER-ENTRANCE": 1,
+    "SOLVER-RAMPS": 5,
+    "SOLVER-CELLAR": 8,
     "SOLVER-CORES": 8,
     "SOLVER-LABELS": 7,
 }
+ROAD_LABELS = {"loop": "LOOP ROAD", "main approach": "MAIN APPROACH ROAD",
+               "internal": "INTERNAL ROAD", "cul-de-sac": "CUL-DE-SAC"}
 
 
 def _ring(polygon: Polygon) -> list[tuple[float, float]]:
@@ -30,10 +36,12 @@ def _ring(polygon: Polygon) -> list[tuple[float, float]]:
 
 
 def _parts(shape) -> list[Polygon]:
-    """The driveway ring can come back as several pieces; nothing is one piece for free."""
+    """Roads and lanes come back as several pieces; nothing is one piece for free."""
     if shape is None or shape.is_empty:
         return []
-    return [shape] if isinstance(shape, Polygon) else [p for p in shape.geoms]
+    if isinstance(shape, Polygon):
+        return [shape]
+    return [p for p in getattr(shape, "geoms", []) if isinstance(p, Polygon)]
 
 
 def write_layout_dxf(option: LayoutOption, plot: Polygon, path: str | Path) -> Path:
@@ -45,29 +53,44 @@ def write_layout_dxf(option: LayoutOption, plot: Polygon, path: str | Path) -> P
 
     def add(polygon: Polygon, layer: str) -> None:
         msp.add_lwpolyline(_ring(polygon), close=True, dxfattribs={"layer": layer})
+        for hole in polygon.interiors:
+            msp.add_lwpolyline([(x, y) for x, y in list(hole.coords)[:-1]], close=True,
+                               dxfattribs={"layer": layer})
+
+    def label(text: str, at, height: float) -> None:
+        msp.add_text(text, height=height, dxfattribs={"layer": "SOLVER-LABELS"}
+                     ).set_placement((at.x, at.y))
 
     add(plot, "Plot")
-    for part in _parts(option.driveway):
-        add(part, "Driveway")
+    for part in _parts(option.green_strip):
+        add(part, "SOLVER-GREEN-STRIP")
+    for road in option.roads:
+        for part in _parts(road.shape):
+            add(part, "SOLVER-ROADS")
+        biggest = max(_parts(road.shape), key=lambda p: p.area, default=None)
+        if biggest is not None:
+            label(f"{ROAD_LABELS.get(road.kind, road.kind.upper())} {road.width_m:g} M",
+                  biggest.representative_point(), 2.0)
+    for part in _parts(option.fire_lanes):
+        add(part, "SOLVER-FIRE-LANES")
+    if option.entrance is not None:
+        for part in _parts(option.entrance.gate):
+            add(part, "SOLVER-ENTRANCE")
+        label("MAIN ENTRANCE", option.entrance.gate.centroid, 2.5)
+    if option.parking is not None and option.parking.cellar_outline is not None:
+        for part in _parts(option.parking.cellar_outline):
+            add(part, "SOLVER-CELLAR")
+    for ramp in option.ramps:
+        add(ramp, "SOLVER-RAMPS")
+        label("RAMP 1:8", ramp.centroid, 2.0)
     if option.club_house is not None:
         add(option.club_house, "Building Plan")
-        c = option.club_house.centroid
-        msp.add_text(
-            "CLUB HOUSE", height=3.0, dxfattribs={"layer": "SOLVER-LABELS"}
-        ).set_placement((c.x, c.y))
+        label("CLUB HOUSE", option.club_house.centroid, 3.0)
     for bay in option.parking_bays:
         add(bay, "Parking")
-    for name, gate in option.gates:
-        add(gate, "SOLVER-GATES")
-        c = gate.centroid
-        msp.add_text(name, height=2.5, dxfattribs={"layer": "SOLVER-LABELS"}).set_placement(
-            (c.x, c.y)
-        )
     for amenity in option.amenities:
         add(amenity.shape, "SITE-AMENITIES")
-        c = amenity.shape.centroid
-        msp.add_text(amenity.name, height=2.0, dxfattribs={"layer": "SOLVER-LABELS"}
-                     ).set_placement((c.x, c.y))
+        label(amenity.name, amenity.shape.centroid, 2.0)
     for pocket in option.open_space:
         add(pocket, "Organized Open Space")
     for tower in option.towers:
@@ -76,10 +99,7 @@ def write_layout_dxf(option: LayoutOption, plot: Polygon, path: str | Path) -> P
             add(flat, "Dwelling Unit")
         for core in tower.cores:
             add(core, "SOLVER-CORES")
-        c = tower.footprint.centroid
-        msp.add_text(tower.name, height=3.0, dxfattribs={"layer": "SOLVER-LABELS"}).set_placement(
-            (c.x, c.y)
-        )
+        label(tower.name, tower.footprint.centroid, 3.0)
     out = Path(path)
     out.parent.mkdir(parents=True, exist_ok=True)
     doc.saveas(out)
@@ -87,7 +107,7 @@ def write_layout_dxf(option: LayoutOption, plot: Polygon, path: str | Path) -> P
 
 
 def write_layout_svg(option: LayoutOption, plot: Polygon, path: str | Path, title: str) -> Path:
-    """A plain drawing for a browser: plot, open space, towers, flats, cores, labels."""
+    """A plain drawing for a browser: plot, roads, lanes, open space, towers, flats, labels."""
     minx, miny, maxx, maxy = plot.bounds
     pad = 12.0
     scale = 900 / max(maxx - minx + 2 * pad, maxy - miny + 2 * pad)
@@ -100,6 +120,12 @@ def write_layout_svg(option: LayoutOption, plot: Polygon, path: str | Path, titl
             for x, y in polygon.exterior.coords
         )
 
+    def text(at, words: str, size: int, colour: str, bold: bool = False) -> str:
+        weight = ' font-weight="700"' if bold else ""
+        return (f'<text x="{(at.x - minx + pad) * scale:.1f}" '
+                f'y="{(maxy - at.y + pad) * scale + 70:.1f}" font-size="{size}"{weight} '
+                f'text-anchor="middle" fill="{colour}">{escape(words)}</text>')
+
     s = option.summary()
     lines = [
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{width:.0f}" height="{height:.0f}" '
@@ -107,40 +133,36 @@ def write_layout_svg(option: LayoutOption, plot: Polygon, path: str | Path, titl
         '<rect width="100%" height="100%" fill="#fbfbf8"/>',
         f'<text x="14" y="26" font-size="17" font-weight="700">{escape(title)}</text>',
         f'<text x="14" y="50" font-size="13" fill="#444">{s["towers"]} tower'
-        f'{"" if s["towers"] == 1 else "s"} · '
-        f'{s["total_flats"]} flats · {s["saleable_sqft"]:,} sft saleable · open space '
+        f'{"" if s["towers"] == 1 else "s"} · stilt + {option.floors} · '
+        f'{s["total_flats"]} flats · {s["saleable_sqft"]:,} sft saleable (flats) · tot-lot '
         f'{s["open_space_share_pct"]}% · mix {escape(str(s["unit_mix_achieved"]))}</text>',
         f'<polygon points="{pts(plot)}" fill="none" stroke="#ad2677" stroke-width="2"/>',
     ]
-    for part in _parts(option.driveway):
-        lines.append(f'<polygon points="{pts(part)}" fill="#ded9cc" stroke="#b0a894"/>')
+    for part in _parts(option.green_strip):
+        lines.append(f'<polygon points="{pts(part)}" fill="#d9ead0" stroke="none"/>')
+    for road in option.roads:
+        for part in _parts(road.shape):
+            lines.append(f'<polygon points="{pts(part)}" fill="#d6d2c6" stroke="#9c9587"/>')
+    for part in _parts(option.fire_lanes):
+        lines.append(f'<polygon points="{pts(part)}" fill="#f3e3c7" stroke="#d0a24c" '
+                     'stroke-dasharray="4 3"/>')
+    if option.entrance is not None:
+        for part in _parts(option.entrance.gate):
+            lines.append(f'<polygon points="{pts(part)}" fill="#f6d6cc" stroke="#bd3b27"/>')
+        lines.append(text(option.entrance.gate.centroid, "ENTRANCE", 10, "#bd3b27", True))
+    for ramp in option.ramps:
+        lines.append(f'<polygon points="{pts(ramp)}" fill="#6d7f99" stroke="#34445c"/>')
+        lines.append(text(ramp.centroid, "RAMP", 9, "#ffffff", True))
     if option.club_house is not None:
-        c = option.club_house.centroid
-        lines.append(
-            f'<polygon points="{pts(option.club_house)}" fill="#cfd8e8" stroke="#3a5a8c"/>'
-        )
-        lines.append(
-            f'<text x="{(c.x - minx + pad) * scale:.1f}" y="{(maxy - c.y + pad) * scale + 70:.1f}" '
-            f'font-size="11" font-weight="700" text-anchor="middle" fill="#3a5a8c">CLUB</text>'
-        )
+        lines.append(f'<polygon points="{pts(option.club_house)}" fill="#cfd8e8" '
+                     'stroke="#3a5a8c"/>')
+        lines.append(text(option.club_house.centroid, "CLUB", 11, "#3a5a8c", True))
     for bay in option.parking_bays:
-        lines.append(
-            f'<polygon points="{pts(bay)}" fill="#f0ece0" stroke="#9a9384" stroke-width="0.5"/>'
-        )
-    for name, gate in option.gates:
-        c = gate.centroid
-        lines.append(f'<polygon points="{pts(gate)}" fill="#f6d6cc" stroke="#bd3b27"/>')
-        lines.append(
-            f'<text x="{(c.x - minx + pad) * scale:.1f}" y="{(maxy - c.y + pad) * scale + 70:.1f}" '
-            f'font-size="10" font-weight="700" text-anchor="middle" fill="#bd3b27">{name}</text>'
-        )
+        lines.append(f'<polygon points="{pts(bay)}" fill="#f0ece0" stroke="#9a9384" '
+                     'stroke-width="0.5"/>')
     for amenity in option.amenities:
-        c = amenity.shape.centroid
         lines.append(f'<polygon points="{pts(amenity.shape)}" fill="#cde7ef" stroke="#3b7f96"/>')
-        lines.append(
-            f'<text x="{(c.x - minx + pad) * scale:.1f}" y="{(maxy - c.y + pad) * scale + 70:.1f}" '
-            f'font-size="9" text-anchor="middle" fill="#2b5d6e">{escape(amenity.name)}</text>'
-        )
+        lines.append(text(amenity.shape.centroid, amenity.name, 9, "#2b5d6e"))
     for pocket in option.open_space:
         lines.append(f'<polygon points="{pts(pocket)}" fill="#bfdcaa" stroke="#47762c"/>')
     for tower in option.towers:
@@ -154,12 +176,7 @@ def write_layout_svg(option: LayoutOption, plot: Polygon, path: str | Path, titl
             )
         for core in tower.cores:
             lines.append(f'<polygon points="{pts(core)}" fill="#8a8a8a"/>')
-        c = tower.footprint.centroid
-        lines.append(
-            f'<text x="{(c.x - minx + pad) * scale:.1f}" y="{(maxy - c.y + pad) * scale + 70:.1f}" '
-            f'font-size="14" font-weight="700" text-anchor="middle" fill="#bd3b27">'
-            f"{escape(tower.name)}</text>"
-        )
+        lines.append(text(tower.footprint.centroid, tower.name, 14, "#bd3b27", True))
     lines.append("</svg>")
     out = Path(path)
     out.parent.mkdir(parents=True, exist_ok=True)

@@ -23,9 +23,8 @@ from siteplan.intake import (
     missing,
     questions,
 )
-from siteplan.layout import LayoutRequest
+from siteplan.provenance import Provenance
 from siteplan.roads import Road
-from siteplan.runner import heights_to_try
 
 ROAD = Road(width_m=14.08, lines_m=(0.0, 7.0, 8.0, 14.08), distance_m=10.5, side="W",
             direction_deg=90.0, sections=20)
@@ -146,12 +145,41 @@ def test_a_strip_named_for_a_side_comes_off_that_side():
     assert north.bounds[3] == pytest.approx(60 - 1000 / 100, abs=0.05)
 
 
-def test_maximise_tries_the_most_floors_and_the_two_below_but_stays_high_rise():
-    def request(floors):
-        return LayoutRequest(floors=floors, unit_mix={"2BHK": 1.0}, maximise=True)
-    assert heights_to_try(request(9)) == [9, 8, 7]
-    assert heights_to_try(request(7)) == [7, 6]  # 6 floors on a 3 m stilt is 21 m
-    assert heights_to_try(request(6)) == [6]
+def test_every_value_says_how_far_it_can_be_trusted():
+    status = build_project(_draft(), ANSWERS)["status"]
+    assert status["gross_area_sqm"] == Provenance.EXTRACTED
+    assert status["measured_carriageway_m"] == Provenance.EXTRACTED
+    assert status["access_side"] == Provenance.EXTRACTED  # the chosen road's side, off the survey
+    assert status["abutting_road"] == Provenance.USER_CONFIRMED  # declared on the site plan
+    assert status["road_dead_end"] == Provenance.UNVERIFIED  # answered 'unknown'
+    assert status["street_joins_12m"] == Provenance.UNVERIFIED  # left at its default
+    assert status["authority"] == Provenance.USER_CONFIRMED
+    assert status["site_coordinates"] == Provenance.UNVERIFIED
+    assert status["flat_library"] == Provenance.ASSUMED_FOR_TEST  # the engine's, not the firm's
+    certified = build_project(_draft(), ANSWERS | {"road_row_source": "1"})["status"]
+    assert certified["abutting_road"] == Provenance.VERIFIED
+
+
+def test_an_answers_file_can_mark_a_value_unverified_or_assumed_for_a_test():
+    marked = ANSWERS | {"_status": {"authority": "UNVERIFIED", "road_row": "ASSUMED_FOR_TEST"}}
+    status = build_project(_draft(), marked)["status"]
+    assert status["authority"] == Provenance.UNVERIFIED
+    assert status["abutting_road"] == Provenance.ASSUMED_FOR_TEST
+
+
+def test_the_access_side_and_the_street_it_joins_go_into_the_project():
+    site = build_project(_draft(), ANSWERS | {"street_join": "yes"})["site"]
+    assert site["access_side"] == "W" and site["street_joins_12m"] is True
+
+
+def test_workspace_standards_set_by_the_firm_are_confirmed_and_the_rest_assumed():
+    defaults = WorkspaceDefaults(flat_library="flats.json", max_cellars=2,
+                                 status={"floor_height_m": "ASSUMED_FOR_TEST"})
+    project = build_project(_draft(), ANSWERS, defaults)
+    assert project["layout"]["max_cellars"] == 2
+    assert project["status"]["flat_library"] == Provenance.USER_CONFIRMED
+    assert project["status"]["floor_height_m"] == Provenance.ASSUMED_FOR_TEST
+    assert project["status"]["cellar_floor_height_m"] == Provenance.ASSUMED_FOR_TEST
 
 
 def _dxf_survey(path):

@@ -87,12 +87,25 @@ def test_the_layout_keeps_every_tower_off_the_buffer():
     zone = NALA.buffer(9.0)
     options = solve(PLOT, LIBRARY, REQUEST, abutting_road_m=18.0, keep_out=zone)
     assert options
-    for option in options:  # a block may stand on the buffer's edge, exactly 9 m off
+    for option in options:
         assert all(t.footprint.intersection(zone).area < 0.01 for t in option.towers)
         assert all(bay.intersection(zone).area < 0.01 for bay in option.parking_bays)
-        assert any(t.footprint.distance(NALA) < 9.5 for t in option.towers)  # it did use the edge
+        # A road's width off the buffer, so the loop road can run along it.
+        assert all(t.footprint.distance(zone) >= 9.0 - 0.02 for t in option.towers)
         finding = {f.rule: f for f in option.findings}["Water-body buffer"]
         assert finding.status is Status.PASS
+
+
+def test_land_across_the_water_from_the_entrance_is_left_unbuilt():
+    """No crossing over the nala is drawn, so a fire tender could not reach a tower beyond it;
+    the towers all stand on the entrance's side."""
+    zone = NALA.buffer(9.0)
+    for option in solve(PLOT, LIBRARY, REQUEST, abutting_road_m=18.0, keep_out=zone,
+                        access_side="W"):
+        assert option.entrance.gate.centroid.x < 75
+        assert all(t.footprint.centroid.x < 75 for t in option.towers)
+        assert {f.rule: f for f in option.findings}[
+            "Fire access: reached from the entrance"].status is Status.PASS
 
 
 def test_a_tower_standing_in_the_buffer_fails():
