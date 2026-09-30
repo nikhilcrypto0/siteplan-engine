@@ -57,6 +57,7 @@ class WorkspaceDefaults(BaseModel):
     floor_height_m: PositiveFloat = 3.0
     stilt_height_m: PositiveFloat = 3.0
     common_area_pct: float = 22.0
+    max_tower_length_m: PositiveFloat | None = None  # the firm's longest block; else the engine's
 
 
 def load_defaults(folder: str | Path) -> WorkspaceDefaults:
@@ -284,6 +285,8 @@ def build_project(draft: Draft, answers: dict[str, str],
         "club_house": _yes_no(given["club_house"]),
         "options": 3,
     }
+    if defaults.max_tower_length_m:
+        layout["max_tower_length_m"] = defaults.max_tower_length_m
     if given["floors"].lower() == "max":
         layout["floors"] = _most_floors(site, draft, defaults)
         layout["maximise"] = True

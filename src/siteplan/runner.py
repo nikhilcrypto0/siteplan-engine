@@ -120,7 +120,7 @@ def run_layout(
         # Taller blocks need wider setbacks and gaps, so the most floors need not sell most.
         runs = [at(floors) for floors in heights_to_try(request)]
         tried = [{"floors_above_stilt": r.floors, "options": len(o),
-                  "best_saleable_sqft": max((x.saleable_sqft for x in o), default=0)}
+                  "best_saleable_sqft": round(max((x.saleable_sqft for x in o), default=0))}
                  for r, o in runs]
         request, options = max(runs, key=lambda run: max(
             (x.saleable_sqft for x in run[1]), default=-1))

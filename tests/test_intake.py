@@ -124,6 +124,12 @@ def test_unanswered_questions_are_named_before_anything_is_built():
         build_project(_draft(), answers)
 
 
+def test_the_firms_longest_block_is_a_workspace_default():
+    layout = build_project(_draft(), ANSWERS, WorkspaceDefaults(max_tower_length_m=56))["layout"]
+    assert layout["max_tower_length_m"] == 56
+    assert "max_tower_length_m" not in build_project(_draft(), ANSWERS)["layout"]
+
+
 def test_workspace_defaults_are_the_firms_libraries_and_heights(tmp_path):
     assert load_defaults(tmp_path) == WorkspaceDefaults()
     (tmp_path / "siteplan.workspace.json").write_text(json.dumps(

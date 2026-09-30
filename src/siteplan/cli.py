@@ -173,6 +173,26 @@ def _cmd_start(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_acceptance(args: argparse.Namespace) -> int:
+    """Raw survey and answers -> layouts; only then is the firm's plan read, to compare."""
+    from siteplan.acceptance import compare, generate, report
+    from siteplan.cases import Case
+
+    out = Path(args.out)
+    generated = generate(Path(args.survey), json.loads(Path(args.answers).read_text()), out,
+                         Path(args.workspace) if args.workspace else None)
+    if not generated.options:
+        print("No tower fits inside the setbacks with the required open space.")
+        return 1
+    case = Case.model_validate_json(Path(args.firm_case).read_text())  # read only now
+    statement = (Project.model_validate_json(Path(args.firm_project).read_text()).area_statement
+                 if args.firm_project else None)
+    text = report(generated, compare(generated, case, statement))
+    (out / "acceptance.txt").write_text(text + "\n")
+    print(text + f"\n\nWrote the options and acceptance.txt to {out}/")
+    return 0
+
+
 def _cmd_new(args: argparse.Namespace) -> int:
     """Ask a few questions and write the project file the other commands read."""
     print("A few questions about the site. Press enter to take the value in brackets.\n")
@@ -418,6 +438,16 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--out", help="Where to write the project (default: the workspace)")
     p.add_argument("--force", action="store_true", help="Replace an existing project file")
     p.set_defaults(run=_cmd_start)
+
+    p = sub.add_parser("acceptance", help="Raw survey + answers -> layouts, then compared with "
+                       "the firm's own plan, which is read only after they are drawn.")
+    p.add_argument("survey")
+    p.add_argument("--answers", required=True, help="The architect's answers, as JSON")
+    p.add_argument("--firm-case", required=True, help="The firm's plan, as a case file")
+    p.add_argument("--firm-project", help="A project file holding the firm's area statement")
+    p.add_argument("--workspace", help=f"Folder with {WORKSPACE_FILE} (default: the survey's)")
+    p.add_argument("--out", default="out/acceptance")
+    p.set_defaults(run=_cmd_acceptance)
 
     p = sub.add_parser("layout", help="Generate tower layout options for a project.")
     p.add_argument("project")
