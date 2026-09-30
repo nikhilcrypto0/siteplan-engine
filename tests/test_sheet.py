@@ -42,6 +42,17 @@ def test_every_tower_and_the_site_are_dimensioned(drawing):
     assert len(dims) == len(option.towers) + 2    # the two site extents, plus each tower
 
 
+def test_dimensions_read_in_metres_as_drawn_and_as_cad_redraws_them(drawing):
+    """ezdxf's EZDXF style multiplies by 100 for centimetres: a 150 m plot read '15000'."""
+    doc, _ = drawing
+    dims = [e for e in doc.modelspace() if e.dxftype() == "DIMENSION"]
+    shown = [t.plain_text() for d in dims for t in doc.blocks.get(d.dxf.geometry)
+             if t.dxftype() == "MTEXT"]
+    assert "150" in shown and "120" in shown  # the plot is 150 m by 120 m
+    assert not any(text.startswith(("15000", "12000")) for text in shown)
+    assert all(d.override().get("dimlfac") == 1.0 for d in dims)  # what ZWCAD regenerates from
+
+
 def test_the_sheet_says_what_it_is(drawing):
     doc, _ = drawing
     text = " ".join(e.dxf.text for e in doc.modelspace().query("TEXT"))

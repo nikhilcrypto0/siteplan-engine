@@ -152,8 +152,9 @@ def _dimension(msp, plot: Polygon, option: LayoutOption, m: float) -> None:
     style = {
         "dimstyle": "EZDXF",
         "dxfattribs": {"layer": "SHEET-DIMENSIONS"},
+        # dimlfac 1: ezdxf's EZDXF style multiplies by 100 (centimetres); the sheet reads metres
         "override": {"dimtxt": 2.2 * m, "dimasz": 2.0 * m, "dimexe": 1.0 * m,
-                     "dimexo": 1.0 * m, "dimdec": 2},
+                     "dimexo": 1.0 * m, "dimdec": 2, "dimlfac": 1.0},
     }
     msp.add_linear_dim(base=(minx, miny - 9 * m), p1=(minx, miny), p2=(maxx, miny),
                        **style).render()
