@@ -18,6 +18,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import re
 import uuid
 import webbrowser
 from collections.abc import Callable
@@ -37,13 +38,21 @@ from siteplan.area_statement import render
 from siteplan.assistant import Assistant, BriefExtraction, compare_options
 from siteplan.checks import check_site
 from siteplan.guards import sanitize_brief
+from siteplan.intake import WORKSPACE_FILE, build_project, extract, load_defaults, questions, save
 from siteplan.layout import LayoutRequest
 from siteplan.library import FlatLibrary
 from siteplan.max_floors import max_floors as floor_limit
 from siteplan.project import Project
 from siteplan.result_page import write_result_page
 from siteplan.rulebook import RuleBook
-from siteplan.runner import LAYOUT_CAVEAT, load_plot, load_water, read_survey, run_layout
+from siteplan.runner import (
+    LAYOUT_CAVEAT,
+    heights_to_try,
+    load_plot,
+    load_water,
+    read_survey,
+    run_layout,
+)
 from siteplan.site_amenities import AmenityLibrary
 
 log = logging.getLogger("siteplan.mcp")
@@ -51,6 +60,7 @@ log = logging.getLogger("siteplan.mcp")
 READ_ONLY = ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False)
 WRITES_FILES = ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False)
 SURVEY_TYPES = {".pdf", ".dxf"}
+PROJECTS = "projects"  # where finish_project writes, inside the runs folder
 MAX_LISTED = 200
 MAX_BRIEF_CHARS = 2000
 APPROVAL_TIMEOUT_S = 300
@@ -63,7 +73,11 @@ OPTION_KEYS = ("option", "towers", "total_flats", "saleable_sqft", "built_up_sqf
 INSTRUCTIONS = (
     "Site-planning tools for Telangana group housing. Every number these tools return is "
     "computed; quote them as given and never estimate areas, setbacks or flat counts yourself. "
-    "Call list_files first to find project, survey and flat-library files. propose_layouts asks "
+    "Call list_files first to find project, survey and flat-library files. To start a new "
+    "project from a raw survey, call start_project: it returns what the survey settles and the "
+    "questions it cannot. Ask the architect those questions, showing each default, and pass "
+    "their answers in their own words to finish_project; never answer one yourself. "
+    "propose_layouts asks "
     "the architect to approve before it draws anything; if it reports that the architect did "
     "not approve, do not call it again unless the architect asks. "
     "For any question about the building rules, call rules_for_height or search_rules and "
@@ -98,8 +112,12 @@ class Workspace:
         return path
 
     def project(self, name: str) -> Project:
+        """A project file from the workspace, or one finish_project wrote to the runs folder."""
+        made = (self.out / name).resolve()
+        path = (made if made.is_relative_to(self.out / PROJECTS) and made.suffix == ".json"
+                and made.is_file() else self.file(name, {".json"}))
         try:
-            return Project.model_validate_json(self.file(name, {".json"}).read_text())
+            return Project.model_validate_json(path.read_text())
         except ValidationError as exc:
             raise ToolError(f"'{name}' is not a valid project file ({_fields(exc)}).") from None
 
@@ -159,9 +177,14 @@ def _json_kind(path: Path) -> str | None:
 def approval_request(project: str, plot: str, request: LayoutRequest, reading: dict) -> tuple:
     """What the architect is shown before anything is drawn: a title and one line per value."""
     mix = ", ".join(f"{k} {v * 100:.0f}%" for k, v in sorted(request.unit_mix.items()))
+    floors = f"Floors above the stilt: {request.floors} (height {request.height_m:g} m)"
+    if request.maximise:
+        tried = ", ".join(f"stilt + {f}" for f in heights_to_try(request))
+        floors = (f"Floors above the stilt: the most the rules allow, {request.floors} (height "
+                  f"{request.height_m:g} m); tries {tried} and keeps the one that sells most")
     lines = [
         f"Plot: {plot}",
-        f"Floors above the stilt: {request.floors} (height {request.height_m:g} m)",
+        floors,
         f"Unit mix: {mix}",
         f"Stilt {request.stilt_height_m:g} m, floor-to-floor {request.floor_height_m:g} m, "
         f"common area {request.common_area_pct:g}%",
@@ -198,6 +221,45 @@ def build_server(workspace: Path, out_dir: Path, approval: str = "elicit",
             return read_survey(ws.file(survey_file, SURVEY_TYPES)).summary()
         except ValueError as exc:
             raise ToolError(str(exc)) from None
+
+    @server.tool(annotations=READ_ONLY)
+    def start_project(survey_file: str) -> dict[str, Any]:
+        """Start a project from a raw survey (PDF or DXF). Returns what the survey settles by
+        itself (the plot and its areas, the roads measured across themselves, marks such as
+        ROAD WIDENING or NALA, the village and mandal) and the questions it cannot settle. Ask
+        the architect every question, showing its default, and pass their answers to
+        finish_project. Never answer a question yourself, and never pick a nala's colour from
+        the lines listed near it: they are offered, not chosen."""
+        try:
+            draft = extract(ws.file(survey_file, SURVEY_TYPES))
+        except ValueError as exc:
+            raise ToolError(str(exc)) from None
+        asked = [{"key": q.key, "question": q.prompt, "default": q.default,
+                  "example": q.example} | (
+                     {"asked_only_if": "road_row is a width, not 'as drawn'"}
+                     if q.when is not None else {}) for q in questions(draft)]
+        return {"survey": draft.as_dict(), "questions": asked,
+                "next": "Ask the architect these questions, then call finish_project with "
+                        "survey_file and their answers, keyed as asked."}
+
+    @server.tool(annotations=WRITES_FILES)
+    def finish_project(survey_file: str, answers: dict[str, str]) -> dict[str, Any]:
+        """Write the project from the survey and the architect's answers to start_project's
+        questions (keyed as asked; one left out takes the default shown). Returns the
+        project_file to pass to propose_layouts. 'max' floors is worked out here, from the
+        rules, not by you."""
+        survey = ws.file(survey_file, SURVEY_TYPES)
+        try:
+            project = build_project(extract(survey), answers, load_defaults(ws.root))
+        except ValueError as exc:
+            raise ToolError(str(exc)) from None
+        slug = re.sub(r"[^a-z0-9]+", "-", project["name"].lower()).strip("-") or "project"
+        name = f"{PROJECTS}/{slug}.project.json"
+        save(project, ws.out / name)
+        return {"project_file": name, "project": project,
+                "next": f"Call propose_layouts with project_file '{name}' and survey_file "
+                        f"'{survey_file}'; the flat and amenity libraries are the firm's "
+                        "defaults."}
 
     @server.tool(annotations=READ_ONLY)
     def check_rules(project_file: str) -> list[dict]:
@@ -267,8 +329,10 @@ def build_server(workspace: Path, out_dir: Path, approval: str = "elicit",
     async def propose_layouts(
         ctx: Context,
         project_file: str,
-        library_file: str,
         brief: Annotated[str, Field(description="The architect's own words, copied exactly")],
+        library_file: Annotated[str | None, Field(
+            description=f"Flat library; left out, the firm's default in {WORKSPACE_FILE}"
+        )] = None,
         floors_above_stilt: Annotated[int | None, Field(
             description="Floors above the stilt: 'stilt + 8' means 8. Null if not stated"
         )] = None,
@@ -280,15 +344,20 @@ def build_server(workspace: Path, out_dir: Path, approval: str = "elicit",
         common_area_pct: float | None = None,
         survey_file: str | None = None,
         amenities_file: Annotated[str | None, Field(
-            description="Amenity library: pool, courts, play area, security cabin"
+            description="Amenity library (pool, courts, play area, security cabin); left out, "
+            "the firm's default"
         )] = None,
     ) -> dict[str, Any]:
         """Draw tower layout options (DXF for ZWCAD, an A1 drawing sheet and an SVG preview) from
-        a brief. Give amenities_file as well to lay out the pool, courts and play area. Pass
-        only values the architect stated; leave the rest null. The architect is asked to
-        approve the values before anything is drawn."""
+        a brief. Pass only values the architect stated; leave the rest null: a project made by
+        finish_project already holds the floors and the mix. The architect is asked to approve
+        the values before anything is drawn."""
         project = ws.project(project_file)
-        library = ws.library(library_file)
+        defaults = load_defaults(ws.root)
+        if not (library_file or defaults.flat_library):
+            raise ToolError(f"No flat library given, and none set in {WORKSPACE_FILE}.")
+        library = ws.library(library_file or defaults.flat_library)
+        amenities_file = amenities_file or defaults.amenities
         amenities = ws.amenities(amenities_file) if amenities_file else None
         unknown = set(unit_mix_percent or {}) - set(library.categories)
         if unknown:
@@ -307,6 +376,12 @@ def build_server(workspace: Path, out_dir: Path, approval: str = "elicit",
             ),
             clean.text,
         )
+        if project.sources and project.layout is not None:
+            # made by finish_project: the architect's own answers already set these
+            reading["missing"] = [m for m in reading["missing"]
+                                  if m not in ("floors above the stilt", "unit mix")]
+        if "floors" in reading["request"]:  # a height the architect names is not a maximum
+            reading["request"]["maximise"] = False
         if reading["missing"]:
             return {"solved": False, "missing": reading["missing"],
                     "next": "Ask the architect for these values. Do not guess them."}

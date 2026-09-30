@@ -10,6 +10,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 import anyio
+import ezdxf
 import pytest
 from browser_stub import clicker, read_page
 from mcp.shared.memory import create_connected_server_and_client_session
@@ -32,7 +33,8 @@ LAYOUT_ARGS = {
     "unit_mix_percent": {"2BHK": 70, "3BHK": 30},
 }
 READ_TOOLS = {"list_files", "read_survey_drawing", "check_rules", "area_statement",
-              "rules_for_height", "search_rules", "max_floors"}
+              "rules_for_height", "search_rules", "max_floors", "start_project"}
+WRITE_TOOLS = {"propose_layouts", "finish_project"}
 
 
 class Architect:
@@ -82,9 +84,9 @@ def nothing_drawn(ws):
 
 def test_tools_carry_honest_annotations(ws):
     tools = {t.name: t for t in call(ws, None).tools}
-    assert set(tools) == READ_TOOLS | {"propose_layouts"}
+    assert set(tools) == READ_TOOLS | WRITE_TOOLS
     assert all(tools[name].annotations.readOnlyHint for name in READ_TOOLS)
-    assert tools["propose_layouts"].annotations.readOnlyHint is False
+    assert not any(tools[name].annotations.readOnlyHint for name in WRITE_TOOLS)
 
 
 def test_list_files_classifies_the_workspace(ws):
@@ -301,3 +303,51 @@ def test_an_amenity_file_that_is_not_one_is_refused(ws):
     result = call(ws, "propose_layouts",
                   LAYOUT_ARGS | {"amenities_file": "example.project.json"}, Architect())
     assert result.isError and "amenity library" in result.content[0].text
+
+
+def _raw_survey(ws):
+    """A made-up survey as a surveyor sends it: a plot and its written area, nothing else."""
+    doc = ezdxf.new("R2018")
+    doc.header["$INSUNITS"] = 6
+    msp = doc.modelspace()
+    msp.add_lwpolyline([(0, 0), (120, 0), (120, 90), (0, 90)], close=True,
+                       dxfattribs={"layer": "SITE-BOUNDARY"})
+    msp.add_text("AREA: 10800 SQ.MTS", height=2).set_placement((10, -10))
+    doc.saveas(ws / "raw_survey.dxf")
+    return "raw_survey.dxf"
+
+
+ANSWERS = {"main_road": "W", "road_row": "60 ft", "road_row_source": "2", "surrender": "no",
+           "authority": "HMDA", "name": "Chat site", "mix": "70% 2BHK, 30% 3BHK",
+           "floors": "max"}
+
+
+def test_start_project_asks_only_what_the_survey_cannot_settle_and_writes_nothing(ws):
+    reply = ok(call(ws, "start_project", {"survey_file": _raw_survey(ws)}))
+    assert reply["survey"]["written_area_sqm"] == pytest.approx(10800)
+    keys = [q["key"] for q in reply["questions"]]
+    assert keys[:2] == ["main_road", "road_row"] and "surrender" in keys and "floors" in keys
+    assert not (ws / "out").exists()
+
+
+def test_a_project_from_answers_is_drawn_from_its_own_floors_and_the_firms_library(ws):
+    survey = _raw_survey(ws)
+    (ws / "siteplan.workspace.json").write_text(
+        json.dumps({"flat_library": "flat_library.example.json"}))
+    made = ok(call(ws, "finish_project", {"survey_file": survey, "answers": ANSWERS}))
+    assert made["project_file"] == "projects/chat-site.project.json"
+    assert (made["project"]["layout"]["floors"], made["project"]["layout"]["maximise"]) == (
+        9, True)
+    architect = Architect("decline")
+    reply = ok(call(ws, "propose_layouts", {"project_file": made["project_file"],
+                                            "brief": "Get the most out of the site.",
+                                            "survey_file": survey}, architect))
+    assert reply["solved"] is False and "missing" not in reply  # the answers set floors, mix
+    assert "the most the rules allow, 9" in architect.asked[0]
+    assert nothing_drawn(ws)
+
+
+def test_finish_project_names_what_was_left_unanswered(ws):
+    result = call(ws, "finish_project", {"survey_file": _raw_survey(ws),
+                                         "answers": ANSWERS | {"road_row": ""}})
+    assert result.isError and "road_row" in result.content[0].text
