@@ -183,9 +183,17 @@ PARKING_PERCENT_ELSEWHERE = 20.0
 PARKING_CLAUSE = "G.O.168 rule 13, Table V row 4 (Residential Apartment Complexes)"
 
 
-def parking_percent(authority: str | None) -> float:
-    """The Table V percentage of built-up area to be provided as parking."""
-    inside_ghmc = (authority or "").upper() == "GHMC"
+# G.O.Ms.No.45 of 05.02.2026 brought the Core Urban Region (CURE) under GHMC: "Building Rules ...
+# as applicable for GHMC area, shall be applicable to the entire CURE area". G.O.Ms.No.55 of
+# 11.02.2026 then made the Cyberabad Municipal Corporation out of CURE zones, so a site inside
+# CURE takes Table V's GHMC column whichever corporation it now falls in.
+CURE_RULES_CLAUSE = "G.O.Ms.No.45 of 2026 (GHMC's building rules across the Core Urban Region)"
+
+
+def parking_percent(authority: str | None, inside_cure: bool | None = None) -> float:
+    """The Table V percentage of built-up area to be provided as parking: the GHMC column in
+    GHMC or anywhere in CURE, the 20% column elsewhere."""
+    inside_ghmc = (authority or "").upper() == "GHMC" or bool(inside_cure)
     return PARKING_PERCENT_GHMC if inside_ghmc else PARKING_PERCENT_ELSEWHERE
 
 

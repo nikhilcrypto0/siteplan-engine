@@ -20,6 +20,7 @@ from siteplan.units import ft_to_m, parse_acre_gunta, sqft_to_sqm, sqyd_to_sqm
 
 Ring = list[tuple[float, float]]
 WaterKind = Literal[tuple(rules.WATER_BUFFER_M)]  # the classes rule 3(a)(ii) gives buffers for
+RoadWidthStatus = Literal["CERTIFIED_ROW", "DECLARED_ON_SITE_PLAN", "UNVERIFIED_DRAWING_VALUE"]
 
 
 def _ft(value: float | None) -> float | None:
@@ -94,8 +95,29 @@ class SiteIn(BaseModel):
     open_space_pockets_m: list[Ring] = []
     water: list[WaterIn] = []
     authority: str | None = Field(
-        None, description="GHMC, HMDA, DTCP...; the Table V parking percentage differs by one"
+        None, description="The body whose rules apply (GHMC, CMC, HMDA, DTCP...); the Table V "
+        "parking percentage differs by one"
     )
+    inside_cure: bool | None = Field(
+        None, description="Inside the Core Urban Region, where GHMC's building rules apply "
+        "(G.O.Ms.No.45 of 2026). Leave out when not known.")
+    abutting_road_status: RoadWidthStatus | None = Field(
+        None, description="How the abutting road width is known: a certified right of way, "
+        "declared on the site plan, or a value read off a drawing")
+    measured_carriageway_m: PositiveFloat | None = Field(
+        None, description="The road as the survey measures it; reported beside the declared "
+        "width, never used by the rules")
+    road_dead_end: bool | None = Field(
+        None, description="Does the access road end at the plot? Leave out when not known: a "
+        "survey line stopping at the boundary does not prove it")
+    proposed_floors: PositiveInt | None = Field(
+        None, description="Floors above the stilt the firm's drawings propose")
+    sanctioned_floors: PositiveInt | None = Field(
+        None, description="Floors above the stilt on the sanction; from an approval, never a "
+        "drawing")
+    site_coordinates: tuple[float, float] | None = Field(
+        None, description="Latitude and longitude. Without them airport and Air Force height "
+        "limits stay unverified.")
 
     @model_validator(mode="after")
     def _area_text_parses(self) -> SiteIn:
@@ -156,4 +178,7 @@ class Project(BaseModel):
             open_space_pockets=tuple(Polygon(p) for p in s.open_space_pockets_m),
             buildings=tuple(b.to_building() for b in self.buildings),
             authority=s.authority,
+            inside_cure=s.inside_cure,
+            abutting_road_status=s.abutting_road_status,
+            measured_carriageway_m=s.measured_carriageway_m,
         )

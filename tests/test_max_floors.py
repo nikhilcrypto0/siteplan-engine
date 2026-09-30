@@ -1,5 +1,6 @@
 """The most floors a plot can take: the road caps the height, the plot must be big enough."""
 
+import json
 import math
 
 import pytest
@@ -114,3 +115,30 @@ def test_the_command_takes_the_architects_word_on_a_dead_end(capsys):
     assert main(["floors", "--plot-sqyd", "22686", "--road-ft", "60", "--dead-end", "yes"]) == 0
     out = capsys.readouterr().out
     assert "road ends at the plot" in out and "stilt + 9" in out and "stilt + 10" not in out
+
+
+def test_a_project_file_says_what_is_declared_measured_and_unknown(tmp_path, capsys):
+    project = tmp_path / "p.project.json"
+    project.write_text(json.dumps({"name": "T", "site": {
+        "net_area_sqm": 18969, "abutting_road_ft": 60, "measured_carriageway_m": 14.08,
+        "abutting_road_status": "DECLARED_ON_SITE_PLAN", "authority": "CMC",
+        "inside_cure": True}}))
+    assert main(["floors", "--project", str(project)]) == 0
+    out = capsys.readouterr().out
+    assert "18.29 m declared (DECLARED_ON_SITE_PLAN)" in out and "14.08 m of carriageway" in out
+    assert "Road ends at the plot: UNKNOWN" in out and "- Dead end:" in out  # warned, not capped
+    assert "sanctioned UNKNOWN" in out and "Air Force height: UNVERIFIED" in out
+    assert "CMC, inside CURE" in out
+    assert main(["floors", "--project", str(project), "--dead-end", "yes"]) == 0
+    capped = capsys.readouterr().out
+    assert "Road ends at the plot: yes" in capped and "stilt + 10" not in capped
+
+
+def test_a_proposal_taller_than_the_road_allows_is_named(tmp_path, capsys):
+    project = tmp_path / "p.project.json"
+    project.write_text(json.dumps({"name": "T", "site": {
+        "net_area_sqm": 8064, "abutting_road_m": 12.4, "proposed_floors": 10}}))
+    assert main(["floors", "--project", str(project)]) == 0
+    out = capsys.readouterr().out
+    assert "stilt + 10, more than the stilt + 8 this road allows" in out
+    assert "the 3 TDR floors could cover it" in out

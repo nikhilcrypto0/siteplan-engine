@@ -113,6 +113,7 @@ def run_layout(
         authority=site.authority,
         amenities=amenities,
         keep_out=keep_out,
+        inside_cure=site.inside_cure,
     )
     summaries = []
     for i, option in enumerate(options, 1):

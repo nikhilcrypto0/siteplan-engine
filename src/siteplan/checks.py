@@ -71,6 +71,9 @@ class Site:
     surface_parking_sqm: float = 0.0
     units: int | None = None
     authority: str | None = None  # GHMC, HMDA, DTCP...; Table V differs by authority
+    inside_cure: bool | None = None  # G.O.Ms.No.45 of 2026: GHMC's building rules across CURE
+    abutting_road_status: str | None = None  # how the abutting road's width is known
+    measured_carriageway_m: float | None = None  # the survey's measure; never used by the rules
     water_buffer: Polygon | None = None  # lake, nala or river with its rule 3(a)(ii) buffer
 
 
@@ -204,27 +207,30 @@ def _amenity_finding(site: Site) -> Finding:
 
 
 def _parking_finding(site: Site) -> Finding:
-    percent = rules.parking_percent(site.authority)
+    percent = rules.parking_percent(site.authority, site.inside_cure)
     required = f">= {percent:g}% of built-up area"
+    clause = rules.PARKING_CLAUSE
+    if site.inside_cure:
+        clause = f"{clause}; {rules.CURE_RULES_CLAUSE}"
     if site.built_up_sqm is None:
-        return Finding("Parking", Status.NOT_CHECKED, "built-up area unknown", required,
-                       rules.PARKING_CLAUSE)
+        return Finding("Parking", Status.NOT_CHECKED, "built-up area unknown", required, clause)
     need = percent / 100 * site.built_up_sqm
     stilt = sum(b.footprint.area for b in site.buildings if b.footprint is not None)
     provided = stilt + site.surface_parking_sqm
     measured = f"stilt {stilt:,.0f} m² + surface {site.surface_parking_sqm:,.0f} m²"
     note = "Cellars and podium parking are not modelled."
-    if site.authority is None:
-        note += " Authority not given, so the 20% column is used; inside GHMC it is 30%."
+    if site.authority is None and site.inside_cure is None:
+        note += (" Authority not given, so the 20% column is used; inside GHMC or anywhere in "
+                 "CURE it is 30%.")
     if provided + 0.5 >= need:
         return Finding("Parking", Status.PASS, measured, f"{required} = {need:,.0f} m²",
-                       rules.PARKING_CLAUSE, note)
+                       clause, note)
     return Finding(
         "Parking",
         Status.NEEDS_INPUT,
         f"{measured}, short by {need - provided:,.0f} m²",
         f"{required} = {need:,.0f} m²",
-        rules.PARKING_CLAUSE,
+        clause,
         f"{note} Say where the rest goes (cellar or podium) to settle this.",
     )
 
@@ -302,14 +308,26 @@ def _road_finding(site: Site, tallest: str, band: rules.HeightBand) -> Finding:
     if site.abutting_road_m is None:
         return Finding(rule, Status.NEEDS_INPUT, "unknown", required, rules.TABLE_IV_CLAUSE)
     ok = site.abutting_road_m >= band.min_road_m
+    advice = "" if ok else "If the master plan widens this road, re-run with master_plan_road_m."
     return Finding(
         rule,
         Status.PASS if ok else Status.FAIL,
         f"{_m(site.abutting_road_m)} (existing)",
         required,
         rules.TABLE_IV_CLAUSE,
-        "" if ok else "If the master plan widens this road, re-run with master_plan_road_m.",
+        " ".join(part for part in (_road_basis(site), advice) if part),
     )
+
+
+def _road_basis(site: Site) -> str:
+    """How the width the rules used is known, beside what the survey measures of the road."""
+    parts = []
+    if site.abutting_road_status:
+        parts.append(f"Width status: {site.abutting_road_status}.")
+    if site.measured_carriageway_m is not None:
+        parts.append(f"The survey measures {_m(site.measured_carriageway_m)} of carriageway; "
+                     "the rules use the declared width.")
+    return " ".join(parts)
 
 
 def _plot_size_finding(site: Site) -> Finding:

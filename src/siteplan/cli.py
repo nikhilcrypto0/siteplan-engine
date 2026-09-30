@@ -91,7 +91,8 @@ def _cmd_layout(args: argparse.Namespace) -> int:
     )
     plot, basis = load_plot(project, args.survey)
     keep_out, water = load_water(project, args.survey)
-    print(f"Layout: {project.name}\nPlot: {plot.area:,.0f} m², {basis}\n")
+    print(f"Layout: {project.name}\nPlot: {plot.area:,.0f} m², {basis}")
+    print("\n".join(_site_facts(project, project.site.road_dead_end)) + "\n")
     if water:
         print(f"Water: {water}; {plot.intersection(keep_out).area:,.0f} m² of the plot\n")
     out = Path(args.out)
@@ -160,7 +161,18 @@ def _cmd_floors(args: argparse.Namespace) -> int:
     from siteplan.units import ft_to_m, sqyd_to_sqm
 
     road_m = ft_to_m(args.road_ft) if args.road_ft else args.road_m
-    if args.survey:
+    dead_end = {"yes": True, "no": False}.get(args.dead_end)
+    if args.project:
+        project = _load_project(args.project)
+        plot_sqm = project.site.net_sqm()
+        if plot_sqm is None:
+            raise ValueError("The project states no net area (net_area_sqyd or net_area_sqm).")
+        if road_m is None:
+            road_m = project.to_site().abutting_road_m
+        if args.dead_end is None:
+            dead_end = project.site.road_dead_end
+        print("\n".join(_site_facts(project, dead_end)) + "\n")
+    elif args.survey:
         survey = read_survey(Path(args.survey))
         plot_sqm = survey.stated_area_sqm or survey.area_sqm
         print(f"Plot from {args.survey}: {plot_sqm:,.0f} m²")
@@ -179,9 +191,50 @@ def _cmd_floors(args: argparse.Namespace) -> int:
         plot_sqm = sqyd_to_sqm(args.plot_sqyd) if args.plot_sqyd else args.plot_sqm
     if road_m is None:
         raise ValueError("Give the road width with --road-m or --road-ft.")
-    dead_end = {"yes": True, "no": False}.get(args.dead_end)
-    print(describe(max_floors(plot_sqm, road_m, args.floor_m, args.stilt_m, dead_end)))
+    limit = max_floors(plot_sqm, road_m, args.floor_m, args.stilt_m, dead_end)
+    print(describe(limit))
+    proposed = project.site.proposed_floors if args.project else None
+    if proposed and limit.floors_stilt_counted is not None:
+        print("\n" + _against_proposal(proposed, limit))
     return 0
+
+
+def _against_proposal(proposed: int, limit) -> str:
+    """The floors the firm's drawings propose, held against the most this road allows."""
+    most = max(limit.floors_stilt_counted, limit.floors_stilt_not_counted)
+    if proposed <= most:
+        return f"Proposed on the drawings: stilt + {proposed}, within what this road allows."
+    line = (f"Proposed on the drawings: stilt + {proposed}, more than the stilt + {most} this "
+            "road allows")
+    if limit.tdr_extra_floors and proposed <= most + limit.tdr_extra_floors:
+        line += f"; the {limit.tdr_extra_floors} TDR floors could cover it"
+    return line + "."
+
+
+def _site_facts(project: Project, dead_end: bool | None) -> list[str]:
+    """What the project knows about the site, and what it does not: printed before an answer."""
+    s, road_m = project.site, project.to_site().abutting_road_m
+    lines = []
+    if road_m is not None:
+        road = f"Road: {road_m:.2f} m declared ({s.abutting_road_status or 'status not given'})"
+        if s.measured_carriageway_m is not None:
+            road += (f"; the survey measures {s.measured_carriageway_m:.2f} m of carriageway, "
+                     "not used by the rules")
+        lines.append(road)
+    lines.append(f"Road ends at the plot: {_TRISTATE[dead_end]}")
+    cure = {True: "inside CURE", False: "outside CURE", None: "CURE not known"}[s.inside_cure]
+    lines.append(f"Jurisdiction: {s.authority or 'not given'}, {cure}")
+    floors = {n: f"stilt + {n}" for n in (s.proposed_floors, s.sanctioned_floors) if n}
+    lines.append(f"Floors: proposed {floors.get(s.proposed_floors, 'UNKNOWN')} (drawing), "
+                 f"sanctioned {floors.get(s.sanctioned_floors, 'UNKNOWN')}")
+    lines.append("Airport and Air Force height: UNVERIFIED, " + (
+        "no site coordinates" if s.site_coordinates is None
+        else f"not computed; read the maps at {s.site_coordinates[0]:.5f}, "
+             f"{s.site_coordinates[1]:.5f}"))
+    return lines
+
+
+_TRISTATE = {True: "yes", False: "no", None: "UNKNOWN"}
 
 
 def _cmd_cases(args: argparse.Namespace) -> int:
@@ -317,6 +370,8 @@ def main(argv: list[str] | None = None) -> int:
     plot.add_argument("--plot-sqm", type=float, help="Net plot area in m²")
     plot.add_argument("--plot-sqyd", type=float, help="Net plot area in square yards")
     plot.add_argument("--survey", help="Take the area, and list the roads, from a survey")
+    plot.add_argument("--project", help="Take the plot, declared road and site facts from a "
+                      "project file")
     road = p.add_mutually_exclusive_group()
     road.add_argument("--road-m", type=float, help="Legal width of the abutting road, metres")
     road.add_argument("--road-ft", type=float, help="Legal width of the abutting road, feet")

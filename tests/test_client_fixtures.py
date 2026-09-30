@@ -9,8 +9,10 @@ from pathlib import Path
 
 import pytest
 
+from siteplan import rules
 from siteplan.area_statement import render
 from siteplan.checks import check_site
+from siteplan.max_floors import max_floors
 from siteplan.pdf_survey import read_pdf_survey
 from siteplan.project import Project
 
@@ -62,3 +64,45 @@ def test_rule_check_statuses(expect):
     found = {f.rule: f.status.value for f in check_site(project.to_site())}
     for rule, status in expect["statuses"].items():
         assert found[rule] == status, rule
+
+
+# The test values set on 30 Sept 2026: unsanctioned fixtures, never evidence for a rule.
+DHULAPALLY = FIXTURES / "workspace" / "dhula-assumed.project.json"
+SUCHITRA = FIXTURES / "workspace" / "suchitra.project.json"
+
+
+def _project(path: Path) -> Project:
+    if not path.exists():
+        pytest.skip(f"{path.name} not present")
+    return Project.model_validate_json(path.read_text())
+
+
+def test_dhulapally_keeps_its_declared_road_apart_from_the_measured_one():
+    project = _project(DHULAPALLY)
+    site = project.to_site()
+    assert site.abutting_road_m == pytest.approx(18.288)
+    assert site.measured_carriageway_m == pytest.approx(14.08)
+    assert site.abutting_road_status == "DECLARED_ON_SITE_PLAN"
+    assert (site.authority, site.inside_cure) == ("CMC", True)
+    assert rules.parking_percent(site.authority, site.inside_cure) == rules.PARKING_PERCENT_GHMC
+    assert project.site.road_dead_end is None and project.site.site_coordinates is None
+
+
+@pytest.mark.parametrize("dead_end", [True, False])
+def test_dhulapally_is_run_both_ways_on_the_dead_end_nobody_knows(dead_end):
+    project = _project(DHULAPALLY)
+    limit = max_floors(project.site.net_sqm(), project.to_site().abutting_road_m,
+                       dead_end=dead_end)
+    nbc_note = any("4.6(b)" in note for note in limit.notes)
+    assert nbc_note is dead_end  # the residential 30 m rule speaks only on a dead end
+    assert limit.floors_stilt_not_counted == (9 if dead_end else 10)
+
+
+def test_suchitra_road_is_a_drawing_value_and_its_floors_only_proposed():
+    project = _project(SUCHITRA)
+    assert project.site.abutting_road_status == "UNVERIFIED_DRAWING_VALUE"
+    assert project.site.abutting_road_m == pytest.approx(12.4)
+    assert (project.site.proposed_floors, project.site.sanctioned_floors) == (10, None)
+    # the drawings propose stilt + 10 where a 12.4 m road allows stilt + 7 or 8
+    limit = max_floors(project.site.net_sqm(), project.site.abutting_road_m)
+    assert max(limit.floors_stilt_counted, limit.floors_stilt_not_counted) < 10

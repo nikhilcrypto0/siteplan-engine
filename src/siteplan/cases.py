@@ -3,8 +3,10 @@
 A case describes a scheme from the firm's own drawing and, once there is one, its approval
 letter: the plot, each building's outline and height, and the roads. `review` runs over it the
 same checker our own layouts face. A FAIL on a sanctioned plan means our rule is wrong, not
-their drawing. Each case lists the FAILs already understood, with the reason, so a new one
-cannot slip in unnoticed, and one that stops failing is reported too: that is a rule fixed.
+their drawing. A firm's own unsanctioned drawing (evidence "firm_drawing") is a test fixture,
+not evidence: its FAILs are recorded, never used to settle a rule. Each case lists the FAILs
+already understood, with the reason, so a new one cannot slip in unnoticed, and one that stops
+failing is reported too: that is a rule fixed.
 
 Cases are client data. They live in gitignored fixtures/cases/, never in git.
 """
@@ -19,6 +21,7 @@ from pydantic import BaseModel, Field
 from shapely.geometry import Polygon
 
 from siteplan.checks import Building, Finding, Site, Status, check_site
+from siteplan.project import RoadWidthStatus
 
 Point = tuple[float, float]
 
@@ -37,6 +40,9 @@ class Case(BaseModel):
     evidence: Literal["sanctioned", "firm_drawing"]
     sources: list[str] = Field(min_length=1)
     authority: str | None = None
+    inside_cure: bool | None = None
+    abutting_road_status: RoadWidthStatus | None = None
+    measured_carriageway_m: float | None = None
     gross_area_sqm: float | None = None
     net_area_sqm: float | None = None
     abutting_road_m: float | None = None
@@ -60,7 +66,9 @@ class Case(BaseModel):
             gross_area_sqm=self.gross_area_sqm, net_area_sqm=self.net_area_sqm,
             abutting_road_m=self.abutting_road_m, master_plan_road_m=self.master_plan_road_m,
             open_space_sqm=self.open_space_sqm, net_plot=Polygon(self.net_plot),
-            buildings=buildings, authority=self.authority,
+            buildings=buildings, authority=self.authority, inside_cure=self.inside_cure,
+            abutting_road_status=self.abutting_road_status,
+            measured_carriageway_m=self.measured_carriageway_m,
         )
 
 

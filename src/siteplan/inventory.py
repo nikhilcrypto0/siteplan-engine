@@ -216,7 +216,8 @@ INVENTORY: tuple[Entry, ...] = (
                "use no standard colour. The buffer is measured from the lines drawn (a centreline "
                "would understate it by half the channel) and kept free of towers, facilities and "
                "parking; it is not counted as tot-lot, though the rule allows it. The firm's "
-               "Suchitra drawing keeps a 9.4 m strip beside a 9.6 m channel: the 9 m class.",
+               "unsanctioned Suchitra drawing keeps a 9.4 m strip beside a 9.6 m channel, which "
+               "looks like the 9 m class: a test fixture, not evidence.",
         settles="A sanctioned plan beside a nala or lake: which class, and what it deducted.",
     ),
     Entry(
@@ -376,13 +377,16 @@ INVENTORY: tuple[Entry, ...] = (
     # Parking
     Entry(
         "Parking", "Parking area as a share of the total built-up area.",
-        f"{rules.PARKING_PERCENT_GHMC:g}% inside GHMC, {rules.PARKING_PERCENT_ELSEWHERE:g}% "
-        "elsewhere in HMDA",
-        rules.PARKING_CLAUSE, Reading.INTERPRETED, (Where.CHECKER,),
+        f"{rules.PARKING_PERCENT_GHMC:g}% inside GHMC or anywhere in CURE, "
+        f"{rules.PARKING_PERCENT_ELSEWHERE:g}% elsewhere in HMDA",
+        f"{rules.PARKING_CLAUSE}; {rules.CURE_RULES_CLAUSE}", Reading.INTERPRETED,
+        (Where.CHECKER,),
         ("PARKING_PERCENT_GHMC", "PARKING_PERCENT_ELSEWHERE", "PARKING_CLAUSE",
-         "parking_percent"),
+         "CURE_RULES_CLAUSE", "parking_percent"),
         choice="Counts the whole stilt footprint and the surface bays as parking. The text does "
-               "not say whether the built-up area it is a share of includes the stilt.",
+               "not say whether the built-up area it is a share of includes the stilt. Inside "
+               "CURE the GHMC column applies whichever corporation the site now falls in "
+               "(Cyberabad, since G.O.Ms.No.55 of 2026, for Qutbullapur zone).",
         settles="The parking statement on a sanctioned plan.",
     ),
     Entry(

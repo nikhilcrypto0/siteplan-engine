@@ -421,6 +421,7 @@ def solve(
     authority: str | None = None,
     amenities: AmenityLibrary | None = None,
     keep_out: Polygon | None = None,
+    inside_cure: bool | None = None,
 ) -> list[LayoutOption]:
     """Best distinct layouts for the plot, each already re-checked against the rules.
     keep_out is land nothing may stand on (a water body's buffer): no tower, facility or bay."""
@@ -464,7 +465,7 @@ def solve(
     furnished = [_furnish(o, plot, gap, request, amenities, keep_out) for o in chosen]
     return [
         _with_findings(o, plot, request, gross_area_sqm, abutting_road_m, master_plan_road_m,
-                       authority, keep_out)
+                       authority, keep_out, inside_cure)
         for o in furnished
     ]
 
@@ -581,7 +582,7 @@ def _amenity_size(plot, envelope, library, request, gap) -> float | None:
 
 
 def _with_findings(option, plot, request, gross, road, master_road, authority=None,
-                   keep_out=None) -> LayoutOption:
+                   keep_out=None, inside_cure=None) -> LayoutOption:
     site = Site(
         gross_area_sqm=gross,
         net_area_sqm=plot.area,
@@ -601,6 +602,7 @@ def _with_findings(option, plot, request, gross, road, master_road, authority=No
         surface_parking_sqm=bay_area_sqm(len(option.parking_bays)),
         units=option.total_flats,
         authority=authority,
+        inside_cure=inside_cure,
         water_buffer=keep_out,
     )
     return LayoutOption(**{**option.__dict__, "findings": tuple(check_site(site))})

@@ -148,3 +148,20 @@ def test_a_high_rise_needs_a_drive_6_m_wide_for_fire_tenders():
     assert tall["Driveway"].status is Status.FAIL and tall["Driveway"].required == ">= 6 m wide"
     assert "15(b)(iv)" in tall["Driveway"].clause
     assert low["Driveway"].status is Status.PASS and low["Driveway"].required == ">= 4.5 m wide"
+
+
+def test_anywhere_in_cure_takes_the_ghmc_parking_column():
+    """G.O.Ms.No.45 of 2026: GHMC's building rules across CURE, now split into corporations."""
+    base = dict(built_up_sqm=10_000, buildings=(_tower("A", 10, 10, 30, 50),))
+    hmda = _by_rule(check_site(Site(authority="HMDA", **base)))["Parking"]
+    cmc = _by_rule(check_site(Site(authority="CMC", inside_cure=True, **base)))["Parking"]
+    assert hmda.required.startswith(">= 20%") and cmc.required.startswith(">= 30%")
+    assert "G.O.Ms.No.45" in cmc.clause and "G.O.Ms.No.45" not in hmda.clause
+
+
+def test_the_road_finding_says_how_the_width_is_known_and_what_the_survey_measured():
+    site = Site(abutting_road_m=18.288, abutting_road_status="DECLARED_ON_SITE_PLAN",
+                measured_carriageway_m=14.08, buildings=(Building("A", height_m=27),))
+    road = _by_rule(check_site(site))["Abutting road width (for A)"]
+    assert road.status is Status.PASS and road.measured.startswith("18.29 m")  # declared width
+    assert "DECLARED_ON_SITE_PLAN" in road.note and "14.08 m of carriageway" in road.note
