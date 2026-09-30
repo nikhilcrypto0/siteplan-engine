@@ -27,7 +27,7 @@ from siteplan.dxf_entities import (
     text_of,
     text_position,
 )
-from siteplan.survey import SpotLevel, Survey
+from siteplan.survey import Label, SpotLevel, Survey, line_groups
 from siteplan.units import site_area
 
 _BOUNDARY_HINT = re.compile(r"BOUND|PLOT|SITE", re.IGNORECASE)
@@ -62,12 +62,16 @@ def _closed_polylines(drawn: tuple[Drawn, ...]) -> list[tuple[str, Polygon, bool
 
 
 def _texts(drawn: tuple[Drawn, ...]) -> list[tuple[str, tuple[float, float]]]:
+    return [(text, where) for text, where, _ in _texts_with_layers(drawn)]
+
+
+def _texts_with_layers(drawn: tuple[Drawn, ...]) -> list[tuple[str, tuple[float, float], str]]:
     texts = []
     for d in drawn:
         if d.entity.dxftype() in TEXT_TYPES:
             where = text_position(d.entity)
             if where is not None:
-                texts.append((text_of(d.entity), where))
+                texts.append((text_of(d.entity), where, d.layer))
     return texts
 
 
@@ -87,6 +91,23 @@ def _open_lines(drawn: tuple[Drawn, ...], hint: str,
             points = polyline_points(d.entity)
             lines.append([*points, points[0]])
     return [line for line in lines if len(line) >= 2]
+
+
+def _lines_by_layer(drawn: tuple[Drawn, ...]) -> dict[str, list[list[tuple[float, float]]]]:
+    """Every line and polyline, open or closed, grouped by its exact layer."""
+    groups: dict[str, list[list[tuple[float, float]]]] = {}
+    for d in drawn:
+        points: list[tuple[float, float]] = []
+        if d.entity.dxftype() == "LINE":
+            start, end = d.entity.dxf.start, d.entity.dxf.end
+            points = [(start.x, start.y), (end.x, end.y)]
+        elif _is_polyline(d.entity):
+            points = list(polyline_points(d.entity))
+            if points and is_closed(d.entity):
+                points.append(points[0])
+        if len(set(points)) >= 2:
+            groups.setdefault(d.layer, []).append(points)
+    return groups
 
 
 def read_dxf_survey(path: str | Path, profile: DxfProfile | None = None) -> Survey:
@@ -164,6 +185,8 @@ def read_dxf_survey(path: str | Path, profile: DxfProfile | None = None) -> Surv
                      for ln in _open_lines(drawn, hint, closed_too))
 
     water = profile.water_layer_hint
+    by_layer = {name: [LineString([to_m(x, y) for x, y in pts]) for pts in groups]
+                for name, groups in _lines_by_layer(drawn).items()}
     return Survey(
         source=str(path),
         boundary=boundary,
@@ -173,5 +196,9 @@ def read_dxf_survey(path: str | Path, profile: DxfProfile | None = None) -> Surv
         roads=lines(profile.road_layer_hint),
         contours=lines(profile.contour_layer_hint),
         water=lines(water.upper(), closed_too=True) if water else (),
+        labels=tuple(Label(text, *to_m(x, y), nearby=((layer_name, 0.0),))
+                     for text, (x, y), layer_name in _texts_with_layers(drawn)),
+        line_groups=line_groups(by_layer, boundary),
+        boundary_key=layer,
         warnings=tuple(warnings),
     )

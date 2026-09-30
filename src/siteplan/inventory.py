@@ -198,11 +198,13 @@ INVENTORY: tuple[Entry, ...] = (
         settles="A sanctioned plan on a widened road: from which line are its setbacks drawn?",
     ),
     Entry(
-        "Plot", "Without a drawn net plot, the deducted area comes off the longest boundary as "
-                "a strip.",
-        "longest straight run of the boundary", "none (runner.load_plot)", Reading.ASSUMED,
-        (Where.LAYOUT,),
-        choice="The longest side is taken as the road frontage; the gates assume the same.",
+        "Plot", "Without a drawn net plot, the deducted area comes off one side as a strip.",
+        "the side the architect names, else the longest straight run",
+        "none (runner.load_plot)", Reading.ASSUMED, (Where.LAYOUT,),
+        choice="Cut at an even width along every run facing the side named; with no side, the "
+               "longest run, which the gates also take as the road frontage. On Dhulapally "
+               "neither matches the drawn strip (a 40 ft road along part of the east side), "
+               "which is why a drawn net plot, or the site plan read as the survey, is better.",
         settles="The road-widening line on the survey or the sanction plan.",
     ),
     Entry(

@@ -6,6 +6,7 @@ Shared by `siteplan layout` and the assistant, so both produce identical outputs
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 
 from shapely.geometry import Polygon
@@ -78,13 +79,16 @@ def load_plot(project: Project, survey: str | Path | None) -> tuple[Polygon, str
         boundary = read_survey(Path(survey)).boundary
         net = project.site.net_sqm()
         if net and net < boundary.area - NET_AREA_TOLERANCE_SQM:
-            plot = less_road_strip(boundary, net)
+            side = project.site.road_strip_side
+            plot = less_road_strip(boundary, net, side)
+            where = (f"off the {side} side at an even width, as the architect said" if side
+                     else "off the longest boundary")
             return plot, (
                 f"surveyed boundary {boundary.area:,.0f} m², less the "
                 f"{boundary.area - net:,.0f} m² the project states is deducted. ASSUMED: it "
-                "comes off the longest boundary as a road-widening strip. For the real shape, "
-                "give the architect's site-plan DXF as the survey (its plot outline is the net "
-                "plot, strip already cut) or net_plot_m in the project file."
+                f"comes {where}, as a road strip. For the real shape, give the architect's "
+                "site-plan DXF as the survey (its plot outline is the net plot, strip already "
+                "cut) or net_plot_m in the project file."
             )
         if net and abs(net - boundary.area) <= NET_AREA_TOLERANCE_SQM:
             return boundary, (f"plot outline {boundary.area:,.0f} m², matching the {net:,.0f} m² "
@@ -103,18 +107,25 @@ def run_layout(
     keep_out: Polygon | None = None,
 ) -> list[dict]:
     site = project.to_site()
-    options = solve(
-        plot,
-        library,
-        request,
-        gross_area_sqm=site.gross_area_sqm,
-        abutting_road_m=site.abutting_road_m,
-        master_plan_road_m=site.master_plan_road_m,
-        authority=site.authority,
-        amenities=amenities,
-        keep_out=keep_out,
-        inside_cure=site.inside_cure,
-    )
+
+    def at(floors: int) -> tuple[LayoutRequest, list]:
+        req = request.model_copy(update={"floors": floors})
+        return req, solve(plot, library, req, gross_area_sqm=site.gross_area_sqm,
+                          abutting_road_m=site.abutting_road_m,
+                          master_plan_road_m=site.master_plan_road_m, authority=site.authority,
+                          amenities=amenities, keep_out=keep_out, inside_cure=site.inside_cure)
+
+    tried: list[dict] = []
+    if request.maximise:
+        # Taller blocks need wider setbacks and gaps, so the most floors need not sell most.
+        runs = [at(floors) for floors in heights_to_try(request)]
+        tried = [{"floors_above_stilt": r.floors, "options": len(o),
+                  "best_saleable_sqft": max((x.saleable_sqft for x in o), default=0)}
+                 for r, o in runs]
+        request, options = max(runs, key=lambda run: max(
+            (x.saleable_sqft for x in run[1]), default=-1))
+    else:
+        request, options = at(request.floors)
     summaries = []
     for i, option in enumerate(options, 1):
         stem = out / f"option_{i}"
@@ -123,12 +134,22 @@ def run_layout(
                                                          **project.sheet.model_dump()),
                         out / f"option_{i}.sheet.dxf")
         write_layout_svg(option, plot, stem.with_suffix(".svg"), f"{project.name}: option {i}")
-        summary = {"option": i} | option.summary() | {
+        summary = {"option": i, "floors_above_stilt": request.floors} | option.summary() | {
             "area_statement": render(area_statement(option, request)),
             "sheet_dxf": str(out / f"option_{i}.sheet.dxf"),
             "flat_library_note": library.note,
             "caveat": LAYOUT_CAVEAT,
-        }
+        } | ({"heights_tried": tried} if tried else {})
         stem.with_suffix(".json").write_text(json.dumps(summary, indent=2))
         summaries.append(summary)
     return summaries
+
+
+HEIGHTS_TRIED = 3  # the most floors, and the two below it
+
+
+def heights_to_try(request: LayoutRequest) -> list[int]:
+    """From the most floors down, never below a high-rise (layouts are high-rise only)."""
+    lowest = math.ceil((rules.HIGH_RISE_THRESHOLD_M - request.stilt_height_m)
+                       / request.floor_height_m - 1e-9)
+    return [f for f in range(request.floors, request.floors - HEIGHTS_TRIED, -1) if f >= lowest]

@@ -15,6 +15,7 @@ from siteplan import rules
 from siteplan.area_statement import render
 from siteplan.checks import Status, check_site
 from siteplan.dxf_export import write_survey_dxf
+from siteplan.intake import WORKSPACE_FILE, load_defaults
 from siteplan.library import FlatLibrary
 from siteplan.llm import AssistantConfig
 from siteplan.project import Project
@@ -69,6 +70,11 @@ def _count(n: int, noun: str) -> str:
 
 
 def _print_options(summaries: list[dict]) -> None:
+    tried = summaries[0].get("heights_tried") if summaries else None
+    if tried:
+        print("Heights tried: " + "; ".join(
+            f"stilt + {t['floors_above_stilt']}: best {t['best_saleable_sqft']:,} sft"
+            for t in tried) + f". Kept stilt + {summaries[0]['floors_above_stilt']}.\n")
     for summary in summaries:
         fails = [rule for rule, status in summary["rule_findings"].items() if status == "FAIL"]
         print(
@@ -84,10 +90,14 @@ def _cmd_layout(args: argparse.Namespace) -> int:
     if project.layout is None:
         print("The project file has no layout section.", file=sys.stderr)
         return 2
-    library = FlatLibrary.model_validate_json(Path(args.library).read_text())
+    library_file, amenities_file = _library_files(args)
+    if library_file is None:
+        print(f"Give --library, or name a flat_library in {WORKSPACE_FILE} next to the project "
+              "or the survey.", file=sys.stderr)
+        return 2
+    library = FlatLibrary.model_validate_json(library_file.read_text())
     amenities = (
-        AmenityLibrary.model_validate_json(Path(args.amenities).read_text())
-        if args.amenities else None
+        AmenityLibrary.model_validate_json(amenities_file.read_text()) if amenities_file else None
     )
     plot, basis = load_plot(project, args.survey)
     keep_out, water = load_water(project, args.survey)
@@ -105,6 +115,61 @@ def _cmd_layout(args: argparse.Namespace) -> int:
     if library.note:
         print(f"Flat library: {library.note}")
     print(LAYOUT_CAVEAT)
+    return 0
+
+
+def _library_files(args: argparse.Namespace) -> tuple[Path | None, Path | None]:
+    """The libraries asked for, else the firm's defaults in the project's or survey's folder."""
+    folders = [Path(args.project).parent] + ([Path(args.survey).parent] if args.survey else [])
+    folder = next((f for f in folders if (f / WORKSPACE_FILE).exists()), folders[0])
+    defaults = load_defaults(folder)
+    library = Path(args.library) if args.library else (
+        folder / defaults.flat_library if defaults.flat_library else None)
+    amenities = Path(args.amenities) if args.amenities else (
+        folder / defaults.amenities if defaults.amenities else None)
+    return library, amenities
+
+
+def _cmd_extract(args: argparse.Namespace) -> int:
+    """What the survey settles by itself, and what will still be asked."""
+    from siteplan.intake import extract, questions, render
+
+    draft = extract(Path(args.survey))
+    if args.json:
+        print(json.dumps(draft.as_dict(), indent=2))
+        return 0
+    print(render(draft) + "\n\nStill to answer:")
+    for question in questions(draft):
+        default = f" [{question.default}]" if question.default else ""
+        print(f"  - {question.prompt.splitlines()[0]}{default}")
+    return 0
+
+
+def _cmd_start(args: argparse.Namespace) -> int:
+    """Raw survey -> what it settles -> ask only the rest -> the project file."""
+    from siteplan.intake import build_project, extract, questions, render, save
+
+    survey = Path(args.survey)
+    draft = extract(survey)
+    print(render(draft) + "\n")
+    if args.answers:
+        answers = json.loads(Path(args.answers).read_text())
+    else:
+        print("Only what the survey cannot settle. Press enter to take the value in brackets.\n")
+        answers = collect(input, questions=questions(draft))
+    workspace = Path(args.workspace) if args.workspace else survey.parent
+    project = build_project(draft, answers, load_defaults(workspace))
+    out = Path(args.out or workspace / f"{_slug(project['name'])}.project.json")
+    if out.exists() and not args.force and (
+            args.answers or input(f"\n{out} exists. Overwrite? [y/N]: ").strip().lower() != "y"):
+        print(f"{out} exists; left it alone (--force to replace it).", file=sys.stderr)
+        return 1
+    save(project, out)
+    print(f"Wrote {out}")
+    if project["layout"].get("maximise"):
+        print(f"The most floors the rules allow here: stilt + {project['layout']['floors']}. "
+              "Layouts also try the two heights below and keep the one that sells most.")
+    print(f"\nNext: uv run siteplan layout {out} --survey {survey}")
     return 0
 
 
@@ -341,9 +406,22 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("project")
     p.set_defaults(run=_cmd_area_statement)
 
+    p = sub.add_parser("extract", help="What a raw survey settles, and what it leaves to ask.")
+    p.add_argument("survey")
+    p.add_argument("--json", action="store_true", help="The facts as JSON")
+    p.set_defaults(run=_cmd_extract)
+
+    p = sub.add_parser("start", help="Start a project from a raw survey: ask only what is open.")
+    p.add_argument("survey")
+    p.add_argument("--answers", help="Answers as JSON instead of asking (scripted runs)")
+    p.add_argument("--workspace", help=f"Folder with {WORKSPACE_FILE} (default: the survey's)")
+    p.add_argument("--out", help="Where to write the project (default: the workspace)")
+    p.add_argument("--force", action="store_true", help="Replace an existing project file")
+    p.set_defaults(run=_cmd_start)
+
     p = sub.add_parser("layout", help="Generate tower layout options for a project.")
     p.add_argument("project")
-    p.add_argument("--library", required=True, help="Flat library JSON")
+    p.add_argument("--library", help=f"Flat library JSON (default: {WORKSPACE_FILE}'s)")
     p.add_argument("--survey", help="Survey or site-plan PDF/DXF (a site plan's outline is the "
                    "net plot), used when the project has no net_plot_m")
     p.add_argument("--amenities", help="Amenity library JSON: pool, courts, play area, cabin")

@@ -12,6 +12,39 @@ from shapely.geometry import LineString, Polygon
 from siteplan.units import sqm_to_sqft, sqm_to_sqyd
 
 _COMPASS = ("N", "NE", "E", "SE", "S", "SW", "W", "NW")
+NEAR_M = 25.0  # line work this close to the plot may bound it: a nala, an HT line, a road
+
+
+@dataclass(frozen=True)
+class Label:
+    """A piece of text on the sheet and where it sits, in metres."""
+
+    text: str
+    x: float
+    y: float
+    nearby: tuple[tuple[str, float], ...] = ()  # the closest colours (PDF) or layers, metres off
+
+
+@dataclass(frozen=True)
+class LineGroup:
+    """All the line work of one colour (PDF) or layer (DXF) near the plot, summarised."""
+
+    key: str  # '#00FFFF' on a PDF survey, the layer name on a DXF one
+    length_m: float  # within NEAR_M of the plot
+    crosses_plot: bool
+
+
+def line_groups(groups: dict[str, list[LineString]], boundary: Polygon) -> tuple[LineGroup, ...]:
+    """Summarise each group's lines near the plot, longest first; groups that stay away drop."""
+    near = boundary.buffer(NEAR_M)
+    found = []
+    for key, lines in groups.items():
+        close = [line for line in lines if line.intersects(near)]
+        if close:
+            length = sum(line.intersection(near).length for line in close)
+            crosses = any(line.intersects(boundary.buffer(-0.5)) for line in close)
+            found.append(LineGroup(key, round(length, 1), crosses))
+    return tuple(sorted(found, key=lambda g: -g.length_m))
 
 
 @dataclass(frozen=True)
@@ -112,6 +145,9 @@ class Survey:
     roads: tuple[LineString, ...] = ()
     contours: tuple[LineString, ...] = ()
     water: tuple[LineString, ...] = ()  # only when asked for: its colour or layer is not standard
+    labels: tuple[Label, ...] = ()  # the sheet's text, for marks such as ROAD WIDENING or NALA
+    line_groups: tuple[LineGroup, ...] = ()  # line work near the plot, by colour or layer
+    boundary_key: str | None = None  # the colour or layer the boundary was drawn in
     warnings: tuple[str, ...] = ()
 
     @property

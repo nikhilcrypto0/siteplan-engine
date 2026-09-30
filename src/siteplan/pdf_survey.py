@@ -18,11 +18,20 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 
 import pdfplumber
+from shapely import STRtree
 from shapely.geometry import LineString, Point, Polygon
 from shapely.ops import linemerge, polygonize, unary_union
 
 from siteplan.geometry import angle_gap, straight_runs
-from siteplan.survey import Calibration, ScaleEstimate, SpotLevel, Survey, calibrate
+from siteplan.survey import (
+    Calibration,
+    Label,
+    ScaleEstimate,
+    SpotLevel,
+    Survey,
+    calibrate,
+    line_groups,
+)
 from siteplan.units import site_area
 
 Colour = tuple[float, ...]
@@ -162,6 +171,70 @@ def read_text(page) -> tuple[list[Token], list[str]]:
     return tokens, runs
 
 
+def read_labels(page) -> list[tuple[str, float, float]]:
+    """Whole text runs and where each sits on the page (the middle of its characters)."""
+    labels = []
+    for _, _, chars in _chars_by_direction(page).values():
+        for line in _lines(chars):
+            for part in _split(line, 1.2, on_space=False):
+                text = "".join(c.text for c in part).strip()
+                if text:
+                    labels.append((text, sum(c.cx for c in part) / len(part),
+                                   sum(c.cy for c in part) / len(part)))
+    return labels
+
+
+def colour_hex(colour: Colour) -> str:
+    """'#RRGGBB' for an RGB stroke, grey for a one-channel one, CMYK turned to RGB."""
+    if len(colour) == 1:
+        colour = (colour[0],) * 3
+    elif len(colour) == 4:
+        c, m, y, k = colour
+        colour = ((1 - c) * (1 - k), (1 - m) * (1 - k), (1 - y) * (1 - k))
+    return "#" + "".join(f"{round(v * 255):02X}" for v in colour[:3])
+
+
+LABEL_REACH_M = 15.0  # colours drawn this close to a label are offered as what it names
+
+
+def _nearby_finder(segments: dict[Colour, list], metres_per_unit: float
+                   ) -> Callable[[float, float], tuple[tuple[str, float], ...]]:
+    """For a label, the three closest colours within reach, nearest first. Offered, never
+    chosen: on Suchitra's sheet the line nearest the word 'Nala' is grey, and a 'Road' label
+    sits on the cyan line that may be the nala."""
+    lines, colours = [], []
+    for colour, segs in segments.items():
+        if colour:
+            lines += segs
+            colours += [colour] * len(segs)
+    tree = STRtree(lines) if lines else None
+    reach = LABEL_REACH_M / metres_per_unit
+
+    def nearby(x: float, y: float) -> tuple[tuple[str, float], ...]:
+        if tree is None:
+            return ()
+        here, best = Point(x, y), {}
+        for i in tree.query(here.buffer(reach)):
+            metres = lines[i].distance(here) * metres_per_unit
+            key = colour_hex(colours[i])
+            if metres <= LABEL_REACH_M and metres < best.get(key, math.inf):
+                best[key] = metres
+        return tuple((key, round(m, 1)) for key, m in sorted(best.items(), key=lambda b: b[1]))[:3]
+
+    return nearby
+
+
+def _closest(segments: dict[Colour, list], colour: Colour | None) -> Colour | None:
+    """The stroke colour on the sheet within rounding of the one asked for ('#00B82E' comes
+    back as 0.722 where the sheet says 0.72)."""
+    if not colour:
+        return None
+    same = [c for c in segments if len(c) == len(colour)
+            and max(abs(a - b) for a, b in zip(c, colour, strict=True)) <= 0.01]
+    return min(same, key=lambda c: sum(abs(a - b) for a, b in zip(c, colour, strict=True)),
+               default=None)
+
+
 def _segments_by_colour(page, include_rects: bool) -> dict[Colour, list[LineString]]:
     """Stroke segments grouped by colour. Rectangles are usually symbols (legend swatches,
     sheds), so they only count when looking for a boundary, never as roads or contours."""
@@ -290,6 +363,7 @@ def read_pdf_survey(path: str | Path, profile: PdfProfile | None = None) -> Surv
             raise ValueError(f"{path}: the PDF has no pages")
         page = pdf.pages[0]
         tokens, runs = read_text(page)
+        labels = read_labels(page)
         shapes = _segments_by_colour(page, include_rects=True)
         segments = _segments_by_colour(page, include_rects=False)
         plots = _plot_shapes(shapes, float(page.width), float(page.height), profile)
@@ -322,7 +396,7 @@ def read_pdf_survey(path: str | Path, profile: PdfProfile | None = None) -> Surv
             f"{path}: no closed boundary with at least two matching dimension labels was found, "
             "and no area is written to scale one from"
         )
-    return _build_survey(str(path), best, stated, numbers, segments, is_level, profile)
+    return _build_survey(str(path), best, stated, numbers, segments, is_level, profile, labels)
 
 
 def _scaled_by_written_area(
@@ -345,7 +419,8 @@ def _scaled_by_written_area(
     return _Candidate(colour, polygon, Calibration(k, (), (), k), stated, frozenset())
 
 
-def _build_survey(source, best, stated, numbers, segments, is_level, profile) -> Survey:
+def _build_survey(source, best, stated, numbers, segments, is_level, profile,
+                  labels=()) -> Survey:
     k = best.calibration.metres_per_unit
     minx, _, _, maxy = best.polygon.bounds
 
@@ -354,6 +429,7 @@ def _build_survey(source, best, stated, numbers, segments, is_level, profile) ->
 
     boundary_page = best.polygon
     boundary = Polygon([to_m(x, y) for x, y in boundary_page.exterior.coords])
+    near = _nearby_finder(segments, k)
     levels = tuple(
         SpotLevel(*to_m(t.x, t.y), z=v, on_site=boundary_page.contains(Point(t.x, t.y)))
         for v, t in numbers
@@ -361,7 +437,8 @@ def _build_survey(source, best, stated, numbers, segments, is_level, profile) ->
     )
 
     def lines_of(colour: Colour | None) -> tuple[LineString, ...]:
-        segs = segments.get(colour, []) if colour else []
+        key = _closest(segments, colour)
+        segs = segments.get(key, []) if key else []
         if not segs:
             return ()
         joined = unary_union(segs)
@@ -402,5 +479,11 @@ def _build_survey(source, best, stated, numbers, segments, is_level, profile) ->
         roads=lines_of(profile.road_colour),
         contours=lines_of(profile.contour_colour),
         water=lines_of(profile.water_colour),
+        labels=tuple(Label(text, *to_m(x, y), nearby=near(x, y)) for text, x, y in labels),
+        line_groups=line_groups(
+            {colour_hex(c): [LineString([to_m(*p) for p in s.coords]) for s in segs]
+             for c, segs in segments.items() if c},
+            boundary),
+        boundary_key=colour_hex(best.colour) if best.colour else None,
         warnings=tuple(warnings),
     )

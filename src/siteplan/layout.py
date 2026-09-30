@@ -70,6 +70,9 @@ class LayoutRequest(BaseModel):
     max_tower_length_m: PositiveFloat = 80.0
     min_flats_per_side: PositiveInt = 2
     options: int = Field(3, ge=1, le=10)
+    maximise: bool = Field(
+        False, description="floors is the most the rules allow; also try lower heights and keep "
+        "the one that sells most (taller blocks need wider setbacks and gaps)")
 
     @model_validator(mode="after")
     def _mix_adds_up(self) -> LayoutRequest:

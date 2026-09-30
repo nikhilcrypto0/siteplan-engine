@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from typing import Any
 
 FEET_PER_M = 3.28084
-AUTHORITIES = ("GHMC", "HMDA", "DTCP", "OTHER")
+AUTHORITIES = ("GHMC", "CMC", "HMDA", "DTCP", "OTHER")
 
 
 @dataclass(frozen=True)
@@ -27,6 +27,7 @@ class Question:
     example: str = ""
     optional: bool = False
     parse: Callable[[str], Any] | None = None  # checked as it is typed, not at the end
+    when: Callable[[dict[str, str]], bool] | None = None  # asked only if the answers so far say so
 
 
 
@@ -114,9 +115,14 @@ def build_project(answers: dict[str, str]) -> dict[str, Any]:
     return project
 
 
-def collect(ask: Callable[[str], str], say: Callable[[str], None] = print) -> dict[str, str]:
-    """Ask every question, re-asking anything that does not make sense."""
-    return {question.key: _one(question, ask, say) for question in QUESTIONS}
+def collect(ask: Callable[[str], str], say: Callable[[str], None] = print,
+            questions: tuple[Question, ...] = QUESTIONS) -> dict[str, str]:
+    """Ask every question that applies, re-asking anything that does not make sense."""
+    answers: dict[str, str] = {}
+    for question in questions:
+        if question.when is None or question.when(answers):
+            answers[question.key] = _one(question, ask, say)
+    return answers
 
 
 def _one(question: Question, ask: Callable[[str], str], say: Callable[[str], None]) -> str:

@@ -92,6 +92,9 @@ class SiteIn(BaseModel):
     master_plan_road_m: PositiveFloat | None = None
     open_space_sqft: PositiveFloat | None = None
     net_plot_m: Ring | None = None
+    road_strip_side: Literal["N", "NE", "E", "SE", "S", "SW", "W", "NW"] | None = Field(
+        None, description="The side land given up for a road comes off, when no drawing shows "
+        "it: cut at an even width along that side, an approximation of the real strip")
     open_space_pockets_m: list[Ring] = []
     water: list[WaterIn] = []
     authority: str | None = Field(
@@ -165,6 +168,9 @@ class Project(BaseModel):
     area_statement: AreaStatement | None = None
     layout: LayoutRequest | None = None
     sheet: SheetIn = Field(default_factory=lambda: SheetIn())
+    sources: dict[str, str] = Field(
+        default_factory=dict, description="Where each site value came from: the survey, or the "
+        "architect's answer")
 
     def to_site(self) -> Site:
         s = self.site
