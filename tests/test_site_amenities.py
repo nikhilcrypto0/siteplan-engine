@@ -7,7 +7,7 @@ from siteplan.layout import LayoutRequest, solve
 from siteplan.library import FlatLibrary
 from siteplan.site_amenities import AmenityLibrary, place_amenities
 
-PLOT = box(0, 0, 160, 130)
+PLOT = box(0, 0, 180, 140)  # room left for the facilities once the rules have their land
 FLATS = FlatLibrary(
     flats=[
         {"name": "2A", "bhk": "2BHK", "width_m": 7.7, "depth_m": 11.0, "saleable_sqft": 1112},
@@ -56,14 +56,14 @@ def test_each_facility_keeps_its_size(option):
         assert amenity.shape.area == pytest.approx(wanted[amenity.name], rel=0.01)
 
 
-def test_the_pool_lands_nearer_the_club_house_than_the_gate(option):
-    pool = next((a for a in option.amenities if a.name == "SWIMMING POOL"), None)
-    if pool is None or option.club_house is None or not option.gates:
-        pytest.skip("this site did not hold a pool, a club house and a gate")
-    gate = option.gates[0][1].centroid
-    assert pool.shape.centroid.distance(option.club_house.centroid) < pool.shape.centroid.distance(
-        gate
-    )
+def test_each_facility_lands_by_its_own_anchor():
+    """The pool goes by the club house and the cabin by the gate, wherever those two are."""
+    strip = box(0, 0, 120, 20)
+    anchors = {"club": Point(5, 10), "gate": Point(115, 10)}
+    placed, missed = place_amenities(strip, AMENITIES, 0.0, anchors)
+    where = {a.name: a.shape.centroid for a in placed}
+    assert where["SWIMMING POOL"].distance(anchors["club"]) < 15
+    assert where["SECURITY CABIN"].distance(anchors["gate"]) < 5
 
 
 def test_an_item_with_no_room_is_named_not_squeezed_in():

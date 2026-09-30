@@ -24,16 +24,17 @@ from shapely.ops import unary_union
 
 from siteplan import rules
 from siteplan.access import (
+    R_OUT,
     ROAD_M,
     Entrance,
     RoadPiece,
-    along_boundary,
     entrance,
     fire_bands,
     green_strip,
     green_strip_width,
     inner_plot,
     loop_road,
+    loop_turns,
     tower_inset,
 )
 from siteplan.geometry import opening
@@ -65,7 +66,8 @@ class Frame:
     setback_m: float
     corridor_m: float
     green_m: float
-    envelope: Polygon  # the towers' land, and everything else's
+    envelope: Polygon  # the towers' land, the loop road running round it
+    land: Polygon  # all the ground beyond the setbacks and the loop: towers and everything else
     inner: Polygon  # motorable ground: the plot less the green strip and any water buffer
     loop: Polygon
     entrance: Entrance
@@ -84,27 +86,34 @@ def frame(plot: Polygon, setback_m: float, gross_area_sqm: float | None = None,
     """None when the towers' land is empty."""
     green_m = green_strip_width(setback_m)
     inset = tower_inset(setback_m)
-    gate = entrance(plot, access_side, inset + EPS_M, keep_out)
     inner = inner_plot(plot, green_m, keep_out)
-    turns = tuple(along_boundary(inner))
-    envelope = plot.buffer(-(inset + EPS_M))
+    land = plot.buffer(-(inset + EPS_M))
     # Towers keep a road's width off a water buffer, so the loop can run along it too.
-    taken = [gate.approach, *turns] + (
-        [keep_out.buffer(ROAD_M + EPS_M, join_style="mitre")] if keep_out is not None else [])
-    envelope = envelope.difference(unary_union(taken))
-    # Only ground a fire tender can reach from the entrance takes towers: no crossing over a
+    if keep_out is not None:
+        land = land.difference(keep_out.buffer(ROAD_M + EPS_M, join_style="mitre"))
+    # Only ground a fire tender can reach from the entrance side is used: no crossing over a
     # nala or lake is drawn, so land beyond one is left unbuilt.
-    reachable = [part for part in getattr(inner, "geoms", [inner])
-                 if part.intersects(gate.approach)]
-    if reachable and len(getattr(inner, "geoms", [inner])) > 1:
-        envelope = envelope.intersection(unary_union(reachable))
+    parts = list(getattr(inner, "geoms", [inner]))
+    if len(parts) > 1:
+        side = entrance(plot, access_side, inset + EPS_M, keep_out)
+        reachable = [part for part in parts if part.intersects(side.approach)]
+        if reachable:
+            land = land.intersection(unary_union(reachable))
+    # The loop runs round the towers' land, so that land keeps no part a tender could not turn
+    # round: nothing narrower than two turning radii, every corner rounded to one. A narrow arm
+    # of the plot is left to the tot-lot, the facilities and the parking.
+    envelope = land.buffer(-R_OUT).buffer(R_OUT)
     if envelope.is_empty:
         return None
-    loop = loop_road(envelope, inner).difference(gate.approach)
+    loop = loop_road(envelope, inner)
+    # The entrance goes where the shortest approach from the access side joins the loop.
+    gate = entrance(plot, access_side, inset + EPS_M, keep_out, loop)
+    land = land.difference(gate.approach)
+    envelope = envelope.difference(gate.approach)
     target = rules.OPEN_SPACE_MIN_FRACTION * max(plot.area, gross_area_sqm or 0.0)
     corridor = max(setback_m, ROAD_M) + EPS_M
-    return Frame(plot, target, setback_m, corridor, green_m, envelope, inner, loop, gate,
-                 green_strip(plot, green_m, gate.gate), keep_out, turns)
+    return Frame(plot, target, setback_m, corridor, green_m, envelope, land, inner, loop, gate,
+                 green_strip(plot, green_m, gate.gate), keep_out, tuple(loop_turns(loop)))
 
 
 @dataclass(frozen=True)
@@ -159,7 +168,7 @@ def _attempt(fr: Frame, placement: Placement, ctx: Context, quick: bool
     bands = fire_bands([t.footprint for t in towers])
     circulation = unary_union([road_land, bands]) if bands is not None else road_land
     blocks = unary_union([t.footprint for t in towers])
-    room = fr.envelope.difference(unary_union([blocks, circulation]))
+    room = fr.land.difference(unary_union([blocks, circulation]))
     fire_lanes = bands.difference(road_land).intersection(fr.inner) if bands else None
 
     tower_sqm = sum(t.footprint.area for t in towers) * ctx.floors
@@ -275,14 +284,21 @@ def _trim(pocket: Polygon, area: float, angle_deg: float) -> Polygon | None:
         return None
     turned = rotate(pocket, -angle_deg, origin=(0, 0))
     minx, miny, maxx, maxy = turned.bounds
-    lo, hi = minx, maxx
+    along_x = maxx - minx >= maxy - miny  # cut across the long side, never along it
+
+    def keep(at: float) -> Polygon:
+        cut = (box(minx - 1, miny - 1, at, maxy + 1) if along_x
+               else box(minx - 1, miny - 1, maxx + 1, at))
+        return turned.intersection(cut)
+
+    lo, hi = (minx, maxx) if along_x else (miny, maxy)
     for _ in range(40):  # the cut that leaves the area wanted
         mid = (lo + hi) / 2
-        if turned.intersection(box(minx - 1, miny - 1, mid, maxy + 1)).area < area:
+        if keep(mid).area < area:
             lo = mid
         else:
             hi = mid
-    piece = turned.intersection(box(minx - 1, miny - 1, hi, maxy + 1))
+    piece = keep(hi)
     parts = [p for p in getattr(piece, "geoms", [piece]) if isinstance(p, Polygon)]
     if not parts:
         return None
@@ -318,7 +334,8 @@ def _pockets(room) -> list[Polygon]:
     """Tot-lot pockets: at least 3 m wide and 50 m² each (rule 7(a)(vii))."""
     if room.is_empty:
         return []
-    usable = opening(room, rules.OPEN_SPACE_MIN_WIDTH_M + 2 * EPS_M)
+    # Growing back after the shrink can push a square corner past the room's own edge.
+    usable = opening(room, rules.OPEN_SPACE_MIN_WIDTH_M + 2 * EPS_M).intersection(room)
     parts = getattr(usable, "geoms", [usable])
     return [p for p in parts if isinstance(p, Polygon)
             and p.area >= rules.OPEN_SPACE_MIN_POCKET_SQM + EPS_M]

@@ -45,8 +45,8 @@ def test_the_club_house_keeps_off_roads_fire_lanes_and_the_tot_lot_and_its_gap_t
 
 
 def test_a_small_scheme_gets_no_automatic_club_house():
-    small = box(0, 0, 70, 60)
-    option = solve(small, LIBRARY, LayoutRequest(**BASE), **FACTS)[0]
+    small = box(0, 0, 90, 70)
+    option = solve(small, LIBRARY, LayoutRequest(**BASE | {"floors": 6}), **FACTS)[0]
     assert option.total_flats < 100 and option.club_house is None
 
 

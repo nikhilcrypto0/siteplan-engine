@@ -22,9 +22,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+import numpy as np
+import shapely
 from shapely.affinity import rotate
-from shapely.geometry import LineString, Polygon, box
+from shapely.geometry import LineString, Polygon
 from shapely.ops import unary_union
+from shapely.prepared import prep
 
 from siteplan import rules
 
@@ -45,22 +48,30 @@ def surface_bays(free, angle_deg: float, limit: int = MAX_BAYS,
     """Bays filling the free area, in rows running along the towers, an aisle beside each row.
     Double-loaded, two rows share one aisle, as a cellar is laid out."""
     bays: list[Polygon] = []
+    for area, fitting in _fitting_bays(free, angle_deg, double_loaded):
+        for bay in fitting[: limit - len(bays)]:
+            bays.append(rotate(bay, angle_deg, origin=area.centroid))
+        if len(bays) >= limit:
+            break
+    return bays
+
+
+def _fitting_bays(free, angle_deg: float, double_loaded: bool):
+    """For each part of the free area, the bays that fit, in its turned frame. Every place on
+    the grid is tested at once."""
     for area in _parts(free):
         if area.area < BAY_WIDTH_M * BAY_DEPTH_M:
             continue
         turned = rotate(area, -angle_deg, origin="centroid")
         minx, miny, maxx, maxy = turned.bounds
         rows = _row_starts(miny, maxy, double_loaded)
-        for y in rows:
-            x = minx
-            while x + BAY_WIDTH_M <= maxx + EPS_M and len(bays) < limit:
-                bay = box(x, y, x + BAY_WIDTH_M, y + BAY_DEPTH_M)
-                if turned.contains(bay):
-                    bays.append(rotate(bay, angle_deg, origin=area.centroid))
-                x += BAY_WIDTH_M
-            if len(bays) >= limit:
-                return bays
-    return bays
+        columns = np.arange(minx, maxx - BAY_WIDTH_M + EPS_M, BAY_WIDTH_M)
+        if not rows or not len(columns):
+            continue
+        x0, y0 = (a.ravel() for a in np.meshgrid(columns, rows))
+        grid = shapely.box(x0, y0, x0 + BAY_WIDTH_M, y0 + BAY_DEPTH_M)
+        shapely.prepare(turned)
+        yield area, list(grid[shapely.contains(turned, grid)])
 
 
 def _row_starts(low: float, high: float, double_loaded: bool) -> list[float]:
@@ -77,7 +88,7 @@ def _row_starts(low: float, high: float, double_loaded: bool) -> list[float]:
 
 def count_bays(floor, angle_deg: float) -> int:
     """Cars that physically fit on a parking floor laid out double-loaded."""
-    return len(surface_bays(floor, angle_deg, limit=100_000, double_loaded=True))
+    return sum(len(fitting) for _, fitting in _fitting_bays(floor, angle_deg, double_loaded=True))
 
 
 def _parts(shape) -> list[Polygon]:
@@ -196,8 +207,15 @@ def cellars_needed(need_sqm: float, ground_sqm: float, per_level) -> int | None:
 def place_ramp(room, roads, width_m: float, length_m: float, anchor=None) -> Polygon | None:
     """A ramp rectangle inside `room` with one short end on a road, so cars drive straight off
     the road and down. Of the positions that fit, the one nearest the anchor (the entrance)."""
+    if room.is_empty:
+        return None
+    near = room.buffer(0.2)
     edges = [LineString(ring.coords) for part in _parts(roads)
              for ring in (part.exterior, *part.interiors)]
+    # Only the stretches of road that border the room can start a ramp into it.
+    edges = [piece for edge in edges for piece in _lines(edge.intersection(near))
+             if piece.length >= width_m]
+    inside = prep(room)
     best: tuple[float, Polygon] | None = None
     for edge in edges:
         steps = int(edge.length // RAMP_STEP_M)
@@ -219,9 +237,17 @@ def place_ramp(room, roads, width_m: float, length_m: float, anchor=None) -> Pol
                     (at.x + half_x + far[0], at.y + half_y + far[1]),
                     (at.x - half_x + far[0], at.y - half_y + far[1]),
                 ])
-                if not room.contains(ramp):
+                if not inside.contains(ramp):
                     continue
                 score = ramp.centroid.distance(anchor) if anchor is not None else 0.0
                 if best is None or score < best[0]:
                     best = (score, ramp)
     return best[1] if best else None
+
+
+def _lines(shape) -> list[LineString]:
+    if shape.is_empty:
+        return []
+    if shape.geom_type == "LineString":
+        return [shape]
+    return [g for g in getattr(shape, "geoms", []) if g.geom_type == "LineString"]

@@ -115,10 +115,21 @@ def write_layout_svg(option: LayoutOption, plot: Polygon, path: str | Path, titl
     height = (maxy - miny + 2 * pad) * scale + 70
 
     def pts(polygon: Polygon) -> str:
+        return _svg_points(polygon.exterior.coords)
+
+    def _svg_points(coords) -> str:
         return " ".join(
             f"{(x - minx + pad) * scale:.1f},{(maxy - y + pad) * scale + 70:.1f}"
-            for x, y in polygon.exterior.coords
+            for x, y in coords
         )
+
+    def shape(polygon: Polygon, style: str) -> str:
+        """A polygon with its holes, which a plain <polygon> would fill in."""
+        if not polygon.interiors:
+            return f'<polygon points="{pts(polygon)}" {style}/>'
+        rings = [polygon.exterior, *polygon.interiors]
+        d = " ".join(f"M {_svg_points(r.coords)} Z" for r in rings)
+        return f'<path d="{d}" fill-rule="evenodd" {style}/>'
 
     def text(at, words: str, size: int, colour: str, bold: bool = False) -> str:
         weight = ' font-weight="700"' if bold else ""
@@ -139,13 +150,12 @@ def write_layout_svg(option: LayoutOption, plot: Polygon, path: str | Path, titl
         f'<polygon points="{pts(plot)}" fill="none" stroke="#ad2677" stroke-width="2"/>',
     ]
     for part in _parts(option.green_strip):
-        lines.append(f'<polygon points="{pts(part)}" fill="#d9ead0" stroke="none"/>')
+        lines.append(shape(part, 'fill="#d9ead0" stroke="none"'))
     for road in option.roads:
         for part in _parts(road.shape):
-            lines.append(f'<polygon points="{pts(part)}" fill="#d6d2c6" stroke="#9c9587"/>')
+            lines.append(shape(part, 'fill="#d6d2c6" stroke="#9c9587"'))
     for part in _parts(option.fire_lanes):
-        lines.append(f'<polygon points="{pts(part)}" fill="#f3e3c7" stroke="#d0a24c" '
-                     'stroke-dasharray="4 3"/>')
+        lines.append(shape(part, 'fill="#f3e3c7" stroke="#d0a24c" stroke-dasharray="4 3"'))
     if option.entrance is not None:
         for part in _parts(option.entrance.gate):
             lines.append(f'<polygon points="{pts(part)}" fill="#f6d6cc" stroke="#bd3b27"/>')

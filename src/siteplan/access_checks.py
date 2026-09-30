@@ -16,10 +16,10 @@ from siteplan import rules
 from siteplan.access import (
     FIRE_BAND_M,
     LANE_M,
-    along_boundary,
     around_block,
     blocked,
     lane_passes,
+    loop_turns,
     through_roads,
 )
 from siteplan.findings import Finding, Status, narrower_than
@@ -123,11 +123,6 @@ def fire_findings(site, high_rise) -> list[Finding]:
         inner = inner.difference(site.green_strip)
     if site.water_buffer is not None:
         inner = inner.difference(site.water_buffer)
-    # The loop road bends where the green strip does; the gap the entrance cuts in the strip is
-    # a way in, not a bend of the loop.
-    loop_line = inner
-    if site.green_strip is not None and site.entrance is not None:
-        loop_line = inner.difference(site.entrance.gate)
     buildings = [b.footprint for b in site.buildings if b.footprint is not None]
     solid = [*buildings, *site.obstructions]
     if site.club_house is not None:
@@ -138,7 +133,7 @@ def fire_findings(site, high_rise) -> list[Finding]:
     for b in high_rise:
         if b.footprint is not None:
             findings.append(_block_finding(b, free, motorable, clause))
-    findings.append(_loop_turns_finding(loop_line, free, clause))
+    findings.append(_loop_turns_finding(site, free, clause))
     findings.append(_reach_finding(site, high_rise, motorable, clause))
     findings.append(_entrance_finding(site))
     findings.append(_obstruction_finding(site, motorable, clause))
@@ -173,8 +168,10 @@ def _block_finding(b, free, motorable, clause: str) -> Finding:
     )
 
 
-def _loop_turns_finding(inner, free, clause: str) -> Finding:
-    turns = along_boundary(inner)
+def _loop_turns_finding(site, free, clause: str) -> Finding:
+    """Every bend of the loop road as drawn: its outer edge, and round the land it rings."""
+    loops = _roads(site, "loop")
+    turns = loop_turns(unary_union([r.shape for r in loops])) if loops else []
     stuck = blocked(turns, free)
     return Finding(
         "Fire access: turns along the loop road", Status.FAIL if stuck else Status.PASS,

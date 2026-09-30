@@ -60,6 +60,7 @@ class Generated:
     options: list[dict]  # the summaries written beside each option's drawings
     out: Path
     library_note: str = ""
+    standards: dict | None = None  # the workspace standards the run used
 
 
 def generate(survey: Path, answers: dict, out: Path, workspace: Path | None = None) -> Generated:
@@ -82,7 +83,8 @@ def generate(survey: Path, answers: dict, out: Path, workspace: Path | None = No
                  if defaults.amenities else None)
     found = run_search(project, library, plot, project.layout, amenities, keep_out)
     options = write_options(found, project, library, plot, project.layout, out)
-    return Generated(draft, project_dict, plot, basis, limit, found, options, out, library.note)
+    return Generated(draft, project_dict, plot, basis, limit, found, options, out, library.note,
+                     defaults.model_dump(exclude={"status"}))
 
 
 def towers_in(dxf: Path) -> list[Polygon]:
@@ -136,8 +138,10 @@ def compare(generated: Generated, case: Case,
         rows += [
             ("Tower floor area, all floors, no loading", f"{ours:,} sft",
              f"{firm_area:,.0f} sft (engine {(ours / firm_area - 1) * 100:+.1f}%)"),
-            (f"Firm's total with its {loading:g}% loading; engine's saleable from its flats",
-             f"{best['saleable_sqft']:,} sft", f"{statement.total_sqft:,} sft"),
+            (f"The same with the firm's {loading:g}% loading (its statement's total)",
+             f"{ours * (1 + loading / 100):,.0f} sft", f"{statement.total_sqft:,} sft"),
+            ("Saleable from the flats' own sale areas", f"{best['saleable_sqft']:,} sft",
+             "not in the area statement"),
         ]
     fails = [rule for rule, status in best["rule_findings"].items() if status == "FAIL"]
     rows.append(("Rule FAILs (engine's checker)", ", ".join(fails) or "none",
@@ -158,7 +162,7 @@ def report(generated: Generated, rows: list[tuple[str, str, str]]) -> str:
         f"  plot planned on: {generated.plot.area:,.0f} m², {generated.basis}",
         "",
         "2. INPUTS AND HOW FAR EACH IS TRUSTED",
-        *_inputs(project),
+        *_inputs(project, generated.standards or {}),
         "",
         "3. UNRESOLVED FACTS AND ASSUMPTIONS",
         *_unresolved(project),
@@ -182,9 +186,11 @@ def report(generated: Generated, rows: list[tuple[str, str, str]]) -> str:
     return "\n".join(lines)
 
 
-def _inputs(project: dict) -> list[str]:
+def _inputs(project: dict, standards: dict) -> list[str]:
     site, layout = project["site"], project["layout"]
-    values = {**site, **layout,
+    values = {**standards, **site, **layout,
+              "water": ", ".join(f"{w['kind']} in {w.get('survey_colour') or w.get('survey_layer')}"
+                                 for w in site.get("water", [])) or "none",
               "abutting_road": (f"{site['abutting_road_ft']:g} ft" if "abutting_road_ft" in site
                                 else f"{site.get('abutting_road_m', 0):g} m")
               + f" ({site.get('abutting_road_status', '')})",

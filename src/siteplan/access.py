@@ -98,23 +98,52 @@ def loop_road(envelope, inner):
 
 
 ENTRANCE_POSITIONS = (0.5, 0.4, 0.6, 0.3, 0.7, 0.2, 0.8)  # along the side, middle first
+ENTRANCE_STEP_M = 3.0  # where along a side an entrance is tried, when it has to reach a loop
+APPROACH_MAX_M = 80.0
+LOOP_OVERLAP_SQM = 18.0  # the approach runs 2 m into the loop road, so the two join
 
 
-def entrance(plot: Polygon, access_side: str | None, depth_m: float,
-             keep_out=None) -> Entrance:
-    """The main entrance and approach road on the side the access road runs along: the longest
-    straight stretch of boundary facing that side, entered as near its middle as keeps the
-    approach off any water buffer. With no side known it goes on the longest stretch, and the
-    note says so."""
+def entrance(plot: Polygon, access_side: str | None, depth_m: float, keep_out=None,
+             reach=None) -> Entrance:
+    """The main entrance and approach road on the side the access road runs along. With a loop
+    to `reach`, the entrance goes where the shortest approach joins it, off any water buffer;
+    without one, as near the middle of the longest stretch as keeps off the water. With no side
+    known it goes on the longest stretch, and the note says so."""
     runs = straight_runs(plot)
     facing = [r for r in runs if access_side and _faces(plot, r, access_side)]
     if facing:
-        run = max(facing, key=lambda r: r.length)
         note = f"on the {access_side} side, where the access road runs"
     else:
-        run = max(runs, key=lambda r: r.length)
+        facing = [max(runs, key=lambda r: r.length)]
         note = ("ASSUMED on the longest boundary: no access side is known" if not access_side
                 else f"ASSUMED on the longest boundary: no side faces {access_side}")
+    gate_depth = max(rules.PERIPHERAL_GREEN_STRIP_M, 1.0)
+    if reach is None or reach.is_empty:
+        run = max(facing, key=lambda r: r.length)
+        spots = [run.line.interpolate(f, normalized=True) for f in ENTRANCE_POSITIONS]
+        rect = _approach_along(plot, run)
+        clear = [p for p in spots if keep_out is None or
+                 rect(p, depth_m).intersection(keep_out).area < EPS_M]
+        at = clear[0] if clear else spots[0]
+        return Entrance(rect(at, gate_depth).intersection(plot),
+                        rect(at, depth_m).intersection(plot), APPROACH_M, note)
+    best = None
+    for run in facing:
+        rect = _approach_along(plot, run)
+        steps = int((run.length - APPROACH_M) // ENTRANCE_STEP_M)
+        for i in range(max(steps, 0) + 1):
+            at = run.line.interpolate(APPROACH_M / 2 + i * ENTRANCE_STEP_M)
+            depth = _depth_to(rect, at, depth_m, reach, keep_out)
+            if depth is not None and (best is None or depth < best[0]):
+                best = (depth, rect, at)
+    if best is None:  # no approach reaches the loop: keep the plain one, the checker will say
+        return entrance(plot, access_side, depth_m, keep_out)
+    depth, rect, at = best
+    return Entrance(rect(at, gate_depth).intersection(plot),
+                    rect(at, depth).intersection(plot), APPROACH_M, note)
+
+
+def _approach_along(plot: Polygon, run):
     (x0, y0), (x1, y1) = run.line.coords[0], run.line.coords[-1]
     along = ((x1 - x0) / run.length, (y1 - y0) / run.length)
     inward = _inward(plot, run.line, along)
@@ -126,13 +155,27 @@ def entrance(plot: Polygon, access_side: str | None, depth_m: float,
         return Polygon([a, b, (b[0] + inward[0] * depth, b[1] + inward[1] * depth),
                         (a[0] + inward[0] * depth, a[1] + inward[1] * depth)])
 
-    spots = [run.line.interpolate(f, normalized=True) for f in ENTRANCE_POSITIONS]
-    clear = [p for p in spots if keep_out is None or
-             rectangle(p, depth_m).intersection(keep_out).area < EPS_M]
-    at = clear[0] if clear else spots[0]
-    gate_depth = max(rules.PERIPHERAL_GREEN_STRIP_M, 1.0)
-    return Entrance(rectangle(at, gate_depth).intersection(plot),
-                    rectangle(at, depth_m).intersection(plot), APPROACH_M, note)
+    return rectangle
+
+
+def _depth_to(rect, at, least: float, reach, keep_out) -> float | None:
+    """How deep an approach from `at` must go to run into the loop; None if it cannot, or
+    would cross water on the way. The overlap only grows with depth, so it is bisected."""
+    def overlap(depth: float) -> float:
+        return rect(at, depth).intersection(reach).area
+
+    if overlap(APPROACH_MAX_M) < LOOP_OVERLAP_SQM:
+        return None
+    lo, hi = least, APPROACH_MAX_M
+    if overlap(lo) < LOOP_OVERLAP_SQM:
+        for _ in range(12):  # to within 2 cm
+            mid = (lo + hi) / 2
+            lo, hi = (lo, mid) if overlap(mid) >= LOOP_OVERLAP_SQM else (mid, hi)
+    else:
+        hi = lo
+    if keep_out is not None and rect(at, hi).intersection(keep_out).area > EPS_M:
+        return None
+    return hi
 
 
 def _faces(plot: Polygon, run, side: str) -> bool:
@@ -234,6 +277,19 @@ def along_boundary(inner: Polygon) -> list[Polygon]:
                 size = math.hypot(bx, by) or 1.0
                 centre = (vx - R_IN * bx / size, vy - R_IN * by / size)
                 sectors.append(sector(centre, R_IN, R_OUT, _angle(m1), turn))
+    return sectors
+
+
+def loop_turns(loop) -> list[Polygon]:
+    """The swept sectors along the loop road as drawn: at the bends of its outer edge, as the
+    boundary's; round the corners of the land it rings, as a block's."""
+    sectors = []
+    for part in getattr(loop, "geoms", [loop]):
+        if part.is_empty or part.geom_type != "Polygon":
+            continue
+        sectors += along_boundary(Polygon(part.exterior))
+        for hole in part.interiors:
+            sectors += around_block(Polygon(hole))
     return sectors
 
 

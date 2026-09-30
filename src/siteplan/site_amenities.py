@@ -13,9 +13,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+import numpy as np
+import shapely
 from pydantic import BaseModel, Field, PositiveFloat
 from shapely.affinity import rotate
-from shapely.geometry import Point, Polygon, box
+from shapely.geometry import Point, Polygon
 from shapely.ops import unary_union
 
 SCAN_STEP_M = 2.0
@@ -82,7 +84,8 @@ def place_amenities(
 
 
 def _fit(room, item: AmenityItem, angle_deg: float, anchor: Point | None) -> Polygon | None:
-    """The position nearest the anchor that holds the whole rectangle."""
+    """The position nearest the anchor that holds the whole rectangle. Every position on the
+    grid is tried at once; only the winner is built as a shape."""
     best: tuple[float, Polygon] | None = None
     for angle in (angle_deg, angle_deg + 90):
         for part in _parts(room):
@@ -90,15 +93,27 @@ def _fit(room, item: AmenityItem, angle_deg: float, anchor: Point | None) -> Pol
                 continue
             turned = rotate(part, -angle, origin="centroid")
             minx, miny, maxx, maxy = turned.bounds
-            for x0 in _steps(minx + EPS_M, maxx - item.width_m - EPS_M):
-                for y0 in _steps(miny + EPS_M, maxy - item.depth_m - EPS_M):
-                    shape = box(x0, y0, x0 + item.width_m, y0 + item.depth_m)
-                    if not turned.contains(shape):
-                        continue
-                    upright = rotate(shape, angle, origin=part.centroid)
-                    score = upright.centroid.distance(anchor) if anchor else 0.0
-                    if best is None or score < best[0]:
-                        best = (score, upright)
+            xs = _steps(minx + EPS_M, maxx - item.width_m - EPS_M)
+            ys = _steps(miny + EPS_M, maxy - item.depth_m - EPS_M)
+            if not xs or not ys:
+                continue
+            x0, y0 = (a.ravel() for a in np.meshgrid(xs, ys))
+            boxes = shapely.box(x0, y0, x0 + item.width_m, y0 + item.depth_m)
+            shapely.prepare(turned)
+            fits = shapely.contains(turned, boxes)
+            if not fits.any():
+                continue
+            origin = part.centroid
+            cx = x0[fits] + item.width_m / 2 - origin.x
+            cy = y0[fits] + item.depth_m / 2 - origin.y
+            turn = np.radians(angle)
+            ux = origin.x + cx * np.cos(turn) - cy * np.sin(turn)
+            uy = origin.y + cx * np.sin(turn) + cy * np.cos(turn)
+            scores = np.hypot(ux - anchor.x, uy - anchor.y) if anchor else np.zeros(len(ux))
+            pick = int(np.argmin(scores))
+            if best is None or scores[pick] < best[0]:
+                shape = boxes[fits][pick]
+                best = (float(scores[pick]), rotate(shape, angle, origin=origin))
     return best[1] if best else None
 
 
