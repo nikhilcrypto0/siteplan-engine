@@ -41,9 +41,11 @@ from siteplan.geometry import opening
 from siteplan.parking import (
     ParkingPlan,
     ParkingStandards,
+    bay_area_sqm,
     cellar_floor,
     cellar_outline,
     cellars_needed,
+    count_bays,
     place_ramp,
     ramp_size,
     stilt_area,
@@ -55,6 +57,9 @@ EPS_M = 0.01
 CLEARANCE_M = 1.5  # walking room between the club house, the ramp and the tot-lot
 CLUB_ASPECT = 1.6
 AMENITY_SHARE = rules.AMENITY_MIN_BUILT_UP_FRACTION
+# The share of a parking floor that bays and aisles are expected to take once laid out, for
+# sizing the cellars; the cars are then counted and a level added if they fall short.
+LAYOUT_SHARE = 0.75
 
 
 @dataclass(frozen=True)
@@ -106,10 +111,12 @@ def frame(plot: Polygon, setback_m: float, gross_area_sqm: float | None = None,
     if envelope.is_empty:
         return None
     loop = loop_road(envelope, inner)
-    # The entrance goes where the shortest approach from the access side joins the loop.
+    # The entrance goes where the shortest approach from the access side joins the loop; it
+    # stops at the towers' land, which the loop already rings.
     gate = entrance(plot, access_side, inset + EPS_M, keep_out, loop)
+    gate = Entrance(gate.gate, _largest(gate.approach.difference(envelope)), gate.width_m,
+                    gate.note)
     land = land.difference(gate.approach)
-    envelope = envelope.difference(gate.approach)
     target = rules.OPEN_SPACE_MIN_FRACTION * max(plot.area, gross_area_sqm or 0.0)
     corridor = max(setback_m, ROAD_M) + EPS_M
     return Frame(plot, target, setback_m, corridor, green_m, envelope, land, inner, loop, gate,
@@ -179,19 +186,19 @@ def _attempt(fr: Frame, placement: Placement, ctx: Context, quick: bool
     if club_sqm and not _wide_enough(club_room, footprint):
         return None, _no_club(club_sqm)
 
-    built_up = tower_sqm + club_sqm
-    need = ctx.parking_percent / 100 * built_up
+    need = ctx.parking_percent / 100 * (tower_sqm + club_sqm)
     stilt = stilt_area(towers)
     width, length = ramp_size(ctx.standards)
     cores = [c for t in towers for c in t.cores]
     per_level = [_level_area(fr, n, cores, width * length, ctx.standards)
                  for n in range(1, ctx.standards.max_cellars + 1)]
-    levels = cellars_needed(need, stilt, per_level)
+    # Sized so the cars that fit in bays and aisles, not only the floor, meet the need.
+    levels = cellars_needed(need, stilt * LAYOUT_SHARE, [a * LAYOUT_SHARE for a in per_level])
     if levels is None:
-        best = stilt + (ctx.standards.max_cellars * per_level[-1] if per_level else 0.0)
+        best = (stilt + (ctx.standards.max_cellars * per_level[-1] if per_level else 0.0))
         return None, (f"parking: {need:,.0f} m² needed ({ctx.parking_percent:g}% of built-up), "
-                      f"at most {best:,.0f} m² with the stilt and "
-                      f"{ctx.standards.max_cellars} cellars")
+                      f"about {best * LAYOUT_SHARE:,.0f} m² of bays and aisles fit in the "
+                      f"stilt and {ctx.standards.max_cellars} cellars")
 
     if quick:  # the area book: club, ramp and tot-lot must all fit in the pockets together
         spare = sum(p.area for p in _pockets(room))
@@ -225,19 +232,85 @@ def _attempt(fr: Frame, placement: Placement, ctx: Context, quick: bool
                           f"{fr.tot_lot_target_sqm:,.0f} m² needed (rule 7(a)(vii))")
         free = room.difference(unary_union(chosen)) if chosen else room
 
-    outline = cellar_outline(fr.plot, fr.plot.area, levels, fr.keep_out) if levels else None
-    plan = ParkingPlan(
-        percent=ctx.parking_percent, basis=ctx.parking_basis, built_up_sqm=built_up,
-        stilt_sqm=stilt, surface_sqm=0.0, cellar_levels=levels,
-        cellar_setback_m=rules.cellar_setback_m(fr.plot.area, max(levels, 1)),
-        cellar_sqm_per_level=per_level[levels - 1] if levels else 0.0,
-        cellar_outline=outline, ramps=(ramp,) if ramp is not None else (),
-        ramp_width_m=width if levels else 0.0,
-        ramp_length_m=length if levels else 0.0,
-        utilities_fraction=ctx.standards.utilities_fraction if levels else 0.0,
-    )
+    plan = parking_plan(fr, towers, club_sqm, ctx, levels, (ramp,) if ramp is not None else ())
     return Ground(towers, tuple(roads), fire_lanes, club, club_sqm, ramp, tuple(chosen), plan,
                   free), ""
+
+
+def parking_plan(fr: Frame, towers, club_sqm: float, ctx: Context, levels: int,
+                 ramps: tuple[Polygon, ...], surface_sqm: float = 0.0,
+                 cars: dict[str, int] | None = None) -> ParkingPlan:
+    """The parking a set of towers is given with `levels` cellars (rule 13 and Table V)."""
+    width, length = ramp_size(ctx.standards)
+    cores = [c for t in towers for c in t.cores]
+    tower_sqm = sum(t.footprint.area for t in towers) * ctx.floors
+    return ParkingPlan(
+        percent=ctx.parking_percent, basis=ctx.parking_basis, built_up_sqm=tower_sqm + club_sqm,
+        stilt_sqm=stilt_area(towers), surface_sqm=surface_sqm, cellar_levels=levels,
+        cellar_setback_m=rules.cellar_setback_m(fr.plot.area, max(levels, 1)),
+        cellar_sqm_per_level=(_level_area(fr, levels, cores, width * length, ctx.standards)
+                              if levels else 0.0),
+        cellar_outline=(cellar_outline(fr.plot, fr.plot.area, levels, fr.keep_out)
+                        if levels else None),
+        ramps=ramps if levels else (), ramp_width_m=width if levels else 0.0,
+        ramp_length_m=length if levels else 0.0,
+        utilities_fraction=ctx.standards.utilities_fraction if levels else 0.0,
+        cars=cars or {},
+    )
+
+
+def firm_up(fr: Frame, ground: Ground, towers, ctx: Context, angle: float, bays: int,
+            spare=None, roads=None) -> ParkingPlan:
+    """Count the cars that fit on every floor and add cellar levels (and, with none yet, a ramp
+    on the spare ground) until the bays and aisles laid out meet Table V, or the deepest the
+    standards allow is reached; the checker says so if even that is short."""
+    levels, ramps = ground.parking.cellar_levels, ground.parking.ramps
+    surface = bay_area_sqm(bays)
+
+    def counted(n: int) -> ParkingPlan:
+        plan = parking_plan(fr, towers, ground.club_sqm, ctx, n, ramps, surface)
+        return ParkingPlan(**{**plan.__dict__, "cars": _cars(fr, plan, towers, angle, bays)})
+
+    def enough(plan: ParkingPlan) -> bool:
+        need = plan.required_sqm - EPS_M
+        return plan.provided_sqm >= need and plan.laid_out_sqm >= need
+
+    plan = counted(levels)
+    while not enough(plan) and levels < ctx.standards.max_cellars:  # dig deeper
+        if not ramps:
+            width, length = ramp_size(ctx.standards)
+            ramp = (place_ramp(spare, roads, width, length, fr.entrance.gate.centroid)
+                    if spare is not None and roads is not None else None)
+            if ramp is None:
+                return plan
+            ramps = (ramp,)
+        levels += 1
+        plan = counted(levels)
+    while enough(plan) and levels > 0:  # but no deeper than the cars counted need
+        shallower = counted(levels - 1)
+        if not enough(shallower):
+            break
+        levels, plan = levels - 1, shallower
+    return plan
+
+
+def _cars(fr: Frame, plan: ParkingPlan, towers, angle: float, bays: int) -> dict[str, int]:
+    cars = {"stilt": sum(count_bays(t.footprint.difference(unary_union(t.cores)), angle)
+                         for t in towers)}
+    if plan.cellar_levels and plan.cellar_outline is not None:
+        cores = [c for t in towers for c in t.cores]
+        floor = cellar_floor(plan.cellar_outline, cores, plan.ramps)
+        per_level = int(count_bays(floor, angle) * (1 - plan.utilities_fraction))
+        for level in range(1, plan.cellar_levels + 1):
+            cars[f"cellar {level}"] = per_level
+    if bays:
+        cars["surface"] = bays
+    return cars
+
+
+def _largest(shape) -> Polygon:
+    parts = [p for p in getattr(shape, "geoms", [shape]) if isinstance(p, Polygon)]
+    return max(parts, key=lambda p: p.area) if parts else shape
 
 
 def _no_club(club_sqm: float) -> str:
@@ -339,12 +412,3 @@ def _pockets(room) -> list[Polygon]:
     parts = getattr(usable, "geoms", [usable])
     return [p for p in parts if isinstance(p, Polygon)
             and p.area >= rules.OPEN_SPACE_MIN_POCKET_SQM + EPS_M]
-
-
-def cellar_levels_floor(fr: Frame, ground: Ground):
-    """The parking floor of a cellar level, for counting the cars that fit on it."""
-    plan = ground.parking
-    if not plan.cellar_levels or plan.cellar_outline is None:
-        return None
-    cores = [c for t in ground.towers for c in t.cores]
-    return cellar_floor(plan.cellar_outline, cores, plan.ramps)

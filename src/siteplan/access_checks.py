@@ -18,6 +18,7 @@ from siteplan.access import (
     LANE_M,
     around_block,
     blocked,
+    healed,
     lane_passes,
     loop_turns,
     through_roads,
@@ -50,7 +51,7 @@ def road_findings(site) -> list[Finding]:
             f"road must be wider, so the authority may ask for up to {high:g} m.",
         ))
     others = _roads(site, "loop", "internal")
-    network = unary_union([r.shape for r in others]) if others else None
+    network = healed(unary_union([r.shape for r in site.roads])) if others else None
     if network is not None:
         thin = narrower_than(network, rules.INTERNAL_ROAD_M - 0.02)
         loops = len(_roads(site, "loop"))

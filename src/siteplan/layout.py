@@ -28,13 +28,13 @@ from siteplan import rules
 from siteplan.access import Entrance, RoadPiece
 from siteplan.area_statement import AreaStatement, FloorLine, TowerGroup
 from siteplan.checks import Building, Finding, Site, Status, check_site
-from siteplan.grounds import Context, Frame, Ground, cellar_levels_floor, frame, lay
+from siteplan.geometry import angle_gap
+from siteplan.grounds import Context, Frame, Ground, firm_up, frame, lay
 from siteplan.library import FlatLibrary
 from siteplan.parking import (
     ParkingPlan,
     ParkingStandards,
     bay_area_sqm,
-    count_bays,
     parking_percent,
     surface_bays,
 )
@@ -49,7 +49,8 @@ SWEEP_STEP_M = 2.0
 # set none, so the search tries whole free stretches and two shorter caps.
 EXPLORED_TOWER_LENGTHS_M: tuple[float | None, ...] = (None, 60.0, 45.0)
 SHORTLIST = 10  # placements laid exactly, of the hundreds ranked by area alone
-SAME_IDEA_OVERLAP = 0.7  # two layouts sharing this much tower ground are one idea
+SAME_IDEA_OVERLAP = 0.5  # two layouts sharing this much tower ground are one idea
+ANGLE_FAMILY_DEG = 10.0  # towers running within this of each other run the same way
 
 
 class LayoutRequest(BaseModel):
@@ -368,23 +369,30 @@ def _placement_score(placement: Placement, request: LayoutRequest) -> float:
 
 
 def _shortlist(ranked, request: LayoutRequest) -> list[Placement]:
-    """The best placements that differ in towers, sale area or direction."""
-    seen: set[tuple] = set()
-    chosen: list[Placement] = []
-    for score, placement in ranked:
-        key = (len(placement.towers), round(score, -3), round(placement.angle_deg))
-        if key in seen:
-            continue
-        seen.add(key)
-        chosen.append(placement)
-        if len(chosen) == max(SHORTLIST, request.options * 3):
+    """The placements worth laying exactly: the best of every massing (a tower count and a
+    direction) first, so different ideas reach the checker, then the next best of any."""
+    size = max(SHORTLIST, request.options * 3)
+    best_of: dict[tuple, Placement] = {}
+    for _, placement in ranked:
+        best_of.setdefault(_massing(placement.towers, placement.angle_deg), placement)
+    chosen = list(best_of.values())[:size]
+    seen = {id(p) for p in chosen}
+    for _, placement in ranked:
+        if len(chosen) >= size:
             break
+        if id(placement) not in seen:
+            chosen.append(placement)
+            seen.add(id(placement))
     return chosen
 
 
+def _massing(towers, angle_deg: float) -> tuple[int, int]:
+    """How many towers, running which way (to the nearest ANGLE_FAMILY_DEG, modulo 180)."""
+    return len(towers), round((angle_deg % 180) / ANGLE_FAMILY_DEG) % round(180 / ANGLE_FAMILY_DEG)
+
+
 def pick_distinct(options: list[LayoutOption], count: int) -> list[LayoutOption]:
-    """The best options that are genuinely different: another tower count, or towers that
-    share less than SAME_IDEA_OVERLAP of their ground with every option already kept."""
+    """The best options that are genuinely different ideas (see same_idea), best first."""
     chosen: list[LayoutOption] = []
     for option in sorted(options, key=lambda o: -o.score):
         if any(same_idea(option, kept) for kept in chosen):
@@ -396,7 +404,11 @@ def pick_distinct(options: list[LayoutOption], count: int) -> list[LayoutOption]
 
 
 def same_idea(a: LayoutOption, b: LayoutOption) -> bool:
-    if len(a.towers) != len(b.towers) or a.floors != b.floors:
+    """Two layouts are one idea when they have as many towers running the same way on mostly
+    the same ground, whatever their height: one floor less is not another scheme."""
+    if len(a.towers) != len(b.towers):
+        return False
+    if angle_gap(a.orientation_deg, b.orientation_deg) > ANGLE_FAMILY_DEG:
         return False
     ground_a = unary_union([t.footprint for t in a.towers])
     ground_b = unary_union([t.footprint for t in b.towers])
@@ -425,18 +437,8 @@ def _furnish(fr: Frame, ground: Ground, angle: float, request: LayoutRequest,
                 [f.shape.buffer(AMENITY_CLEARANCE_M, join_style="mitre") for f in facilities]))
     reachable = [p for p in _parts(free) if p.distance(road_land) <= 0.5]
     bays = tuple(surface_bays(unary_union(reachable), angle)) if reachable else ()
-
-    plan = ground.parking
-    cars = {"stilt": sum(count_bays(t.footprint.difference(unary_union(t.cores)), angle)
-                         for t in towers)}
-    floor = cellar_levels_floor(fr, ground)
-    if floor is not None:
-        per_level = int(count_bays(floor, angle) * (1 - plan.utilities_fraction))
-        for level in range(1, plan.cellar_levels + 1):
-            cars[f"cellar {level}"] = per_level
-    if bays:
-        cars["surface"] = len(bays)
-    plan = ParkingPlan(**{**plan.__dict__, "surface_sqm": bay_area_sqm(len(bays)), "cars": cars})
+    spare = free.difference(unary_union(bays)) if (free is not None and bays) else free
+    plan = firm_up(fr, ground, towers, ctx, angle, len(bays), spare, road_land)
 
     option = LayoutOption(
         orientation_deg=angle, towers=towers, open_space=ground.tot_lot, floors=request.floors,

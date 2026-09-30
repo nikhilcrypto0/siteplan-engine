@@ -19,6 +19,7 @@ from pathlib import Path
 import ezdxf
 from shapely.geometry import Point, Polygon
 
+from siteplan import rules
 from siteplan.area_statement import AreaStatement
 from siteplan.cases import Case
 from siteplan.findings import Status
@@ -176,8 +177,9 @@ def report(generated: Generated, rows: list[tuple[str, str, str]]) -> str:
     ]
     if not generated.found.options:
         lines.append("  None: no height has a layout that passes every rule.")
+    gross = generated.project["site"].get("gross_area_sqm") or generated.plot.area
     for summary, option in zip(generated.options, generated.found.options, strict=True):
-        lines += _option(summary, option, generated.plot)
+        lines += _option(summary, option, generated.plot, gross)
     lines += ["", "6. REJECTED CANDIDATES", *_rejected(generated.found)]
     width = max(len(r[0]) for r in rows)
     lines += ["", "7. COMPARED WITH THE FIRM'S PLAN (read only now)",
@@ -239,8 +241,11 @@ def _heights(generated: Generated) -> list[str]:
     return lines
 
 
-def _option(summary: dict, option: LayoutOption, plot: Polygon) -> list[str]:
+def _option(summary: dict, option: LayoutOption, plot: Polygon, gross_sqm: float) -> list[str]:
     parking = summary["parking"]
+    tot_lot_need = rules.OPEN_SPACE_MIN_FRACTION * max(plot.area, gross_sqm)
+    club_need = (rules.AMENITY_MIN_BUILT_UP_FRACTION * option.built_up_sqm
+                 if option.total_flats >= rules.AMENITY_MIN_UNITS else 0.0)
     towers = ", ".join(f"{t.name} {t.length_m:.0f} m" for t in option.towers)
     by_type = ", ".join(f"{k} {n}" for k, n in summary["flats_by_type"].items())
     asked = ", ".join(f"{k} {v:.0%}" for k, v in sorted(option.unit_mix_target.items()))
@@ -271,13 +276,16 @@ def _option(summary: dict, option: LayoutOption, plot: Polygon) -> list[str]:
                             for f in fire if f.status is not Status.PASS),
         f"    Parking: required {parking.get('required_sqm', 0):,} m² "
         f"({parking.get('percent', 0):g}%, {parking.get('basis', '')}); provided "
-        f"{parking.get('provided_sqm', 0):,} m² = stilt {parking.get('stilt_sqm', 0):,} + surface "
-        f"{parking.get('surface_sqm', 0):,} + {parking.get('cellar_levels', 0)} cellar level(s) x "
-        f"{parking.get('cellar_sqm_per_level', 0):,}; ramp {parking.get('ramp', 'none')}; cars "
-        f"{parking.get('cars', {})}",
-        f"    Tot-lot: {summary['open_space_sqm']:,.0f} m² in {len(option.open_space)} pocket(s), "
-        f"{summary['open_space_share_pct']}% of the net plot",
-        f"    Club house: {summary['club_house_sqm']:,.0f} m² built-up on "
+        f"{parking.get('provided_sqm', 0):,} m² of floor = stilt {parking.get('stilt_sqm', 0):,} + "
+        f"surface {parking.get('surface_sqm', 0):,} + {parking.get('cellar_levels', 0)} cellar "
+        f"level(s) x {parking.get('cellar_sqm_per_level', 0):,}; {parking.get('total_cars', 0):,} "
+        f"cars laid out in bays and aisles = {parking.get('laid_out_sqm', 0):,} m² "
+        f"{parking.get('cars', {})}; ramp {parking.get('ramp', 'none')}",
+        f"    Tot-lot: required {tot_lot_need:,.0f} m² (10% of the larger of the net and gross "
+        f"site); provided {summary['open_space_sqm']:,.0f} m² in {len(option.open_space)} "
+        f"pocket(s), {summary['open_space_share_pct']}% of the net plot",
+        f"    Club house: required {club_need:,.0f} m² (3% of the built-up area, from 100 units); "
+        f"provided {summary['club_house_sqm']:,.0f} m² built-up on "
         f"{summary['club_house_footprint_sqm']:,.0f} m²; facilities placed: "
         f"{', '.join(a['name'] for a in summary['amenities']) or 'none'}"
         + (f"; no room for: {', '.join(summary['amenities_with_no_room'])}"

@@ -35,20 +35,23 @@ def _table_v(site, plan) -> Finding:
     if plan.cellar_levels:
         parts.append(f"{plan.cellar_levels} cellar level{'s' if plan.cellar_levels > 1 else ''} "
                      f"x {plan.cellar_sqm_per_level:,.0f} m²")
-    measured = " + ".join(parts) + f" = {plan.provided_sqm:,.0f} m²"
+    measured = " + ".join(parts) + f" = {plan.provided_sqm:,.0f} m² of parking floor"
     if plan.cars:
-        measured += f"; {sum(plan.cars.values()):,} cars fit in bays and aisles"
-    required = f">= {plan.percent:g}% of built-up = {need:,.0f} m² ({plan.basis})"
-    if plan.provided_sqm + AREA_SLACK_SQM >= need:
+        measured += (f"; {sum(plan.cars.values()):,} cars fit in bays and aisles = "
+                     f"{plan.laid_out_sqm:,.0f} m² laid out")
+    required = (f">= {plan.percent:g}% of built-up = {need:,.0f} m² ({plan.basis}), as floor "
+                "and as bays and aisles that fit")
+    # Both the floor and what can physically be laid out on it have to meet the need.
+    provided = min(plan.provided_sqm, plan.laid_out_sqm) if plan.cars else plan.provided_sqm
+    if provided + AREA_SLACK_SQM >= need:
         return Finding("Parking (Table V)", Status.PASS, measured, required, _clause(site))
     lenient = rules.PARKING_PERCENT_ELSEWHERE / 100 * plan.built_up_sqm
     unsettled = plan.percent > rules.PARKING_PERCENT_ELSEWHERE and "not settled" in plan.basis
-    if unsettled and plan.provided_sqm + AREA_SLACK_SQM >= lenient:
+    if unsettled and provided + AREA_SLACK_SQM >= lenient:
         return Finding("Parking (Table V)", Status.UNVERIFIED, measured, required, _clause(site),
                        "Enough at 20%, short at 30%: it depends on whose rules apply.")
     return Finding("Parking (Table V)", Status.FAIL,
-                   f"{measured}, short by {need - plan.provided_sqm:,.0f} m²", required,
-                   _clause(site))
+                   f"{measured}, short by {need - provided:,.0f} m²", required, _clause(site))
 
 
 def _visitors(plan) -> Finding:

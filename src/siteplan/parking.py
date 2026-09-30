@@ -37,6 +37,8 @@ AISLE_M = 6.0
 MAX_BAYS = 600  # a site plan stops being readable long before this
 EPS_M = 0.01
 RAMP_STEP_M = 2.0
+# A bay and half the 6 m aisle it opens onto, as a double-loaded row is laid out.
+LAID_OUT_SQM_PER_CAR = BAY_WIDTH_M * (BAY_DEPTH_M + AISLE_M / 2)
 
 
 def bay_area_sqm(bays: int) -> float:
@@ -174,6 +176,12 @@ class ParkingPlan:
         """Parking at ground level, where visitors' parking is marked (rule 13(c)(xii))."""
         return self.stilt_sqm + self.surface_sqm
 
+    @property
+    def laid_out_sqm(self) -> float:
+        """The parking the cars that physically fit account for: each a bay and its share of
+        the aisle. Zero until the cars are counted."""
+        return sum(self.cars.values()) * LAID_OUT_SQM_PER_CAR
+
     def as_dict(self) -> dict:
         return {
             "percent": self.percent, "basis": self.basis,
@@ -185,6 +193,7 @@ class ParkingPlan:
             "ramp": (f"{len(self.ramps)} x {self.ramp_width_m:g} m wide, "
                      f"{self.ramp_length_m:g} m long at 1 in 8") if self.ramps else "none",
             "cars": dict(self.cars), "total_cars": sum(self.cars.values()),
+            "laid_out_sqm": round(self.laid_out_sqm),
         }
 
 

@@ -25,7 +25,8 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
-from shapely.geometry import Point, Polygon
+from shapely.affinity import rotate
+from shapely.geometry import Point, Polygon, box
 from shapely.geometry.polygon import orient
 from shapely.ops import unary_union
 
@@ -303,13 +304,50 @@ def lane_passes(shape) -> Polygon:
     return opening(shape, LANE_M - 2 * EPS_M)
 
 
+END_M = 1.0  # how much of a road's length counts as its end
+TOUCH_M = 0.5
+
+
 def through_roads(pieces: list[RoadPiece], base) -> tuple[list[RoadPiece], list[RoadPiece]]:
-    """Split internal roads into those joining the loop (or approach) at both ends and the dead
-    ends: a road touching the rest of the network in one place only is a cul-de-sac."""
+    """Split internal roads into those joining the rest of the network at both ends and the
+    dead ends. A road running alongside the loop touches it all along its side, so it is its
+    two ends that are looked at, not how many times it touches."""
     through, dead = [], []
-    touching = base.buffer(0.2)
     for piece in pieces:
-        contact = piece.shape.intersection(touching)
-        count = len(getattr(contact, "geoms", [contact])) if not contact.is_empty else 0
-        (through if count >= 2 else dead).append(piece)
+        others = [p.shape for p in pieces if p is not piece]
+        network = unary_union([base, *others]).buffer(TOUCH_M)
+        ends = road_ends(piece.shape)
+        (through if ends and all(e.intersects(network) for e in ends) else dead).append(piece)
     return through, dead
+
+
+def road_ends(shape: Polygon) -> list[Polygon]:
+    """The two ends of a road, END_M deep, across its length."""
+    angle = _long_axis(shape)
+    turned = rotate(shape, -angle, origin=(0, 0))
+    minx, miny, maxx, maxy = turned.bounds
+    caps = [box(minx - 1, miny - 1, minx + END_M, maxy + 1),
+            box(maxx - END_M, miny - 1, maxx + 1, maxy + 1)]
+    return [rotate(turned.intersection(cap), angle, origin=(0, 0)) for cap in caps
+            if not turned.intersection(cap).is_empty]
+
+
+def _long_axis(shape: Polygon) -> float:
+    """The direction, in degrees, of the long side of the smallest rectangle round the shape."""
+    hull = list(shape.convex_hull.exterior.coords)
+    best = None
+    for (x0, y0), (x1, y1) in zip(hull, hull[1:], strict=False):
+        if (x0, y0) == (x1, y1):
+            continue
+        angle = math.degrees(math.atan2(y1 - y0, x1 - x0))
+        minx, miny, maxx, maxy = rotate(shape, -angle, origin=(0, 0)).bounds
+        area = (maxx - minx) * (maxy - miny)
+        if best is None or area < best[0]:
+            long = angle if maxx - minx >= maxy - miny else angle + 90
+            best = (area, long)
+    return best[1] if best else 0.0
+
+
+def healed(shape, gap_m: float = 0.05):
+    """The shape with hairline cracks closed: pieces drawn to meet can miss by a hair."""
+    return shape.buffer(gap_m, join_style="mitre").buffer(-gap_m, join_style="mitre")
