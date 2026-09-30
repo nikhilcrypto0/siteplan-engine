@@ -102,7 +102,7 @@ def check_site(site: Site) -> list[Finding]:
         findings += _spacing_findings(encoded, bands)
     findings += _open_space_findings(site)
     findings.append(_green_strip_finding(site, encoded, bands))
-    findings.append(_driveway_finding(site))
+    findings.append(_driveway_finding(site, high_rise=bool(all_high_rise)))
     findings.append(_amenity_finding(site))
     findings.append(_parking_finding(site))
     return findings
@@ -128,12 +128,16 @@ def _green_strip_finding(site: Site, high_rise, bands) -> Finding:
     )
 
 
-def _driveway_finding(site: Site) -> Finding:
-    required = f">= {rules.DRIVEWAY_MIN_WIDTH_M:g} m wide"
+def _driveway_finding(site: Site, high_rise: bool) -> Finding:
+    """4.5 m for any drive; 6 m where a high-rise needs its fire-tender approach."""
+    width, clause = rules.DRIVEWAY_MIN_WIDTH_M, rules.DRIVEWAY_CLAUSE
+    if high_rise:
+        width, clause = rules.FIRE_TENDER_MIN_WIDTH_M, rules.FIRE_TENDER_CLAUSE
+    required = f">= {width:g} m wide"
     if site.driveway is None:
         return Finding("Driveway", Status.NOT_CHECKED, "no driveway in this layout", required,
-                       rules.DRIVEWAY_CLAUSE, "Give the layout a driveway width to check it.")
-    narrow = _narrower_than(site.driveway, rules.DRIVEWAY_MIN_WIDTH_M)
+                       clause, "Give the layout a driveway width to check it.")
+    narrow = _narrower_than(site.driveway, width)
     measured = f"{site.driveway.area:,.0f} m²"
     if narrow:
         measured += ", narrower than the minimum in places"
@@ -142,8 +146,9 @@ def _driveway_finding(site: Site) -> Finding:
         Status.FAIL if narrow else Status.PASS,
         measured,
         required,
-        rules.DRIVEWAY_CLAUSE,
-        "Ramps are not counted here; rule 13(c)(vii) keeps those out of the mandatory setbacks.",
+        clause,
+        "Ramps are not counted here; rule 13(c)(vii) lets one into a side or rear setback only "
+        "after leaving 7 m for fire vehicles. The 9 m turning radius is not checked.",
     )
 
 

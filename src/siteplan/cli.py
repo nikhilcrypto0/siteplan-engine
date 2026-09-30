@@ -176,7 +176,8 @@ def _cmd_floors(args: argparse.Namespace) -> int:
         plot_sqm = sqyd_to_sqm(args.plot_sqyd) if args.plot_sqyd else args.plot_sqm
     if road_m is None:
         raise ValueError("Give the road width with --road-m or --road-ft.")
-    print(describe(max_floors(plot_sqm, road_m, args.floor_m, args.stilt_m)))
+    dead_end = {"yes": True, "no": False}.get(args.dead_end)
+    print(describe(max_floors(plot_sqm, road_m, args.floor_m, args.stilt_m, dead_end)))
     return 0
 
 
@@ -315,6 +316,8 @@ def main(argv: list[str] | None = None) -> int:
     road.add_argument("--road-ft", type=float, help="Legal width of the abutting road, feet")
     p.add_argument("--floor-m", type=float, default=3.0, help="Floor-to-floor height")
     p.add_argument("--stilt-m", type=float, default=3.0, help="Stilt height")
+    p.add_argument("--dead-end", choices=("yes", "no"),
+                   help="Does the access road end at the plot? Above 30 m it must not")
     p.set_defaults(run=_cmd_floors)
 
     p = sub.add_parser("cases", help="Check the rules against real schemes (sanctioned plans).")

@@ -139,3 +139,12 @@ def test_the_green_strip_is_only_asked_for_where_the_setback_reaches_9_m():
     assert shallow_finding.status is Status.INFO
     assert "9 m" in shallow_finding.note
     assert _by_rule(check_site(deep))["Peripheral green strip"].status is Status.NOT_CHECKED
+
+
+def test_a_high_rise_needs_a_drive_6_m_wide_for_fire_tenders():
+    drive = box(0, 0, 100, 5)
+    tall = _by_rule(check_site(Site(driveway=drive, buildings=(Building("A", height_m=27),))))
+    low = _by_rule(check_site(Site(driveway=drive, buildings=(Building("Villa", height_m=10),))))
+    assert tall["Driveway"].status is Status.FAIL and tall["Driveway"].required == ">= 6 m wide"
+    assert "15(b)(iv)" in tall["Driveway"].clause
+    assert low["Driveway"].status is Status.PASS and low["Driveway"].required == ">= 4.5 m wide"

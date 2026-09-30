@@ -199,6 +199,16 @@ def test_max_floors_gives_both_stilt_answers_and_the_rule_that_stops_it(ws):
     assert bad.isError
 
 
+def test_max_floors_caps_at_30_m_only_when_told_the_road_ends_at_the_plot(ws):
+    unknown = ok(call(ws, "max_floors", {"plot_area_sqm": 18969, "road_width_m": 18.28}))
+    assert unknown["road_ends_at_plot"] == "not given"
+    assert any(note.startswith("Dead end:") for note in unknown["notes"])
+    dead_end = ok(call(ws, "max_floors", {"plot_area_sqm": 18969, "road_width_m": 18.28,
+                                          "road_is_dead_end": True}))
+    assert dead_end["road_ends_at_plot"] == "yes" and dead_end["extra_floors_through_tdr"] == 0
+    assert sorted(dead_end["floors_above_stilt"].values()) == [9, 9]
+
+
 def test_rule_search_refuses_rather_than_improvising_when_no_document_is_loaded(ws):
     result = call(ws, "search_rules", {"question": "how wide must the driveway be"})
     assert result.isError and "--rules" in result.content[0].text

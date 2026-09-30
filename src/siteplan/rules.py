@@ -124,11 +124,27 @@ DRIVEWAY_MIN_WIDTH_M = 4.5
 DRIVEWAY_CLAUSE = "G.O.168 rule 13(c)(viii) (minimum drive way width 4.5 m)"
 
 # Rule 15(b)(iv) holds a high-rise to NBC's fire protection requirements, and NBC 2016 Part 4
-# (3.4.4.1, note) leaves fire-vehicle clearances to Part 3, whose 4.6(d) asks an entrance of at
-# least 6 m for the fire engine, a gate that folds back against the compound wall, and 4.5 m
-# clear under anything built over the entrance.
+# (3.4.4.1, note) leaves fire-vehicle clearances to Part 3, section 4.6:
+# (b) the road may end in a dead end only for a residential building up to 30 m, the height being
+#     NBC's own (Part 3 2.10: from the ground to the terrace of the top floor, stilt included);
+# (c) the approach and the open space on all sides at least 6 m wide, motorable for a 45 t
+#     tender, with a 9 m turning radius and no parking in it;
+# (d) an entrance of at least 6 m, a gate that folds back against the compound wall, and 4.5 m
+#     clear under anything built over the entrance.
+DEAD_END_MAX_HEIGHT_M = 30.0
+DEAD_END_CLAUSE = (
+    "G.O.168 rule 15(b)(iv), bringing in NBC 2016 Part 3 4.6(b) (no dead-end road for a "
+    "residential building above 30 m)"
+)
+FIRE_TENDER_MIN_WIDTH_M = 6.0
+FIRE_TENDER_CLAUSE = (
+    "G.O.168 rule 15(b)(iv), bringing in NBC 2016 Part 3 4.6(c) (fire-tender approach at least "
+    "6 m wide)"
+)
 GATE_MIN_WIDTH_M = 6.0
-GATE_CLAUSE = "NBC 2016 Part 3 4.6(d), through G.O.168 rule 15(b)(iv) (entrance 6 m minimum)"
+GATE_CLAUSE = (
+    "G.O.168 rule 15(b)(iv), bringing in NBC 2016 Part 3 4.6(d) (entrance at least 6 m wide)"
+)
 
 # Rule 15(a)(x) is the group-housing one: 3% of built-up area, in a block of its own. (Rule 9(o)
 # asks 5% of site area but sits in the row-housing section, so it is not used as the check here.)

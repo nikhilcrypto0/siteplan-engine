@@ -146,21 +146,29 @@ INVENTORY: tuple[Entry, ...] = (
         _BOTH,
         choice="Rule 2(c) settles that a campus of 4,000 m² or more with apartment blocks or "
                "high-rises is a Group Development Scheme, so rule 8(m) applies. The engine still "
-               "draws a driveway ring to rule 13(c)(viii) (4.5 m minimum, 6 m by default). Open: "
+               "draws a driveway ring to rule 13(c)(viii) (at least 4.5 m, or 6 m round a "
+               "high-rise; 6 m by default). Open: "
                "whether the firm's '23 ft wide driveway' (7.0 m) is a rule 8(m) internal road, a "
                "driveway, or the 7 m rule 13(c)(vii) keeps for fire vehicles.",
         settles="The internal road widths on a sanctioned Group Development plan.",
     ),
     Entry(
-        "Road", "The street a high-rise stands on joins a street at least 12 m wide at one end, "
-                "and ends in a dead end only if the building is residential and 30 m or lower.",
-        "12 m street at one end; no dead end above 30 m",
-        "NBC 2016 Part 3 4.6(a), (b); G.O.168 rule 15(b)(iv)", Reading.NOT_MODELLED,
-        choice="Where a road leads is not on a survey, so neither is checked and the floors "
-               "calculator does not warn. It bites above 30 m: Dhulapally's survey draws its "
-               "roads ending at the plot, so floors above 30 m, TDR floors included, would need a "
-               "road that runs on; whether the 40 ft road along the east will is a site fact.",
-        settles="The fire NOC of a sanctioned residential high-rise above 30 m.",
+        "Road", "A residential building above this height may not stand on a road that ends at "
+                "the plot.",
+        f"{rules.DEAD_END_MAX_HEIGHT_M:g} m, the stilt included", rules.DEAD_END_CLAUSE,
+        Reading.AS_WRITTEN, (Where.FLOORS,), ("DEAD_END_MAX_HEIGHT_M", "DEAD_END_CLAUSE"),
+        choice="A survey does not show where a road leads, so the architect says whether it ends "
+               "at the plot: then every answer, TDR floors included, stops at 30 m; left unsaid, "
+               "the floors calculator warns whenever an answer passes 30 m. Dhulapally's survey "
+               "draws its roads ending at the plot; whether the 40 ft road along the east will "
+               "run on is a site fact.",
+    ),
+    Entry(
+        "Road", "The street a high-rise stands on joins a street at least 12 m wide at one end.",
+        "12 m", "G.O.168 rule 15(b)(iv), bringing in NBC 2016 Part 3 4.6(a)",
+        Reading.NOT_MODELLED,
+        choice="Where a road leads is not on a survey, so it is not checked; Table IV already "
+               "asks 12 m or more of the road a high-rise stands on.",
     ),
     # Plot
     Entry(
@@ -330,19 +338,26 @@ INVENTORY: tuple[Entry, ...] = (
                "entrance, are not drawn.",
     ),
     Entry(
-        "Access", "Fire tenders reach a high-rise and drive round it: the approach and the open "
-                  "spaces on all its sides stay motorable, carry a 45 t tender, and are never "
-                  "used for parking.",
-        "6 m wide on all sides, 9 m turning radius, 45 t",
-        "G.O.168 rule 15(b)(iv); NBC 2016 Part 4 3.4.4.1 note; Part 3 4.6(c)",
-        Reading.NOT_MODELLED,
-        choice="Rule 15(b)(iv) holds a high-rise to NBC's fire protection requirements, and NBC "
-               "Part 4 leaves fire-vehicle clearances to Part 3, which sets these figures. "
-               "G.O.168's own figure is wider: a ramp may take a setback only after leaving 7 m "
-               "for fire vehicles (rule 13(c)(vii)). The layout's 6 m drive runs in setbacks of "
-               "7 m or more with no parking in them, which gives the width; the 9 m turn is not "
-               "drawn, and the checker asks only 4.5 m of a drive.",
-        settles="The fire NOC and the drive on a sanctioned high-rise.",
+        "Access", "A high-rise's drive is wide enough for fire tenders.",
+        f"{rules.FIRE_TENDER_MIN_WIDTH_M:g} m", rules.FIRE_TENDER_CLAUSE, Reading.INTERPRETED,
+        (Where.CHECKER,), ("FIRE_TENDER_MIN_WIDTH_M", "FIRE_TENDER_CLAUSE"),
+        choice="Asked of the drive once any block is a high-rise in the state's sense (21 m), "
+               "where rule 15(b)(iv) brings NBC in (NBC Part 4 3.4.4.1's note leaves "
+               "fire-vehicle clearances to Part 3). NBC's own high-rise starts at 15 m, and rule "
+               "15(a)(i) may bring 4.6 in from there.",
+        settles="The drive on a sanctioned building of 15 to 21 m, and the fire NOC of a "
+                "sanctioned high-rise.",
+    ),
+    Entry(
+        "Access", "Fire tenders drive round a high-rise: the open space on all its sides stays "
+                  "motorable, carries a 45 t tender, turns at 9 m and is never parked in.",
+        "all sides; 9 m turning radius; 45 t",
+        "G.O.168 rule 15(b)(iv), bringing in NBC 2016 Part 3 4.6(c)", Reading.NOT_MODELLED,
+        choice="Setbacks of 7 m or more with no parking in them give the width all round, and "
+               "G.O.168's own figure is wider still: a ramp may take a side or rear setback only "
+               "after leaving 7 m for fire vehicles (rule 13(c)(vii)). The 9 m turn and the 45 t "
+               "loading are not drawn.",
+        settles="The fire NOC of a sanctioned high-rise.",
     ),
     # Parking
     Entry(

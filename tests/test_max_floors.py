@@ -75,3 +75,42 @@ def test_the_command_prints_both_stilt_readings(capsys):
     assert main(["floors", "--plot-sqyd", "22686", "--road-ft", "60"]) == 0
     out = capsys.readouterr().out
     assert "stilt + 9" in out and "stilt + 10" in out and "30 m" in out
+
+
+def test_on_a_dead_end_road_dhulapally_stops_at_stilt_plus_9_either_way_with_no_tdr():
+    limit = max_floors(plot_sqm=18969, road_m=18.28, dead_end=True)
+    assert limit.max_height_m == 30.0 and limit.dead_end is True
+    assert (limit.floors_stilt_counted, limit.floors_stilt_not_counted) == (9, 9)
+    assert limit.tdr_extra_floors == 0
+    assert any("stilt in it" in note for note in limit.notes)  # NBC counts the stilt
+
+
+def test_a_dead_end_caps_even_a_wide_road_at_30_m():
+    limit = max_floors(plot_sqm=18969, road_m=24.4, dead_end=True)  # Table IV alone: 45 m
+    assert limit.max_height_m == 30.0 and "dead-end" in limit.limited_by
+    assert (limit.floors_stilt_counted, limit.floors_stilt_not_counted) == (9, 9)
+    assert limit.setback_m == 10.0 and limit.tdr_extra_floors == 0
+    unlimited = max_floors(plot_sqm=18969, road_m=30.0, dead_end=True)
+    assert unlimited.max_height_m == 30.0 and unlimited.floors_stilt_counted == 9
+
+
+def test_a_dead_end_keeps_the_tdr_floors_that_stay_within_30_m():
+    limit = max_floors(plot_sqm=8064, road_m=12.19, dead_end=True)  # 24 m, TDR 3
+    assert (limit.floors_stilt_counted, limit.floors_stilt_not_counted) == (7, 8)
+    assert limit.tdr_extra_floors == 2  # stilt + 9 is 30 m
+
+
+def test_an_unknown_road_warns_only_when_an_answer_passes_30_m():
+    def warned(limit):
+        return any(note.startswith("Dead end:") for note in limit.notes)
+
+    assert warned(max_floors(plot_sqm=18969, road_m=18.28))  # stilt + 10 is 33 m
+    assert not warned(max_floors(plot_sqm=18969, road_m=18.28, dead_end=False))
+    assert not warned(max_floors(plot_sqm=2000, road_m=12.19))  # 27 m at most, no TDR
+    assert warned(max_floors(plot_sqm=18969, road_m=30.0))  # no road limit at all
+
+
+def test_the_command_takes_the_architects_word_on_a_dead_end(capsys):
+    assert main(["floors", "--plot-sqyd", "22686", "--road-ft", "60", "--dead-end", "yes"]) == 0
+    out = capsys.readouterr().out
+    assert "road ends at the plot" in out and "stilt + 9" in out and "stilt + 10" not in out
