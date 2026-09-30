@@ -364,7 +364,8 @@ INVENTORY: tuple[Entry, ...] = (
     Entry(
         "Parking", "Cellars and ramps.",
         "cellar 3 m from the property line on sites over 2,000 m², +0.5 m per extra cellar; "
-        "ramps 2 x 3.6 m or 1 x 5.4 m at 1 in 8, outside the mandatory setbacks",
+        "ramps 2 x 3.6 m or 1 x 5.4 m at 1 in 8, never in the front setback or building line, "
+        "and in a side or rear setback only after leaving 7 m for fire vehicles",
         "G.O.168 rule 13(c)(vii), 13(c)(x)", Reading.NOT_MODELLED,
         choice="Cellar and podium parking are not modelled, so a parking shortfall is reported "
                "as NEEDS_INPUT.",
