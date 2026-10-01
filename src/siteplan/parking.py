@@ -31,9 +31,13 @@ from shapely.prepared import prep
 
 from siteplan import rules
 
+# ENGINE_DESIGN_ASSUMPTION (constraints.py): no order we hold gives a bay or aisle size. These
+# are the engine's parking standards until the firm's drawings show its own.
 BAY_WIDTH_M = 2.5
 BAY_DEPTH_M = 5.0
 AISLE_M = 6.0
+BAY_BASIS = (f"{BAY_WIDTH_M:g} x {BAY_DEPTH_M:g} m bays, {AISLE_M:g} m aisles: "
+             "ENGINE_DESIGN_ASSUMPTION, no order gives a bay size; the firm's drawings settle it")
 MAX_BAYS = 600  # a site plan stops being readable long before this
 EPS_M = 0.01
 RAMP_STEP_M = 2.0
@@ -194,6 +198,7 @@ class ParkingPlan:
                      f"{self.ramp_length_m:g} m long at 1 in 8") if self.ramps else "none",
             "cars": dict(self.cars), "total_cars": sum(self.cars.values()),
             "laid_out_sqm": round(self.laid_out_sqm),
+            "bay_standard": BAY_BASIS,
         }
 
 

@@ -15,6 +15,7 @@ from siteplan import rules
 from siteplan.access_checks import fire_findings, road_findings
 from siteplan.findings import Finding, Status, narrower_than
 from siteplan.parking_checks import parking_findings
+from siteplan.units import sqft_to_sqm
 
 WATER_OVERLAP_SQM = 0.01  # less than this inside a water buffer is floating-point, not a block
 __all__ = ["Building", "Finding", "Site", "Status", "check_site"]
@@ -157,8 +158,19 @@ def _green_strip_finding(site: Site, high_rise, bands) -> Finding:
     )
 
 
+AMENITY_BASIS = (
+    f"UNRESOLVED_INTERPRETATION: the {rules.AMENITY_MIN_BUILT_UP_FRACTION:.0%} minimum is the 2012 "
+    "wording, kept as the planning target and ASSUMED_FOR_TEST. G.O.Ms.No.7 of 2016 rewrote the "
+    f"clause as 'upto {rules.AMENITY_MIN_BUILT_UP_FRACTION:.0%} of the total built up area (or) "
+    f"{rules.AMENITY_CAP_SQFT_2016:,.0f} Sft. whichever is lower', which may make "
+    f"{rules.AMENITY_MIN_BUILT_UP_FRACTION:.0%} a ceiling and adds a cap. Not settled law: a "
+    "sanctioned plan of 100 units or more, or the architect, settles how it is read."
+)
+
+
 def _amenity_finding(site: Site) -> Finding:
-    required = f">= {rules.AMENITY_MIN_BUILT_UP_FRACTION:.0%} of built-up area"
+    required = (f">= {rules.AMENITY_MIN_BUILT_UP_FRACTION:.0%} of built-up area (planning "
+                "minimum ASSUMED_FOR_TEST)")
     if site.built_up_sqm is None or site.units is None:
         return Finding("Amenities (club house)", Status.NOT_CHECKED,
                        "built-up area or unit count unknown", required, rules.AMENITY_CLAUSE)
@@ -173,13 +185,23 @@ def _amenity_finding(site: Site) -> Finding:
         provided = site.club_house.area if site.club_house is not None else 0.0
     need = rules.AMENITY_MIN_BUILT_UP_FRACTION * site.built_up_sqm
     short = provided + 0.5 < need
+    measured = f"{provided:,.0f} m² ({_pct(provided / site.built_up_sqm)} of built-up)"
+    cap_sqm = sqft_to_sqm(rules.AMENITY_CAP_SQFT_2016)
+    if not short and provided > cap_sqm + 0.5:
+        # Meets the 2012 minimum but exceeds the 2016 cap: which wording governs is the question.
+        return Finding(
+            "Amenities (club house)", Status.UNVERIFIED,
+            f"{measured}, above the {rules.AMENITY_CAP_SQFT_2016:,.0f} sft of the 2016 wording",
+            f"{required} = {need:,.0f} m²", rules.AMENITY_CLAUSE, AMENITY_BASIS,
+        )
     return Finding(
         "Amenities (club house)",
         Status.FAIL if short else Status.PASS,
-        f"{provided:,.0f} m² ({_pct(provided / site.built_up_sqm)} of built-up)",
+        measured,
         f"{required} = {need:,.0f} m²",
         rules.AMENITY_CLAUSE,
-        "The amenities block is separate from the residential blocks, as the clause requires.",
+        AMENITY_BASIS + " The amenities block is separate from the residential blocks, as the "
+        "clause requires.",
     )
 
 
