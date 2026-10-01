@@ -5,6 +5,8 @@
     "net_area_sqm": 9500,
     "abutting_road_ft": 40,
     "master_plan_road_ft": 60,
+    "authority": "HMDA",
+    "inside_cure": false,
     "open_space_sqft": 11000,
     "net_plot_m": [
       [

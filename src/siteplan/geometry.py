@@ -62,15 +62,6 @@ def opening(shape, width_m: float):
     return shape.buffer(-half, join_style="mitre").buffer(half, join_style="mitre")
 
 
-def _keep_behind(polygon: Polygon, line: LineString, signed_width_m: float) -> Polygon:
-    """The polygon less a strip of that width along the line; the sign picks the side."""
-    kept = polygon.difference(line.buffer(signed_width_m, single_sided=True))
-    if kept.geom_type == "Polygon":
-        return kept
-    parts = [p for p in kept.geoms if p.geom_type == "Polygon"]
-    return max(parts, key=lambda p: p.area) if parts else polygon
-
-
 def facing_deg(boundary: Polygon, run: Run) -> float:
     """The compass bearing a run faces out of the plot: 0 north, 90 east (y is north)."""
     (x0, y0), (x1, y1) = run.line.coords[0], run.line.coords[-1]
@@ -81,49 +72,17 @@ def facing_deg(boundary: Polygon, run: Run) -> float:
     return math.degrees(math.atan2(nx, ny)) % 360
 
 
-def _strip_off_side(boundary: Polygon, net_area_sqm: float, side: str) -> Polygon:
-    """An even-width strip along every run facing that side (within 45 degrees): the shape an
-    architect's 'it comes off the east' gives, which is not the shape a drawn strip has."""
+def strip_along_side(boundary: Polygon, side: str, width_m: float) -> Polygon:
+    """The plot left after an even strip of that width comes off every run facing that side
+    (within 45 degrees), as the architect describes it. Nothing is inferred: the side and the
+    width are given; the caller checks the area that comes off against the stated deduction."""
     runs = [run for run in straight_runs(boundary)
             if abs((facing_deg(boundary, run) - COMPASS_DEG[side] + 180) % 360 - 180) < 45]
     if not runs:
         raise ValueError(f"No side of the plot faces {side}.")
     edge = unary_union([run.line for run in runs])
-
-    def kept(width: float) -> Polygon:
-        rest = boundary.difference(edge.buffer(width, cap_style="flat", join_style="mitre"))
-        parts = getattr(rest, "geoms", [rest])
-        return max((p for p in parts if p.geom_type == "Polygon"), key=lambda p: p.area)
-
-    lo, hi = 0.0, min(boundary.bounds[2] - boundary.bounds[0],
-                      boundary.bounds[3] - boundary.bounds[1])
-    for _ in range(60):  # the strip width that leaves exactly the net area
-        mid = (lo + hi) / 2
-        lo, hi = (mid, hi) if kept(mid).area > net_area_sqm else (lo, mid)
-    return kept(hi)
-
-
-def less_road_strip(boundary: Polygon, net_area_sqm: float, side: str | None = None) -> Polygon:
-    """The plot that is left after the gross-to-net deduction.
-
-    On a Telangana site that deduction is land given up for road widening or a new road, so
-    it comes off one side rather than evenly all round: an even inset would leave buildings
-    standing in the strip the road will take. The side is the architect's (N, NE, E ... NW),
-    taken at an even width along it; without one, the longest straight run, as the gates
-    assume. A drawn net plot is better than either.
-    """
-    if net_area_sqm >= boundary.area:
-        return boundary
-    if side:
-        return _strip_off_side(boundary, net_area_sqm, side)
-    frontage = max(straight_runs(boundary), key=lambda r: r.length).line
-    probe = min(boundary.bounds[2] - boundary.bounds[0], boundary.bounds[3] - boundary.bounds[1])
-    side = max((1.0, -1.0), key=lambda s: boundary.area - _keep_behind(boundary, frontage, s).area)
-    lo, hi = 0.0, probe
-    for _ in range(60):  # the strip width that leaves exactly the net area
-        mid = (lo + hi) / 2
-        if _keep_behind(boundary, frontage, mid * side).area > net_area_sqm:
-            lo = mid
-        else:
-            hi = mid
-    return _keep_behind(boundary, frontage, hi * side)
+    rest = boundary.difference(edge.buffer(width_m, cap_style="flat", join_style="mitre"))
+    parts = [p for p in getattr(rest, "geoms", [rest]) if p.geom_type == "Polygon"]
+    if not parts:
+        raise ValueError(f"A {width_m:g} m strip off the {side} side leaves no plot.")
+    return max(parts, key=lambda p: p.area)

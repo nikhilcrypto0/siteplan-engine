@@ -18,7 +18,8 @@ LIBRARY = FlatLibrary(
     ],
     core_width_m=7.5,
 )
-PROJECT = Project(name="Test site", site={"abutting_road_m": 18})
+PROJECT = Project(name="Test site", site={"abutting_road_m": 18, "authority": "HMDA",
+                                         "inside_cure": False})
 BRIEF = "Stilt plus 8 floors, 70% 2BHK and the rest 3BHK, maximise sellable area."
 
 

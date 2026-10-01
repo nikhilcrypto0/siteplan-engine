@@ -16,7 +16,8 @@ LIBRARY = FlatLibrary(
     ],
     core_width_m=7.5,
 )
-REQUEST = LayoutRequest(floors=8, unit_mix={"2BHK": 0.7, "3BHK": 0.3})
+REQUEST = LayoutRequest(floors=8, unit_mix={"2BHK": 0.7, "3BHK": 0.3},
+                        conservative_parking=True)  # no jurisdiction given: test mode
 INFO = SheetInfo(project="Test site", client="A client", architect="An architect",
                  number="SP-01", drawn_by="NK")
 

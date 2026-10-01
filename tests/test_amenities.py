@@ -65,10 +65,17 @@ def test_a_club_house_too_big_for_the_site_leaves_no_layout_and_says_why():
     assert "club house" in result.problem
 
 
-def test_parking_uses_the_ghmc_column_inside_ghmc_or_when_cure_is_not_known():
-    def percent(**facts):
-        return solve(PLOT, LIBRARY, LayoutRequest(**BASE), **FACTS | facts)[0].parking.percent
+def test_parking_uses_the_ghmc_column_inside_ghmc_and_asks_when_cure_is_not_known():
+    def percent(extra=None, **facts):
+        request = LayoutRequest(**BASE | (extra or {}))
+        return solve(PLOT, LIBRARY, request, **FACTS | facts)[0].parking.percent
 
     assert percent(authority="GHMC") == 30.0
     assert percent() == 20.0
-    assert percent(inside_cure=None) == 30.0
+    # CURE not known decides 20% or 30%: a normal run stops and asks, it does not pick one.
+    open_cure = search(PLOT, LIBRARY, LayoutRequest(**BASE),
+                       SiteFacts(**FACTS | {"inside_cure": None}))
+    assert open_cure.options == [] and open_cure.stopped
+    assert "confirm the authority" in open_cure.problem
+    # Only the named test mode plans the stricter column.
+    assert percent({"conservative_parking": True}, inside_cure=None) == 30.0

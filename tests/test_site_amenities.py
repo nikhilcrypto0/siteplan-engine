@@ -15,7 +15,8 @@ FLATS = FlatLibrary(
     ],
     core_width_m=7.5,
 )
-REQUEST = LayoutRequest(floors=8, unit_mix={"2BHK": 0.7, "3BHK": 0.3})
+REQUEST = LayoutRequest(floors=8, unit_mix={"2BHK": 0.7, "3BHK": 0.3},
+                        conservative_parking=True)  # no jurisdiction given: test mode
 AMENITIES = AmenityLibrary(items=[
     # 12 x 6 m: with the true Table IV setbacks this made-up site packs six towers, and a
     # 20 x 10 m pool no longer finds ground; the placement rule is what is under test.

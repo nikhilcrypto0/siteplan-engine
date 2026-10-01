@@ -115,14 +115,43 @@ ANSWERS = FIXTURES / "acceptance" / "dhulapally.answers.json"
 FIRM_CASE = FIXTURES / "cases" / "dhulapally.case.json"
 
 
-@pytest.fixture(scope="module")
-def dhulapally_run(tmp_path_factory):
-    from siteplan.acceptance import generate
-
+def _answers() -> dict:
     if not (SURVEY.exists() and ANSWERS.exists()):
         pytest.skip("the Dhulapally survey or its answers are not present")
+    return json.loads(ANSWERS.read_text())
+
+
+def _strip_located(answers: dict) -> bool:
+    """Whether the answers say where the road-widening strip lies (its side and width)."""
+    from siteplan.intake import _surrender
+
+    given = _surrender(answers.get("surrender", "no"))
+    return given is None or bool(given[2] and given[3])
+
+
+@pytest.fixture(scope="module")
+def dhulapally_run(tmp_path_factory):
+    """Whose rules apply is marked unverified in the answers, so this is the conservative test
+    mode; and it needs the answers to say where the road-widening strip lies."""
+    from siteplan.acceptance import generate
+
+    answers = _answers()
+    if not _strip_located(answers):
+        pytest.skip("the answers do not give the road-widening strip's side and width")
     out = tmp_path_factory.mktemp("acceptance")
-    return generate(SURVEY, json.loads(ANSWERS.read_text()), out, FIXTURES / "workspace")
+    return generate(SURVEY, answers, out, FIXTURES / "workspace", conservative_parking=True)
+
+
+def test_dhulapally_without_the_strips_location_stops_and_asks(tmp_path):
+    """The engine once cut 1,160 m² off the whole east side at an even 6.6 m, where the firm
+    draws a 40 ft road along part of it. It no longer guesses."""
+    from siteplan.acceptance import generate
+
+    answers = _answers()
+    if _strip_located(answers):
+        pytest.skip("the answers give the strip's side and width")
+    with pytest.raises(ValueError, match="does not guess a strip's location"):
+        generate(SURVEY, answers, tmp_path, FIXTURES / "workspace", conservative_parking=True)
 
 
 def test_dhulapally_from_the_survey_alone_finds_the_height_the_law_and_the_ground_allow(

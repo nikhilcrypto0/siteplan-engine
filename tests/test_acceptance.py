@@ -16,7 +16,8 @@ from siteplan.cases import Case
 
 EXAMPLES = Path(__file__).parent.parent / "examples"
 ANSWERS = {"main_road": "W", "road_row": "60 ft", "road_row_source": "2", "surrender": "no",
-           "authority": "HMDA", "name": "Acceptance test", "mix": "70% 2BHK, 30% 3BHK",
+           "authority": "HMDA", "inside_cure": "no",
+           "name": "Acceptance test", "mix": "70% 2BHK, 30% 3BHK",
            "floors": "max"}
 
 
