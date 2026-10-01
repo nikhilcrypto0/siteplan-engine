@@ -20,6 +20,7 @@ import ezdxf
 from shapely.geometry import Point, Polygon
 
 from siteplan import rules
+from siteplan.access import FIRE_BAND_M
 from siteplan.area_statement import AreaStatement
 from siteplan.cases import Case
 from siteplan.constraints import Basis, by_basis
@@ -293,7 +294,10 @@ def _option(summary: dict, option: LayoutOption, plot: Polygon, gross_sqm: float
         kinds.setdefault(road["kind"], []).append(road)
     road_line = "; ".join(f"{kind} {rs[0]['width_m']:g} m" + (f" x {len(rs)}" if len(rs) > 1
                                                               else "")
-                          for kind, rs in kinds.items())
+                          for kind, rs in kinds.items() if kind != "perimeter")
+    lane = kinds.get("perimeter")
+    lane_line = (f"perimeter lane {lane[0]['width_m']:g} m inside the setback "
+                 "(ASSUMED_FOR_TEST; not counted as a rule 8(m) road); " if lane else "")
     fire = [f for f in option.findings if f.rule.startswith("Fire access")]
     counts = {s: sum(f.status is s for f in option.findings) for s in Status}
     physical = summary.get("physical_height_m", option.height_m)
@@ -338,18 +342,21 @@ def _option(summary: dict, option: LayoutOption, plot: Polygon, gross_sqm: float
         f"{setback:.2f} m" if need is not None else f"    Setback: least actual {setback:.2f} m",
         (f"    Tower spacing: required {need:g} m; least actual {gap:.2f} m" if gap is not None
          else "    Tower spacing: one tower"),
-        f"    Roads: {road_line}; entrance {option.entrance.note if option.entrance else '-'}",
+        f"    Internal roads (rule 8(m)): {road_line}; entrance "
+        f"{option.entrance.note if option.entrance else '-'}",
+        f"    Fire lanes: {lane_line}clear motorable band round every tower at least "
+        f"{FIRE_BAND_M:.2f} m (derived from the 9 m turning radius on our reading, "
+        f"UNRESOLVED_INTERPRETATION); {summary['fire_lanes_sqm']:,.0f} m² of fire lane",
         f"    Fire access: {sum(f.status is Status.PASS for f in fire)} of {len(fire)} checks "
         "pass; " + "; ".join(f"{f.rule.removeprefix('Fire access: ')} {f.status.value}"
                             for f in fire if f.status is not Status.PASS),
         f"    Rules: {counts[Status.PASS]} PASS, {counts[Status.FAIL]} FAIL, "
-        f"{counts[Status.UNVERIFIED] + counts[Status.NOT_CHECKED]} UNVERIFIED",
+        f"{counts[Status.UNVERIFIED]} UNVERIFIED, {counts[Status.NOT_CHECKED]} NOT_CHECKED",
     ]
     for f in option.findings:
         if f.status is Status.INFO:
             continue
-        shown = "UNVERIFIED" if f.status is Status.NOT_CHECKED else f.status.value
-        lines.append(f"      {shown:<10} {f.rule}: {f.measured} (needs {f.required})")
+        lines.append(f"      {f.status.value:<11} {f.rule}: {f.measured} (needs {f.required})")
     if assumed:
         lines.append(f"    ASSUMED_FOR_TEST in this run: {', '.join(assumed)}")
     return lines
@@ -381,13 +388,23 @@ def _comparison(summaries: list[dict], plot: Polygon) -> list[str]:
             "Tot-lot": f"{s['open_space_share_pct']}%",
             "Club house": f"{s['club_house_sqm']:,.0f} m²",
             "Facilities missed": str(len(s["amenities_with_no_room"])),
+            "Internal roads": ", ".join(sorted({f"{r['kind']} {r['width_m']:g} m"
+                                                for r in s["roads"]
+                                                if r["kind"] != "perimeter"})),
+            "Fire lane": ", ".join(sorted({f"{r['width_m']:g} m perimeter"
+                                           for r in s["roads"] if r["kind"] == "perimeter"}))
+            or "loop road",
+            "PASS/FAIL/UNVERIFIED/NOT_CHECKED": " / ".join(
+                str(list(s["rule_findings"].values()).count(k))
+                for k in ("PASS", "FAIL", "UNVERIFIED", "NOT_CHECKED")),
         }
         return values[key]
 
     keys = ["Towers", "Floors", "Height for the rules", "Flats", "2BHK / 3BHK",
             "Flats per floor per tower", "Cores per tower", "Longest tower", "Built-up",
             "Saleable", "Parking req / prov", "Cars", "Tot-lot", "Club house",
-            "Facilities missed"]
+            "Facilities missed", "Internal roads", "Fire lane",
+            "PASS/FAIL/UNVERIFIED/NOT_CHECKED"]
     names = [(s.get("strategy") or f"Option {s['option']}").split(":")[0] for s in summaries]
     width = max(len(k) for k in keys)
     lines = [f"  {'':<{width}}  " + "  |  ".join(names)]
