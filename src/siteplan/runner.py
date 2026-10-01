@@ -17,6 +17,7 @@ from siteplan.dxf_survey import DxfProfile, read_dxf_survey
 from siteplan.geometry import strip_along_side
 from siteplan.heights import HeightSearch, search_heights
 from siteplan.layout import LayoutRequest, SiteFacts, area_statement
+from siteplan.layout import stop_reason as _stop_reason
 from siteplan.layout_export import write_layout_dxf, write_layout_svg
 from siteplan.library import FlatLibrary
 from siteplan.pdf_survey import PdfProfile, read_pdf_survey
@@ -138,6 +139,26 @@ def site_facts(project: Project, keep_out: Polygon | None = None) -> SiteFacts:
     )
 
 
+class NoLayout(ValueError):
+    """No height has a layout that passes. The message gives every height tried, its verdict
+    and the reasons the search recorded, so the caller never has to guess why."""
+
+
+def why_none(found: HeightSearch) -> str:
+    """Every height tried, top down, with its verdict and why it gave no layout."""
+    lines = ["No layout passes at any height tried. Height by height, top down:"]
+    for r in found.results:
+        reasons = "; ".join(r.reasons()) or "no reason was recorded"
+        lines.append(f"- stilt + {r.floors} ({r.height_m:g} m): {r.verdict}: {reasons}")
+    return "\n".join(lines)
+
+
+def stop_reason(project: Project, plot: Polygon, request: LayoutRequest,
+                keep_out: Polygon | None = None) -> str | None:
+    """Why no height can be tried at all (layout.stop_reason), asked before any approval."""
+    return _stop_reason(plot, request, site_facts(project, keep_out))
+
+
 def run_search(project: Project, library: FlatLibrary, plot: Polygon, request: LayoutRequest,
                amenities: AmenityLibrary | None = None,
                keep_out: Polygon | None = None) -> HeightSearch:
@@ -154,6 +175,8 @@ def run_layout(
     keep_out: Polygon | None = None,
 ) -> list[dict]:
     found = run_search(project, library, plot, request, amenities, keep_out)
+    if not found.options:
+        raise NoLayout(why_none(found))
     return write_options(found, project, library, plot, request, out)
 
 
