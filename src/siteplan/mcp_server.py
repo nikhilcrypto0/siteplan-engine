@@ -156,6 +156,15 @@ class Workspace:
                         found["project_names"][name] = Project.model_validate_json(
                             path.read_text()
                         ).name
+        # Projects finish_project wrote live in the runs folder, not the workspace; list them
+        # too, so a new chat can find the project an earlier one made.
+        for path in sorted((self.out / PROJECTS).glob("*.project.json"))[:MAX_LISTED]:
+            name = f"{PROJECTS}/{path.name}"
+            try:
+                found["project_names"][name] = Project.model_validate_json(path.read_text()).name
+            except ValidationError:
+                continue
+            found["projects"].append(name)
         return found
 
 

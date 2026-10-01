@@ -337,6 +337,10 @@ def test_a_project_from_answers_is_drawn_from_its_own_floors_and_the_firms_libra
         json.dumps({"flat_library": "flat_library.example.json"}))
     made = ok(call(ws, "finish_project", {"survey_file": survey, "answers": ANSWERS}))
     assert made["project_file"] == "projects/chat-site.project.json"
+    # A later chat, which never saw finish_project's reply, finds it in the listing.
+    found = ok(call(ws, "list_files"))
+    assert made["project_file"] in found["projects"]
+    assert found["project_names"][made["project_file"]] == "Chat site"
     assert (made["project"]["layout"]["floors"], made["project"]["layout"]["maximise"]) == (
         9, True)
     architect = Architect("decline")
