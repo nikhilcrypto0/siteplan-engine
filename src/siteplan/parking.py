@@ -115,17 +115,32 @@ class ParkingStandards:
     max_cellars: int = 3  # a search bound, not a rule: no order limits the number of cellars
 
 
+CONSERVATIVE_BASIS = (
+    "CONSERVATIVE_ASSUMPTION (test mode): whose rules apply is not established, so the stricter "
+    "GHMC column is planned and a PASS holds either way")
+
+
 def parking_percent(authority: str | None, inside_cure: bool | None,
-                    jurisdiction_confirmed: bool = True) -> tuple[float, str]:
-    """The Table V share to plan for, and why. When whose rules apply is not settled, the
-    stricter GHMC column is used, so a scheme that passes passes either way."""
-    if authority is None or inside_cure is None or not jurisdiction_confirmed:
-        return rules.PARKING_PERCENT_GHMC, (
-            "jurisdiction not settled, so the stricter GHMC column is used and the answer holds "
-            "either way")
-    percent = rules.parking_percent(authority, inside_cure)
-    where = "GHMC or CURE" if percent == rules.PARKING_PERCENT_GHMC else authority
-    return percent, f"Table V column for {where}"
+                    jurisdiction_confirmed: bool = True,
+                    conservative: bool = False) -> tuple[float | None, str]:
+    """The Table V share to plan for, and why. When the jurisdiction is not established and the
+    answer would change the share (20% or 30%), there is no share to plan for: None, and the
+    reason asks for the jurisdiction. Only the conservative test mode plans the GHMC column
+    then, and its basis says so."""
+    columns = (rules.parking_columns(authority, inside_cure) if jurisdiction_confirmed
+               else {rules.PARKING_PERCENT_GHMC, rules.PARKING_PERCENT_ELSEWHERE})
+    if len(columns) == 1:
+        percent = columns.pop()
+        where = ("GHMC or CURE" if percent == rules.PARKING_PERCENT_GHMC
+                 else authority or "outside GHMC and CURE")
+        return percent, f"Table V column for {where}"
+    if conservative:
+        return rules.PARKING_PERCENT_GHMC, CONSERVATIVE_BASIS
+    return None, (
+        f"parking: whose rules apply is not established, and it decides Table V's share "
+        f"({rules.PARKING_PERCENT_ELSEWHERE:g}% outside GHMC and CURE, "
+        f"{rules.PARKING_PERCENT_GHMC:g}% inside): confirm the authority and whether the site is "
+        "inside CURE, or run in the conservative test mode")
 
 
 def ramp_size(standards: ParkingStandards) -> tuple[float, float]:

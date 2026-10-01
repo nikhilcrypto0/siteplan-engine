@@ -24,6 +24,7 @@ from shapely.ops import unary_union
 
 from siteplan import rules
 from siteplan.access import (
+    FIRE_BAND_M,
     R_OUT,
     ROAD_M,
     Entrance,
@@ -63,6 +64,17 @@ AMENITY_SHARE = rules.AMENITY_MIN_BUILT_UP_FRACTION
 # The share of a parking floor that bays and aisles are expected to take once laid out, for
 # sizing the cellars; the cars are then counted and a level added if they fall short.
 LAYOUT_SHARE = 0.75
+# A water body beside the towers' land is three separate things, never added to each other:
+# 1. the statutory buffer (rules.WATER_BUFFER_M, rule 3(a)(ii)), which is the keep-out itself;
+# 2. the Table IV setback, measured from the plot line: towers keep the larger of the two where
+#    they overlap, because the land is the plot under the setback LESS the buffer zone (a union);
+# 3. room to drive beside the tower. NBC 4.6(c) asks a motorable band on every side
+#    (FIRE_BAND_M on our reading of the 9 m); the buffer is treated as not motorable, which is an
+#    UNRESOLVED_INTERPRETATION of rule 3(a). Beyond that band the loop road needs the rest of its
+#    9 m to run along the water rather than end at it (a dead end rule 8(m) does not allow): that
+#    remainder is the engine's road pattern, an ENGINE_DESIGN_ASSUMPTION.
+WATER_FIRE_CLEARANCE_M = FIRE_BAND_M
+WATER_LOOP_ROAD_EXTRA_M = max(0.0, ROAD_M - FIRE_BAND_M)
 
 
 @dataclass(frozen=True)
@@ -91,14 +103,18 @@ class Frame:
 
 def frame(plot: Polygon, setback_m: float, gross_area_sqm: float | None = None,
           keep_out=None, access_side: str | None = None) -> Frame | None:
-    """None when the towers' land is empty."""
+    """None when the towers' land is empty. The plot is the net plot and the setback is kept on
+    every side, the front included (rules.SETBACK_ON_NET_PLOT_CLAUSE, rules.FRONT_SETBACK_CLAUSE).
+    """
     green_m = green_strip_width(setback_m)
     inset = tower_inset(setback_m)
     inner = inner_plot(plot, green_m, keep_out)
     land = plot.buffer(-(inset + EPS_M))
-    # Towers keep a road's width off a water buffer, so the loop can run along it too.
+    # Towers keep the fire clearance off a water buffer, and the rest of a road's width so the
+    # loop can run along the water (see WATER_FIRE_CLEARANCE_M). The setback is not added to it.
     if keep_out is not None:
-        land = land.difference(keep_out.buffer(ROAD_M + EPS_M, join_style="mitre"))
+        clear = WATER_FIRE_CLEARANCE_M + WATER_LOOP_ROAD_EXTRA_M
+        land = land.difference(keep_out.buffer(clear + EPS_M, join_style="mitre"))
     # Only ground a fire tender can reach from the entrance side is used: no crossing over a
     # nala or lake is drawn, so land beyond one is left unbuilt.
     parts = list(getattr(inner, "geoms", [inner]))

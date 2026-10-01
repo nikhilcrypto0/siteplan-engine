@@ -56,7 +56,7 @@ class HeightResult:
     def verdict(self) -> str:
         if self.legal_fails:
             return "FAIL (law)"
-        if self.search is None:
+        if self.search is None or self.search.stopped:
             return "NOT TRIED"
         return "PASS" if self.options else "FAIL (site)"
 
@@ -64,6 +64,8 @@ class HeightResult:
         """What stops this height, or what stays open about it."""
         if self.legal_fails:
             return [f"{f.rule}: {f.measured}; needs {f.required}" for f in self.legal_fails]
+        if self.search is not None and self.search.stopped:
+            return [self.search.problem]
         if self.search is None or self.options:
             return [f"{f.rule}: {f.measured}" for f in self.legal_open]
         if self.search.problem:

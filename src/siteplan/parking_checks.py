@@ -46,7 +46,8 @@ def _table_v(site, plan) -> Finding:
     if provided + AREA_SLACK_SQM >= need:
         return Finding("Parking (Table V)", Status.PASS, measured, required, _clause(site))
     lenient = rules.PARKING_PERCENT_ELSEWHERE / 100 * plan.built_up_sqm
-    unsettled = plan.percent > rules.PARKING_PERCENT_ELSEWHERE and "not settled" in plan.basis
+    unsettled = (plan.percent > rules.PARKING_PERCENT_ELSEWHERE
+                 and plan.basis.startswith("CONSERVATIVE"))
     if unsettled and provided + AREA_SLACK_SQM >= lenient:
         return Finding("Parking (Table V)", Status.UNVERIFIED, measured, required, _clause(site),
                        "Enough at 20%, short at 30%: it depends on whose rules apply.")
@@ -122,9 +123,12 @@ def _utilities(plan) -> Finding:
 
 
 def _undrawn(site) -> Finding:
-    """A project checked on its own: stilt and surface only; the rest may be in cellars."""
-    percent = rules.parking_percent(site.authority, site.inside_cure)
-    required = f">= {percent:g}% of built-up area"
+    """A project checked on its own: stilt and surface only; the rest may be in cellars. When
+    the jurisdiction is not known and it changes the share, a PASS needs the stricter one."""
+    columns = rules.parking_columns(site.authority, site.inside_cure)
+    percent = max(columns)
+    required = (f">= {percent:g}% of built-up area" if len(columns) == 1 else
+                f">= {min(columns):g}% or {max(columns):g}% of built-up area, by jurisdiction")
     if site.built_up_sqm is None:
         return Finding("Parking (Table V)", Status.NOT_CHECKED, "built-up area unknown",
                        required, _clause(site))
@@ -133,12 +137,17 @@ def _undrawn(site) -> Finding:
     provided = stilt + site.surface_parking_sqm
     measured = f"stilt {stilt:,.0f} m² + surface {site.surface_parking_sqm:,.0f} m²"
     note = "No cellars drawn."
-    if site.authority is None and site.inside_cure is None:
-        note += (" Authority not given, so the 20% column is used; inside GHMC or anywhere in "
-                 "CURE it is 30%.")
+    if len(columns) > 1:
+        note += (" Whose rules apply is not established: a PASS needs the 30% column, which "
+                 "holds either way; confirm the authority and CURE.")
     if provided + AREA_SLACK_SQM >= need:
         return Finding("Parking (Table V)", Status.PASS, measured,
                        f"{required} = {need:,.0f} m²", _clause(site), note)
+    lenient = min(columns) / 100 * site.built_up_sqm
+    if len(columns) > 1 and provided + AREA_SLACK_SQM >= lenient:
+        return Finding("Parking (Table V)", Status.UNVERIFIED, measured,
+                       f"{required} = {need:,.0f} m² at 30%", _clause(site),
+                       f"{note} Enough at 20%, short at 30%: it depends on whose rules apply.")
     return Finding("Parking (Table V)", Status.UNVERIFIED,
                    f"{measured}, short by {need - provided:,.0f} m²",
                    f"{required} = {need:,.0f} m²", _clause(site),

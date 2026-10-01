@@ -74,6 +74,9 @@ class LayoutRequest(BaseModel):
         None, description="The firm's longest block, if it has one; left out, lengths are "
         "explored, since no rule limits them")
     min_flats_per_side: PositiveInt = 2
+    conservative_parking: bool = Field(
+        False, description="Test mode: when whose rules apply is not established, plan the "
+        "stricter GHMC parking column instead of stopping to ask")
     cellar_floor_height_m: PositiveFloat = Field(
         3.0, description="Floor to floor of a cellar: the rise each 1 in 8 ramp climbs")
     cellar_utilities_pct: float = Field(
@@ -273,6 +276,7 @@ class Search:
     rejected: list[Rejected] = field(default_factory=list)
     considered: int = 0  # placements ranked
     problem: str = ""  # why there is nothing at all, when there is nothing
+    stopped: bool = False  # nothing was tried: an input is missing, or the site is not supported
 
 
 def solve(plot: Polygon, library: FlatLibrary, request: LayoutRequest, *,
@@ -295,12 +299,20 @@ def search(plot: Polygon, library: FlatLibrary, request: LayoutRequest, facts: S
     band = rules.band_for_height(height)
     if band is None:
         raise ValueError(f"{height:g} m is above the encoded Table IV rows")
+    site_sqm = facts.gross_area_sqm or plot.area
+    if not rules.is_group_development(site_sqm):
+        return Search(stopped=True, problem=(
+            f"site {site_sqm:,.0f} m², under the {rules.GROUP_DEVELOPMENT_MIN_SITE_SQM:,.0f} m² "
+            "of a Group Development Scheme (rule 2(c)): rule 8(m)'s internal roads do not apply, "
+            "and layouts without them are not supported yet"))
+    percent, basis = parking_percent(facts.authority, facts.inside_cure,
+                                     facts.jurisdiction_confirmed, request.conservative_parking)
+    if percent is None:
+        return Search(stopped=True, problem=basis)
     fr = frame(plot, band.min_open_space_m, facts.gross_area_sqm, facts.keep_out,
                facts.access_side)
     if fr is None:
         return Search(problem="no land for towers inside the setbacks and the loop road")
-    percent, basis = parking_percent(facts.authority, facts.inside_cure,
-                                     facts.jurisdiction_confirmed)
     standards = standards or ParkingStandards(
         cellar_floor_height_m=request.cellar_floor_height_m,
         utilities_fraction=request.cellar_utilities_pct / 100, max_cellars=request.max_cellars)
