@@ -48,10 +48,12 @@ from siteplan.result_page import write_result_page
 from siteplan.rulebook import RuleBook
 from siteplan.runner import (
     LAYOUT_CAVEAT,
+    NoLayout,
     load_plot,
     load_water,
     read_survey,
     run_layout,
+    stop_reason,
 )
 from siteplan.site_amenities import AmenityLibrary
 
@@ -399,6 +401,9 @@ def build_server(workspace: Path, out_dir: Path, approval: str = "elicit",
         except ValueError as exc:
             raise ToolError(str(exc)) from None
 
+        stop = stop_reason(project, plot, request, keep_out)
+        if stop:  # nothing can be tried: say why before asking anyone to approve
+            return {"solved": False, "next": f"Nothing was tried: {stop}."}
         plot_text = f"plot {plot.area:,.0f} m², {basis}"
         if water:
             plot_text += f"; {water}"
@@ -413,11 +418,10 @@ def build_server(workspace: Path, out_dir: Path, approval: str = "elicit",
             options = await anyio.to_thread.run_sync(
                 run_layout, project, library, plot, request, out, amenities, keep_out
             )
+        except NoLayout as exc:
+            return {"solved": False, "next": str(exc)}
         except ValueError as exc:
             return {"solved": False, "next": f"The solver refused the request: {exc}"}
-        if not options:
-            return {"solved": False,
-                    "next": "No tower fits inside the setbacks with the required open space."}
         facts = [{k: o[k] for k in OPTION_KEYS} for o in options]
         comparison = compare_options(facts)
         record = {"project": project.name, "brief": clean.text, "plot": plot_text,
