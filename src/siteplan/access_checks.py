@@ -64,7 +64,9 @@ def road_findings(site) -> list[Finding]:
         thin = narrower_than(road.shape, low - 0.02)
         findings.append(Finding(
             "Internal roads: main approach", Status.FAIL if thin else Status.PASS,
-            f"{road.width_m:g} m wide, from the entrance to the loop road",
+            (f"narrower than {low:g} m in places (drawn {road.width_m:g} m, cut by the "
+             "boundary)" if thin else f"{road.width_m:g} m wide") + ", from the entrance to the "
+            "loop road",
             f">= {low:g} m (the order gives {low:g} to {high:g} m)", clause,
             f"Drawn at the least the order allows; it gives no test for when a main approach "
             f"road must be wider, so the authority may ask for up to {high:g} m.",
