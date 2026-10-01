@@ -26,12 +26,12 @@ import math
 from dataclasses import dataclass
 
 from shapely.affinity import rotate
-from shapely.geometry import Point, Polygon, box
+from shapely.geometry import LineString, Point, Polygon, box
 from shapely.geometry.polygon import orient
 from shapely.ops import unary_union
 
 from siteplan import rules
-from siteplan.geometry import COMPASS_DEG, facing_deg, opening, straight_runs
+from siteplan.geometry import COMPASS_DEG, Run, facing_deg, opening, straight_runs
 
 EPS_M = 0.01
 LANE_M = rules.FIRE_TENDER_MIN_WIDTH_M
@@ -116,6 +116,12 @@ def entrance(plot: Polygon, access_side: str | None, depth_m: float, keep_out=No
     facing = [r for r in runs if access_side and _faces(plot, r, access_side)]
     if facing:
         note = f"on the {access_side} side, where the access road runs"
+        # The approach is a straight road as wide as APPROACH_M, so it starts on a stretch of
+        # boundary at least that long. A side traced through survey points is jagged, every
+        # piece shorter than the road: the road then starts on the side's overall line, and
+        # its mouth follows the boundary. Anchored on a short piece, it hung past the piece's
+        # ends and was cut to a sliver 9 m wide nowhere (found on Suchitra).
+        facing = [r for r in facing if r.length >= APPROACH_M] or [_chord(facing)]
     else:
         facing = [max(runs, key=lambda r: r.length)]
         note = ("ASSUMED on the longest boundary: no access side is known" if not access_side
@@ -181,15 +187,31 @@ def _depth_to(rect, at, least: float, reach, keep_out) -> float | None:
     return hi
 
 
+def _chord(runs) -> Run:
+    """The straight line between the two points of a chain of runs that lie farthest apart:
+    the overall line of a jagged side."""
+    points = [p for run in runs for p in run.line.coords]
+    a, b = max(((p, q) for i, p in enumerate(points) for q in points[i + 1:]),
+               key=lambda pq: math.dist(*pq))
+    return Run(LineString([a, b]), math.degrees(math.atan2(b[1] - a[1], b[0] - a[0])) % 180)
+
+
 def _faces(plot: Polygon, run, side: str) -> bool:
     return abs((facing_deg(plot, run) - COMPASS_DEG[side] + 180) % 360 - 180) < 45
 
 
 def _inward(plot: Polygon, line, along: tuple[float, float]) -> tuple[float, float]:
+    """The normal pointing into the plot: tested just off the line's middle, or, when the line
+    is a chord that does not lie on the boundary, towards the plot's centre."""
     normal = (-along[1], along[0])
     middle = line.interpolate(0.5, normalized=True)
-    probe = Point(middle.x + normal[0] * 0.5, middle.y + normal[1] * 0.5)
-    return normal if plot.contains(probe) else (-normal[0], -normal[1])
+    ahead = plot.contains(Point(middle.x + normal[0] * 0.5, middle.y + normal[1] * 0.5))
+    behind = plot.contains(Point(middle.x - normal[0] * 0.5, middle.y - normal[1] * 0.5))
+    if ahead != behind:
+        return normal if ahead else (-normal[0], -normal[1])
+    centre = plot.centroid
+    toward = (centre.x - middle.x) * normal[0] + (centre.y - middle.y) * normal[1]
+    return normal if toward > 0 else (-normal[0], -normal[1])
 
 
 def fire_bands(footprints) -> Polygon | None:
