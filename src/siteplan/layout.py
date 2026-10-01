@@ -49,6 +49,31 @@ SWEEP_STEP_M = 2.0
 # set none, so the search tries whole free stretches and two shorter caps.
 EXPLORED_TOWER_LENGTHS_M: tuple[float | None, ...] = (None, 60.0, 45.0)
 SHORTLIST = 10  # placements laid exactly, of the hundreds ranked by area alone
+# The three massing strategies an architect is shown. These are design choices, not law: no
+# order limits a block's cores or length (constraints.py, ENGINE_DESIGN_ASSUMPTION).
+BALANCED_MAX_CORES = 2
+BALANCED_MAX_LENGTH_M = 75.0  # medium blocks: a two-core slab of the longest kind is ~100 m
+CONVENTIONAL_MAX_CORES = 1
+# (key, label, most cores in any tower, longest tower): A is whatever yields most; B medium
+# blocks of up to two cores; C compact one-core towers.
+STRATEGIES = (
+    ("A", "Maximum yield", None, None),
+    ("B", "Balanced development", BALANCED_MAX_CORES, BALANCED_MAX_LENGTH_M),
+    ("C", "Conventional smaller towers", CONVENTIONAL_MAX_CORES, None),
+)
+
+
+def fits_strategy(towers, cores: int | None, length_m: float | None) -> bool:
+    """Whether a set of towers is of a strategy's kind: no tower over its cores or its length,
+    and (so balanced and conventional differ) the largest towers have exactly its cores, or,
+    for the balanced kind, more than the conventional one."""
+    most = max((len(t.cores) for t in towers), default=0)
+    if length_m is not None and max((t.length_m for t in towers), default=0) > length_m + EPS_M:
+        return False
+    if cores is None:
+        return True
+    floor = CONVENTIONAL_MAX_CORES + 1 if cores > CONVENTIONAL_MAX_CORES else cores
+    return floor <= most <= cores
 SAME_IDEA_OVERLAP = 0.5  # two layouts sharing this much tower ground are one idea
 ANGLE_FAMILY_DEG = 10.0  # towers running within this of each other run the same way
 
@@ -74,6 +99,15 @@ class LayoutRequest(BaseModel):
         None, description="The firm's longest block, if it has one; left out, lengths are "
         "explored, since no rule limits them")
     min_flats_per_side: PositiveInt = 2
+    stilt_in_rule_height: bool = Field(
+        True, description="Whether the stilt counts in the height that picks the Table IV row "
+        "and the high-rise class. True is the engine's reading of rule 2(e) (an "
+        "UNRESOLVED_INTERPRETATION); a test profile may set False. NBC's fire height always "
+        "counts it")
+    circulation_in_setback: bool = Field(
+        False, description="Whether the perimeter driveway and fire lane may run inside the "
+        "Table IV setback band, towers standing at the setback itself. False keeps the 9 m loop "
+        "road outside the setback; a test profile may set True (reported UNVERIFIED)")
     conservative_parking: bool = Field(
         False, description="Test mode: when whose rules apply is not established, plan the "
         "stricter GHMC parking column instead of stopping to ask")
@@ -101,7 +135,13 @@ class LayoutRequest(BaseModel):
 
     @property
     def height_m(self) -> float:
+        """The physical height, stilt included: what NBC's fire rules measure."""
         return self.stilt_height_m + self.floors * self.floor_height_m
+
+    @property
+    def rule_height_m(self) -> float:
+        """The height that picks the Table IV row and the high-rise class."""
+        return self.height_m if self.stilt_in_rule_height else self.floors * self.floor_height_m
 
 
 @dataclass(frozen=True)
@@ -141,8 +181,15 @@ class LayoutOption:
     entrance: Entrance | None = None
     ramps: tuple[Polygon, ...] = ()
     parking: ParkingPlan | None = None
-    height_m: float = 0.0
+    height_m: float = 0.0  # the height the Table IV rules used
     dropped: tuple[str, ...] = ()  # why towers were dropped while the ground was laid
+    physical_height_m: float = 0.0  # stilt included, as NBC measures it
+    strategy: str = ""  # which massing strategy picked it (STRATEGIES)
+
+    @property
+    def max_cores(self) -> int:
+        """The most cores any one tower has."""
+        return max((len(t.cores) for t in self.towers), default=0)
 
     @property
     def flats_per_floor(self) -> dict[str, int]:
@@ -218,8 +265,12 @@ class LayoutOption:
         total = sum(counts.values()) or 1
         tower_floor = sqm_to_sqft(self.tower_floor_sqm)
         return {
+            "strategy": self.strategy,
             "orientation_deg": round(self.orientation_deg, 1),
             "height_m": round(self.height_m, 2),
+            "rule_height_m": round(self.height_m, 2),
+            "physical_height_m": round(self.physical_height_m or self.height_m, 2),
+            "towers_detail": [t.detail(self.floors) for t in self.towers],
             "towers": len(self.towers),
             "tower_lengths_m": [round(t.length_m, 1) for t in self.towers],
             "flats_per_floor": counts,
@@ -293,7 +344,7 @@ def search(plot: Polygon, library: FlatLibrary, request: LayoutRequest, facts: S
     unknown = set(request.unit_mix) - library.categories
     if unknown:
         raise ValueError(f"unit_mix asks for {sorted(unknown)}, not in the flat library")
-    height = request.height_m
+    height = request.rule_height_m
     if height < rules.HIGH_RISE_THRESHOLD_M:
         raise ValueError(f"{height:g} m is not high-rise; Table III setbacks are not encoded yet")
     band = rules.band_for_height(height)
@@ -305,7 +356,7 @@ def search(plot: Polygon, library: FlatLibrary, request: LayoutRequest, facts: S
     percent, basis = parking_percent(facts.authority, facts.inside_cure,
                                      facts.jurisdiction_confirmed, request.conservative_parking)
     fr = frame(plot, band.min_open_space_m, facts.gross_area_sqm, facts.keep_out,
-               facts.access_side)
+               facts.access_side, request.circulation_in_setback)
     if fr is None:
         return Search(problem="no land for towers inside the setbacks and the loop road")
     standards = standards or ParkingStandards(
@@ -333,7 +384,7 @@ def search(plot: Polygon, library: FlatLibrary, request: LayoutRequest, facts: S
                 tuple(f"{f.rule}: {f.measured}" for f in option.fails), option.saleable_sqft))
         else:
             passing.append(option)
-    result.options = pick_distinct(passing, request.options)
+    result.options = pick_strategies(passing, request.options)
     return result
 
 
@@ -357,16 +408,25 @@ def _rank(fr: Frame, library: FlatLibrary, request: LayoutRequest, ctx: Context
     why the placements that kept no tower lost their last one."""
     pitch = library.tower_depth_m + fr.corridor_m + EPS_M
     steps = max(1, int(pitch // SWEEP_STEP_M))
-    caps = ((request.max_tower_length_m,) if request.max_tower_length_m
-            else EXPLORED_TOWER_LENGTHS_M)
+    lengths = ((request.max_tower_length_m,) if request.max_tower_length_m
+               else EXPLORED_TOWER_LENGTHS_M)
+    # Every length explored, and the smaller blocks the balanced and conventional strategies
+    # look for: at most two cores, and one.
+    firm = request.max_tower_length_m  # the firm's longest block always wins over a strategy's
+
+    def capped(length: float | None) -> float | None:
+        return lengths[0] if length is None else (min(length, firm) if firm else length)
+
+    shapes = [*((cap, None) for cap in lengths),
+              *((capped(length), cores) for _, _, cores, length in STRATEGIES if cores)]
     ranked: list[tuple[float, Placement]] = []
     failures: Counter = Counter()
     for angle in orientations(fr.plot):
         for i in range(steps):
-            for cap in caps:
+            for cap, cores in shapes:
                 placement = place(fr.envelope, angle, i * SWEEP_STEP_M, library,
                                   request.unit_mix, request.min_flats_per_side, fr.corridor_m,
-                                  cap)
+                                  cap, cores)
                 if not placement.towers:
                     continue
                 ground, reasons = lay(fr, placement, ctx, quick=True)
@@ -396,7 +456,14 @@ def _shortlist(ranked, request: LayoutRequest) -> list[Placement]:
     best_of: dict[tuple, Placement] = {}
     for _, placement in ranked:
         best_of.setdefault(_massing(placement.towers, placement.angle_deg), placement)
-    chosen = list(best_of.values())[:size]
+    # The best few of each strategy's blocks reach the checker, whatever their rank by area.
+    for _, _, cores, length in STRATEGIES:
+        if cores is None:
+            continue
+        fitting = [p for _, p in ranked if fits_strategy(p.towers, cores, length)]
+        for placement in fitting[:3]:
+            best_of.setdefault(("strategy", cores, id(placement)), placement)
+    chosen = list(best_of.values())[:size + 6]
     seen = {id(p) for p in chosen}
     for _, placement in ranked:
         if len(chosen) >= size:
@@ -410,6 +477,42 @@ def _shortlist(ranked, request: LayoutRequest) -> list[Placement]:
 def _massing(towers, angle_deg: float) -> tuple[int, int]:
     """How many towers, running which way (to the nearest ANGLE_FAMILY_DEG, modulo 180)."""
     return len(towers), round((angle_deg % 180) / ANGLE_FAMILY_DEG) % round(180 / ANGLE_FAMILY_DEG)
+
+
+def pick_strategies(options: list[LayoutOption], count: int) -> list[LayoutOption]:
+    """One option per massing strategy (STRATEGIES), each the best that passes within its
+    limit on cores per tower and a different idea from those already chosen; then, if more are
+    asked, the best remaining distinct ideas. A strategy nothing passes for is left out."""
+    chosen: list[LayoutOption] = []
+    ranked = sorted(options, key=lambda o: -o.score)
+    for key, label, cores, length in STRATEGIES:
+        for option in ranked:
+            if not fits_strategy(option.towers, cores, length):
+                continue
+            if any(option is kept or same_idea(option, kept) for kept in chosen):
+                continue
+            chosen.append(LayoutOption(**{**option.__dict__,
+                                          "strategy": f"Option {key}: {label}"}))
+            break
+    wanted = len(chosen) + max(0, count - len(STRATEGIES))  # more only when more are asked
+    for option in ranked:
+        if len(chosen) >= wanted:
+            break
+        if not any(option is kept or same_idea(option, kept) for kept in chosen):
+            chosen.append(option)
+    return chosen
+
+
+def missing_strategies(options: list[LayoutOption]) -> list[str]:
+    """The strategies no passing layout was found for, said plainly, never filled in."""
+    found = {o.strategy for o in options}
+    def kind(cores: int, length: float | None) -> str:
+        size = f", none longer than {length:g} m" if length else ""
+        return f"towers of {cores} core{'s' if cores > 1 else ''}{size}"
+
+    return [f"Option {key}: {label}: no layout of {kind(cores, length)} passed every rule"
+            for key, label, cores, length in STRATEGIES
+            if cores and f"Option {key}: {label}" not in found]
 
 
 def pick_distinct(options: list[LayoutOption], count: int) -> list[LayoutOption]:
@@ -467,7 +570,8 @@ def _furnish(fr: Frame, ground: Ground, angle: float, request: LayoutRequest,
         club_house=ground.club, club_house_floors=request.club_house_floors,
         parking_bays=bays, amenities=facilities, amenities_missed=missed, roads=ground.roads,
         fire_lanes=ground.fire_lanes, green_strip=fr.green, entrance=fr.entrance,
-        ramps=plan.ramps, parking=plan, height_m=request.height_m, dropped=ground.dropped,
+        ramps=plan.ramps, parking=plan, height_m=request.rule_height_m, dropped=ground.dropped,
+        physical_height_m=request.height_m,
     )
     return LayoutOption(**{**option.__dict__, "findings": tuple(_check(option, fr, facts))})
 
@@ -490,7 +594,8 @@ def _check(option: LayoutOption, fr: Frame, facts: SiteFacts) -> list[Finding]:
         open_space_sqm=option.open_space_sqm,
         net_plot=fr.plot,
         open_space_pockets=option.open_space,
-        buildings=tuple(Building(t.name, height_m=option.height_m, footprint=t.footprint)
+        buildings=tuple(Building(t.name, height_m=option.height_m, footprint=t.footprint,
+                                 physical_height_m=option.physical_height_m or None)
                         for t in option.towers),
         club_house=option.club_house,
         club_house_built_up_sqm=option.club_house_sqm,

@@ -24,6 +24,7 @@ from siteplan.access import (
     through_roads,
 )
 from siteplan.findings import Finding, Status, narrower_than
+from siteplan.geometry import opening
 
 TOUCH_M = 0.5  # a block this close to a road opens onto it
 OVERLAP_SQM = 0.5  # less than this of overlap is drawing noise, not a car or a wall
@@ -72,18 +73,25 @@ def road_findings(site) -> list[Finding]:
             f"road must be wider, so the authority may ask for up to {high:g} m.",
         ))
     others = _roads(site, "loop", "internal")
-    network = healed(unary_union([r.shape for r in site.roads])) if others else None
-    if network is not None:
-        thin = narrower_than(network, rules.INTERNAL_ROAD_M - 0.02)
+    if others:
+        # The 9 m roads are measured inside the whole network, so a road's end where it meets
+        # another is not taken for a narrowing. A perimeter lane inside the setback (a test
+        # assumption) is part of the network but held to the fire lane, below, not to 9 m.
+        network = healed(unary_union([r.shape for r in site.roads]))
+        tested = unary_union([r.shape for r in site.roads if r.kind != "perimeter"])
+        wide = opening(network, rules.INTERNAL_ROAD_M - 0.02).intersection(tested)
+        thin = wide.area < tested.area * 0.98
         loops = len(_roads(site, "loop"))
         inner = len(_roads(site, "internal"))
         findings.append(Finding(
             "Internal roads: loop and other roads", Status.FAIL if thin else Status.PASS,
-            f"a loop road and {inner} internal road{'s' if inner != 1 else ''}"
-            + (", narrower than 9 m in places" if thin else ", all at least 9 m")
-            if loops else f"{inner} internal roads", f">= {rules.INTERNAL_ROAD_M:g} m", clause,
+            (f"a loop road and {inner} internal road{'s' if inner != 1 else ''}" if loops
+             else f"{inner} internal road{'s' if inner != 1 else ''}")
+            + (", narrower than 9 m in places" if thin else ", all at least 9 m"),
+            f">= {rules.INTERNAL_ROAD_M:g} m", clause,
             "A driveway (rule 13(c)(viii), 4.5 m) is not counted as an internal road.",
         ))
+    findings += _perimeter_findings(site, clause)
     findings.append(_dead_end_finding(site, clause))
     findings.append(_served_finding(site))
     findings.append(Finding(
@@ -95,8 +103,31 @@ def road_findings(site) -> list[Finding]:
     return findings
 
 
+def _perimeter_findings(site, clause: str) -> list[Finding]:
+    """The perimeter driveway and fire lane a test profile lets run inside the setback. It must
+    carry a fire tender; whether it may stand in for 8(m)'s 9 m looped road is the open
+    question, so at best it is UNVERIFIED, never PASS."""
+    ring = _roads(site, "perimeter")
+    if not ring:
+        return []
+    shape = unary_union([r.shape for r in ring])
+    lane = rules.FIRE_TENDER_MIN_WIDTH_M
+    if narrower_than(shape, lane - 0.02):
+        return [Finding("Internal roads: perimeter lane in the setback", Status.FAIL,
+                        f"narrower than the {lane:g} m fire lane in places",
+                        f">= {lane:g} m motorable", clause)]
+    return [Finding(
+        "Internal roads: perimeter lane in the setback", Status.UNVERIFIED,
+        f"{ring[0].width_m:g} m inside the setback band, at least {lane:g} m everywhere",
+        f">= {rules.INTERNAL_ROAD_M:g} m for a looped road (rule 8(m)); >= {lane:g} m for fire "
+        "access", clause,
+        "ASSUMED_FOR_TEST: the profile lets circulation run inside the setback. Whether a "
+        "perimeter lane narrower than 9 m may serve as the loop is not settled.",
+    )]
+
+
 def _dead_end_finding(site, clause: str) -> Finding:
-    base = unary_union([r.shape for r in _roads(site, "loop", "main approach")])
+    base = unary_union([r.shape for r in _roads(site, "loop", "perimeter", "main approach")])
     _, dead = through_roads(_roads(site, "internal"), base)
     low, high = rules.CUL_DE_SAC_LENGTH_M
     required = (f"through roads; a cul-de-sac only {low:g}-{high:g} m long, "
@@ -195,7 +226,7 @@ def _block_finding(b, free, motorable, clause: str) -> Finding:
 
 def _loop_turns_finding(site, free, clause: str) -> Finding:
     """Every bend of the loop road as drawn: its outer edge, and round the land it rings."""
-    loops = _roads(site, "loop")
+    loops = _roads(site, "loop", "perimeter")
     turns = loop_turns(unary_union([r.shape for r in loops])) if loops else []
     stuck = blocked(turns, free)
     return Finding(
@@ -267,7 +298,7 @@ def _street_finding(site) -> Finding:
 
 
 def _dead_end_road_finding(site, high_rise) -> Finding:
-    tallest = max((b.resolved_height() or 0) for b in high_rise)
+    tallest = max((b.physical_height_m or b.resolved_height() or 0) for b in high_rise)
     limit = rules.DEAD_END_MAX_HEIGHT_M
     required = f"no dead-end road for a residential building above {limit:g} m"
     rule = "Fire access: dead-end road"
