@@ -6,6 +6,7 @@ When an input is missing the finding says so (UNVERIFIED) rather than guessing.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from itertools import combinations
 
@@ -105,11 +106,32 @@ def check_site(site: Site) -> list[Finding]:
     findings.append(_green_strip_finding(site, encoded, bands))
     findings += road_findings(site)
     findings += fire_findings(site, all_high_rise)
+    if all_high_rise:
+        findings.append(_egress_finding(all_high_rise))
     findings.append(_amenity_finding(site))
     findings += parking_findings(site)
     if site.water_buffer is not None:
         findings.append(_water_finding(site))
     return findings
+
+
+def _egress_finding(high_rise) -> Finding:
+    """Exits inside a block (travel distance to a staircase, the number of stairs) are not
+    modelled, so a long slab's layout is not a full building-code check. Said on every high-rise
+    layout, never left out."""
+    lengths = [_long_side(b.footprint) for b in high_rise if b.footprint is not None]
+    longest = f"longest block {max(lengths):.0f} m" if lengths else "no block outlines"
+    return Finding(
+        "INTERNAL_EGRESS", Status.NOT_CHECKED,
+        f"{longest}; travel distance to a staircase and the exits are not modelled",
+        "NBC 2016 Part 4 exit requirements inside each block", "NBC 2016 Part 4 (not modelled)",
+        "Long slabs with few cores need this checked before they are relied on.",
+    )
+
+
+def _long_side(footprint: Polygon) -> float:
+    a, b, c = list(footprint.minimum_rotated_rectangle.exterior.coords)[:3]
+    return max(math.dist(a, b), math.dist(b, c))
 
 
 def _water_finding(site: Site) -> Finding:
