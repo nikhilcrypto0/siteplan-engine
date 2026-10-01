@@ -145,10 +145,12 @@ GATE_CLAUSE = (
 # the building and open spaces on all its sides shall be not less than 6 m in width, and a turning
 # radius of minimum 9 m shall be provided for fire tender movement ... which shall be kept free of
 # obstructions and shall be motorable. The compulsory open spaces around the building shall not
-# be used for parking." It does not say where the 9 m is measured. We take it as the tender's own
-# turning circle, the outer edge of the 6 m lane (inner edge 3 m): that is what lets a lane turn
-# round a corner inside the 7 m the state keeps for fire vehicles (rule 13(c)(vii)) and its 7 m
-# high-rise minimum setback, which a 9 m centreline could not.
+# be used for parking." It does not say where the 9 m is measured. UNRESOLVED_INTERPRETATION
+# (constraints.py): we take it as the tender's own turning circle, the outer edge of the 6 m lane
+# (inner edge 3 m): that is what lets a lane turn round a corner inside the 7 m the state keeps
+# for fire vehicles (rule 13(c)(vii)) and its 7 m high-rise minimum setback, which a 9 m
+# centreline could not. The 9 m is the order's number; the 6.88 m band access.py derives from
+# this reading is ours, not the order's.
 FIRE_TURNING_RADIUS_M = 9.0
 FIRE_ACCESS_CLAUSE = (
     "G.O.168 rule 15(b)(iv), bringing in NBC 2016 Part 3 4.6(c) (6 m of motorable open space "
@@ -201,10 +203,13 @@ WATER_BUFFER_CLAUSE = (
 # Rule 15(a)(x) is the group-housing one: 3% of built-up area, in a block of its own. (Rule 9(o)
 # asks 5% of site area but sits in the row-housing section, so it is not used as the check here.)
 # G.O.Ms.No.7 of 2016, Amendment 15, rewrote it as "upto 3% of the total built up area (or)
-# 50,000 Sft. whichever is lower". The check still applies the 2012 minimum of 3% with no cap
-# until a sanctioned plan shows how the new wording is read (inventory.py flags it).
+# 50,000 Sft. whichever is lower". UNRESOLVED_INTERPRETATION (constraints.py): the 3% minimum is
+# the 2012 wording, kept as the planning target and ASSUMED_FOR_TEST; the 2016 wording may make
+# 3% a ceiling and adds a cap. It is not settled law. The cap is recorded here as read, and only
+# reported, never applied, until a sanctioned plan or the architect shows how the clause is read.
 AMENITY_MIN_BUILT_UP_FRACTION = 0.03
 AMENITY_MIN_UNITS = 100
+AMENITY_CAP_SQFT_2016 = 50_000.0
 AMENITY_CLAUSE = (
     "G.O.168 rule 15(a)(x) as substituted by G.O.Ms.No.7 of 2016 (group housing of 100 units "
     "or more: 'upto 3% of the total built up area (or) 50,000 Sft. whichever is lower', in a "

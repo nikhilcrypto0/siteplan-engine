@@ -54,8 +54,11 @@ from siteplan.site_amenities import AmenityItem, _fit
 from siteplan.towers import Placement, Tower, corridor_roads
 
 EPS_M = 0.01
+# Every number here is classified in constraints.py; none of these three is law.
 CLEARANCE_M = 1.5  # walking room between the club house, the ramp and the tot-lot
-CLUB_ASPECT = 1.6
+CLUB_ASPECT = 1.6  # the club house footprint's proportion, when the firm gives none
+# The planning target for the club house: the 2012 minimum, UNRESOLVED_INTERPRETATION of the 2016
+# wording ('upto 3% ... or 50,000 Sft. whichever is lower'), ASSUMED_FOR_TEST (see rules.py).
 AMENITY_SHARE = rules.AMENITY_MIN_BUILT_UP_FRACTION
 # The share of a parking floor that bays and aisles are expected to take once laid out, for
 # sizing the cellars; the cars are then counted and a level added if they fall short.
@@ -384,7 +387,8 @@ def _trim(pocket: Polygon, area: float, angle_deg: float) -> Polygon | None:
 
 
 def _club_size(ctx: Context, tower_sqm: float, units: int) -> float:
-    """Rule 15(a)(x): 3% of the built-up area from 100 units, the block itself included."""
+    """Rule 15(a)(x): 3% of the built-up area from 100 units, the block itself included. The 3%
+    as a minimum is the engine's planning assumption for the test, not settled law."""
     if not ctx.club_house:
         return 0.0
     if ctx.club_house_sqm:

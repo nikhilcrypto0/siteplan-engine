@@ -164,8 +164,11 @@ def _block_finding(b, free, motorable, clause: str) -> Finding:
     return Finding(
         f"Fire access: {b.name}", Status.FAIL if problems else Status.PASS, measured,
         f">= {LANE_M:g} m motorable on all sides; a {rules.FIRE_TURNING_RADIUS_M:g} m turn at "
-        f"every corner ({FIRE_BAND_M:.2f} m clear beside each face)", clause,
-        "The 9 m turning radius is read as the outer edge of the 6 m lane.",
+        "every corner", clause,
+        f"UNRESOLVED_INTERPRETATION: the order gives the {rules.FIRE_TURNING_RADIUS_M:g} m, not "
+        f"where it is measured. Read here as the outer edge of the {LANE_M:g} m lane, which needs "
+        f"{FIRE_BAND_M:.2f} m of clear ground beside each face; that figure is derived from our "
+        "reading, not written in the rule (a 9 m centreline would need 7.76 m).",
     )
 
 

@@ -38,7 +38,9 @@ LANE_M = rules.FIRE_TENDER_MIN_WIDTH_M
 R_OUT = rules.FIRE_TURNING_RADIUS_M
 R_IN = R_OUT - LANE_M
 # Clear ground beside each face of a rectangular block for a lane that turns round its corners:
-# the swept sector reaches R_OUT - R_IN*sin(45 degrees) from each face.
+# the swept sector reaches R_OUT - R_IN*sin(45 degrees) from each face. This 6.88 m is derived
+# from our reading of the 9 m (UNRESOLVED_INTERPRETATION: measured at the lane's outer edge); the
+# order gives the 9 m and the 6 m, never this figure. A 9 m centreline would make it 7.76 m.
 FIRE_BAND_M = R_OUT - R_IN * math.sin(math.pi / 4)
 ROAD_M = rules.INTERNAL_ROAD_M
 APPROACH_M = rules.MAIN_APPROACH_ROAD_M[0]

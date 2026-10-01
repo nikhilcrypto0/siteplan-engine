@@ -50,7 +50,9 @@ def test_an_entry_is_applied_where_it_says(entry):
 @pytest.mark.parametrize("entry", [e for e in INVENTORY if e.uses and not e.applied_in],
                          ids=lambda e: e.rule[:40])
 def test_a_rule_marked_not_applied_is_used_nowhere(entry):
-    others = [p.read_text() for p in SRC.glob("*.py") if p.name not in ("rules.py", "inventory.py")]
+    # constraints.py reads every rule value to classify it, as inventory.py does to list it.
+    others = [p.read_text() for p in SRC.glob("*.py")
+              if p.name not in ("rules.py", "inventory.py", "constraints.py")]
     for name in entry.uses:
         assert not any(_mentions(text, name) for text in others), name
         assert len(re.findall(rf"\b{name}\b", (SRC / "rules.py").read_text())) == 1, name
