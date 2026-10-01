@@ -29,6 +29,8 @@ class Building:
     floors: int | None = None
     floor_height_m: float | None = None
     footprint: Polygon | None = None
+    physical_height_m: float | None = None  # stilt included, for NBC; when the rule height leaves
+    # the stilt out, as a test profile may
 
     def resolved_height(self) -> float | None:
         """Height including the stilt, as rule 2(f) counts it."""
