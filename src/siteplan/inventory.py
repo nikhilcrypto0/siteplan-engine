@@ -386,7 +386,8 @@ INVENTORY: tuple[Entry, ...] = (
         rules.FIRE_ACCESS_CLAUSE, Reading.INTERPRETED, _BOTH,
         ("FIRE_TENDER_MIN_WIDTH_M", "FIRE_TURNING_RADIUS_M", "FIRE_ACCESS_CLAUSE"),
         choice="Every high-rise keeps 6.88 m of clear, motorable ground on every side, a road or "
-               "a fire lane, which is what a 6 m lane needs to turn round a square corner. The "
+               "a fire lane, which is what a 6 m lane needs to turn round a square corner on our "
+               "reading of the 9 m; the order gives the 9 m and the 6 m, never the 6.88 m. The "
                "turns at every tower corner and every bend of the loop road are checked as the "
                "swept sectors themselves, and the lanes as one network from the entrance. No "
                "bay, facility, ramp or tot-lot stands in them. The order does not say where the "
@@ -477,9 +478,10 @@ INVENTORY: tuple[Entry, ...] = (
     Entry(
         "Parking", "Size of a parking bay and its aisle.",
         "2.5 x 5 m bays, 6 m aisles", "none (parking.py)", Reading.ASSUMED, (Where.LAYOUT,),
-        choice="The rules give no bay or aisle size. Used to lay out the surface bays and to "
-               "count the cars each floor holds.",
-        settles="The bay size on the firm's drawings.",
+        choice="ENGINE_DESIGN_ASSUMPTION: no order we hold gives a bay or aisle size, so these "
+               "are the engine's parking standards, not the firm's and not law. Used to lay out "
+               "the surface bays and to count the cars each floor holds.",
+        settles="The bay size on the firm's drawings, or a primary source that fixes one.",
     ),
     # Towers
     Entry(
@@ -495,14 +497,18 @@ INVENTORY: tuple[Entry, ...] = (
     # Amenities
     Entry(
         "Amenities", "From 100 units, common amenities in a block of their own.",
-        f"at least {rules.AMENITY_MIN_BUILT_UP_FRACTION:.0%} of the built-up area, from "
-        f"{rules.AMENITY_MIN_UNITS} units",
+        f"{rules.AMENITY_MIN_BUILT_UP_FRACTION:.0%} of the built-up area planned as a minimum "
+        f"(ASSUMED_FOR_TEST), from {rules.AMENITY_MIN_UNITS} units; the 2016 cap of "
+        f"{rules.AMENITY_CAP_SQFT_2016:,.0f} sft reported, not applied",
         rules.AMENITY_CLAUSE, Reading.INTERPRETED, _BOTH,
-        ("AMENITY_MIN_BUILT_UP_FRACTION", "AMENITY_MIN_UNITS", "AMENITY_CLAUSE"),
-        choice="Applied as a minimum of 3% with no cap, which is the 2012 wording. Since 2016 the "
-               "rule reads 'upto 3% ... (or) 50,000 Sft. whichever is lower': that adds a cap "
-               "(it binds above about 1.67 million sft built-up) and may make 3% a ceiling "
-               "rather than a floor.",
+        ("AMENITY_MIN_BUILT_UP_FRACTION", "AMENITY_MIN_UNITS", "AMENITY_CAP_SQFT_2016",
+         "AMENITY_CLAUSE"),
+        choice="UNRESOLVED_INTERPRETATION, not settled law. Planned and checked as a minimum of "
+               "3% with no cap, which is the 2012 wording, so the test is conservative. Since "
+               "2016 the rule reads 'upto 3% ... (or) 50,000 Sft. whichever is lower': that "
+               "adds a cap (it binds above about 1.67 million sft built-up) and may make 3% a "
+               "ceiling rather than a floor. The checker says so on its finding and reports a "
+               "block above the cap UNVERIFIED.",
         settles="The amenities area on a sanctioned plan of 100 units or more, against its "
                 "built-up area.",
     ),

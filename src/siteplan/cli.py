@@ -1,4 +1,5 @@
-"""Command line: survey, check, area-statement, layout, rules, inventory, floors, cases, assist."""
+"""Command line: survey, check, area-statement, layout, rules, inventory, constraints, floors,
+cases, assist."""
 
 from __future__ import annotations
 
@@ -248,6 +249,14 @@ def _cmd_inventory(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_constraints(args: argparse.Namespace) -> int:
+    from siteplan.constraints import Basis, render_markdown, render_text
+
+    only = Basis(args.basis) if args.basis else None
+    print(render_markdown() if args.markdown else render_text(only=only))
+    return 0
+
+
 def _cmd_floors(args: argparse.Namespace) -> int:
     from siteplan.max_floors import describe, max_floors
     from siteplan.roads import roads_near
@@ -480,6 +489,15 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("inventory", help="Every rule the engine applies, and how it was read.")
     p.add_argument("--markdown", action="store_true", help="A table to share with the firm")
     p.set_defaults(run=_cmd_inventory)
+
+    p = sub.add_parser("constraints", help="Every number generation uses, and what kind of fact "
+                       "each is: law, the firm's standard, an engine assumption, an unresolved "
+                       "reading, or a site input.")
+    p.add_argument("--markdown", action="store_true", help="A table to share with the firm")
+    p.add_argument("--basis", choices=["LEGAL_RULE", "FIRM_STANDARD", "ENGINE_DESIGN_ASSUMPTION",
+                                       "UNRESOLVED_INTERPRETATION", "SITE_INPUT"],
+                   help="Only this class")
+    p.set_defaults(run=_cmd_constraints)
 
     p = sub.add_parser("floors", help="The most floors a plot can take, from its area and road.")
     plot = p.add_mutually_exclusive_group(required=True)
