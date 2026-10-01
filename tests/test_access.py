@@ -101,3 +101,46 @@ def test_a_road_that_meets_the_loop_once_is_a_dead_end():
     stub = RoadPiece("internal", box(60, 9, 69, 50), 9.0)
     ok, dead = through_roads([through, stub], loop)
     assert ok == [through] and dead == [stub]
+
+
+JAGGED_NE = {  # an access side traced through survey points, as Suchitra's outline is
+    "one piece long enough": [(100, 50), (97, 54), (93, 57), (88, 62), (84, 65), (79, 70),
+                              (75, 74), (70, 79), (66, 82), (60, 85)],
+    "every piece shorter than the road": [(100, 50), (97, 55), (94, 56), (91, 61), (87, 63),
+                                          (84, 68), (80, 70), (77, 75), (73, 77), (70, 82),
+                                          (66, 84), (62, 85)],
+}
+
+
+@pytest.mark.parametrize("side", JAGGED_NE.values(), ids=JAGGED_NE.keys())
+def test_a_jagged_access_side_still_gets_a_full_width_approach_road(side):
+    """On Suchitra every candidate failed 'main approach': the 9 m road was anchored on a
+    piece of boundary shorter than itself, hung past its ends and was cut to a sliver."""
+    from pathlib import Path
+
+    from siteplan.findings import narrower_than
+    from siteplan.layout import LayoutRequest, SiteFacts, search
+    from siteplan.library import FlatLibrary
+
+    library = FlatLibrary.model_validate_json(
+        (Path(__file__).parent.parent / "examples" / "flat_library.example.json").read_text())
+    plot = Polygon([(0, 0), (100, 0), *side, (0, 85)])
+    facts = SiteFacts(abutting_road_m=12.38, authority="HMDA", inside_cure=False,
+                      access_side="NE")
+    result = search(plot, library, LayoutRequest(floors=7, unit_mix={"2BHK": 1.0}), facts)
+    assert result.options, [r.reasons for r in result.rejected]
+    approach = next(r for r in result.options[0].roads if r.kind == "main approach")
+    assert not narrower_than(approach.shape, 8.98)
+
+
+def test_a_main_approach_narrower_than_the_rule_says_so_rather_than_its_drawn_width():
+    from siteplan.access import Entrance, RoadPiece
+    from siteplan.access_checks import road_findings
+    from siteplan.checks import Site
+
+    sliver = Polygon([(0, 0), (9, 0), (1, 6)])  # drawn as a 9 m road, 9 m wide nowhere
+    site = Site(gross_area_sqm=8_000, net_plot=box(0, 0, 100, 80),
+                roads=(RoadPiece("main approach", sliver, 9.0),),
+                entrance=Entrance(sliver, sliver, 9.0, "test"))
+    finding = next(f for f in road_findings(site) if f.rule == "Internal roads: main approach")
+    assert finding.status.value == "FAIL" and finding.measured.startswith("narrower than 9 m")
