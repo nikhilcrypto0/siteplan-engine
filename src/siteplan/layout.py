@@ -299,16 +299,11 @@ def search(plot: Polygon, library: FlatLibrary, request: LayoutRequest, facts: S
     band = rules.band_for_height(height)
     if band is None:
         raise ValueError(f"{height:g} m is above the encoded Table IV rows")
-    site_sqm = facts.gross_area_sqm or plot.area
-    if not rules.is_group_development(site_sqm):
-        return Search(stopped=True, problem=(
-            f"site {site_sqm:,.0f} m², under the {rules.GROUP_DEVELOPMENT_MIN_SITE_SQM:,.0f} m² "
-            "of a Group Development Scheme (rule 2(c)): rule 8(m)'s internal roads do not apply, "
-            "and layouts without them are not supported yet"))
+    stop = stop_reason(plot, request, facts)
+    if stop:
+        return Search(stopped=True, problem=stop)
     percent, basis = parking_percent(facts.authority, facts.inside_cure,
                                      facts.jurisdiction_confirmed, request.conservative_parking)
-    if percent is None:
-        return Search(stopped=True, problem=basis)
     fr = frame(plot, band.min_open_space_m, facts.gross_area_sqm, facts.keep_out,
                facts.access_side)
     if fr is None:
@@ -340,6 +335,20 @@ def search(plot: Polygon, library: FlatLibrary, request: LayoutRequest, facts: S
             passing.append(option)
     result.options = pick_distinct(passing, request.options)
     return result
+
+
+def stop_reason(plot: Polygon, request: LayoutRequest, facts: SiteFacts) -> str | None:
+    """Why nothing can be tried on this site at any height, before anything is drawn: the site
+    is not a Group Development Scheme (layouts without rule 8(m) roads are not supported), or
+    whose rules apply is open and decides the parking share. None when the search can run."""
+    site_sqm = facts.gross_area_sqm or plot.area
+    if not rules.is_group_development(site_sqm):
+        return (f"site {site_sqm:,.0f} m², under the {rules.GROUP_DEVELOPMENT_MIN_SITE_SQM:,.0f} "
+                "m² of a Group Development Scheme (rule 2(c)): rule 8(m)'s internal roads do not "
+                "apply, and layouts without them are not supported yet")
+    percent, basis = parking_percent(facts.authority, facts.inside_cure,
+                                     facts.jurisdiction_confirmed, request.conservative_parking)
+    return basis if percent is None else None
 
 
 def _rank(fr: Frame, library: FlatLibrary, request: LayoutRequest, ctx: Context

@@ -91,3 +91,35 @@ def test_the_group_development_threshold_is_the_rule_as_written():
     assert rules.is_group_development(4_000) and not rules.is_group_development(3_999)
     entry = next(c for c in REGISTRY if "rules.GROUP_DEVELOPMENT_MIN_SITE_SQM" in c.symbols)
     assert entry.basis is Basis.LEGAL_RULE
+
+
+def test_when_nothing_passes_every_heights_real_reason_reaches_the_caller(tmp_path):
+    """A live Hermes run on Suchitra said only 'No tower fits inside the setbacks', which hid
+    what the search had recorded at each height."""
+    from siteplan.project import Project
+    from siteplan.runner import NoLayout, run_layout
+
+    project = Project(name="T", site=SETTLED)
+    with pytest.raises(NoLayout) as caught:
+        run_layout(project, LIBRARY, box(0, 0, 70, 60), REQUEST, tmp_path)
+    text = str(caught.value)
+    assert "stilt + 8 (27 m): FAIL (site)" in text and "open ground" in text
+    assert "No tower fits" not in text
+
+
+def test_the_chat_says_why_nothing_can_be_tried_before_asking_for_approval(tmp_path):
+    import json
+    import shutil
+    from pathlib import Path
+
+    from test_mcp_server import LAYOUT_ARGS, Architect, call, nothing_drawn
+
+    ws = tmp_path / "ws"
+    shutil.copytree(Path(__file__).parent.parent / "examples", ws)
+    project = json.loads((ws / "example.project.json").read_text())
+    project["site"].pop("inside_cure")  # HMDA, CURE not known: 20% or 30%
+    (ws / "example.project.json").write_text(json.dumps(project))
+    architect = Architect()
+    reply = call(ws, "propose_layouts", LAYOUT_ARGS, architect).structuredContent
+    assert reply["solved"] is False and "confirm the authority" in reply["next"]
+    assert architect.asked == [] and nothing_drawn(ws)  # nobody was asked to approve
