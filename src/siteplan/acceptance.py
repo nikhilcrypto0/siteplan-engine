@@ -22,6 +22,7 @@ from shapely.geometry import Point, Polygon
 from siteplan import rules
 from siteplan.area_statement import AreaStatement
 from siteplan.cases import Case
+from siteplan.constraints import Basis, by_basis
 from siteplan.findings import Status
 from siteplan.heights import HeightSearch
 from siteplan.intake import Draft, build_project, extract, load_defaults, save
@@ -36,18 +37,6 @@ from siteplan.site_amenities import AmenityLibrary
 
 BUILDING_LAYER = "Building Plan"  # the BuildNow layer the towers are delivered on
 TOWER_NAME = re.compile(r"T\d+")
-# How the engine reads what the orders leave open; each is in the inventory with what settles it.
-READINGS = (
-    "The stilt counts in the height (rule 2(e)); the firm's drawing behaves as if it does not.",
-    "NBC 4.6(c)'s 9 m turning radius is the outer edge of the 6 m fire lane.",
-    "Rule 8(m) gives 9 to 18 m for a main approach road with no test for which: drawn at 9 m.",
-    "Every cellar keeps the setback of the deepest (rule 13(c)(x)), and 10% of each cellar is "
-    "kept for utilities, the most rule 13(c)(xi) allows.",
-    "Table V's parking area is the parking floor less cores, ramp and utilities; visitors' "
-    "parking (13(c)(xii)) is read as parking at ground level.",
-    "The tot-lot is measured against the larger of the net and the gross site area.",
-    "No rule limits a block's length, so lengths were explored rather than asked.",
-)
 
 
 @dataclass(frozen=True)
@@ -167,8 +156,12 @@ def report(generated: Generated, rows: list[tuple[str, str, str]]) -> str:
         "",
         "3. UNRESOLVED FACTS AND ASSUMPTIONS",
         *_unresolved(project),
-        "  The engine's readings of what the orders leave open:",
-        *(f"    - {reading}" for reading in READINGS),
+        "  UNRESOLVED_INTERPRETATION: the engine's readings of what the orders leave open, each "
+        "taken for this test (siteplan constraints lists what would settle each):",
+        *(f"    - {c.what} {c.value}." for c in by_basis(Basis.UNRESOLVED_INTERPRETATION)),
+        "  ENGINE_DESIGN_ASSUMPTION: the engine's own numbers, neither law nor the firm's "
+        "standards:",
+        *(f"    - {c.what} {c.value}." for c in by_basis(Basis.ENGINE_DESIGN_ASSUMPTION)),
         "",
         "4. HEIGHT",
         *_heights(generated),
@@ -282,11 +275,15 @@ def _option(summary: dict, option: LayoutOption, plot: Polygon, gross_sqm: float
         f"surface {parking.get('surface_sqm', 0):,} + {parking.get('cellar_levels', 0)} cellar "
         f"level(s) x {parking.get('cellar_sqm_per_level', 0):,}; {parking.get('total_cars', 0):,} "
         f"cars laid out in bays and aisles = {parking.get('laid_out_sqm', 0):,} m² "
-        f"{parking.get('cars', {})}; ramp {parking.get('ramp', 'none')}",
+        f"{parking.get('cars', {})}; ramp {parking.get('ramp', 'none')}; "
+        f"{parking.get('bay_standard', '')}",
         f"    Tot-lot: required {tot_lot_need:,.0f} m² (10% of the larger of the net and gross "
         f"site); provided {summary['open_space_sqm']:,.0f} m² in {len(option.open_space)} "
         f"pocket(s), {summary['open_space_share_pct']}% of the net plot",
-        f"    Club house: required {club_need:,.0f} m² (3% of the built-up area, from 100 units); "
+        f"    Club house: required {club_need:,.0f} m² "
+        f"({rules.AMENITY_MIN_BUILT_UP_FRACTION:.0%} of the built-up area from "
+        f"{rules.AMENITY_MIN_UNITS} units: the planning minimum ASSUMED_FOR_TEST, an "
+        "UNRESOLVED_INTERPRETATION of the 2016 wording); "
         f"provided {summary['club_house_sqm']:,.0f} m² built-up on "
         f"{summary['club_house_footprint_sqm']:,.0f} m²; facilities placed: "
         f"{', '.join(a['name'] for a in summary['amenities']) or 'none'}"
