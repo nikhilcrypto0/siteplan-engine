@@ -37,7 +37,7 @@ from siteplan.llm import (
     estimate_tokens,
 )
 from siteplan.project import Project
-from siteplan.runner import run_layout
+from siteplan.runner import NoLayout, run_layout
 
 log = logging.getLogger("siteplan.assistant")
 
@@ -297,10 +297,10 @@ class Assistant:
         try:
             options = run_layout(self.project, self.library, self.plot, request, self.out_dir,
                                  keep_out=self.keep_out)
+        except NoLayout as exc:
+            return {"status": str(exc)}
         except ValueError as exc:
             return {"status": f"The solver refused the request: {exc}"}
-        if not options:
-            return {"status": "No tower fits inside the setbacks with the required open space."}
         return {"options": options}
 
     def _explain(self, state: State) -> dict:

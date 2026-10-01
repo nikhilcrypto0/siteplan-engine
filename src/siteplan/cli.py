@@ -20,7 +20,14 @@ from siteplan.intake import WORKSPACE_FILE, load_defaults
 from siteplan.library import FlatLibrary
 from siteplan.llm import AssistantConfig
 from siteplan.project import Project
-from siteplan.runner import LAYOUT_CAVEAT, load_plot, load_water, read_survey, run_layout
+from siteplan.runner import (
+    LAYOUT_CAVEAT,
+    NoLayout,
+    load_plot,
+    load_water,
+    read_survey,
+    run_layout,
+)
 from siteplan.site_amenities import AmenityLibrary
 from siteplan.wizard import build_project, collect
 
@@ -117,9 +124,10 @@ def _cmd_layout(args: argparse.Namespace) -> int:
     if water:
         print(f"Water: {water}; {plot.intersection(keep_out).area:,.0f} m² of the plot\n")
     out = Path(args.out)
-    summaries = run_layout(project, library, plot, project.layout, out, amenities, keep_out)
-    if not summaries:
-        print("No tower fits inside the setbacks with the required open space.")
+    try:
+        summaries = run_layout(project, library, plot, project.layout, out, amenities, keep_out)
+    except NoLayout as exc:
+        print(exc)
         return 1
     _print_options(summaries)
     print(f"\nWrote option_1..{len(summaries)} (.dxf, .svg, .json) to {out}/")
