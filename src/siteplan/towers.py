@@ -48,6 +48,22 @@ class Tower:
         corners = list(self.footprint.exterior.coords)
         return max(math.dist(corners[0], corners[1]), math.dist(corners[1], corners[2]))
 
+    @property
+    def width_m(self) -> float:
+        """The short side of the block: two flats deep and the corridor between them."""
+        corners = list(self.footprint.exterior.coords)
+        return min(math.dist(corners[0], corners[1]), math.dist(corners[1], corners[2]))
+
+    def detail(self, floors: int) -> dict:
+        """What an architect asks of a block: its size, flats per floor and cores."""
+        per_floor = sum(self.flats_per_floor().values())
+        cores = len(self.cores)
+        return {"name": self.name, "length_m": round(self.length_m, 1),
+                "width_m": round(self.width_m, 1), "floors_above_stilt": floors,
+                "flats_per_floor": per_floor, "flats_per_floor_by_type": self.flats_per_floor(),
+                "cores": cores, "flats_per_core_per_floor": round(per_floor / cores, 1)
+                if cores else 0, "flats": per_floor * floors}
+
 
 @dataclass(frozen=True)
 class Placement:
@@ -121,10 +137,13 @@ def tower_length(flats: list[FlatType], library: FlatLibrary) -> float:
 
 
 def compose_tower(available_m: float, library: FlatLibrary, mix: MixTracker,
-                  min_per_side: int) -> list[FlatType] | None:
+                  min_per_side: int, max_cores: int | None = None) -> list[FlatType] | None:
+    """Flats along one side of a block that fits the length available, and, when asked, no
+    more of them than max_cores cores serve (flats_per_core_per_side each)."""
     flats: list[FlatType] = []
     pending: dict[str, int] = {}
-    while True:
+    most = None if max_cores is None else max_cores * library.flats_per_core_per_side
+    while most is None or len(flats) < most:
         for flat in mix.next_choices(library, pending):
             if tower_length([*flats, flat], library) <= available_m + 1e-9:
                 flats.append(flat)
@@ -170,7 +189,7 @@ def build_tower(name: str, x0: float, y0: float, flats: list[FlatType], library:
 
 def place(envelope, angle: float, offset: float, library: FlatLibrary,
           unit_mix: dict[str, float], min_per_side: int, corridor_m: float,
-          max_length_m: float | None) -> Placement:
+          max_length_m: float | None, max_cores: int | None = None) -> Placement:
     """Columns of towers across the envelope, a corridor apart, filling each free stretch."""
     alpha = 90 - angle  # turn the site so the towers' long axis runs along y
     turned = affinity.rotate(envelope, alpha, origin=(0, 0))
@@ -187,7 +206,7 @@ def place(envelope, angle: float, offset: float, library: FlatLibrary,
             y = lo
             while hi - y > 0:
                 available = hi - y if max_length_m is None else min(hi - y, max_length_m)
-                flats = compose_tower(available, library, mix, min_per_side)
+                flats = compose_tower(available, library, mix, min_per_side, max_cores)
                 if flats is None:
                     break
                 towers.append(build_tower(f"T{len(towers) + 1}", x, y, flats, library, alpha,

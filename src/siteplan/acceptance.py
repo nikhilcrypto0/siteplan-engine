@@ -27,9 +27,10 @@ from siteplan.findings import Status
 from siteplan.heights import HeightSearch
 from siteplan.intake import Draft, build_project, extract, load_defaults, save
 from siteplan.intake import render as render_draft
-from siteplan.layout import LayoutOption
+from siteplan.layout import LayoutOption, missing_strategies
 from siteplan.library import FlatLibrary
 from siteplan.max_floors import FloorLimit, max_floors
+from siteplan.profiles import AssumptionProfile, apply_profile, describe
 from siteplan.project import Project
 from siteplan.provenance import Provenance
 from siteplan.runner import load_plot, load_water, run_search, write_options
@@ -51,13 +52,16 @@ class Generated:
     out: Path
     library_note: str = ""
     standards: dict | None = None  # the workspace standards the run used
+    profile: AssumptionProfile | None = None  # a site's temporary test assumptions, if any
 
 
 def generate(survey: Path, answers: dict, out: Path, workspace: Path | None = None,
-             conservative_parking: bool = False) -> Generated:
+             conservative_parking: bool = False,
+             profile: AssumptionProfile | None = None) -> Generated:
     """Everything the engine produces from the raw survey and the answers alone. With
     conservative_parking, an unestablished jurisdiction plans the GHMC column (a labelled test
-    mode) instead of stopping to ask."""
+    mode) instead of stopping to ask. A profile sets one site's temporary test assumptions on
+    top of the answers, each recorded ASSUMED_FOR_TEST and listed in the report."""
     workspace = workspace or survey.parent
     defaults = load_defaults(workspace)
     if not defaults.flat_library:
@@ -68,6 +72,8 @@ def generate(survey: Path, answers: dict, out: Path, workspace: Path | None = No
         project_dict["layout"]["conservative_parking"] = True
         project_dict["sources"]["conservative_parking"] = "run in the conservative test mode"
         project_dict["status"]["conservative_parking"] = Provenance.ASSUMED_FOR_TEST
+    if profile is not None:
+        project_dict = apply_profile(project_dict, profile)
     save(project_dict, out / "project.json")
     project = Project.model_validate(project_dict)
     plot, basis = load_plot(project, survey)
@@ -81,7 +87,7 @@ def generate(survey: Path, answers: dict, out: Path, workspace: Path | None = No
     found = run_search(project, library, plot, project.layout, amenities, keep_out)
     options = write_options(found, project, library, plot, project.layout, out)
     return Generated(draft, project_dict, plot, basis, limit, found, options, out, library.note,
-                     defaults.model_dump(exclude={"status"}))
+                     defaults.model_dump(exclude={"status"}), profile)
 
 
 def towers_in(dxf: Path) -> list[Polygon]:
@@ -149,11 +155,19 @@ def compare(generated: Generated, case: Case,
 def report(generated: Generated, rows: list[tuple[str, str, str]]) -> str:
     """Plain text for the terminal and the report file."""
     project = generated.project
+    profile = generated.profile
+    debug = profile is not None and profile.debug_fixture
     lines = [
-        f"ACCEPTANCE: {project['name']}",
+        f"{'DEBUG RUN (test fixture, not blind acceptance)' if debug else 'ACCEPTANCE'}: "
+        f"{project['name']}",
+        "The plot outline comes from the firm's finished plan; the towers, roads and everything "
+        "else were generated, and the firm's plan was read again only for the comparison."
+        if debug else
         "The generator saw the raw survey, the answers and the firm's standard libraries; the "
         "firm's plan for this site was read only for the comparison at the end.",
         "",
+        *(["0. TEST PROFILE: TEMPORARY ASSUMPTIONS FOR THIS SITE ONLY", *describe(profile), ""]
+          if profile is not None else []),
         "1. EXTRACTED FROM THE SURVEY",
         *("  " + line.strip() for line in render_draft(generated.draft).splitlines()[1:]),
         f"  plot planned on: {generated.plot.area:,.0f} m², {generated.basis}",
@@ -177,9 +191,14 @@ def report(generated: Generated, rows: list[tuple[str, str, str]]) -> str:
     ]
     if not generated.found.options:
         lines.append("  None: no height has a layout that passes every rule.")
+    lines += [f"  {missing}" for missing in missing_strategies(generated.found.options)]
     gross = generated.project["site"].get("gross_area_sqm") or generated.plot.area
+    assumed = sorted(k for k, s in project.get("status", {}).items()
+                     if s == Provenance.ASSUMED_FOR_TEST)
     for summary, option in zip(generated.options, generated.found.options, strict=True):
-        lines += _option(summary, option, generated.plot, gross)
+        lines += _option(summary, option, generated.plot, gross, assumed)
+    if generated.found.options:
+        lines += ["", "5a. COMPARISON", *_comparison(generated.options, generated.plot)]
     lines += ["", "6. REJECTED CANDIDATES", *_rejected(generated.found)]
     width = max(len(r[0]) for r in rows)
     lines += ["", "7. COMPARED WITH THE FIRM'S PLAN (read only now)",
@@ -227,11 +246,17 @@ def _unresolved(project: dict) -> list[str]:
 def _heights(generated: Generated) -> list[str]:
     found, limit = generated.found, generated.limit
     legal, feasible = found.max_legal_floors, found.max_feasible_floors
-    stilt = generated.project["layout"]["stilt_height_m"]
-    floor_h = generated.project["layout"]["floor_height_m"]
+    layout = generated.project["layout"]
+    stilt, floor_h = layout["stilt_height_m"], layout["floor_height_m"]
+    counted = layout.get("stilt_in_rule_height", True)
 
     def height(floors: int | None) -> str:
-        return "none" if floors is None else f"stilt + {floors} ({stilt + floors * floor_h:g} m)"
+        if floors is None:
+            return "none"
+        physical = stilt + floors * floor_h
+        if counted:
+            return f"stilt + {floors} ({physical:g} m)"
+        return f"stilt + {floors} ({floors * floor_h:g} m for the rules, {physical:g} m physical)"
 
     road_status = generated.project.get("status", {}).get("abutting_road", "not recorded")
     lines = [f"  Maximum legally allowed: {height(legal)}, resting on the abutting road's width "
@@ -241,68 +266,82 @@ def _heights(generated: Generated) -> list[str]:
              f"  Maximum geometrically feasible: {height(feasible)}",
              "  Height by height, top down:"]
     for r in found.results:
-        lines.append(f"    stilt + {r.floors} ({r.height_m:g} m): {r.verdict}"
+        physical = (f", {r.physical_height_m:g} m physical" if r.physical_height_m
+                    and abs(r.physical_height_m - r.height_m) > 1e-6 else "")
+        lines.append(f"    stilt + {r.floors} ({r.height_m:g} m for the rules{physical}): "
+                     f"{r.verdict}"
                      + (f", {len(r.options)} passing layout{'s' if len(r.options) != 1 else ''}"
                         if r.options else ""))
         lines += [f"      - {reason}" for reason in r.reasons()]
     return lines
 
 
-def _option(summary: dict, option: LayoutOption, plot: Polygon, gross_sqm: float) -> list[str]:
+def _option(summary: dict, option: LayoutOption, plot: Polygon, gross_sqm: float,
+            assumed: list[str] | None = None) -> list[str]:
     parking = summary["parking"]
     tot_lot_need = rules.OPEN_SPACE_MIN_FRACTION * max(plot.area, gross_sqm)
     club_need = (rules.AMENITY_MIN_BUILT_UP_FRACTION * option.built_up_sqm
                  if option.total_flats >= rules.AMENITY_MIN_UNITS else 0.0)
-    towers = ", ".join(f"{t.name} {t.length_m:.0f} m" for t in option.towers)
-    by_type = ", ".join(f"{k} {n}" for k, n in summary["flats_by_type"].items())
+    total = summary["total_flats"] or 1
+    by_type = ", ".join(f"{k} {n} ({n / total:.1%})" for k, n in summary["flats_by_type"].items())
     asked = ", ".join(f"{k} {v:.0%}" for k, v in sorted(option.unit_mix_target.items()))
-    got = ", ".join(f"{k} {v:.1%}" for k, v in summary["unit_mix_achieved"].items())
     setback, gap = spacing(plot, [t.footprint for t in option.towers])
-    roads = summary["roads"]
-    kinds = {}
-    for road in roads:
+    band = rules.band_for_height(option.height_m)
+    need = band.min_open_space_m if band else None
+    kinds: dict[str, list] = {}
+    for road in summary["roads"]:
         kinds.setdefault(road["kind"], []).append(road)
     road_line = "; ".join(f"{kind} {rs[0]['width_m']:g} m" + (f" x {len(rs)}" if len(rs) > 1
                                                               else "")
                           for kind, rs in kinds.items())
     fire = [f for f in option.findings if f.rule.startswith("Fire access")]
     counts = {s: sum(f.status is s for f in option.findings) for s in Status}
+    physical = summary.get("physical_height_m", option.height_m)
+    title = summary.get("strategy") or f"Option {summary['option']}"
     lines = [
         "",
-        f"  Option {summary['option']}: stilt + {option.floors} ({option.height_m:g} m), "
-        f"{summary['towers']} towers ({towers})",
-        f"    Flats: {summary['total_flats']} ({by_type}); mix {got} against {asked}",
-        f"    Areas: tower floor {summary['tower_floor_sqft']:,} sft = flats' own "
-        f"{summary['flats_own_sqft']:,} + common and core {summary['common_core_sqft']:,} "
-        f"({summary['core_share_pct']}%); saleable {summary['saleable_sqft']:,} sft "
-        f"({summary['saleable_basis']}); club house {summary['amenity_sqft']:,} sft; parking "
-        f"{summary['parking_sqft']:,} sft",
-        f"    Roads: {road_line}; entrance {option.entrance.note if option.entrance else '-'}",
-        f"    Fire access: {sum(f.status is Status.PASS for f in fire)} of {len(fire)} checks "
-        "pass; " + "; ".join(f"{f.rule.removeprefix('Fire access: ')} {f.status.value}"
-                            for f in fire if f.status is not Status.PASS),
+        f"  {title}: {summary['towers']} tower{'s' if summary['towers'] != 1 else ''}, "
+        f"stilt + {option.floors}; height used for the rules {option.height_m:g} m "
+        f"({physical:g} m physical, stilt included)",
+        "    Towers:",
+        *(f"      {d['name']}: {d['length_m']:g} x {d['width_m']:g} m, {d['flats_per_floor']} "
+          f"flats per floor ({_by_type(d['flats_per_floor_by_type'])}), "
+          f"{d['cores']} core{'s' if d['cores'] != 1 else ''}, "
+          f"{d['flats_per_core_per_floor']:g} flats per core per floor, {d['flats']} flats"
+          for d in summary.get("towers_detail", [])),
+        f"    Flats: {summary['total_flats']}: {by_type}; asked {asked}",
+        f"    Areas: built-up {summary['built_up_sqft']:,} sft (towers "
+        f"{summary['tower_floor_sqft']:,} + club house {summary['amenity_sqft']:,}); saleable "
+        f"{summary['saleable_sqft']:,} sft "
+        f"({summary['saleable_basis']}); common and core {summary['core_share_pct']}% of the "
+        "tower floor",
         f"    Parking: required {parking.get('required_sqm', 0):,} m² "
         f"({parking.get('percent', 0):g}%, {parking.get('basis', '')}); provided "
         f"{parking.get('provided_sqm', 0):,} m² of floor = stilt {parking.get('stilt_sqm', 0):,} + "
         f"surface {parking.get('surface_sqm', 0):,} + {parking.get('cellar_levels', 0)} cellar "
         f"level(s) x {parking.get('cellar_sqm_per_level', 0):,}; {parking.get('total_cars', 0):,} "
-        f"cars laid out in bays and aisles = {parking.get('laid_out_sqm', 0):,} m² "
-        f"{parking.get('cars', {})}; ramp {parking.get('ramp', 'none')}; "
-        f"{parking.get('bay_standard', '')}",
-        f"    Tot-lot: required {tot_lot_need:,.0f} m² (10% of the larger of the net and gross "
-        f"site); provided {summary['open_space_sqm']:,.0f} m² in {len(option.open_space)} "
-        f"pocket(s), {summary['open_space_share_pct']}% of the net plot",
+        f"cars laid out = {parking.get('laid_out_sqm', 0):,} m² {parking.get('cars', {})}; ramp "
+        f"{parking.get('ramp', 'none')}; {parking.get('bay_standard', '')}",
         f"    Club house: required {club_need:,.0f} m² "
         f"({rules.AMENITY_MIN_BUILT_UP_FRACTION:.0%} of the built-up area from "
         f"{rules.AMENITY_MIN_UNITS} units: the planning minimum ASSUMED_FOR_TEST, an "
         "UNRESOLVED_INTERPRETATION of the 2016 wording); "
         f"provided {summary['club_house_sqm']:,.0f} m² built-up on "
-        f"{summary['club_house_footprint_sqm']:,.0f} m²; facilities placed: "
-        f"{', '.join(a['name'] for a in summary['amenities']) or 'none'}"
-        + (f"; no room for: {', '.join(summary['amenities_with_no_room'])}"
+        f"{summary['club_house_footprint_sqm']:,.0f} m²",
+        f"    Amenities: placed {', '.join(a['name'] for a in summary['amenities']) or 'none'}"
+        + (f"; no room for {', '.join(summary['amenities_with_no_room'])}"
            if summary["amenities_with_no_room"] else ""),
-        f"    Setbacks and spacing: least setback {setback:.2f} m, least gap "
-        + (f"{gap:.2f} m" if gap is not None else "- (one tower)"),
+        f"    Tot-lot: required {tot_lot_need:,.0f} m² (10% of the larger of the net and gross "
+        f"site); provided {summary['open_space_sqm']:,.0f} m² in {len(option.open_space)} "
+        f"pocket(s), {summary['open_space_share_pct']}% of the net plot",
+        f"    Setback: required {need:g} m (Table IV at {option.height_m:g} m); least actual "
+        f"{setback:.2f} m" if need is not None else f"    Setback: least actual {setback:.2f} m",
+        (f"    Tower spacing: required {need:g} m; least actual {gap:.2f} m" if gap is not None
+         else "    Tower spacing: one tower"),
+        f"    Roads: {road_line}; entrance {option.entrance.note if option.entrance else '-'}",
+        f"    Fire access: {sum(f.status is Status.PASS for f in fire)} of {len(fire)} checks "
+        "pass; " + "; ".join(f"{f.rule.removeprefix('Fire access: ')} {f.status.value}"
+                            for f in fire if f.status is not Status.PASS),
         f"    Rules: {counts[Status.PASS]} PASS, {counts[Status.FAIL]} FAIL, "
         f"{counts[Status.UNVERIFIED] + counts[Status.NOT_CHECKED]} UNVERIFIED",
     ]
@@ -311,6 +350,48 @@ def _option(summary: dict, option: LayoutOption, plot: Polygon, gross_sqm: float
             continue
         shown = "UNVERIFIED" if f.status is Status.NOT_CHECKED else f.status.value
         lines.append(f"      {shown:<10} {f.rule}: {f.measured} (needs {f.required})")
+    if assumed:
+        lines.append(f"    ASSUMED_FOR_TEST in this run: {', '.join(assumed)}")
+    return lines
+
+
+def _by_type(counts: dict[str, int]) -> str:
+    return ", ".join(f"{k} {n}" for k, n in counts.items())
+
+
+def _comparison(summaries: list[dict], plot: Polygon) -> list[str]:
+    """The options side by side, one measure per row."""
+    def cell(s: dict, key: str) -> str:
+        p = s.get("parking", {})
+        d = s.get("towers_detail", [])
+        values = {
+            "Towers": str(s["towers"]),
+            "Floors": f"stilt + {s['floors_above_stilt']}",
+            "Height for the rules": f"{s['rule_height_m']:g} m",
+            "Flats": str(s["total_flats"]),
+            "2BHK / 3BHK": " / ".join(str(s["flats_by_type"].get(k, 0)) for k in ("2BHK", "3BHK")),
+            "Flats per floor per tower": ", ".join(str(t["flats_per_floor"]) for t in d),
+            "Cores per tower": ", ".join(str(t["cores"]) for t in d),
+            "Longest tower": f"{max((t['length_m'] for t in d), default=0):g} m",
+            "Built-up": f"{s['built_up_sqft']:,} sft",
+            "Saleable": f"{s['saleable_sqft']:,} sft",
+            "Parking req / prov": f"{p.get('required_sqm', 0):,} / "
+                                  f"{min(p.get('provided_sqm', 0), p.get('laid_out_sqm', 0)):,} m²",
+            "Cars": f"{p.get('total_cars', 0):,}",
+            "Tot-lot": f"{s['open_space_share_pct']}%",
+            "Club house": f"{s['club_house_sqm']:,.0f} m²",
+            "Facilities missed": str(len(s["amenities_with_no_room"])),
+        }
+        return values[key]
+
+    keys = ["Towers", "Floors", "Height for the rules", "Flats", "2BHK / 3BHK",
+            "Flats per floor per tower", "Cores per tower", "Longest tower", "Built-up",
+            "Saleable", "Parking req / prov", "Cars", "Tot-lot", "Club house",
+            "Facilities missed"]
+    names = [(s.get("strategy") or f"Option {s['option']}").split(":")[0] for s in summaries]
+    width = max(len(k) for k in keys)
+    lines = [f"  {'':<{width}}  " + "  |  ".join(names)]
+    lines += [f"  {k:<{width}}  " + "  |  ".join(cell(s, k) for s in summaries) for k in keys]
     return lines
 
 

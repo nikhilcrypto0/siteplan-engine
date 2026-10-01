@@ -108,7 +108,9 @@ REGISTRY: tuple[Constraint, ...] = (
         "stilt + floors x floor height", Basis.UNRESOLVED_INTERPRETATION,
         "G.O.168 rule 2(e); rule 5(c) excludes the stilt for Table III only",
         note="The stricter reading; the firm's own Dhulapally drawing behaves as if the stilt is "
-             "not counted. The floors calculator gives both answers.",
+             "not counted. The floors calculator gives both answers. A test profile may set "
+             "stilt_in_rule_height false; NBC's fire height (the 30 m dead-end limit) counts the "
+             "stilt either way.",
         settles="A sanctioned stilt + N high-rise whose approved setback fits one reading only.",
     ),
     Constraint(
@@ -117,6 +119,19 @@ REGISTRY: tuple[Constraint, ...] = (
         note="Read on 2026-10-01: 'The Front setback shall be as per Table-III of rule-5 & "
              "Table-IV of rule-7 for Non High Rise & High Rise buildings respectively.' The "
              "Table III building line applies to buildings below high-rise only.",
+    ),
+    Constraint(
+        "Setbacks", "Whether internal roads, driveways and fire lanes may run inside the Table "
+                    "IV setback band.",
+        "no by default: the 9 m loop road runs outside the setback; a test profile may set "
+        "circulation_in_setback", Basis.UNRESOLVED_INTERPRETATION,
+        f"{rules.TABLE_IV_CLAUSE}; {rules.RAMP_CLAUSE} (7 m of setback 'for movement of "
+        "fire-fighting vehicles')",
+        note="Rule 13(c)(vii) suggests fire vehicles may move inside a setback, and the firm's "
+             "Dhulapally drawing runs 7 m driveways inside 8 m setbacks. With the switch on, "
+             "towers stand at the setback and the ring inside it is a perimeter lane, held to "
+             "the 6 m fire lane and reported UNVERIFIED against 8(m)'s 9 m loop.",
+        settles="The architect, or a sanctioned plan whose roads run inside the setback.",
     ),
     Constraint(
         "Setbacks", "The gap between two blocks of different heights is the larger block's "
@@ -611,6 +626,22 @@ REGISTRY: tuple[Constraint, ...] = (
         "none (layout.same_idea, layout._massing)",
         ("layout.ANGLE_FAMILY_DEG", "layout.SAME_IDEA_OVERLAP"),
         settles="Nothing: how the options are chosen for variety, not whether one passes.",
+    ),
+    Constraint(
+        "Towers", "The three massing strategies shown: maximum yield with no limit; balanced, "
+                  "medium blocks of up to this many cores and this length; conventional, "
+                  "compact towers of this many cores.",
+        f"A: no limit; B: up to {layout.BALANCED_MAX_CORES} cores and "
+        f"{layout.BALANCED_MAX_LENGTH_M:g} m, the largest more than one core; C: "
+        f"{layout.CONVENTIONAL_MAX_CORES} core per tower", Basis.ENGINE_DESIGN_ASSUMPTION,
+        "none (layout.STRATEGIES, layout.fits_strategy, layout.pick_strategies)",
+        ("layout.BALANCED_MAX_CORES", "layout.BALANCED_MAX_LENGTH_M",
+         "layout.CONVENTIONAL_MAX_CORES", "layout.STRATEGIES"),
+        note="Design categories, not law: no order limits a block's length or cores since "
+             "G.O.Ms.No.65 of 2019. A strategy no layout passes for is reported missing, never "
+             "filled in. Each option reports every tower's length, width, flats per floor, "
+             "cores and flats per core.",
+        settles="The firm's own block types (its longest block, cores per block).",
     ),
     Constraint(
         "Towers", "How many options are returned.", f"{_lr['options'].default}",
