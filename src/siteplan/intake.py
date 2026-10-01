@@ -242,8 +242,9 @@ def _edge_questions(draft: Draft) -> list[Question]:
                      for g in draft.line_work) or "none"
     return [Question(
         "surrender", f"{seen}Is land given up for road widening or a new road? 'no', or the net "
-        "plot area or the area given up, and the side it comes off",
-        example="net 22686 sq yd, E", parse=_surrender,
+        "plot area or the area given up, the side it comes off and the strip's width. Without "
+        "the side and width, where the strip lies stays UNVERIFIED and no layout is drawn",
+        example="net 22686 sq yd, E, 40 ft", parse=_surrender,
     ), Question(
         "water", f"{marked}Other line work near the plot: {work}. Is a lake, nala or river near "
         f"the plot? 'no', or its colour (PDF) or 'layer NAME,' (DXF) and class ({WATER_CLASSES})",
@@ -297,12 +298,17 @@ def build_project(draft: Draft, answers: dict, defaults: WorkspaceDefaults | Non
         "survey: drawn boundary")
     status["gross_area_sqm"] = Provenance.EXTRACTED
     if surrender:
-        kind, area, side = surrender
+        kind, area, side, width = surrender
         site["net_area_sqm"] = round(area if kind == "net" else draft.area_sqm - area, 1)
         sources["net_area_sqm"] = f"architect: {given['surrender']}"
         status["net_area_sqm"] = Provenance.USER_CONFIRMED
         if side:
             site["road_strip_side"] = side
+        if width:
+            site["road_strip_width_m"] = round(width, 3)
+        sources["road_strip"] = f"architect: {given['surrender']}"
+        status["road_strip"] = (Provenance.USER_CONFIRMED if side and width
+                                else Provenance.UNVERIFIED)
     water = _water(given["water"])
     if water:
         site["water"] = water
@@ -471,8 +477,13 @@ _AREA = re.compile(r"(\d[\d,]*(?:\.\d+)?)\s*(sq\.?\s*y(?:ar)?ds?|sqyds?|yd2|"
                    r"sq\.?\s*m(?:ts?|etres?)?|sqm|m2|m²|sq\.?\s*ft|sqft|ft2)", re.I)
 
 
-def _surrender(value: str) -> tuple[str, float, str | None] | None:
-    """'no' -> None; 'net 22686 sq yd, E' or '1163 m2 E' -> (net|given, m², side)."""
+_WIDTH = re.compile(r"(\d+(?:\.\d+)?)\s*(ft|feet|foot|m|metres?|meters?)\b", re.I)
+
+
+def _surrender(value: str) -> tuple[str, float, str | None, float | None] | None:
+    """'no' -> None; 'net 22686 sq yd, E, 40 ft' or '1163 m2 E 12 m' -> (net|given, m², side,
+    the strip's width in m); the side and the width may be left out, and then where the strip
+    lies is not known."""
     if value.strip().lower() in ("no", "none", "nil", "0"):
         return None
     match = _AREA.search(value)
@@ -481,11 +492,17 @@ def _surrender(value: str) -> tuple[str, float, str | None] | None:
     number, unit = float(match.group(1).replace(",", "")), match.group(2).lower()
     area = (sqyd_to_sqm(number) if "y" in unit else
             sqft_to_sqm(number) if "f" in unit else number)
-    rest = (value[:match.start()] + " " + value[match.end():]).upper()
+    rest = value[:match.start()] + " " + value[match.end():]
+    wide = _WIDTH.search(rest)
+    width = None
+    if wide:
+        width = float(wide.group(1)) * (M_PER_FT if wide.group(2).lower().startswith("f") else 1)
+        rest = rest[:wide.start()] + " " + rest[wide.end():]
+    rest = rest.upper()
     rest = re.sub(r"(NORTH|SOUTH)[\s-]+(EAST|WEST)", r"\1\2", rest)  # 'north-west' is one side
     sides = [_WORDS.get(word, word) for word in re.findall(r"[A-Z]+", rest)]
     side = next((s for s in sides if s in COMPASS), None)
-    return ("net" if "NET" in rest.split() else "given", area, side)
+    return ("net" if "NET" in rest.split() else "given", area, side, width)
 
 
 def _water(value: str) -> list[dict]:

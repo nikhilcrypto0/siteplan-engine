@@ -112,6 +112,42 @@ PARKING_FLOOR_HEIGHT_CLAUSE = (
 )
 
 BLOCK_SPACING_CLAUSE = "G.O.168 rule 7(a)(xii) (same as Table IV column 4)"
+
+# The front setback, read on 2026-10-01 from the 2012 text (p.17, clause (b)): "The Front setback
+# shall be as per Table-III of rule-5 & Table-IV of rule-7 for Non High Rise & High Rise
+# buildings respectively." So a high-rise keeps Table IV's column 4 at the front too, and the
+# engine's all-round figure is the rule as written, not a reading.
+FRONT_SETBACK_CLAUSE = (
+    "G.O.168 p.17, clause (b) (the front setback of a high-rise is as per Table IV of rule 7)"
+)
+
+# Setbacks are measured on the net plot, after the road-widening strip. Rule 7(a)(iii), read on
+# 2026-10-01: a high-rise site "affected in road widening where there is shortfall of the net plot
+# size" is considered "with the proposed height and corresponding minimum all round setbacks", so
+# the all-round setback is taken on the net plot; rules 5(f)(ii) and 5's notes say the same for
+# Table III ("the prescribed setback ... after the said road widening portion").
+SETBACK_ON_NET_PLOT_CLAUSE = (
+    "G.O.168 rule 7(a)(iii) (setbacks of a high-rise on the net plot left after road widening); "
+    "rule 5(f)(ii) for Table III"
+)
+
+# Rule 2(c), read on 2026-10-01: "'Group Development Scheme' is reckoned as development of
+# Residential Buildings in a Campus or Site of 4000sq.m and above in area and could be row houses,
+# semi-detached, detached Houses, Apartment blocks or High-Rise buildings or mix or combination of
+# the above." Rule 8 (internal roads 8(m), pathways 8(l)) governs such schemes, so below 4,000 m²
+# it does not apply. The site's area is the area as per documents (the gross), the net plot when
+# no gross is known.
+GROUP_DEVELOPMENT_MIN_SITE_SQM = 4000.0
+GROUP_DEVELOPMENT_CLAUSE = (
+    "G.O.168 rule 2(c) (a Group Development Scheme is residential development on a campus or "
+    "site of 4,000 m² and above); rule 8 governs it"
+)
+
+
+def is_group_development(site_sqm: float) -> bool:
+    """Rule 2(c): residential development on a site of 4,000 m² and above. The engine plans
+    residential schemes only, so the area decides."""
+    return site_sqm >= GROUP_DEVELOPMENT_MIN_SITE_SQM - 1e-6
 ROAD_WIDENING_CLAUSE = (
     "G.O.168 rule 16 as substituted by G.O.Ms.No.7 of 2016 (surrender free of cost; TDR, extra "
     "floors or setback concessions)"
@@ -168,9 +204,11 @@ ENTRANCE_CLEAR_HEIGHT_M = 4.5  # 4.6(d): under anything built over the main entr
 # Rule 8(m), read from the 2012 text on 2026-09-30 (G.O.Ms.No.7 of 2016 substituted 8(k) and
 # 8(n), not 8(m)): "9m to 18m for main internal approach roads; 9m for other internal roads and
 # also for looped roads. 8m for cul-de-sacs roads (with a minimum radius 9m.) between 50-100m
-# length." The order gives no test for where in 9 to 18 m a main approach road falls, so the
-# layout draws the least the order allows and says so. Rule 8(l) lets 6 m pathways serve only
-# blocks up to 12 m high, so every high-rise block has to be served by a road of 8(m)'s width.
+# length." The law is the 9 to 18 m range; drawing the main approach at 9 m is the optimiser's
+# choice (access.APPROACH_M), not a reading of the rule. Rule 8(l), read on 2026-10-01: "In case
+# of blocks up to 12m height, access through pathways of 6m width branching out from the internal
+# roads / loop road would be allowed": the pathway is a permission for blocks up to 12 m only, so a
+# taller block takes its access from an internal road. Both apply to a Group Development Scheme.
 MAIN_APPROACH_ROAD_M = (9.0, 18.0)
 INTERNAL_ROAD_M = 9.0
 CUL_DE_SAC_WIDTH_M = 8.0
@@ -234,7 +272,9 @@ RAMP_CLAUSE = "G.O.168 rule 13(c)(vii) (ramps: one of 5.4 m or two of 3.6 m, 1 i
 # (x): "Cellar shall be with a setback of at least 1.5m in the sites of extent of up to 1000sq.m,
 # 2m ... more than 1000sq.m and up to 2000sq.m, and 3m in the sites of extent of more than
 # 2000sq.m from the property line. In case of more than one cellar, 0.5m additional setback for
-# every additional cellar floor shall be insisted."
+# every additional cellar floor shall be insisted." Re-read on 2026-10-01: the text fixes the
+# amounts but not whether the extra applies to the whole cellar or only to the deeper floors, so
+# that stays an UNRESOLVED_INTERPRETATION (constraints.py); it matters only from two cellars.
 CELLAR_SETBACK_BY_SITE_SQM = ((1000.0, 1.5), (2000.0, 2.0), (math.inf, 3.0))
 CELLAR_EXTRA_SETBACK_PER_LEVEL_M = 0.5
 CELLAR_SETBACK_CLAUSE = "G.O.168 rule 13(c)(x) (cellar setback from the property line)"
@@ -264,9 +304,20 @@ CURE_RULES_CLAUSE = "G.O.Ms.No.45 of 2026 (GHMC's building rules across the Core
 
 def parking_percent(authority: str | None, inside_cure: bool | None = None) -> float:
     """The Table V percentage of built-up area to be provided as parking: the GHMC column in
-    GHMC or anywhere in CURE, the 20% column elsewhere."""
+    GHMC or anywhere in CURE, the 20% column elsewhere. Callers must first know the jurisdiction
+    (parking_columns); with an authority or CURE not known this returns the 20% column."""
     inside_ghmc = (authority or "").upper() == "GHMC" or bool(inside_cure)
     return PARKING_PERCENT_GHMC if inside_ghmc else PARKING_PERCENT_ELSEWHERE
+
+
+def parking_columns(authority: str | None, inside_cure: bool | None) -> set[float]:
+    """Every Table V percentage the site could take on what is known: one when the jurisdiction
+    settles it, both when it does not. GHMC, or anywhere inside CURE, is 30% either way."""
+    if (authority or "").upper() == "GHMC" or inside_cure is True:
+        return {PARKING_PERCENT_GHMC}
+    if authority is None or inside_cure is None:
+        return {PARKING_PERCENT_GHMC, PARKING_PERCENT_ELSEWHERE}
+    return {PARKING_PERCENT_ELSEWHERE}
 
 
 def band_for_height(height_m: float) -> HeightBand | None:

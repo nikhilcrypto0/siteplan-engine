@@ -21,7 +21,9 @@ LIBRARY = FlatLibrary(
     ],
     core_width_m=7.5,
 )
-REQUEST = LayoutRequest(floors=8, unit_mix={"2BHK": 0.7, "3BHK": 0.3})  # 27 m: 9 m setbacks
+# No jurisdiction is given, so these made-up sites run in the conservative test mode.
+REQUEST = LayoutRequest(floors=8, unit_mix={"2BHK": 0.7, "3BHK": 0.3},  # 27 m: 9 m setbacks
+                        conservative_parking=True)
 LAYOUT_RULES = ("All-round setback", "Gap between blocks", "Organized open space", "Open-space")
 L_PLOT = Polygon([(0, 0), (180, 0), (180, 90), (90, 90), (90, 170), (0, 170)])
 
@@ -92,7 +94,7 @@ def test_unit_mix_is_close_to_the_request_and_best_option_is_first():
 
 
 def test_single_category_request_uses_only_that_category():
-    only_2bhk = LayoutRequest(floors=8, unit_mix={"2BHK": 1.0})
+    only_2bhk = LayoutRequest(floors=8, unit_mix={"2BHK": 1.0}, conservative_parking=True)
     for option in solve(box(0, 0, 150, 100), LIBRARY, only_2bhk):
         assert set(option.flats_per_floor) == {"2BHK"}
 
@@ -184,7 +186,8 @@ def test_the_summary_prints_built_up_as_well_as_saleable():
         flats=[FlatType(name="2BHK", bhk="2BHK", width_m=7.0, depth_m=11.0, saleable_sqft=1000)],
         core_width_m=7.5,
     )
-    option = solve(plot, library, LayoutRequest(floors=8, unit_mix={"2BHK": 1.0}),
+    option = solve(plot, library, LayoutRequest(floors=8, unit_mix={"2BHK": 1.0},
+                                                conservative_parking=True),
                    gross_area_sqm=plot.area, authority="HMDA", abutting_road_m=18.0)[0]
     summary = option.summary()
     assert summary["built_up_sqft"] > 0

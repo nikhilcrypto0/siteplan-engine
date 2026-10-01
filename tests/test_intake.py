@@ -10,7 +10,7 @@ import pytest
 from shapely.geometry import box
 
 from siteplan.cli import main
-from siteplan.geometry import less_road_strip
+from siteplan.geometry import strip_along_side
 from siteplan.intake import (
     Draft,
     Mark,
@@ -48,7 +48,7 @@ def _draft(**changes) -> Draft:
     ("given 500 sq m on the north-west", ("given", 500.0, "NW")),
 ])
 def test_land_given_up_is_read_in_the_ways_architects_say_it(text, expected):
-    kind, area, side = _surrender(text) or (None, None, None)
+    kind, area, side, _ = _surrender(text) or (None, None, None, None)
     if expected is None:
         assert kind is None
     else:
@@ -137,12 +137,33 @@ def test_workspace_defaults_are_the_firms_libraries_and_heights(tmp_path):
     assert (defaults.flat_library, defaults.floor_height_m) == ("flats.json", 3.1)
 
 
-def test_a_strip_named_for_a_side_comes_off_that_side():
+def test_a_strip_named_for_a_side_comes_off_that_side_at_the_width_given():
     plot = box(0, 0, 100, 60)
-    east = less_road_strip(plot, 5000, "E")
-    assert east.area == pytest.approx(5000, rel=1e-3) and east.bounds[2] < 90  # 16.7 m off
-    north = less_road_strip(plot, 5000, "N")
-    assert north.bounds[3] == pytest.approx(60 - 1000 / 100, abs=0.05)
+    east = strip_along_side(plot, "E", 12.0)
+    assert east.bounds[2] == pytest.approx(88) and east.area == pytest.approx(88 * 60)
+    north = strip_along_side(plot, "N", 10.0)
+    assert north.bounds[3] == pytest.approx(50)
+
+
+@pytest.mark.parametrize(("answer", "side", "width"), [
+    ("net 22686 sq yd, E, 40 ft", "E", 12.192),
+    ("1163 m2 east 12.2 m", "E", 12.2),
+    ("net 22686 sq yd, E", "E", None),  # no width: where the strip lies stays open
+])
+def test_the_surrender_answer_carries_the_strips_side_and_width(answer, side, width):
+    from siteplan.intake import _surrender
+
+    _, _, got_side, got_width = _surrender(answer)
+    assert got_side == side
+    assert got_width == (pytest.approx(width) if width else None)
+
+
+def test_a_strip_with_no_width_is_recorded_as_unverified():
+    unknown = build_project(_draft(), ANSWERS | {"surrender": "net 5000 m2, E"})
+    assert unknown["status"]["road_strip"] == Provenance.UNVERIFIED
+    given = build_project(_draft(), ANSWERS | {"surrender": "net 5000 m2, E, 10 m"})
+    assert given["status"]["road_strip"] == Provenance.USER_CONFIRMED
+    assert given["site"]["road_strip_width_m"] == 10
 
 
 def test_every_value_says_how_far_it_can_be_trusted():

@@ -25,7 +25,8 @@ LIBRARY = FlatLibrary(
     ],
     core_width_m=7.5,
 )
-REQUEST = LayoutRequest(floors=8, unit_mix={"2BHK": 0.7, "3BHK": 0.3}, options=3)
+REQUEST = LayoutRequest(floors=8, unit_mix={"2BHK": 0.7, "3BHK": 0.3}, options=3,
+                        conservative_parking=True)  # no jurisdiction given: test mode
 
 
 def _project(tmp_path, water):

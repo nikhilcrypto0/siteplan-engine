@@ -143,37 +143,40 @@ INVENTORY: tuple[Entry, ...] = (
     Entry(
         "Road", "Internal roads of a group development scheme: a main approach road, other and "
                 "looped roads, cul-de-sacs. A driveway is not one of them.",
-        f"main approach {rules.MAIN_APPROACH_ROAD_M[0]:g}-{rules.MAIN_APPROACH_ROAD_M[1]:g} m "
-        f"(drawn at {rules.MAIN_APPROACH_ROAD_M[0]:g}), other and looped "
-        f"{rules.INTERNAL_ROAD_M:g} m, cul-de-sacs {rules.CUL_DE_SAC_WIDTH_M:g} m for "
-        f"{rules.CUL_DE_SAC_LENGTH_M[0]:g}-{rules.CUL_DE_SAC_LENGTH_M[1]:g} m with a "
-        f"{rules.CUL_DE_SAC_HEAD_RADIUS_M:g} m radius head",
-        f"{rules.INTERNAL_ROAD_CLAUSE}; rule 2(c) (a campus of 4,000 m² or more)",
-        Reading.INTERPRETED, _BOTH,
+        f"main approach {rules.MAIN_APPROACH_ROAD_M[0]:g}-{rules.MAIN_APPROACH_ROAD_M[1]:g} m, "
+        f"other and looped {rules.INTERNAL_ROAD_M:g} m, cul-de-sacs {rules.CUL_DE_SAC_WIDTH_M:g} m "
+        f"for {rules.CUL_DE_SAC_LENGTH_M[0]:g}-{rules.CUL_DE_SAC_LENGTH_M[1]:g} m with a "
+        f"{rules.CUL_DE_SAC_HEAD_RADIUS_M:g} m radius head; on sites from "
+        f"{rules.GROUP_DEVELOPMENT_MIN_SITE_SQM:,.0f} m²",
+        f"{rules.INTERNAL_ROAD_CLAUSE}; {rules.GROUP_DEVELOPMENT_CLAUSE}",
+        Reading.AS_WRITTEN, _BOTH,
         ("MAIN_APPROACH_ROAD_M", "INTERNAL_ROAD_M", "CUL_DE_SAC_WIDTH_M", "CUL_DE_SAC_LENGTH_M",
-         "CUL_DE_SAC_HEAD_RADIUS_M", "INTERNAL_ROAD_CLAUSE"),
-        choice="Rule 2(c) makes a campus of 4,000 m² or more with apartment blocks a Group "
-               "Development Scheme, so 8(m) applies. The layout lays these before any tower: a "
-               "9 m loop road just inside the green strip, the 9 m main approach road from the "
-               "entrance, and a 9 m road in every corridor between tower columns, from the loop "
-               "to the loop, so none is a dead end; towers stand where that leaves room. The "
-               "order gives 9 to 18 m for a main approach road with no test for which, so it is "
-               "drawn at 9 m and the authority may ask for more. The checker fails a road "
-               "narrower than its width and a dead end without the cul-de-sac form, and never "
-               "counts a driveway (rule 13(c)(viii), 4.5 m) as an internal road.",
+         "CUL_DE_SAC_HEAD_RADIUS_M", "INTERNAL_ROAD_CLAUSE", "GROUP_DEVELOPMENT_MIN_SITE_SQM",
+         "GROUP_DEVELOPMENT_CLAUSE"),
+        choice="Rule 2(c): a Group Development Scheme is residential development on a site of "
+               "4,000 m² and above (the area as per documents), and rule 8 governs it. Below "
+               "that the checker does not apply 8(m) or 8(l), and the layout stops: layouts "
+               "without 8(m) roads are not supported yet. From it, the layout lays the roads "
+               "before any tower: a 9 m loop road just inside the green strip, the main approach "
+               "road from the entrance, and a 9 m road in every corridor between tower columns, "
+               "so none is a dead end. The law gives 9 to 18 m for the main approach road; the "
+               "optimiser draws 9 m (an engine choice, in constraints.py). The checker fails a "
+               "road narrower than its width and a dead end without the cul-de-sac form, and "
+               "never counts a driveway (rule 13(c)(viii), 4.5 m) as an internal road.",
         settles="The internal roads on a sanctioned Group Development plan, and whether the "
                 "authority treats the firm's '23 ft wide driveway' (7.0 m) as an 8(m) road.",
     ),
     Entry(
-        "Road", "A block above 12 m opens onto an internal road; 6 m pathways serve only lower "
-                "blocks.",
+        "Road", "A block above 12 m takes its access from an internal road; 6 m pathways serve "
+                "only lower blocks.",
         f"blocks above {rules.PATHWAY_MAX_BLOCK_HEIGHT_M:g} m on a road", rules.PATHWAY_CLAUSE,
-        Reading.INTERPRETED, (Where.CHECKER,),
+        Reading.AS_WRITTEN, (Where.CHECKER,),
         ("PATHWAY_MAX_BLOCK_HEIGHT_M", "PATHWAY_CLAUSE"),
-        choice="Rule 8(l) allows 6 m pathways for blocks up to 12 m high; read the other way, a "
-               "taller block needs a road. Every tower the layout places touches the loop or a "
-               "corridor road, and the checker fails one that does not.",
-        settles="A sanctioned high-rise plan whose blocks are reached only by pathways.",
+        choice="Rule 8(l), read on 2026-10-01: 'In case of blocks up to 12m height, access "
+               "through pathways of 6m width branching out from the internal roads / loop road "
+               "would be allowed.' The permission stops at 12 m, so a taller block opens onto an "
+               "internal road. Applied on a Group Development Scheme only, like the rest of "
+               "rule 8.",
     ),
     Entry(
         "Road", "A residential building above this height may not stand on a road that ends at "
@@ -217,20 +220,11 @@ INVENTORY: tuple[Entry, ...] = (
     Entry(
         "Plot", "Setbacks are measured from the plot line left after the road-widening strip, "
                 "not the surveyed boundary.",
-        "net plot line", "G.O.168 rule 5(f)(ii)", Reading.INTERPRETED, _BOTH,
-        choice="Rule 5(f)(ii) sits in the rule for buildings below high-rise; the engine applies "
-               "it to high-rise too.",
-        settles="A sanctioned plan on a widened road: from which line are its setbacks drawn?",
-    ),
-    Entry(
-        "Plot", "Without a drawn net plot, the deducted area comes off one side as a strip.",
-        "the side the architect names, else the longest straight run",
-        "none (runner.load_plot)", Reading.ASSUMED, (Where.LAYOUT,),
-        choice="Cut at an even width along every run facing the side named; with no side, the "
-               "longest run. On Dhulapally "
-               "neither matches the drawn strip (a 40 ft road along part of the east side), "
-               "which is why a drawn net plot, or the site plan read as the survey, is better.",
-        settles="The road-widening line on the survey or the sanction plan.",
+        "net plot line", rules.SETBACK_ON_NET_PLOT_CLAUSE, Reading.AS_WRITTEN, _BOTH,
+        ("SETBACK_ON_NET_PLOT_CLAUSE",),
+        choice="Rule 7(a)(iii), read on 2026-10-01, considers a widened high-rise site 'with the "
+               "proposed height and corresponding minimum all round setbacks' on its net plot. "
+               "Where the strip lies is a site input, asked and never guessed from the area.",
     ),
     Entry(
         "Plot", "No building within a water body's buffer, which may be open space but never "
@@ -239,13 +233,14 @@ INVENTORY: tuple[Entry, ...] = (
         rules.WATER_BUFFER_CLAUSE, Reading.INTERPRETED, _BOTH,
         ("WATER_BUFFER_M", "WATER_BUFFER_CLAUSE"),
         choice="The architect names the water body's class and the colour or layer the survey "
-               "draws it in: a drawn channel does not show a nala's defined width, and surveyors "
-               "use no standard colour. The buffer is measured from the lines drawn (a centreline "
-               "would understate it by half the channel) and kept free of towers, facilities and "
-               "parking; it is not counted as tot-lot, though the rule allows it. The firm's "
-               "unsanctioned Suchitra drawing keeps a 9.4 m strip beside a 9.6 m channel, which "
-               "looks like the 9 m class: a test fixture, not evidence.",
-        settles="A sanctioned plan beside a nala or lake: which class, and what it deducted.",
+               "draws it in. The buffer is measured from the lines drawn, kept free of towers, "
+               "facilities and parking, and not counted as tot-lot, though the rule allows it. "
+               "It is also treated as not motorable, which the rule does not say: so towers "
+               "keep the fire band clear of it, and the loop road's width runs beside it. The "
+               "buffer and the setback are a union, never added. The firm's unsanctioned "
+               "Suchitra drawing keeps a 9.4 m strip beside a 9.6 m channel: a test fixture.",
+        settles="A sanctioned plan beside a nala or lake: which class, what it deducted, and "
+                "whether a road or fire lane runs inside the buffer.",
     ),
     Entry(
         "Plot", "No building within the buffers of railways, power lines and protected "
@@ -266,13 +261,11 @@ INVENTORY: tuple[Entry, ...] = (
     ),
     Entry(
         "Setbacks", "The table figure is kept on every side, the front included.",
-        "Table IV column 4 all round",
-        "G.O.168 rule 7(a)(xi); G.O.Ms.No.50 of 2019 heads column 4 'side and rear'",
-        Reading.INTERPRETED, _BOTH,
-        choice="Rule 7(a)(xi) makes the front the larger of column 4 and the Table III building "
-               "line for the road (3 to 7.5 m). That exceeds column 4 only for a building up to "
-               "21 m on a road wider than 30 m (7.5 m against 7), which the engine misses.",
-        settles="A sanctioned plan on a road wider than 30 m.",
+        "Table IV column 4 all round", rules.FRONT_SETBACK_CLAUSE, Reading.AS_WRITTEN, _BOTH,
+        ("FRONT_SETBACK_CLAUSE",),
+        choice="Read on 2026-10-01: 'The Front setback shall be as per Table-III of rule-5 & "
+               "Table-IV of rule-7 for Non High Rise & High Rise buildings respectively.' The "
+               "Table III building line is for buildings below high-rise.",
     ),
     Entry(
         "Setbacks", "Balconies may project into the open space from 6 m height up.",
@@ -404,18 +397,16 @@ INVENTORY: tuple[Entry, ...] = (
         "Parking", "Parking area as a share of the total built-up area.",
         f"{rules.PARKING_PERCENT_GHMC:g}% inside GHMC or anywhere in CURE, "
         f"{rules.PARKING_PERCENT_ELSEWHERE:g}% elsewhere in HMDA",
-        f"{rules.PARKING_CLAUSE}; {rules.CURE_RULES_CLAUSE}", Reading.INTERPRETED, _BOTH,
+        f"{rules.PARKING_CLAUSE}; {rules.CURE_RULES_CLAUSE}", Reading.AS_WRITTEN, _BOTH,
         ("PARKING_PERCENT_GHMC", "PARKING_PERCENT_ELSEWHERE", "PARKING_CLAUSE",
          "CURE_RULES_CLAUSE", "parking_percent"),
-        choice="Provided = the stilt less its cores, the surface bays, and as many cellar levels "
-               "as it takes, each the plot under its setback less the cores, the ramp and the "
-               "utilities share. The layout adds cellars until it passes and drops a tower when "
-               "even the deepest allowed do not. When whose rules apply is not settled (an answer "
-               "marked unverified, or CURE not known) the stricter GHMC column is planned, so a "
-               "PASS holds either way. The cars that fit in bays and aisles are counted on every "
-               "floor. Inside CURE the GHMC column applies whichever corporation the site now "
-               "falls in (Cyberabad, since G.O.Ms.No.55 of 2026, for Qutbullapur zone).",
-        settles="The parking statement on a sanctioned plan.",
+        choice="The share is the order's. When whose rules apply is not established and it "
+               "changes the share, a normal run stops and asks; only the conservative test mode "
+               "plans the GHMC column, labelled CONSERVATIVE_ASSUMPTION. How the stilt, surface "
+               "and cellars are measured, and the bay sizes, are the engine's method "
+               "(constraints.py), not this rule. Inside CURE the GHMC column applies whichever "
+               "corporation the site now falls in (Cyberabad, since G.O.Ms.No.55 of 2026, for "
+               "Qutbullapur zone).",
     ),
     Entry(
         "Parking", "Visitors' parking, marked on the ground.",
@@ -447,8 +438,10 @@ INVENTORY: tuple[Entry, ...] = (
         rules.CELLAR_SETBACK_CLAUSE, Reading.INTERPRETED, _BOTH,
         ("CELLAR_SETBACK_BY_SITE_SQM", "CELLAR_EXTRA_SETBACK_PER_LEVEL_M",
          "CELLAR_SETBACK_CLAUSE", "cellar_setback_m"),
-        choice="The extra 0.5 m per cellar is applied to every level, since the cellars are one "
-               "box: the stricter reading. Measured from the net plot line.",
+        choice="The text fixes 1.5, 2 or 3 m and 0.5 m more 'for every additional cellar floor', "
+               "but not whether the upper floors keep the smaller figure. The extra is applied to "
+               "every level, since the cellars are one box: the stricter reading, which matters "
+               "only from two cellars. Measured from the net plot line.",
         settles="The cellar section on a sanctioned plan with two or more cellars.",
     ),
     Entry(

@@ -113,11 +113,10 @@ REGISTRY: tuple[Constraint, ...] = (
     ),
     Constraint(
         "Setbacks", "The Table IV figure is kept on every side, the front included.",
-        "column 4 all round", Basis.UNRESOLVED_INTERPRETATION,
-        "G.O.168 rule 7(a)(xi); G.O.Ms.No.50 of 2019 heads column 4 'side and rear'",
-        note="Rule 7(a)(xi) makes the front the larger of column 4 and the Table III building "
-             "line (3 to 7.5 m), which exceeds column 4 only up to 21 m on a road over 30 m.",
-        settles="A sanctioned plan on a road wider than 30 m.",
+        "column 4 all round", Basis.LEGAL_RULE, rules.FRONT_SETBACK_CLAUSE,
+        note="Read on 2026-10-01: 'The Front setback shall be as per Table-III of rule-5 & "
+             "Table-IV of rule-7 for Non High Rise & High Rise buildings respectively.' The "
+             "Table III building line applies to buildings below high-rise only.",
     ),
     Constraint(
         "Setbacks", "The gap between two blocks of different heights is the larger block's "
@@ -129,11 +128,10 @@ REGISTRY: tuple[Constraint, ...] = (
     ),
     Constraint(
         "Setbacks", "Setbacks and cellars are measured from the net plot line, after the "
-                    "road-widening strip.", "net plot line", Basis.UNRESOLVED_INTERPRETATION,
-        "G.O.168 rule 5(f)(ii), written for buildings below high-rise",
-        note="Applied to high-rise too; the surveyed boundary is never planned on when a net "
-             "area is stated.",
-        settles="A sanctioned plan on a widened road: from which line are its setbacks drawn?",
+                    "road-widening strip.", "net plot line", Basis.LEGAL_RULE,
+        rules.SETBACK_ON_NET_PLOT_CLAUSE,
+        note="Rule 7(a)(iii) takes a widened high-rise site's 'corresponding minimum all round "
+             "setbacks' on its net plot; rule 5 says the same for Table III.",
     ),
     Constraint(
         "Plot", "A high-rise needs a plot of at least this size, tested on the net plot.",
@@ -148,13 +146,16 @@ REGISTRY: tuple[Constraint, ...] = (
         note="Not applied by generation or the checker: the text does not say 10% of what.",
     ),
     Constraint(
-        "Plot", "Without a drawn net plot, the stated deduction comes off one side as a strip, "
-                "when the survey's area exceeds the stated net area by more than this.",
-        f"{runner.NET_AREA_TOLERANCE_SQM:g} m² of drafting slop", Basis.ENGINE_DESIGN_ASSUMPTION,
-        "none (runner.load_plot, geometry.less_road_strip)", ("runner.NET_AREA_TOLERANCE_SQM",),
-        note="Cut at an even width along the side the architect names, else the longest run. "
-             "On Dhulapally neither matched the drawn strip; the site-plan DXF is better.",
-        settles="The road-widening line on the survey or the sanction plan.",
+        "Plot", "Drawing tolerances for the net plot: a survey outline this close to the stated "
+                "net area is taken as the net plot, and a strip the architect describes may "
+                "differ from the stated deduction by this much.",
+        f"{runner.NET_AREA_TOLERANCE_SQM:g} m²; the larger of that and "
+        f"{runner.STRIP_AREA_TOLERANCE:.0%} of the deduction", Basis.ENGINE_DESIGN_ASSUMPTION,
+        "none (runner.load_plot)",
+        ("runner.NET_AREA_TOLERANCE_SQM", "runner.STRIP_AREA_TOLERANCE"),
+        note="The engine never places a strip from the area alone: without the strip's side "
+             "and width, its outline or the net plot outline, the run stops and asks.",
+        settles="Nothing: tolerances; the strip's location is a site input.",
     ),
     # ----------------------------------------------------------------- open space
     Constraint(
@@ -198,14 +199,34 @@ REGISTRY: tuple[Constraint, ...] = (
         Basis.LEGAL_RULE, rules.WATER_BUFFER_CLAUSE, ("rules.WATER_BUFFER_M",),
     ),
     Constraint(
-        "Open space", "The buffer is measured from the lines the surveyor drew, and towers keep "
-                      "a road's width off it so the loop road can run along it.",
-        f"from the drawn lines; towers {rules.INTERNAL_ROAD_M:g} m further off",
+        "Open space", "The water buffer is measured from the lines the surveyor drew for the "
+                      "water body, which stand in for its Full Tank Level or defined boundary.",
+        "from the drawn lines", Basis.ENGINE_DESIGN_ASSUMPTION, "none (runner.load_water)",
+        note="Rule 3(a)(ii) measures from the FTL or the defined boundary, which a survey rarely "
+             "marks; a drawn channel's own width is kept inside the buffer.",
+        settles="The FTL or defined boundary marked on the survey or by the irrigation "
+                "department.",
+    ),
+    Constraint(
+        "Open space", "Whether a road or a fire lane may run inside a water buffer.",
+        f"not motorable: towers keep the {access.FIRE_BAND_M:.2f} m fire band clear of it",
         Basis.UNRESOLVED_INTERPRETATION, rules.WATER_BUFFER_CLAUSE,
-        note="A drawn channel does not show a nala's defined width (the class is a site input). "
-             "The extra road's width is the engine's, so the loop can pass; no crossing over "
-             "water is drawn.",
-        settles="A sanctioned plan beside a nala or lake: which class, and what it deducted.",
+        ("grounds.WATER_FIRE_CLEARANCE_M",),
+        note="Rule 3(a)(ii) forbids buildings in the buffer and 3(a)(iii)(3) lets it count as "
+             "open space; neither says whether vehicles may use it. The buffer, the Table IV "
+             "setback and this clearance are a union, never added together.",
+        settles="A sanctioned plan with a road or fire lane inside a water buffer, or HMDA's or "
+                "the irrigation department's word.",
+    ),
+    Constraint(
+        "Open space", "Beyond the fire band, towers keep the rest of a road's width off a water "
+                      "buffer so the loop road runs along the water instead of ending at it.",
+        f"{grounds.WATER_LOOP_ROAD_EXTRA_M:.2f} m more (a {rules.INTERNAL_ROAD_M:g} m road in "
+        "all)", Basis.ENGINE_DESIGN_ASSUMPTION, "none (grounds.frame)",
+        ("grounds.WATER_LOOP_ROAD_EXTRA_M",),
+        note="The loop road is the engine's road pattern; a road stopping at the water would be "
+             "a dead end rule 8(m) allows only as a cul-de-sac. Another pattern could drop it.",
+        settles="The firm's road pattern beside water; the sanctioned plans.",
     ),
     # ----------------------------------------------------------------- roads
     Constraint(
@@ -220,29 +241,31 @@ REGISTRY: tuple[Constraint, ...] = (
          "towers.ROAD_M", "grounds.ROAD_M"),
     ),
     Constraint(
-        "Roads", "The main approach road is drawn at the least of the 9 to 18 m the order gives.",
-        _m(access.APPROACH_M), Basis.UNRESOLVED_INTERPRETATION, rules.INTERNAL_ROAD_CLAUSE,
+        "Roads", "The optimiser draws the main approach road at the least of the 9 to 18 m the "
+                 "order allows, unless something requires more.",
+        _m(access.APPROACH_M), Basis.ENGINE_DESIGN_ASSUMPTION, "none (access.APPROACH_M)",
         ("access.APPROACH_M",),
-        note="The order gives no test for where in 9 to 18 m a main approach road falls; the "
-             "report says the authority may ask for more.",
-        settles="The main approach road on a sanctioned group development plan.",
+        note="The law is the 9 to 18 m range (the internal-roads entry); taking the minimum "
+             "frees land for towers. The report says the authority may ask for more.",
+        settles="The firm's or the authority's preferred approach width.",
     ),
     Constraint(
-        "Roads", "Rule 8(m) roads are drawn on every site, without testing the 4,000 m² campus "
-                 "threshold of rule 2(c).", "always", Basis.UNRESOLVED_INTERPRETATION,
-        "G.O.168 rule 2(c) (a campus of 4,000 m² or more with apartment blocks is a Group "
-        "Development Scheme); rule 8(m)",
-        note="Every high-rise site this engine has seen is above 4,000 m²; a smaller one would "
-             "be given 8(m) roads it may not need. The 4,000 m² is not in rules.py.",
-        settles="A sanctioned high-rise plan under 4,000 m², and its roads.",
+        "Roads", "Rule 8's internal roads and pathways apply to a Group Development Scheme: "
+                 "residential development on a site of at least this area.",
+        f"{rules.GROUP_DEVELOPMENT_MIN_SITE_SQM:,.0f} m²", Basis.LEGAL_RULE,
+        rules.GROUP_DEVELOPMENT_CLAUSE, ("rules.GROUP_DEVELOPMENT_MIN_SITE_SQM",),
+        note="Tested on the site area as per documents (the gross), the net plot when no gross "
+             "is known. Below it the checker does not apply rule 8, and the layout stops: "
+             "layouts without 8(m) roads are not supported yet.",
     ),
     Constraint(
-        "Roads", "A block above this height opens onto an internal road, not a pathway.",
-        _m(rules.PATHWAY_MAX_BLOCK_HEIGHT_M), Basis.UNRESOLVED_INTERPRETATION,
-        rules.PATHWAY_CLAUSE, ("rules.PATHWAY_MAX_BLOCK_HEIGHT_M",),
-        note="Rule 8(l) allows 6 m pathways for blocks up to 12 m; read the other way, a taller "
-             "block needs a road. Every tower the layout places touches one.",
-        settles="A sanctioned high-rise plan whose blocks are reached only by pathways.",
+        "Roads", "A block above this height takes its access from an internal road; 6 m "
+                 "pathways may serve only lower blocks.",
+        _m(rules.PATHWAY_MAX_BLOCK_HEIGHT_M), Basis.LEGAL_RULE, rules.PATHWAY_CLAUSE,
+        ("rules.PATHWAY_MAX_BLOCK_HEIGHT_M",),
+        note="Rule 8(l): 'In case of blocks up to 12m height, access through pathways of 6m "
+             "width branching out from the internal roads / loop road would be allowed.' The "
+             "permission stops at 12 m. 'Opens onto' is measured as within 0.5 m of a road.",
     ),
     Constraint(
         "Roads", "Minimum driveway width, where one is drawn; never counted as an internal road.",
@@ -257,7 +280,10 @@ REGISTRY: tuple[Constraint, ...] = (
         f"{access.ROAD_M:g} m); inset = max(setback, strip + {access.ROAD_M:g} m)",
         Basis.ENGINE_DESIGN_ASSUMPTION, "none (access.tower_inset, grounds.frame)",
         note="One way to meet 8(m) with no dead end; a firm may run its roads otherwise. The "
-             "firm's Dhulapally drawing runs 7 m driveways instead.",
+             "loop sits outside the setback, so at 27 m towers stand 11 m back where Table IV "
+             "asks 9: the setback and the road are added. Rule 13(c)(vii) leaves '7m of setback "
+             "for movement of fire-fighting vehicles', which suggests vehicles may run inside a "
+             "setback. The firm's Dhulapally drawing runs 7 m driveways instead.",
         settles="The firm's own road pattern, once set as a standard; the sanctioned plans.",
     ),
     Constraint(
@@ -396,22 +422,39 @@ REGISTRY: tuple[Constraint, ...] = (
         ("rules.PARKING_PERCENT_GHMC", "rules.PARKING_PERCENT_ELSEWHERE"),
     ),
     Constraint(
-        "Parking", "When whose rules apply is not settled, the stricter GHMC column is planned.",
-        f"{rules.PARKING_PERCENT_GHMC:g}% until the jurisdiction is confirmed",
-        Basis.ENGINE_DESIGN_ASSUMPTION, "none (parking.parking_percent)",
-        note="A conservative policy, so a PASS holds either way; a layout short only at 30% is "
-             "reported UNVERIFIED, not FAIL.",
+        "Parking", "Conservative test mode: when whose rules apply is not established and it "
+                   "changes the share, plan the stricter GHMC column.",
+        f"{rules.PARKING_PERCENT_GHMC:g}%, only with --conservative-parking",
+        Basis.ENGINE_DESIGN_ASSUMPTION, "none (parking.parking_percent, conservative=True)",
+        note="Labelled CONSERVATIVE_ASSUMPTION wherever it is used. A normal run stops and asks "
+             "for the jurisdiction instead; when the answer would not change the share (GHMC, "
+             "or anywhere inside CURE), nothing is asked.",
         settles="The authority and CURE answers, confirmed (site inputs).",
     ),
     Constraint(
-        "Parking", "What counts as parking provided: the stilt less its cores, the surface bays "
-                   "laid out, and each cellar level less its cores, the ramp and the utilities "
-                   "share.", "stilt + surface + cellars, as measured",
-        Basis.UNRESOLVED_INTERPRETATION, "G.O.168 rule 13(b); Table V",
-        note="Rule 13(b) names the stilt, the open space over and above the setbacks, and "
-             "cellars; what is deducted from each is the engine's reading. Podium parking is "
-             "unsupported.",
-        settles="The parking statement on a sanctioned plan.",
+        "Parking", "Where the required parking may be provided: the stilt, the open space over "
+                   "and above the setbacks, and cellars, in any combination.",
+        "stilt, surface beyond the setbacks, cellars", Basis.LEGAL_RULE,
+        "G.O.168 rule 13(b)",
+        note="Podium parking is unsupported. Fire lanes are never parked in (NBC 4.6(c)).",
+    ),
+    Constraint(
+        "Parking", "How each part is measured: the stilt less its lift and stair cores; each "
+                   "cellar level less the cores, the ramp's footprint on every level and the "
+                   "utilities share.", "as measured from the drawing",
+        Basis.ENGINE_DESIGN_ASSUMPTION, "none (parking.stilt_area, grounds._level_area)",
+        note="No order says what is deducted; the engine deducts what cannot hold a car, which "
+             "is the conservative choice. An authority may count ramps or circulation in.",
+        settles="The parking statement on a sanctioned plan, or the firm's own method.",
+    ),
+    Constraint(
+        "Parking", "A layout must also physically fit cars whose bays and half-aisles come to "
+                   "the Table V area, besides the floor area itself.",
+        f"cars x {parking.LAID_OUT_SQM_PER_CAR:g} m² >= the required area",
+        Basis.ENGINE_DESIGN_ASSUMPTION, "none (grounds.firm_up, parking_checks._table_v)",
+        note="A second test the law does not set: Table V asks for parking area. It can make a "
+             "layout stricter than the rule.",
+        settles="The firm, deciding whether to keep the physical-fit test.",
     ),
     Constraint(
         "Parking", "Visitors' parking share, read as parking at ground level.",
@@ -440,7 +483,9 @@ REGISTRY: tuple[Constraint, ...] = (
         "Parking", "The extra cellar setback is applied to every level, not only the deeper "
                    "ones.", "every level keeps the deepest's setback",
         Basis.UNRESOLVED_INTERPRETATION, rules.CELLAR_SETBACK_CLAUSE,
-        note="The cellars are one box, which is the stricter reading.",
+        note="Re-read on 2026-10-01: '0.5m additional setback for every additional cellar floor "
+             "shall be insisted' fixes the amounts, not whether the upper floors keep the "
+             "smaller setback. The stricter reading is taken; it matters only from two cellars.",
         settles="The cellar section on a sanctioned plan with two or more cellars.",
     ),
     Constraint(
@@ -591,9 +636,11 @@ REGISTRY: tuple[Constraint, ...] = (
     # ----------------------------------------------------------------- site inputs
     Constraint(
         "Site", "The plot: its outline and net area, the gross area, and the land given up for "
-                "road widening.", "per site", Basis.SITE_INPUT,
-        "the survey (EXTRACTED) and the project file's net_plot_m, net_area and gross_area, "
-        "with their status",
+                "road widening and where it lies.", "per site", Basis.SITE_INPUT,
+        "the survey (EXTRACTED) and the project file's net_plot_m, net_area, gross_area, and "
+        "road_strip_side with road_strip_width_m or road_strip_m, with their status",
+        note="Where the strip lies is asked, never guessed from the area: without it the run "
+             "stops and says what to give.",
     ),
     Constraint(
         "Site", "The abutting road's legal width, how it is known, the side it runs along, "

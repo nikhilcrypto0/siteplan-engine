@@ -318,7 +318,8 @@ def _raw_survey(ws):
 
 
 ANSWERS = {"main_road": "W", "road_row": "60 ft", "road_row_source": "2", "surrender": "no",
-           "authority": "HMDA", "name": "Chat site", "mix": "70% 2BHK, 30% 3BHK",
+           "authority": "HMDA", "inside_cure": "no", "name": "Chat site",
+           "mix": "70% 2BHK, 30% 3BHK",
            "floors": "max"}
 
 
