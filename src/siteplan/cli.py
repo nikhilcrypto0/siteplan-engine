@@ -107,6 +107,9 @@ def _cmd_layout(args: argparse.Namespace) -> int:
     amenities = (
         AmenityLibrary.model_validate_json(amenities_file.read_text()) if amenities_file else None
     )
+    if args.conservative_parking:
+        project = project.model_copy(update={"layout": project.layout.model_copy(
+            update={"conservative_parking": True})})
     plot, basis = load_plot(project, args.survey)
     keep_out, water = load_water(project, args.survey)
     print(f"Layout: {project.name}\nPlot: {plot.area:,.0f} m², {basis}")
@@ -188,7 +191,8 @@ def _cmd_acceptance(args: argparse.Namespace) -> int:
 
     out = Path(args.out)
     generated = generate(Path(args.survey), json.loads(Path(args.answers).read_text()), out,
-                         Path(args.workspace) if args.workspace else None)
+                         Path(args.workspace) if args.workspace else None,
+                         conservative_parking=args.conservative_parking)
     rows = []
     if generated.options:
         case = Case.model_validate_json(Path(args.firm_case).read_text())  # read only now
@@ -425,6 +429,11 @@ def _cmd_assist(args: argparse.Namespace) -> int:
     return 0
 
 
+_CONSERVATIVE_HELP = ("Test mode: when whose rules apply is not established, plan the stricter "
+                      "GHMC parking column (labelled CONSERVATIVE_ASSUMPTION) instead of stopping "
+                      "to ask")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="siteplan", description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -464,6 +473,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--firm-project", help="A project file holding the firm's area statement")
     p.add_argument("--workspace", help=f"Folder with {WORKSPACE_FILE} (default: the survey's)")
     p.add_argument("--out", default="out/acceptance")
+    p.add_argument("--conservative-parking", action="store_true", help=_CONSERVATIVE_HELP)
     p.set_defaults(run=_cmd_acceptance)
 
     p = sub.add_parser("layout", help="Generate tower layout options for a project.")
@@ -473,6 +483,7 @@ def main(argv: list[str] | None = None) -> int:
                    "net plot), used when the project has no net_plot_m")
     p.add_argument("--amenities", help="Amenity library JSON: pool, courts, play area, cabin")
     p.add_argument("--out", default="out/layout")
+    p.add_argument("--conservative-parking", action="store_true", help=_CONSERVATIVE_HELP)
     p.set_defaults(run=_cmd_layout)
 
     p = sub.add_parser("new", help="Answer a few questions; write the project file.")

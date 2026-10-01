@@ -53,14 +53,21 @@ class Generated:
     standards: dict | None = None  # the workspace standards the run used
 
 
-def generate(survey: Path, answers: dict, out: Path, workspace: Path | None = None) -> Generated:
-    """Everything the engine produces from the raw survey and the answers alone."""
+def generate(survey: Path, answers: dict, out: Path, workspace: Path | None = None,
+             conservative_parking: bool = False) -> Generated:
+    """Everything the engine produces from the raw survey and the answers alone. With
+    conservative_parking, an unestablished jurisdiction plans the GHMC column (a labelled test
+    mode) instead of stopping to ask."""
     workspace = workspace or survey.parent
     defaults = load_defaults(workspace)
     if not defaults.flat_library:
         raise ValueError(f"Set the firm's flat_library in {workspace}/siteplan.workspace.json.")
     draft = extract(survey)
     project_dict = build_project(draft, answers, defaults)
+    if conservative_parking:
+        project_dict["layout"]["conservative_parking"] = True
+        project_dict["sources"]["conservative_parking"] = "run in the conservative test mode"
+        project_dict["status"]["conservative_parking"] = Provenance.ASSUMED_FOR_TEST
     save(project_dict, out / "project.json")
     project = Project.model_validate(project_dict)
     plot, basis = load_plot(project, survey)
@@ -186,6 +193,11 @@ def _inputs(project: dict, standards: dict) -> list[str]:
     values = {**standards, **site, **layout,
               "water": ", ".join(f"{w['kind']} in {w.get('survey_colour') or w.get('survey_layer')}"
                                  for w in site.get("water", [])) or "none",
+              "road_strip": (f"{site['road_strip_width_m']:g} m off the "
+                             f"{site.get('road_strip_side', '?')} side"
+                             if site.get("road_strip_width_m") else ""),
+              "conservative_parking": "GHMC column planned while the jurisdiction is open"
+              if layout.get("conservative_parking") else "",
               "abutting_road": (f"{site['abutting_road_ft']:g} ft" if "abutting_road_ft" in site
                                 else f"{site.get('abutting_road_m', 0):g} m")
               + f" ({site.get('abutting_road_status', '')})",

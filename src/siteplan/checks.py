@@ -363,8 +363,9 @@ def _setback_findings(site, high_rise, bands) -> list[Finding]:
                 Status.PASS if ok else Status.FAIL,
                 _m(gap),
                 required,
-                rules.TABLE_IV_CLAUSE,
-                "Front setback may also be governed by the Table III building line (not encoded).",
+                f"{rules.TABLE_IV_CLAUSE}; {rules.FRONT_SETBACK_CLAUSE}; "
+                f"{rules.SETBACK_ON_NET_PLOT_CLAUSE}",
+                "The front of a high-rise keeps the Table IV figure too, measured on the net plot.",
             )
         )
     return findings

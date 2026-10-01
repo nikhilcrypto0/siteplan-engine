@@ -33,9 +33,28 @@ def _roads(site, *kinds: str):
     return [r for r in site.roads if not kinds or r.kind in kinds]
 
 
+def site_area(site) -> float | None:
+    """The site's area for rule 2(c): as per documents (the gross), else the net plot."""
+    if site.gross_area_sqm:
+        return site.gross_area_sqm
+    if site.net_area_sqm:
+        return site.net_area_sqm
+    return site.net_plot.area if site.net_plot is not None else None
+
+
 def road_findings(site) -> list[Finding]:
-    """Rule 8(m): the internal roads, their widths, and that every block and ramp is on one."""
+    """Rule 8(m): the internal roads, their widths, and that every block and ramp is on one.
+    Rule 8 governs a Group Development Scheme (rule 2(c)), so below 4,000 m² it is not applied."""
     clause = rules.INTERNAL_ROAD_CLAUSE
+    area = site_area(site)
+    if area is not None and not rules.is_group_development(area):
+        return [Finding(
+            "Internal roads (rule 8)", Status.INFO,
+            f"site {area:,.0f} m²: not a Group Development Scheme",
+            f"rule 8 applies from {rules.GROUP_DEVELOPMENT_MIN_SITE_SQM:,.0f} m²",
+            rules.GROUP_DEVELOPMENT_CLAUSE,
+            "Rule 8(m)'s internal roads and 8(l)'s pathways do not apply below 4,000 m².",
+        )]
     if not site.roads:
         return [Finding("Internal roads", Status.NOT_CHECKED, "no road layout drawn",
                         "rule 8(m) widths", clause)]

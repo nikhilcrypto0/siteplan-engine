@@ -14,7 +14,7 @@ from shapely.ops import polygonize, unary_union
 from siteplan import rules
 from siteplan.area_statement import render
 from siteplan.dxf_survey import DxfProfile, read_dxf_survey
-from siteplan.geometry import less_road_strip
+from siteplan.geometry import strip_along_side
 from siteplan.heights import HeightSearch, search_heights
 from siteplan.layout import LayoutRequest, SiteFacts, area_statement
 from siteplan.layout_export import write_layout_dxf, write_layout_svg
@@ -27,6 +27,7 @@ from siteplan.site_amenities import AmenityLibrary
 from siteplan.survey import Survey
 
 NET_AREA_TOLERANCE_SQM = 50.0  # drafting slop between a survey and a stated area
+STRIP_AREA_TOLERANCE = 0.02  # a described strip may differ from the stated deduction by this
 
 LAYOUT_CAVEAT = (
     "Layouts are first drafts for an architect. Each carries the rule 8(m) internal roads, the "
@@ -75,29 +76,51 @@ def load_water(project: Project, survey: str | Path | None) -> tuple[Polygon | N
 
 
 def load_plot(project: Project, survey: str | Path | None) -> tuple[Polygon, str]:
-    """The plot to plan on, and a sentence saying where it came from."""
+    """The plot to plan on, and a sentence saying where it came from. Setbacks are measured on
+    the net plot (rules.SETBACK_ON_NET_PLOT_CLAUSE), so land given up for road widening comes
+    off first; where it lies is taken from a drawing or the architect, never guessed from the
+    area alone."""
     if project.site.net_plot_m:
         return Polygon(project.site.net_plot_m), "net plot from the project file"
     if survey:
         boundary = read_survey(Path(survey)).boundary
         net = project.site.net_sqm()
         if net and net < boundary.area - NET_AREA_TOLERANCE_SQM:
-            side = project.site.road_strip_side
-            plot = less_road_strip(boundary, net, side)
-            where = (f"off the {side} side at an even width, as the architect said" if side
-                     else "off the longest boundary")
-            return plot, (
-                f"surveyed boundary {boundary.area:,.0f} m², less the "
-                f"{boundary.area - net:,.0f} m² the project states is deducted. ASSUMED: it "
-                f"comes {where}, as a road strip. For the real shape, give the architect's "
-                "site-plan DXF as the survey (its plot outline is the net plot, strip already "
-                "cut) or net_plot_m in the project file."
-            )
+            return _less_strip(project, boundary, net)
         if net and abs(net - boundary.area) <= NET_AREA_TOLERANCE_SQM:
             return boundary, (f"plot outline {boundary.area:,.0f} m², matching the {net:,.0f} m² "
                               "the project states is net: taken as the net plot")
         return boundary, "surveyed boundary (road-widening strip, if any, NOT deducted)"
     raise ValueError("Give a survey file, or net_plot_m in the project file.")
+
+
+def _less_strip(project: Project, boundary: Polygon, net: float) -> tuple[Polygon, str]:
+    """The boundary less the strip the architect describes; refused when nobody has said where
+    it lies, or when what they describe does not come to the deduction they state."""
+    site = project.site
+    deducted = boundary.area - net
+    if site.road_strip_m:
+        rest = boundary.difference(Polygon(site.road_strip_m))
+        parts = [p for p in getattr(rest, "geoms", [rest]) if p.geom_type == "Polygon"]
+        plot, how = max(parts, key=lambda p: p.area), "the strip outline in the project file"
+    elif site.road_strip_side and site.road_strip_width_m:
+        plot = strip_along_side(boundary, site.road_strip_side, site.road_strip_width_m)
+        how = (f"a {site.road_strip_width_m:g} m strip along the {site.road_strip_side} side, "
+               "as the architect gave it")
+    else:
+        raise ValueError(
+            f"The project states {deducted:,.0f} m² is given up for road widening, but neither "
+            "the survey nor the answers show where it lies. Give the side and the width of the "
+            "strip (road_strip_side and road_strip_width_m), its outline (road_strip_m), or the "
+            "net plot outline (net_plot_m). The engine does not guess a strip's location.")
+    taken = boundary.area - plot.area
+    if abs(taken - deducted) > max(NET_AREA_TOLERANCE_SQM, STRIP_AREA_TOLERANCE * deducted):
+        raise ValueError(
+            f"{how.capitalize()} takes {taken:,.0f} m², but the project states {deducted:,.0f} m² "
+            "is given up: the strip does not lie as described (it may run along only part of "
+            "the side). Give its outline (road_strip_m) or the net plot outline (net_plot_m).")
+    return plot, (f"surveyed boundary {boundary.area:,.0f} m², less {taken:,.0f} m² of road "
+                  f"widening: {how} ({rules.SETBACK_ON_NET_PLOT_CLAUSE})")
 
 
 def site_facts(project: Project, keep_out: Polygon | None = None) -> SiteFacts:

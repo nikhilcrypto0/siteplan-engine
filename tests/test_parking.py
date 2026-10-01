@@ -83,9 +83,17 @@ def test_an_unsettled_jurisdiction_plans_for_the_stricter_column():
     assert parking_percent("HMDA", False)[0] == 20.0
     assert parking_percent("CMC", True)[0] == 30.0
     assert parking_percent("GHMC", False)[0] == 30.0
-    assert parking_percent("HMDA", None)[0] == 30.0  # CURE not known
+    # Not known, and it decides the share: nothing to plan for, and the reason asks.
+    percent, basis = parking_percent("HMDA", None)
+    assert percent is None and "confirm the authority" in basis
+    assert parking_percent(None, None)[0] is None
     percent, basis = parking_percent("CMC", True, jurisdiction_confirmed=False)
-    assert percent == 30.0 and "not settled" in basis
+    assert percent is None
+    # Only the named test mode plans the stricter column, and says so.
+    percent, basis = parking_percent("CMC", True, jurisdiction_confirmed=False, conservative=True)
+    assert percent == 30.0 and basis.startswith("CONSERVATIVE_ASSUMPTION")
+    # GHMC is 30% whatever CURE is, so nothing needs asking.
+    assert parking_percent("GHMC", None)[0] == 30.0
 
 
 def test_a_ramp_starts_on_a_road_and_needs_room_for_its_length():

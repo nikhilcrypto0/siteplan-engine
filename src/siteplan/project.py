@@ -95,7 +95,14 @@ class SiteIn(BaseModel):
     net_plot_m: Ring | None = None
     road_strip_side: Literal["N", "NE", "E", "SE", "S", "SW", "W", "NW"] | None = Field(
         None, description="The side land given up for a road comes off, when no drawing shows "
-        "it: cut at an even width along that side, an approximation of the real strip")
+        "it; used only with road_strip_width_m")
+    road_strip_width_m: PositiveFloat | None = Field(
+        None, description="The width of that strip, from the master plan or the architect: an "
+        "even strip of this width comes off every run facing the side, and must match the "
+        "stated deduction")
+    road_strip_m: Ring | None = Field(
+        None, description="The strip given up, as an outline in the survey's own coordinates, "
+        "when it is not an even strip along one side")
     open_space_pockets_m: list[Ring] = []
     water: list[WaterIn] = []
     authority: str | None = Field(
