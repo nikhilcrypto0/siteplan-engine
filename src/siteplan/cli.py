@@ -198,9 +198,12 @@ def _cmd_acceptance(args: argparse.Namespace) -> int:
     from siteplan.cases import Case
 
     out = Path(args.out)
+    from siteplan.profiles import load_profile
+
+    profile = load_profile(args.profile) if args.profile else None
     generated = generate(Path(args.survey), json.loads(Path(args.answers).read_text()), out,
                          Path(args.workspace) if args.workspace else None,
-                         conservative_parking=args.conservative_parking)
+                         conservative_parking=args.conservative_parking, profile=profile)
     rows = []
     if generated.options:
         case = Case.model_validate_json(Path(args.firm_case).read_text())  # read only now
@@ -482,6 +485,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--workspace", help=f"Folder with {WORKSPACE_FILE} (default: the survey's)")
     p.add_argument("--out", default="out/acceptance")
     p.add_argument("--conservative-parking", action="store_true", help=_CONSERVATIVE_HELP)
+    p.add_argument("--profile", help="A site's temporary test assumptions (JSON, kept in "
+                   "fixtures/): each value it sets is ASSUMED_FOR_TEST and listed in the report")
     p.set_defaults(run=_cmd_acceptance)
 
     p = sub.add_parser("layout", help="Generate tower layout options for a project.")

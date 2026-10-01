@@ -27,7 +27,8 @@ LAYERS = {
     "SOLVER-CORES": 8,
     "SOLVER-LABELS": 7,
 }
-ROAD_LABELS = {"loop": "LOOP ROAD", "main approach": "MAIN APPROACH ROAD",
+ROAD_LABELS = {"loop": "LOOP ROAD", "perimeter": "PERIMETER LANE (TEST ASSUMPTION)",
+               "main approach": "MAIN APPROACH ROAD",
                "internal": "INTERNAL ROAD", "cul-de-sac": "CUL-DE-SAC"}
 
 

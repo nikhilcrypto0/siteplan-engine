@@ -76,8 +76,10 @@ def test_the_report_carries_every_section_the_acceptance_asks_for(generated):
                     "5. LAYOUTS THAT PASS", "6. REJECTED CANDIDATES",
                     "7. COMPARED WITH THE FIRM'S PLAN"):
         assert heading in text, heading
-    for line in ("Flats:", "Areas: tower floor", "Roads:", "Fire access:", "Parking: required",
-                 "Tot-lot:", "Club house:", "Setbacks and spacing:", "Rules:"):
+    for line in ("Towers:", "flats per core per floor", "Flats:", "Areas: built-up", "Roads:",
+                 "Fire access:", "Parking: required", "Tot-lot:", "Club house:", "Amenities:",
+                 "Setback: required", "Tower spacing:", "Rules:", "5a. COMPARISON",
+                 "height used for the rules"):
         assert line in text, line
     assert "[UNVERIFIED]" in text  # the dead end and the coordinates were not given
     assert " FAIL " not in text.split("5. LAYOUTS THAT PASS")[1].split("6. REJECTED")[0]
@@ -89,3 +91,47 @@ def test_towers_are_read_back_from_the_delivered_dxf(generated):
     setback, gap = spacing(generated.plot, towers)
     assert setback > 0 and (gap is None or gap > 0)
 
+
+
+def test_a_test_profile_sets_its_values_labels_them_and_leaves_the_rules_alone(tmp_path):
+    """A site's temporary assumptions while the architect is away: recorded ASSUMED_FOR_TEST,
+    listed in the report, and nothing general changes."""
+    from siteplan import rules
+    from siteplan.profiles import AssumptionProfile
+
+    ws = _workspace(tmp_path)
+    profile = AssumptionProfile.model_validate({
+        "name": "made-up test", "purpose": "a stilt left out of the height, roads in the setback",
+        "debug_fixture": True,
+        "site": {"abutting_road_m": {"value": 14.04, "source": "measured from the drawing"}},
+        "layout": {"stilt_in_rule_height": {"value": False, "source": "assumed"},
+                   "circulation_in_setback": {"value": True, "source": "assumed"},
+                   "floors": {"value": 8, "source": "assumed"}},
+        "open_facts": ["the 60 ft legal right of way"],
+    })
+    made = generate(ws / "survey.dxf", ANSWERS, ws / "out", profile=profile)
+    assert made.project["site"]["abutting_road_m"] == 14.04
+    assert "abutting_road_ft" not in made.project["site"]
+    assert made.project["status"]["abutting_road"] == "ASSUMED_FOR_TEST"
+    assert made.project["status"]["stilt_in_rule_height"] == "ASSUMED_FOR_TEST"
+    top = made.found.results[0]  # stilt + 9: 27 m for the rules needs an 18 m road
+    assert (top.floors, top.height_m, top.verdict) == (9, 27.0, "FAIL (law)")
+    assert made.found.max_feasible_floors == 8
+    for option in made.found.options:  # the stilt is left out of the rule height, not NBC's
+        assert option.height_m <= 24.0
+        assert option.physical_height_m == option.height_m + 3.0
+    best = made.found.options[0]
+    assert any(r.kind == "perimeter" for r in best.roads)
+    setback, _ = spacing(made.plot, [t.footprint for t in best.towers])
+    need = rules.band_for_height(best.height_m).min_open_space_m
+    assert need - 0.01 <= setback < need + 1.0  # at the setback, not 9 m behind a loop road
+    text = report(made, compare(made, _firm_case()))
+    assert text.startswith("DEBUG RUN") and "0. TEST PROFILE" in text
+    assert "kept UNVERIFIED: the 60 ft legal right of way" in text
+    assert "perimeter lane in the setback" in text
+    # nothing general moved: Table IV and the default readings are as they were
+    from siteplan.layout import LayoutRequest
+
+    assert rules.band_for_height(27.0).min_open_space_m == 9
+    default = LayoutRequest(floors=8, unit_mix={"2BHK": 1.0})
+    assert default.stilt_in_rule_height and not default.circulation_in_setback

@@ -94,26 +94,36 @@ class Frame:
     green: Polygon | None
     keep_out: Polygon | None
     turns: tuple[Polygon, ...]  # swept sectors at the loop road's bends
+    # With circulation inside the setback (a test assumption), the ring round the towers is a
+    # perimeter driveway and fire lane as wide as the setback leaves, not a 9 m loop road.
+    perimeter_m: float = 0.0
 
     @property
     def base_roads(self) -> list[RoadPiece]:
-        return [RoadPiece("loop", self.loop, ROAD_M),
+        ring = (RoadPiece("perimeter", self.loop, self.perimeter_m) if self.perimeter_m
+                else RoadPiece("loop", self.loop, ROAD_M))
+        return [ring,
                 RoadPiece("main approach", self.entrance.approach, self.entrance.width_m)]
 
 
 def frame(plot: Polygon, setback_m: float, gross_area_sqm: float | None = None,
-          keep_out=None, access_side: str | None = None) -> Frame | None:
+          keep_out=None, access_side: str | None = None,
+          circulation_in_setback: bool = False) -> Frame | None:
     """None when the towers' land is empty. The plot is the net plot and the setback is kept on
     every side, the front included (rules.SETBACK_ON_NET_PLOT_CLAUSE, rules.FRONT_SETBACK_CLAUSE).
     """
     green_m = green_strip_width(setback_m)
-    inset = tower_inset(setback_m)
+    # Without the test assumption the 9 m loop road runs outside the setback, so towers stand
+    # the larger of the setback and the green strip plus the road; with it, at the setback, the
+    # perimeter lane inside it (boundary -> setback with circulation in it -> building).
+    inset = setback_m if circulation_in_setback else tower_inset(setback_m)
     inner = inner_plot(plot, green_m, keep_out)
     land = plot.buffer(-(inset + EPS_M))
     # Towers keep the fire clearance off a water buffer, and the rest of a road's width so the
     # loop can run along the water (see WATER_FIRE_CLEARANCE_M). The setback is not added to it.
     if keep_out is not None:
-        clear = WATER_FIRE_CLEARANCE_M + WATER_LOOP_ROAD_EXTRA_M
+        clear = WATER_FIRE_CLEARANCE_M + (0.0 if circulation_in_setback
+                                          else WATER_LOOP_ROAD_EXTRA_M)
         land = land.difference(keep_out.buffer(clear + EPS_M, join_style="mitre"))
     # Only ground a fire tender can reach from the entrance side is used: no crossing over a
     # nala or lake is drawn, so land beyond one is left unbuilt.
@@ -131,15 +141,22 @@ def frame(plot: Polygon, setback_m: float, gross_area_sqm: float | None = None,
         return None
     loop = loop_road(envelope, inner)
     # The entrance goes where the shortest approach from the access side joins the loop; it
-    # stops at the towers' land, which the loop already rings.
-    gate = entrance(plot, access_side, inset + EPS_M, keep_out, loop)
-    gate = Entrance(gate.gate, _largest(gate.approach.difference(envelope)), gate.width_m,
-                    gate.note)
+    # stops at the towers' land, which the loop already rings. With the perimeter lane inside
+    # a setback narrower than the road, the approach is carried in at least its own width, and
+    # the towers keep off it.
+    least = max(inset, ROAD_M) + 5 * EPS_M if circulation_in_setback else inset + EPS_M
+    gate = entrance(plot, access_side, least, keep_out, loop)
+    if circulation_in_setback:
+        envelope = _largest(envelope.difference(gate.approach.buffer(EPS_M, join_style="mitre")))
+    else:
+        gate = Entrance(gate.gate, _largest(gate.approach.difference(envelope)), gate.width_m,
+                        gate.note)
     land = land.difference(gate.approach)
     target = rules.OPEN_SPACE_MIN_FRACTION * max(plot.area, gross_area_sqm or 0.0)
     corridor = max(setback_m, ROAD_M) + EPS_M
     return Frame(plot, target, setback_m, corridor, green_m, envelope, land, inner, loop, gate,
-                 green_strip(plot, green_m, gate.gate), keep_out, tuple(loop_turns(loop)))
+                 green_strip(plot, green_m, gate.gate), keep_out, tuple(loop_turns(loop)),
+                 setback_m - green_m if circulation_in_setback else 0.0)
 
 
 @dataclass(frozen=True)

@@ -28,7 +28,10 @@ AMENITIES = AmenityLibrary(items=[
 
 @pytest.fixture(scope="module")
 def option():
-    return solve(PLOT, FLATS, REQUEST, abutting_road_m=18.0, amenities=AMENITIES)[0]
+    # The placement rule is under test, so take an option that had ground for facilities: the
+    # maximum-yield option may fill the ground with towers and name every facility as missed.
+    options = solve(PLOT, FLATS, REQUEST, abutting_road_m=18.0, amenities=AMENITIES)
+    return next(o for o in options if o.amenities)
 
 
 def test_facilities_are_placed_in_the_free_ground(option):

@@ -24,7 +24,7 @@ from siteplan.layout import (
     LayoutRequest,
     Search,
     SiteFacts,
-    pick_distinct,
+    pick_strategies,
     search,
 )
 from siteplan.library import FlatLibrary
@@ -36,9 +36,10 @@ AIRPORT_CLAUSE = "G.O.168 rule 3(d) (airport and Air Force height limits)"
 @dataclass(frozen=True)
 class HeightResult:
     floors: int
-    height_m: float
+    height_m: float  # the height the Table IV rules used
     legal: tuple[Finding, ...]
     search: Search | None = None  # None when the law already rules the height out
+    physical_height_m: float = 0.0  # stilt included, as NBC measures it
 
     @property
     def legal_fails(self) -> list[Finding]:
@@ -92,14 +93,17 @@ class HeightSearch:
 
 
 def lowest_high_rise_floors(request: LayoutRequest) -> int:
-    return math.ceil((rules.HIGH_RISE_THRESHOLD_M - request.stilt_height_m)
-                     / request.floor_height_m - 1e-9)
+    stilt = request.stilt_height_m if request.stilt_in_rule_height else 0.0
+    return math.ceil((rules.HIGH_RISE_THRESHOLD_M - stilt) / request.floor_height_m - 1e-9)
 
 
 def legal_findings(floors: int, request: LayoutRequest, facts: SiteFacts,
                    plot: Polygon) -> list[Finding]:
-    """What the law says about this height before any block is drawn."""
-    height = request.stilt_height_m + floors * request.floor_height_m
+    """What the law says about this height before any block is drawn. Table IV takes the rule
+    height (the stilt left out when a profile says so); NBC's dead-end limit takes the physical
+    height, stilt included."""
+    at = request.model_copy(update={"floors": floors})
+    height, physical = at.rule_height_m, at.height_m
     band = rules.band_for_height(height)
     found = []
     road = facts.master_plan_road_m or facts.abutting_road_m
@@ -120,7 +124,7 @@ def legal_findings(floors: int, request: LayoutRequest, facts: SiteFacts,
         f"{area:,.0f} m²", f">= {rules.MIN_HIGH_RISE_PLOT_SQM:,.0f} m²",
         rules.MIN_HIGH_RISE_PLOT_CLAUSE))
     limit = rules.DEAD_END_MAX_HEIGHT_M
-    if height > limit + 1e-6:
+    if physical > limit + 1e-6:
         dead = facts.road_dead_end
         status = (Status.UNVERIFIED if dead is None else Status.FAIL if dead else Status.PASS)
         measured = ("the road's end is not known" if dead is None
@@ -155,6 +159,7 @@ def search_heights(plot: Polygon, library: FlatLibrary, request: LayoutRequest,
         if not any(f.status is Status.FAIL for f in legal):
             tried = search(plot, library, at, facts, amenities)
             passing += tried.options
-        result.results.append(HeightResult(floors, at.height_m, legal, tried))
-    result.options = pick_distinct(passing, request.options)
+        result.results.append(HeightResult(floors, at.rule_height_m, legal, tried,
+                                           at.height_m))
+    result.options = pick_strategies(passing, request.options)
     return result
