@@ -76,7 +76,8 @@ def test_the_report_carries_every_section_the_acceptance_asks_for(generated):
                     "5. LAYOUTS THAT PASS", "6. REJECTED CANDIDATES",
                     "7. COMPARED WITH THE FIRM'S PLAN"):
         assert heading in text, heading
-    for line in ("Towers:", "flats per core per floor", "Flats:", "Areas: built-up", "Roads:",
+    for line in ("Towers:", "flats per core per floor", "Flats:", "Areas: built-up",
+                 "Internal roads (rule 8(m)):", "Fire lanes:",
                  "Fire access:", "Parking: required", "Tot-lot:", "Club house:", "Amenities:",
                  "Setback: required", "Tower spacing:", "Rules:", "5a. COMPARISON",
                  "height used for the rules"):
@@ -128,7 +129,11 @@ def test_a_test_profile_sets_its_values_labels_them_and_leaves_the_rules_alone(t
     text = report(made, compare(made, _firm_case()))
     assert text.startswith("DEBUG RUN") and "0. TEST PROFILE" in text
     assert "kept UNVERIFIED: the 60 ft legal right of way" in text
-    assert "perimeter lane in the setback" in text
+    findings = {f.rule: f.status.value for f in best.findings}
+    assert findings["Fire lane: perimeter lane inside the setback"] == "PASS"
+    assert findings["Internal roads: 9 m loop road (rule 8(m))"] == "UNVERIFIED"  # never PASS
+    assert findings["INTERNAL_EGRESS"] == "NOT_CHECKED"
+    assert "not counted as a rule 8(m) road" in text and "NOT_CHECKED INTERNAL_EGRESS" in text
     # nothing general moved: Table IV and the default readings are as they were
     from siteplan.layout import LayoutRequest
 

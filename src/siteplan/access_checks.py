@@ -104,31 +104,40 @@ def road_findings(site) -> list[Finding]:
 
 
 def _perimeter_findings(site, clause: str) -> list[Finding]:
-    """The perimeter driveway and fire lane a test profile lets run inside the setback. It must
-    carry a fire tender; whether it may stand in for 8(m)'s 9 m looped road is the open
-    question, so at best it is UNVERIFIED, never PASS."""
+    """The perimeter lane a test profile lets run inside the setback, checked twice and apart:
+    as a fire lane (6 m, NBC 4.6(c)), and against rule 8(m)'s 9 m loop road, which it is never
+    taken to satisfy: with no 9 m loop drawn, that requirement is UNVERIFIED, not PASS."""
     ring = _roads(site, "perimeter")
     if not ring:
         return []
     shape = unary_union([r.shape for r in ring])
     lane = rules.FIRE_TENDER_MIN_WIDTH_M
-    if narrower_than(shape, lane - 0.02):
-        return [Finding("Internal roads: perimeter lane in the setback", Status.FAIL,
-                        f"narrower than the {lane:g} m fire lane in places",
-                        f">= {lane:g} m motorable", clause)]
-    return [Finding(
-        "Internal roads: perimeter lane in the setback", Status.UNVERIFIED,
+    thin = narrower_than(shape, lane - 0.02)
+    fire = Finding(
+        "Fire lane: perimeter lane inside the setback", Status.FAIL if thin else Status.PASS,
+        f"narrower than {lane:g} m in places" if thin else
         f"{ring[0].width_m:g} m inside the setback band, at least {lane:g} m everywhere",
-        f">= {rules.INTERNAL_ROAD_M:g} m for a looped road (rule 8(m)); >= {lane:g} m for fire "
-        "access", clause,
-        "ASSUMED_FOR_TEST: the profile lets circulation run inside the setback. Whether a "
-        "perimeter lane narrower than 9 m may serve as the loop is not settled.",
-    )]
+        f">= {lane:g} m motorable", rules.FIRE_ACCESS_CLAUSE,
+        "ASSUMED_FOR_TEST: the profile lets circulation run inside the setback. As a fire lane "
+        "only; it is not counted as a rule 8(m) road.",
+    )
+    if _roads(site, "loop"):
+        return [fire]
+    loop = Finding(
+        "Internal roads: 9 m loop road (rule 8(m))", Status.UNVERIFIED,
+        f"no 9 m loop road drawn; the {ring[0].width_m:g} m perimeter lane inside the setback "
+        "is not counted as one", f">= {rules.INTERNAL_ROAD_M:g} m for looped roads", clause,
+        "Whether a perimeter driveway narrower than 9 m inside the setback may serve as the "
+        "group development's loop is not settled; the architect or a sanctioned plan says.",
+    )
+    return [fire, loop]
 
 
 def _dead_end_finding(site, clause: str) -> Finding:
-    base = unary_union([r.shape for r in _roads(site, "loop", "perimeter", "main approach")])
-    _, dead = through_roads(_roads(site, "internal"), base)
+    """An internal road ends on a rule 8(m) road at both ends (PASS); only on the perimeter
+    lane, which is not established as one (UNVERIFIED); or on neither (FAIL)."""
+    roads_8m = unary_union([r.shape for r in _roads(site, "loop", "main approach")])
+    _, dead = through_roads(_roads(site, "internal"), roads_8m)
     low, high = rules.CUL_DE_SAC_LENGTH_M
     required = (f"through roads; a cul-de-sac only {low:g}-{high:g} m long, "
                 f"{rules.CUL_DE_SAC_WIDTH_M:g} m wide, with a "
@@ -136,27 +145,45 @@ def _dead_end_finding(site, clause: str) -> Finding:
     if not dead:
         return Finding("Internal roads: dead ends", Status.PASS,
                        "every internal road joins the loop at both ends", required, clause)
+    with_lane = unary_union([roads_8m, *(r.shape for r in _roads(site, "perimeter"))])
+    _, still_dead = through_roads(_roads(site, "internal"), with_lane)
+    if not still_dead:
+        return Finding(
+            "Internal roads: dead ends", Status.UNVERIFIED,
+            f"{len(dead)} road{'s' if len(dead) != 1 else ''} end on the perimeter lane only",
+            required, clause,
+            "They are through roads only if the perimeter lane counts as an 8(m) road, which "
+            "is not established (ASSUMED_FOR_TEST circulation in the setback).",
+        )
     return Finding(
         "Internal roads: dead ends", Status.FAIL,
-        f"{len(dead)} road{'s' if len(dead) != 1 else ''} ending without a turning head",
-        required, clause, "The layout does not draw cul-de-sac heads, so a dead end fails.",
+        f"{len(still_dead)} road{'s' if len(still_dead) != 1 else ''} ending without a turning "
+        "head", required, clause, "The layout does not draw cul-de-sac heads, so a dead end fails.",
     )
 
 
 def _served_finding(site) -> Finding:
     """Rule 8(l) lets 6 m pathways serve blocks up to 12 m only, so every taller block has to
-    open onto an internal road."""
+    open onto an internal road. A block reached only by the perimeter lane is UNVERIFIED."""
     tall = [b for b in site.buildings if b.footprint is not None
             and (b.resolved_height() or 0) > rules.PATHWAY_MAX_BLOCK_HEIGHT_M]
-    road_land = unary_union([r.shape for r in site.roads])
-    cut_off = [b.name for b in tall if b.footprint.distance(road_land) > TOUCH_M]
+    roads_8m = unary_union([r.shape for r in site.roads if r.kind != "perimeter"])
+    lane = unary_union([r.shape for r in _roads(site, "perimeter")])
+    off_8m = [b for b in tall if roads_8m.is_empty or b.footprint.distance(roads_8m) > TOUCH_M]
+    cut_off = [b.name for b in off_8m if lane.is_empty or b.footprint.distance(lane) > TOUCH_M]
+    lane_only = [b.name for b in off_8m if b.name not in cut_off]
     required = (f"every block above {rules.PATHWAY_MAX_BLOCK_HEIGHT_M:g} m on an internal road, "
                 "not a pathway")
-    return Finding(
-        "Internal roads: every block served", Status.FAIL if cut_off else Status.PASS,
-        f"not on a road: {', '.join(cut_off)}" if cut_off else f"all {len(tall)} blocks",
-        required, rules.PATHWAY_CLAUSE,
-    )
+    if cut_off:
+        return Finding("Internal roads: every block served", Status.FAIL,
+                       f"not on a road: {', '.join(cut_off)}", required, rules.PATHWAY_CLAUSE)
+    if lane_only:
+        return Finding("Internal roads: every block served", Status.UNVERIFIED,
+                       f"on the perimeter lane only: {', '.join(lane_only)}", required,
+                       rules.PATHWAY_CLAUSE,
+                       "The perimeter lane is not established as an 8(m) road.")
+    return Finding("Internal roads: every block served", Status.PASS, f"all {len(tall)} blocks",
+                   required, rules.PATHWAY_CLAUSE)
 
 
 def fire_findings(site, high_rise) -> list[Finding]:
