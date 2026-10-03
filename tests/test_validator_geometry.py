@@ -4,15 +4,19 @@ validator rebuilds what today's checker borrows from access.py, so these are its
 import math
 
 import pytest
+from shapely import wkt
 from shapely.affinity import rotate
 from shapely.geometry import Point, Polygon, box
+from shapely.ops import unary_union
 
 from siteplan.contracts.resolved_rules import ResolvedRules
 from siteplan.validator.cars import cars_on_floor
 from siteplan.validator.shapes import (
+    OPENING_SLACK_M,
     end_caps,
     healed,
     inscribed_radius,
+    mitred,
     narrower_than,
     opening,
     oriented_box,
@@ -65,6 +69,38 @@ def test_a_part_exactly_as_wide_as_asked_is_kept_not_swollen_or_dropped(angle):
 def test_opening_keeps_a_square_corner():
     corner = box(0, 0, 10, 10).union(box(0, 0, 40, 4))  # an L: a wide arm and a narrow one
     assert opening(corner, 4).area == pytest.approx(corner.area, rel=1e-6)
+
+
+# Made-up land: turned rectangles joined (a road network of the kind the generators draw). The
+# geometry library's mitre buffer gets it wrong: shrunk and grown by 4.495 m it returns parts
+# lying inside one another, which is not a valid shape and breaks the next set operation.
+AWKWARD = wkt.loads(
+    "MULTIPOLYGON (((45.02752127777172 27.904477565410517, 66.92438620239963 83.68548635054344, "
+    "106.49471057250643 68.15213428992463, 84.59784564787851 12.371125504791706, "
+    "45.02752127777172 27.904477565410517)), ((24.68104515214088 53.81952647623693, "
+    "26.30663108112101 53.81952647623693, 13.95937698196122 66.16678057539673, "
+    "15.594389874001262 67.80179346743678, -4.858265036103589 71.9539930196818, "
+    "0.1683465981885064 96.71377439090901, 45.747339020192975 87.46054674108817, "
+    "40.72072738590088 62.700765369860946, 22.1552139387086 66.46984654594557, "
+    "34.805534008417226 53.81952647623693, 49.37771821148314 53.81952647623693, "
+    "49.37771821148314 45.14079342363482, 42.437338272044805 45.14079342363482, "
+    "38.71135120288396 41.414806354473974, 34.98536413372312 45.14079342363482, "
+    "24.68104515214088 45.14079342363482, 24.68104515214088 53.81952647623693)))")
+
+
+def test_a_mitre_buffer_the_geometry_library_gets_wrong_is_mended_before_it_is_used():
+    half = 9.0 / 2 - OPENING_SLACK_M
+    raw = AWKWARD.buffer(-half, join_style="mitre").buffer(half, join_style="mitre")
+    if raw.is_valid:
+        pytest.skip("this geometry library no longer gets the shape wrong")
+    mended = opening(AWKWARD, 9.0)
+    assert mended.is_valid
+    # nothing is lost in the mending: it is the ground the parts cover together (their areas
+    # added up, as the invalid shape reports, would count the nested part twice)
+    assert mended.area == pytest.approx(unary_union(list(raw.geoms)).area)
+    assert mended.area < raw.area
+    assert AWKWARD.difference(mended).area >= 0  # the next set operation runs
+    assert mitred(box(0, 0, 10, 10), 2).equals(box(-2, -2, 12, 12))  # and a plain shape is as ever
 
 
 def test_a_road_drawn_8_9_m_wide_measures_8_9_whatever_it_declares():

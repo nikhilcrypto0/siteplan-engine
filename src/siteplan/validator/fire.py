@@ -32,7 +32,7 @@ from siteplan.validator.readings import (
     unknown_reading,
     verdict,
 )
-from siteplan.validator.shapes import NOISE_SQM, opening, sides_of, union_of_all
+from siteplan.validator.shapes import NOISE_SQM, mitred, opening, sides_of, union_of_all
 from siteplan.validator.turning import road_bends, round_block, turning_for
 
 NON_HIGH_RISE_NOTE = ("Below the high-rise threshold the fire rules of rule 15(a)(i) apply and "
@@ -45,7 +45,7 @@ GATE_SLACK_M = 0.05  # a gate may measure this much under the width it declares
 def clear_band(footprint: Polygon, lane_m: float) -> BaseGeometry:
     """The ground that must stay clear round a block: the lane's width on every side, corners
     square."""
-    return footprint.buffer(lane_m, join_style="mitre").difference(footprint)
+    return mitred(footprint, lane_m).difference(footprint)
 
 
 def reached(ctx: Context) -> BaseGeometry:

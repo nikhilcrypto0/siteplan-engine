@@ -16,7 +16,7 @@ from shapely.affinity import rotate
 from shapely.geometry import Polygon
 from shapely.geometry.base import BaseGeometry
 
-from siteplan.validator.shapes import polygons_of
+from siteplan.validator.shapes import mitred, polygons_of
 
 EPS_M = 0.01
 EDGE_M = 1e-4  # a tenth of a millimetre
@@ -42,7 +42,7 @@ def _count(part: Polygon, angle_deg: float, bay: tuple[float, float], aisle: flo
            along: float, across: float) -> int:
     width, depth = bay
     # A bay on the floor's own edge is on the floor, whatever turning it did to the last digit.
-    turned = rotate(part, -angle_deg, origin="centroid").buffer(EDGE_M, join_style="mitre")
+    turned = mitred(rotate(part, -angle_deg, origin="centroid"), EDGE_M)
     minx, miny, maxx, maxy = turned.bounds
     minx, miny, maxx, maxy = minx + EDGE_M, miny + EDGE_M, maxx - EDGE_M, maxy - EDGE_M
     rows = _rows(miny + across, maxy, depth, aisle)
