@@ -41,15 +41,25 @@ from siteplan.validator.readings import (
     unknown_reading,
     verdict,
 )
-from siteplan.validator.shapes import NOISE_SQM, sides_of, union_of_all
-from siteplan.validator.zones import ramp_zones, setback_zone
+from siteplan.validator.shapes import (
+    NOISE_SQM,
+    polygons_of,
+    sides_of,
+    union_of_all,
+    width_of,
+)
+from siteplan.validator.zones import deepest_setback_m, ramp_zones, setback_zone
 
 AREA_SLACK_SQM = 0.5  # parking short of the need by less than this is rounding
 BAY_SLACK_M = 0.05  # a bay this close to the standard size is that size
+BAY_FILL = 0.95  # a bay fills this much of the rectangle round it: a frame or a triangle is no bay
 BAY_OVERLAP_SQM = 0.01  # a bay this much on anything else is on it
 CELLAR_SLACK_M = 0.01
 RAMP_TOUCH_M = 0.5  # a ramp this close to a road has its top on it
 RAMP_SLACK_M = 0.05  # a ramp drawn this close to its size is that size
+NO_SETBACK_NOTE = ("The setback is not known under this reading (below the high-rise threshold "
+                   "Table III applies and is not modelled), so which ground is outside it is "
+                   "not known.")
 
 
 def table_v_columns(ctx: Context) -> dict[str, float]:
@@ -128,6 +138,7 @@ def measure_floors(ctx: Context) -> Floors:
 class Surface:
     valid: int
     problems: dict[str, int]  # why drawn bays do not count, and how many
+    setback_known: bool = True  # False: which bays stand in a setback could not be told
 
 
 def surface_bays(ctx: Context, ground: Ground, reading: str) -> Surface:
@@ -148,6 +159,8 @@ def surface_bays(ctx: Context, ground: Ground, reading: str) -> Surface:
         why = None
         if long + BAY_SLACK_M < long_side or short + BAY_SLACK_M < short_side:
             why = "too small for a car"
+        elif b.area < BAY_FILL * long * short:
+            why = "not a rectangle a car fits in"
         elif b.difference(ctx.net).area > BAY_OVERLAP_SQM:
             why = "off the plot"
         elif zone is not None and b.intersection(zone).area > BAY_OVERLAP_SQM:
@@ -165,7 +178,7 @@ def surface_bays(ctx: Context, ground: Ground, reading: str) -> Surface:
             problems[why] = problems.get(why, 0) + 1
         else:
             valid += 1
-    return Surface(valid, problems)
+    return Surface(valid, problems, setback_known=zone is not None)
 
 
 def surface_check(ctx: Context, ground: Ground) -> Check | None:
@@ -177,10 +190,13 @@ def surface_check(ctx: Context, ground: Ground) -> Check | None:
     def cell(a: Assignment) -> Cell:
         s = surface_bays(ctx, ground, a[STILT_IN_RULE_HEIGHT])
         why = ", ".join(f"{n} {w}" for w, n in s.problems.items())
-        return Cell(verdict(not s.problems),
-                    f"{s.valid} of {count} bays are bays" + (f"; {why}" if why else ""),
-                    f"each {bay[0]:g} x {bay[1]:g} m, outside the setback and the fire lanes, "
-                    "off roads and buildings", "Bays that are not bays do not count as parking.")
+        measured = f"{s.valid} of {count} bays are bays" + (f"; {why}" if why else "")
+        required = (f"each {bay[0]:g} x {bay[1]:g} m, outside the setback and the fire lanes, "
+                    "off roads and buildings")
+        if not s.problems and not s.setback_known:
+            return Cell(Status.UNVERIFIED, measured, required, NO_SETBACK_NOTE)
+        return Cell(verdict(not s.problems), measured, required,
+                    "Bays that are not bays do not count as parking.")
 
     return check_from(run(ctx.rules, [STILT_IN_RULE_HEIGHT], cell), family=Family.PARKING,
                       rule="Surface parking bays", clause="G.O.168 rule 13(b)(iii); "
@@ -231,6 +247,11 @@ def table_v_check(ctx: Context, ground: Ground, f: Floors) -> Check:
                     "fit")
         provided = min(floor, laid_out)
         if provided + AREA_SLACK_SQM >= need:
+            surface = surfaces[a[STILT_IN_RULE_HEIGHT]]
+            without = min(_provision(f, 0, bay_sqm)[:2])
+            if not surface.setback_known and surface.valid and without + AREA_SLACK_SQM < need:
+                return Cell(Status.UNVERIFIED, measured, required,
+                            NO_SETBACK_NOTE + " It passes only by counting the surface bays.")
             return Cell(Status.PASS, measured, required)
         short = f"{measured}, short by {need - provided:,.0f} m²"
         note = ("No cellar plan is drawn, so the rest may be underground." if
@@ -304,31 +325,38 @@ def ramp_check(ctx: Context, f: Floors) -> Check:
     rise = ctx.brief.firm_standards.cellar_floor_height_m.value
     length_needed = rise / p.ramp_gradient.value
     required = (f"one ramp >= {single:g} m or two >= {pair:g} m, {length_needed:g} m long (1 in "
-                f"{1 / p.ramp_gradient.value:g}), top on a road, outside the mandatory setbacks")
+                f"{1 / p.ramp_gradient.value:g}), from a road down to the cellar, outside the "
+                "mandatory setbacks")
     clause = p.ramp_single_min_m.clause
     road_land = d.road_land
+    ramps = [r for r in polygons_of(union_of_all(list(d.ramps))) if r.area > NOISE_SQM]
 
     def cell(a: Assignment) -> Cell:
         reading = a[STILT_IN_RULE_HEIGHT]
-        if not d.ramps:
+        if not ramps:
             return Cell(Status.FAIL, "no ramp drawn", required)
-        widths = [sides_of(r)[1] for r in d.ramps]
-        lengths = [sides_of(r)[0] for r in d.ramps]
+        widths = [width_of(r, max(single, pair) + 1.0) for r in ramps]
+        lengths = [sides_of(r)[0] for r in ramps]
         problems = []
         if not (any(w + RAMP_SLACK_M >= single for w in widths)
                 or (len(widths) >= 2 and all(w + RAMP_SLACK_M >= pair for w in widths))):
             problems.append(f"width {', '.join(f'{w:.2f}' for w in widths)} m")
         if any(n + RAMP_SLACK_M < length_needed for n in lengths):
             problems.append("too short for a 1 in 8 slope")
-        if road_land.is_empty or any(r.distance(road_land) > RAMP_TOUCH_M for r in d.ramps):
+        if road_land.is_empty or any(r.distance(road_land) > RAMP_TOUCH_M for r in ramps):
             problems.append("top not on a road")
+        if d.cellar_outline.is_empty or all(
+                r.distance(d.cellar_outline) > RAMP_TOUCH_M for r in ramps):
+            problems.append("does not reach the cellar")
         forbidden, front_only = ramp_zones(ctx, reading)
-        into = union_of_all(list(d.ramps))
+        into = union_of_all(ramps)
         if into.intersection(forbidden).area > NOISE_SQM:
             problems.append("in a setback where a ramp may not be")
         measured = ("; ".join(problems) if problems else
-                    f"{len(d.ramps)} x {widths[0]:.2f} m wide, {lengths[0]:.1f} m long, beside a "
+                    f"{len(ramps)} x {widths[0]:.2f} m wide, {lengths[0]:.1f} m long, beside a "
                     "road, clear of the setbacks")
+        if not problems and deepest_setback_m(ctx, reading) is None:
+            return Cell(Status.UNVERIFIED, measured, required, NO_SETBACK_NOTE)
         if not problems and into.intersection(front_only).area > NOISE_SQM:
             return Cell(Status.UNVERIFIED, "in a setback; which side is the front is not known",
                         required, "A ramp may use a side or rear setback leaving 7 m, never the "

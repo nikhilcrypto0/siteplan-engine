@@ -71,20 +71,49 @@ def green_strip_zone(ctx: Context, reading: str) -> BaseGeometry | None:
     return ctx.net.difference(mitred(ctx.net, -width))
 
 
-def front_edges(net, side: Side) -> list[LineString]:
-    """The stretches of the plot's boundary that face the side the access road runs along."""
-    centre = COMPASS_DEG[side]
-    ring = list(orient(net, 1.0).exterior.coords)
+def compass_name(bearing_deg: float) -> str:
+    """The nearest of the eight compass points to a bearing (degrees clockwise from north)."""
+    return list(COMPASS_DEG)[round((bearing_deg % 360) / 45) % 8]
+
+
+def angle_between(a_deg: float, b_deg: float) -> float:
+    """The smaller angle between two bearings, in degrees."""
+    return abs((a_deg - b_deg + 180) % 360 - 180)
+
+
+def boundary_edges(net: Polygon) -> list[tuple[LineString, float]]:
+    """Every stretch of the plot's boundary with the bearing its outward normal faces."""
     edges = []
-    for a, b in zip(ring, ring[1:], strict=False):
-        dx, dy = b[0] - a[0], b[1] - a[1]
-        length = math.hypot(dx, dy)
-        if length < 1e-6:
-            continue
-        bearing = math.degrees(math.atan2(dy / length, -dx / length)) % 360  # outward normal
-        if abs((bearing - centre + 180) % 360 - 180) < FRONT_SECTOR_DEG:
-            edges.append(LineString([a, b]))
+    oriented = orient(net, 1.0)
+    for ring in [oriented.exterior, *oriented.interiors]:
+        coords = list(ring.coords)
+        for a, b in zip(coords, coords[1:], strict=False):
+            dx, dy = b[0] - a[0], b[1] - a[1]
+            length = math.hypot(dx, dy)
+            if length < 1e-6:
+                continue
+            bearing = math.degrees(math.atan2(dy / length, -dx / length)) % 360  # outward normal
+            edges.append((LineString([a, b]), bearing))
     return edges
+
+
+def bearings_near(net: Polygon, shape: BaseGeometry, within_m: float) -> list[float]:
+    """The bearings the plot's boundary faces where a shape stands: the nearest stretch and any
+    other within `within_m` of it (a gate at a corner stands in two sides)."""
+    edges = boundary_edges(net)
+    if shape.is_empty or not edges:
+        return []
+    nearest = min(shape.distance(e) for e, _ in edges)
+    return [bearing for e, bearing in edges if shape.distance(e) <= nearest + within_m]
+
+
+def front_edges(net, side: Side) -> list[LineString]:
+    """The stretches of the plot's boundary that face the side the access road runs along, within
+    45 degrees either way, so a diagonal side (north-east) takes in both the sides it lies
+    between: a ramp barred from the front is barred from either."""
+    centre = COMPASS_DEG[side]
+    return [edge for edge, bearing in boundary_edges(net)
+            if angle_between(bearing, centre) <= FRONT_SECTOR_DEG + 1e-6]
 
 
 def front_zone(ctx: Context, depth_m: float) -> BaseGeometry | None:

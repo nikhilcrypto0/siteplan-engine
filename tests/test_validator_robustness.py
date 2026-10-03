@@ -3,7 +3,7 @@ mirrored ones, no towers, no circulation, and the same answer twice."""
 
 import pytest
 from shapely.geometry import Polygon
-from validator_helpers import fixture, footprint, shape, status
+from validator_helpers import fixture, footprint, move_tower, shape, status
 
 from siteplan.cases import CaseBuilding
 from siteplan.contracts import ValidationReport
@@ -172,7 +172,7 @@ def _draw_bowtie(where):
                                    "its prototype's footprint"])
 def test_a_shape_that_crosses_itself_is_named_and_blocks_a_pass_instead_of_stopping_the_run(where):
     report = fixture("rectangle").edited(_draw_bowtie(where)).report()
-    found = [d for d in report.cross_checks if d.item == "shape that crosses itself"]
+    found = [d for d in report.cross_checks if d.item == "malformed shape"]
     assert len(found) == 1 and found[0].blocks_pass, where
     assert where in found[0].theirs and "Self-intersection" in found[0].theirs
     assert report.verdict.legal is LegalVerdict.FAIL
@@ -210,11 +210,36 @@ def _give_up(error):
     return raise_it
 
 
-def test_a_geometry_error_the_library_cannot_get_past_is_an_unverified_report_not_a_crash(
+def test_a_geometry_error_in_one_group_of_checks_leaves_every_other_verdict_standing(
         monkeypatch):
+    """One shape the library chokes on must not erase a FAIL found elsewhere (a review found a
+    poisoned claim turning a FAIL into one UNVERIFIED line)."""
     from shapely.errors import GEOSException
 
+    def too_close(candidate):
+        move_tower(candidate, "T1", 0.0, 60.0)  # up against the north boundary
+    inputs = fixture("rectangle").edited(too_close)
+    clean = {c.finding.rule: c.finding.status for c in inputs.report().legal}
+    assert clean["All-round setback: T1"] is Z.FAIL
+
     monkeypatch.setattr("siteplan.validator.open_space.qualifying", _give_up(GEOSException(
+        "TopologyException: found non-noded intersection (made up)")))
+    report = inputs.report()
+    broken = [c for c in report.legal if c.finding.rule == "Open space: could not be measured"]
+    assert len(broken) == 1 and broken[0].finding.status is Z.UNVERIFIED
+    assert "non-noded intersection" in broken[0].finding.measured
+    kept = {c.finding.rule: c.finding.status for c in report.legal}
+    for rule, status_ in clean.items():
+        if "open space" not in rule.lower() and "pocket" not in rule.lower():
+            assert kept[rule] is status_, rule
+    assert report.verdict.legal is LegalVerdict.FAIL
+    assert ValidationReport.model_validate_json(report.model_dump_json()) == report
+
+
+def test_a_geometry_error_while_the_ground_is_laid_out_is_one_unverified_report(monkeypatch):
+    from shapely.errors import GEOSException
+
+    monkeypatch.setattr("siteplan.validator.accounting.recompute", _give_up(GEOSException(
         "TopologyException: found non-noded intersection (made up)")))
     report = fixture("rectangle").report()
     assert [c.finding.status for c in report.legal] == [Z.UNVERIFIED]
@@ -222,6 +247,18 @@ def test_a_geometry_error_the_library_cannot_get_past_is_an_unverified_report_no
     assert "non-noded intersection" in report.legal[0].finding.measured
     assert report.verdict.legal is LegalVerdict.UNVERIFIED
     assert ValidationReport.model_validate_json(report.model_dump_json()) == report
+
+
+def test_a_claim_the_library_cannot_compare_is_recorded_and_costs_no_verdict(monkeypatch):
+    from shapely.errors import GEOSException
+
+    clean = {c.finding.rule: c.finding.status for c in fixture("rectangle").report().legal}
+    monkeypatch.setattr("siteplan.validator.cross_checks.metrics",
+                        _give_up(GEOSException("made up")))
+    report = fixture("rectangle").report()
+    found = [d for d in report.cross_checks if d.item == "metrics could not be compared"]
+    assert len(found) == 1 and not found[0].blocks_pass
+    assert {c.finding.rule: c.finding.status for c in report.legal} == clean
 
 
 def test_a_mistake_of_the_validators_own_is_not_hidden_as_a_geometry_error(monkeypatch):

@@ -38,6 +38,7 @@ STRICTER = {
 @pytest.fixture(scope="module", params=sorted(LAYOUTS))
 def suchitra(request):
     from siteplan.adapters import Readings, brief, candidate_from_option, site_model
+    from siteplan.contracts.design_brief import AmenityRequest
     from siteplan.intake import load_defaults
     from siteplan.library import FlatLibrary
     from siteplan.project import Project
@@ -50,10 +51,10 @@ def suchitra(request):
     plot, _ = load_plot(project, SURVEY)
     keep_out, _ = load_water(project, SURVEY)
     defaults = load_defaults(WORKSPACE)
+    facilities = AmenityLibrary.model_validate_json((WORKSPACE / defaults.amenities).read_text())
     found = run_search(
         project, FlatLibrary.model_validate_json((WORKSPACE / defaults.flat_library).read_text()),
-        plot, project.layout,
-        AmenityLibrary.model_validate_json((WORKSPACE / defaults.amenities).read_text()), keep_out)
+        plot, project.layout, facilities, keep_out)
     ring = [list(p) for p in list(plot.exterior.coords)[:-1]]
     project = project.model_copy(update={"site": project.site.model_copy(
         update={"net_plot_m": ring})})
@@ -61,6 +62,10 @@ def suchitra(request):
     drawn = list(read_survey(SURVEY, project.site.water[0]).water)
     site.water[0].lines = [Line(points=[tuple(c) for c in line.coords]) for line in drawn]
     design = brief(project, defaults)
+    # The brief says what surface each facility has, as the adapters should from the firm's list.
+    design.program.amenities = [
+        AmenityRequest(name=i.name, surface="SOFT" if i.counts_as_open_space else "HARD")
+        for i in facilities.items]
     rules = resolved_rules(site)
     readings = Readings.of(project.layout)
     refs = {"site_ref": digest(site), "rules_ref": digest(rules), "brief_ref": digest(design)}
@@ -104,6 +109,25 @@ def test_the_validator_agrees_with_todays_checker_on_the_real_options(suchitra):
             if claim.rule in STRICTER or claim.status is Status.INFO:
                 continue
             assert ours.get(claim.rule) is claim.status, claim.rule
+
+
+def test_without_the_surfaces_of_its_facilities_the_open_space_is_unverified_not_passed(suchitra):
+    """The options stand a children's play area and seating on the tot-lot and count them. Whether
+    they are greenery is the brief's to say; a brief that does not leaves the share unsettled."""
+    from siteplan.validator import validate
+
+    _, _, _, site, rules, design, candidates = suchitra
+    bare = design.model_copy(deep=True)
+    bare.program.amenities = []
+    seen = []
+    for candidate in candidates:
+        again = candidate.model_copy(update={"brief_ref": digest(bare)})
+        report = validate(site, rules, bare, again)
+        space = next(c for c in report.legal if c.finding.rule == "Organized open space (tot-lot)")
+        seen.append(space.finding.status)
+        if space.finding.status is Status.UNVERIFIED:
+            assert "CHILDRENS PLAY" in space.finding.note
+    assert Status.UNVERIFIED in seen
 
 
 def test_a_tower_pushed_into_the_nala_buffer_fails_the_water_check(suchitra):

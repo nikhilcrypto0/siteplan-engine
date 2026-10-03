@@ -37,15 +37,23 @@ def real_run(request, tmp_path_factory):
     from client_baseline import run
 
     from siteplan.adapters import Readings, brief, candidate_from_option, site_model
+    from siteplan.contracts.design_brief import AmenityRequest
     from siteplan.intake import load_defaults
     from siteplan.project import Project
     from siteplan.runner import read_survey
+    from siteplan.site_amenities import AmenityLibrary
 
     generated = run(request.param, tmp_path_factory.mktemp(request.param))
     project = Project.model_validate(generated.project)
     site = site_model(project, site_id="dhulapally", boundary=read_survey(SURVEY).boundary,
                       draft=generated.draft)
-    design = brief(project, load_defaults(WORKSPACE))
+    defaults = load_defaults(WORKSPACE)
+    design = brief(project, defaults)
+    # The brief says what surface each facility has, as the adapters should from the firm's list.
+    facilities = AmenityLibrary.model_validate_json((WORKSPACE / defaults.amenities).read_text())
+    design.program.amenities = [
+        AmenityRequest(name=i.name, surface="SOFT" if i.counts_as_open_space else "HARD")
+        for i in facilities.items]
     rules = resolved_rules(site)
     readings = Readings.of(project.layout)
     refs = {"site_ref": digest(site), "rules_ref": digest(rules), "brief_ref": digest(design)}

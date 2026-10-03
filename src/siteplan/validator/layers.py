@@ -157,7 +157,7 @@ def _other_layers(ctx: Context) -> list[RuleLayer]:
             out.append(_layer(f"water buffer {zone.id}", LayerKind.WATER_BUFFER, on_site,
                               ctx.rules.water.buffer_m_by_class.clause,
                               permits=_forbid(*FORBID_BUILT)))
-    gates = ctx.drawn.gate_land
+    gates = ctx.entrance_land
 
     def strip(reading: str) -> BaseGeometry | None:
         zone = green_strip_zone(ctx, reading)

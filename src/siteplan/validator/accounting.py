@@ -100,11 +100,14 @@ def claims_of(ctx: Context) -> list[Claim]:
     out += [Claim(U.SURFACE_PARKING, f"bay {i}", b) for i, b in enumerate(d.bays, 1)]
     pockets = union_of_all(list(d.open_space))
     for a in d.amenities:
+        if a.inside(d.club):
+            continue  # a gym in the club house: the club house's ground, not another use
         on_open_space = (not pockets.is_empty and a.shape.area > 0
                          and a.shape.intersection(pockets).area > PLAY_SHARE * a.shape.area)
-        if on_open_space:
+        if on_open_space and not a.hard:
             continue  # a play area on the tot-lot: the tot-lot's ground, tagged below
-        out.append(Claim(U.OTHER_BUILT if a.roofed else U.HARD_AMENITY, a.name, a.shape))
+        out.append(Claim(U.SOFT_OPEN_SPACE if a.surface == "SOFT" else U.HARD_AMENITY, a.name,
+                         a.shape))
     for i, pocket in enumerate(d.open_space, 1):
         tags = tuple(f"AMENITY:{a.name}" for a in d.amenities
                      if a.shape.area > 0 and a.shape.intersection(pocket).area

@@ -9,6 +9,7 @@ readings of whether circulation may use it.
 
 from __future__ import annotations
 
+from shapely.geometry import Point, Polygon
 from shapely.geometry.base import BaseGeometry
 
 from siteplan import rules as law
@@ -24,6 +25,7 @@ from siteplan.validator.context import Context
 from siteplan.validator.drawn import DrawnRoad
 from siteplan.validator.ground import Ground
 from siteplan.validator.measure import TOL_M
+from siteplan.validator.network import TOUCH_M, dead_end_check, entrance_connection_check
 from siteplan.validator.readings import (
     ALLOWED,
     AUTHORITY_CHOICE,
@@ -40,7 +42,6 @@ from siteplan.validator.readings import (
 )
 from siteplan.validator.shapes import (
     NOISE_SQM,
-    end_caps,
     healed,
     inscribed_radius,
     opening,
@@ -53,8 +54,6 @@ from siteplan.validator.shapes import (
 from siteplan.validator.zones import deepest_setback_m, setback_zone
 
 DECLARED_SLACK_M = 0.05  # a road may measure this much under the width it declares
-TOUCH_M = 0.5  # a block or a road this close to a road opens onto it
-END_M = 1.0  # how much of a road's length counts as its end
 ROAD_KINDS = (RoadKind.APPROACH, RoadKind.LOOP, RoadKind.INTERNAL, RoadKind.CUL_DE_SAC)
 RULE_8M_KINDS = (RoadKind.APPROACH, RoadKind.LOOP, RoadKind.INTERNAL)
 
@@ -174,47 +173,17 @@ def _perimeter_checks(ctx: Context, ground: Ground) -> list[Check]:
 # --- Dead ends and cul-de-sacs ---------------------------------------------------------------
 
 
-def _joins_at_both_ends(piece: BaseGeometry, others: BaseGeometry) -> bool:
-    """Whether each end of a road meets another road (an end is the first END_M of its length)."""
-    parts = polygons_of(piece)
-    if not parts:
-        return False
-    ends = end_caps(max(parts, key=lambda p: p.area), END_M)
-    near = others.buffer(TOUCH_M)
-    return len(ends) == 2 and all(e.intersects(near) for e in ends)
-
-
-def _dead_end_check(ctx: Context, ground: Ground) -> Check:
-    circ = ctx.rules.circulation
-    low, high = circ.cul_de_sac_length_m.value
-    required = (f"through roads; a cul-de-sac only {low:g}-{high:g} m long, "
-                f"{circ.cul_de_sac_width_m.value:g} m wide, with a "
-                f"{circ.cul_de_sac_head_radius_m.value:g} m radius head")
-    base = _ground_of(ctx, ground, RoadKind.LOOP, RoadKind.APPROACH)
-    lane = _ground_of(ctx, ground, RoadKind.PERIMETER_LANE)
-    internal = ctx.drawn.roads_of(RoadKind.INTERNAL)
-
-    def dead(roads: list[DrawnRoad], extra: BaseGeometry) -> list[DrawnRoad]:
-        return [r for r in roads if not _joins_at_both_ends(
-            _usable(r, ground), union_of_all([base, extra, *(
-                _usable(o, ground) for o in roads if o is not r)]))]
-
-    rule = "Internal roads: dead ends"
-    stuck = dead(internal, union_of_all([]))
-    if not stuck:
-        return plain(Family.ROADS, rule, Status.PASS,
-                     "every internal road joins the loop at both ends", required, _clause(ctx))
-    if not dead(internal, lane):
-        return plain(
-            Family.ROADS, rule, Status.UNVERIFIED,
-            f"{_plural(len(stuck), 'road')} end on the perimeter lane only", required,
-            _clause(ctx), "They are through roads only if the perimeter lane counts as an 8(m) "
-            "road, which is not established (ASSUMED_FOR_TEST circulation in the setback).")
-    return plain(Family.ROADS, rule, Status.FAIL,
-                 f"{_plural(len(stuck), 'road')} ending without a turning head ("
-                 + ", ".join(r.id for r in stuck) + ")", required, _clause(ctx),
-                 "A road that is not a cul-de-sac of the form rule 8(m) allows must join "
-                 "another road at both ends.")
+def _head_radius(body: Polygon | None, joint: BaseGeometry, radius_m: float,
+                 width_m: float) -> float:
+    """The largest circle in the free end of a cul-de-sac, the end furthest from where it joins
+    the road: a head at the wrong end turns nothing."""
+    if body is None:
+        return 0.0
+    if joint.is_empty:
+        return inscribed_radius(body)
+    anchor = joint.centroid
+    far = max((Point(c) for c in body.exterior.coords), key=anchor.distance)
+    return inscribed_radius(body.intersection(far.buffer(2 * radius_m + width_m)))
 
 
 def _cul_de_sac_checks(ctx: Context, ground: Ground) -> list[Check]:
@@ -228,7 +197,9 @@ def _cul_de_sac_checks(ctx: Context, ground: Ground) -> list[Check]:
         parts = polygons_of(usable)
         length = sides_of(max(parts, key=lambda p: p.area))[0] if parts else 0.0
         width = min(width_of(usable, wide), road.declared_width_m)
-        head = inscribed_radius(usable)
+        joint = usable.buffer(TOUCH_M).intersection(network)
+        head = _head_radius(max(parts, key=lambda p: p.area) if parts else None, joint, radius,
+                            wide)
         problems = []
         if width + TOL_M < wide:
             problems.append(f"{width:.2f} m wide")
@@ -327,7 +298,7 @@ def setback_circulation_check(ctx: Context) -> Check | None:
         if zone is None:
             return Cell(Status.NOT_CHECKED, "no setback known under this reading", required,
                         "Table III is not modelled yet.")
-        crossing = d.gate_land.buffer(deepest_setback_m(ctx, reading) + 1.0)
+        crossing = ctx.entrance_land.buffer(deepest_setback_m(ctx, reading) + 1.0)
         approach = by_kind[RoadKind.APPROACH].difference(crossing)
         area = union_of_all([rest, approach]).intersection(zone).area
         measured = f"{area:,.0f} m² of road and fire lane inside the setback"
@@ -390,6 +361,12 @@ def road_checks(ctx: Context, ground: Ground) -> list[Check]:
         out.append(plain(Family.ROADS, "Internal roads", Status.UNVERIFIED,
                          "no road layout drawn", "rule 8(m) widths", _clause(ctx),
                          "Without roads drawn nothing here can be passed."))
+    elif not ctx.drawn.roads_of(*RULE_8M_KINDS, RoadKind.CUL_DE_SAC, RoadKind.PERIMETER_LANE):
+        out.append(plain(Family.ROADS, "Internal roads", Status.FAIL,
+                         "only driveways drawn, no main approach, loop or internal road",
+                         f"a {ctx.rules.circulation.internal_road_m.value:g} m road network",
+                         _clause(ctx), "A driveway (rule 13(c)(viii), 4.5 m) is not counted as an "
+                         "internal road."))
     else:
         network = healed(_ground_of(ctx, ground, *RULE_8M_KINDS, RoadKind.PERIMETER_LANE))
         out += _approach_checks(ctx, ground, network)
@@ -398,7 +375,9 @@ def road_checks(ctx: Context, ground: Ground) -> list[Check]:
         out += _perimeter_checks(ctx, ground)
         out += _cul_de_sac_checks(ctx, ground)
         served = _served_check(ctx, ground)
-        out += [_dead_end_check(ctx, ground)] + ([served] if served else [])
+        joined = entrance_connection_check(ctx, ground)
+        out += [dead_end_check(ctx, ground)] + ([joined] if joined else [])
+        out += [served] if served else []
     drive = driveway_check(ctx, ground, circ.applies.value or by_the_site)
     out += [drive] if drive else []
     return out

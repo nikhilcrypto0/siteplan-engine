@@ -9,6 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from shapely.geometry import Polygon
+from shapely.geometry.base import BaseGeometry
 
 from siteplan.contracts.candidate import CandidateLayout
 from siteplan.contracts.design_brief import DesignBrief
@@ -17,9 +18,12 @@ from siteplan.contracts.site_model import CanonicalSiteModel
 from siteplan.provenance import Provenance
 from siteplan.validator import drawn as drawing
 from siteplan.validator import site_geometry
-from siteplan.validator.drawn import Drawn
+from siteplan.validator.drawn import Drawn, Gate
 from siteplan.validator.measure import HeightClass, TowerGeometry, classify, tower_geometries
+from siteplan.validator.shapes import union_of_all
 from siteplan.validator.site_geometry import SiteGeometry
+
+GATE_ON_BOUNDARY_M = 0.5  # a gate this close to the boundary stands in it
 
 
 def is_known(sourced) -> bool:
@@ -39,6 +43,13 @@ class Context:
     towers: tuple[TowerGeometry, ...]
     drawn: Drawn
     classes: dict[str, dict[str, HeightClass]]  # stilt reading -> tower name -> its band
+    entrances: tuple[Gate, ...]  # the gates that stand in the plot's boundary
+
+    @property
+    def entrance_land(self) -> BaseGeometry:
+        """The ground of the entrances. Only a gate in the boundary is a way in; one drawn
+        inside the plot is not, and no lane starts from it and no rule is relaxed for it."""
+        return union_of_all([g.shape for g in self.entrances])
 
     @property
     def net(self) -> Polygon:
@@ -72,4 +83,7 @@ def build(site: CanonicalSiteModel, rules: ResolvedRules, brief: DesignBrief,
         if None in heights.values():
             continue  # a reading this validator cannot evaluate: its checks say so
         classes[reading] = {name: classify(rules, h) for name, h in heights.items()}
-    return Context(site, rules, brief, candidate, land, towers, drawing.read(candidate), classes)
+    drawn = drawing.read(candidate, brief)
+    entrances = tuple(g for g in drawn.gates
+                      if g.shape.distance(land.net.boundary) <= GATE_ON_BOUNDARY_M)
+    return Context(site, rules, brief, candidate, land, towers, drawn, classes, entrances)
