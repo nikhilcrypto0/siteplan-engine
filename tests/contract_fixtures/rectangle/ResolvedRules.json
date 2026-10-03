@@ -1,6 +1,6 @@
 {
- "schema_version": "1.0",
- "site_ref": "27469de975c61c39",
+ "schema_version": "1.1",
+ "site_ref": "c1f4dfd0d1ec156a",
  "rules_digest": "rules.py at P0",
  "orders": [
   {
@@ -55,14 +55,6 @@
    "basis": "LEGAL_RULE",
    "status": "VERIFIED",
    "note": ""
-  },
-  "above_5_acres": {
-   "value": false,
-   "unit": "",
-   "clause": "G.O.168 rule 8(o), p.16",
-   "basis": "LEGAL_RULE",
-   "status": "VERIFIED",
-   "note": ""
   }
  },
  "jurisdiction": {
@@ -83,6 +75,28 @@
    "clause": "G.O.168 rule 2(f) as substituted by G.O.Ms.No.95 of 2026 (21 m)",
    "basis": "LEGAL_RULE",
    "status": "VERIFIED",
+   "note": ""
+  },
+  "high_rise": {
+   "eligibility": "ALLOWED",
+   "grounds": [
+    {
+     "id": "road_width",
+     "met": true,
+     "measured": "18.29 m",
+     "required": "at least 12 m",
+     "clause": "G.O.168 rule 7(a)(x), Table IV as substituted by G.O.Ms.No.50 of 2019",
+     "status": "USER_CONFIRMED"
+    },
+    {
+     "id": "plot_size",
+     "met": true,
+     "measured": "15,000.0 m²",
+     "required": "at least 2,000 m²",
+     "clause": "G.O.168 rule 7(a)(ii)",
+     "status": "USER_CONFIRMED"
+    }
+   ],
    "note": ""
   },
   "tdr_band_m": {
@@ -111,6 +125,8 @@
    {
     "above_m": 0.0,
     "up_to_m": 21.0,
+    "above_inclusive": false,
+    "up_to_inclusive": false,
     "kind": "NON_HIGH_RISE",
     "modelled": false,
     "min_road_m": null,
@@ -121,7 +137,22 @@
    },
    {
     "above_m": 21.0,
+    "up_to_m": 21.0,
+    "above_inclusive": true,
+    "up_to_inclusive": true,
+    "kind": "HIGH_RISE",
+    "modelled": true,
+    "min_road_m": 12.0,
+    "setback_m": 7.0,
+    "gap_m": 7.0,
+    "clause": "G.O.168 rule 7(a)(x), Table IV as substituted by G.O.Ms.No.50 of 2019",
+    "status": "VERIFIED"
+   },
+   {
+    "above_m": 21.0,
     "up_to_m": 24.0,
+    "above_inclusive": false,
+    "up_to_inclusive": true,
     "kind": "HIGH_RISE",
     "modelled": true,
     "min_road_m": 12.0,
@@ -133,6 +164,8 @@
    {
     "above_m": 24.0,
     "up_to_m": 27.0,
+    "above_inclusive": false,
+    "up_to_inclusive": true,
     "kind": "HIGH_RISE",
     "modelled": true,
     "min_road_m": 18.0,
@@ -144,6 +177,8 @@
    {
     "above_m": 27.0,
     "up_to_m": 30.0,
+    "above_inclusive": false,
+    "up_to_inclusive": true,
     "kind": "HIGH_RISE",
     "modelled": true,
     "min_road_m": 18.0,
@@ -155,6 +190,8 @@
    {
     "above_m": 30.0,
     "up_to_m": 35.0,
+    "above_inclusive": false,
+    "up_to_inclusive": true,
     "kind": "HIGH_RISE",
     "modelled": true,
     "min_road_m": 24.0,
@@ -166,6 +203,8 @@
    {
     "above_m": 35.0,
     "up_to_m": 40.0,
+    "above_inclusive": false,
+    "up_to_inclusive": true,
     "kind": "HIGH_RISE",
     "modelled": true,
     "min_road_m": 24.0,
@@ -177,6 +216,8 @@
    {
     "above_m": 40.0,
     "up_to_m": 45.0,
+    "above_inclusive": false,
+    "up_to_inclusive": true,
     "kind": "HIGH_RISE",
     "modelled": true,
     "min_road_m": 24.0,
@@ -188,6 +229,8 @@
    {
     "above_m": 45.0,
     "up_to_m": 50.0,
+    "above_inclusive": false,
+    "up_to_inclusive": true,
     "kind": "HIGH_RISE",
     "modelled": true,
     "min_road_m": 30.0,
@@ -199,6 +242,8 @@
    {
     "above_m": 50.0,
     "up_to_m": 55.0,
+    "above_inclusive": false,
+    "up_to_inclusive": true,
     "kind": "HIGH_RISE",
     "modelled": true,
     "min_road_m": 30.0,
@@ -210,6 +255,8 @@
    {
     "above_m": 55.0,
     "up_to_m": 70.0,
+    "above_inclusive": false,
+    "up_to_inclusive": true,
     "kind": "HIGH_RISE",
     "modelled": true,
     "min_road_m": 30.0,
@@ -221,6 +268,8 @@
    {
     "above_m": 70.0,
     "up_to_m": 120.0,
+    "above_inclusive": false,
+    "up_to_inclusive": true,
     "kind": "HIGH_RISE",
     "modelled": true,
     "min_road_m": 30.0,
@@ -232,6 +281,8 @@
    {
     "above_m": 120.0,
     "up_to_m": 10000.0,
+    "above_inclusive": false,
+    "up_to_inclusive": true,
     "kind": "HIGH_RISE",
     "modelled": true,
     "min_road_m": 30.0,
@@ -243,28 +294,44 @@
   ],
   "limits": [
    {
+    "id": "table_iv_road",
     "measure": "RULE_HEIGHT",
+    "bound": "BOUNDED",
     "max_m": 30.0,
-    "reason": "the 18.29 m road serves buildings up to 30 m",
-    "clause": "G.O.168 rule 7(a)(x), Table IV as substituted by G.O.Ms.No.50 of 2019",
+    "inclusive": true,
+    "condition": null,
+    "applicability": "APPLIES",
     "status": "USER_CONFIRMED",
-    "applies_if": null
+    "reason": "the 18.29 m road serves buildings up to 30 m",
+    "clause": "G.O.168 rule 7(a)(x), Table IV as substituted by G.O.Ms.No.50 of 2019"
    },
    {
+    "id": "dead_end",
     "measure": "PHYSICAL_HEIGHT",
+    "bound": "BOUNDED",
     "max_m": 30.0,
+    "inclusive": true,
+    "condition": {
+     "fact": "access.dead_end",
+     "holds_when": true,
+     "text": "the access road ends at the plot"
+    },
+    "applicability": "DOES_NOT_APPLY",
+    "status": "USER_CONFIRMED",
     "reason": "no dead-end road for a residential building above 30 m",
-    "clause": "G.O.168 rule 15(b)(iv), bringing in NBC 2016 Part 3 4.6(b) (no dead-end road for a residential building above 30 m)",
-    "status": "VERIFIED",
-    "applies_if": "the access road ends at the plot (site: False)"
+    "clause": "G.O.168 rule 15(b)(iv), bringing in NBC 2016 Part 3 4.6(b) (no dead-end road for a residential building above 30 m)"
    },
    {
+    "id": "airport",
     "measure": "AMSL",
+    "bound": "NOT_EVALUATED",
     "max_m": null,
-    "reason": "no site coordinates: airport and Air Force limits not evaluated",
-    "clause": "G.O.168 rule 3(d)",
+    "inclusive": true,
+    "condition": null,
+    "applicability": "APPLIES",
     "status": "UNVERIFIED",
-    "applies_if": null
+    "reason": "airport and Air Force height limits are not evaluated: the site has no coordinates",
+    "clause": "G.O.168 rule 3(d) (airport and Air Force height limits)"
    }
   ]
  },
@@ -334,7 +401,7 @@
   "over_and_above_setbacks": {
    "value": true,
    "unit": "",
-   "clause": "G.O.168 rule 5(vi)",
+   "clause": "G.O.168 rule 7(a)(vii)",
    "basis": "LEGAL_RULE",
    "status": "VERIFIED",
    "note": ""
@@ -350,11 +417,25 @@
   "buffer_may_count": {
    "value": true,
    "unit": "",
-   "clause": "G.O.168 rule 3(a)(iii)(3)",
+   "clause": "G.O.168 rule 3(a)(ii), the river clause as substituted by G.O.Ms.No.7 of 2016; rule 3(a)(iii)(3)",
    "basis": "LEGAL_RULE",
    "status": "VERIFIED",
    "note": ""
-  }
+  },
+  "qualifying_uses": {
+   "value": [
+    "GREENERY",
+    "TOT_LOT",
+    "SOFT_LANDSCAPE"
+   ],
+   "unit": "",
+   "clause": "G.O.168 rule 7(a)(vii)",
+   "basis": "LEGAL_RULE",
+   "status": "VERIFIED",
+   "note": "the uses the rule names: 'greenery, tot lot or soft landscaping, etc.'"
+  },
+  "tot_lot_surface_interpretation": "tot_lot_surface",
+  "other_uses_interpretation": "open_space_other_uses"
  },
  "green_strip": {
   "width_m": {
@@ -531,6 +612,24 @@
    "note": ""
   }
  },
+ "electrical": {
+  "ht_clearance_m": {
+   "value": 3.0,
+   "unit": "m",
+   "clause": "G.O.168 rule 3(c)(i), pp.4-5 (3 m from a high-tension line and 1.5 m from a low-tension line, vertical and horizontal)",
+   "basis": "LEGAL_RULE",
+   "status": "VERIFIED",
+   "note": ""
+  },
+  "lt_clearance_m": {
+   "value": 1.5,
+   "unit": "m",
+   "clause": "G.O.168 rule 3(c)(i), pp.4-5 (3 m from a high-tension line and 1.5 m from a low-tension line, vertical and horizontal)",
+   "basis": "LEGAL_RULE",
+   "status": "VERIFIED",
+   "note": ""
+  }
+ },
  "parking": {
   "share_pct_by_column": {
    "GHMC_OR_CURE": 30.0,
@@ -607,8 +706,16 @@
    "note": ""
   },
   "ramp_in_setbacks": {
-   "value": "never in the front setback or building line; side or rear only leaving 7 m for fire vehicles",
+   "value": "never in the front setback or building line; side or rear only leaving the fire clearance",
    "unit": "",
+   "clause": "G.O.168 rule 13(c)(vii) (ramps: one of 5.4 m or two of 3.6 m, 1 in 8)",
+   "basis": "LEGAL_RULE",
+   "status": "VERIFIED",
+   "note": ""
+  },
+  "ramp_fire_clearance_m": {
+   "value": 7.0,
+   "unit": "m",
    "clause": "G.O.168 rule 13(c)(vii) (ramps: one of 5.4 m or two of 3.6 m, 1 in 8)",
    "basis": "LEGAL_RULE",
    "status": "VERIFIED",
@@ -666,22 +773,6 @@
    "basis": "LEGAL_RULE",
    "status": "VERIFIED",
    "note": ""
-  },
-  "large_project_share_of_site": {
-   "value": 0.05,
-   "unit": "",
-   "clause": "G.O.168 rule 8(o), p.16",
-   "basis": "LEGAL_RULE",
-   "status": "VERIFIED",
-   "note": "read from the 2012 text on 2026-10-02; not yet a rules.py constant"
-  },
-  "large_project_from_acres": {
-   "value": 5.0,
-   "unit": "acre",
-   "clause": "G.O.168 rule 8(o), p.16",
-   "basis": "LEGAL_RULE",
-   "status": "VERIFIED",
-   "note": ""
   }
  },
  "water": {
@@ -730,8 +821,8 @@
    "basis": "UNRESOLVED_INTERPRETATION",
    "status": "UNVERIFIED",
    "sources": [
-    "rule 8(g)",
-    "rule 5(vi)"
+    "G.O.168 rule 7(a)(vii): 'at least 10% of total site area'",
+    "G.O.168 rule 8(g): 'Minimum of 10% of site area'"
    ],
    "settles": "a sanctioned plan's area statement"
   },
@@ -824,6 +915,36 @@
     "G.O.168 rule 15(a)(x) as substituted by G.O.Ms.No.7 of 2016 (group housing of 100 units or more: 'upto 3% of the total built up area (or) 50,000 Sft. whichever is lower', in a block that is not part of the residential blocks)"
    ],
    "settles": "the authority's reading of the 2016 text"
+  },
+  {
+   "id": "tot_lot_surface",
+   "question": "Must a tot-lot stand on soft ground to count as organised open space?",
+   "alternatives": {
+    "any_surface": "a tot-lot counts whatever its surface: the rule names the tot-lot and does not say what it is laid on",
+    "soft_only": "a tot-lot counts only on soft ground"
+   },
+   "selected": "ALL",
+   "basis": "UNRESOLVED_INTERPRETATION",
+   "status": "UNVERIFIED",
+   "sources": [
+    "G.O.168 rule 7(a)(vii): 'greenery, tot lot or soft landscaping, etc.'"
+   ],
+   "settles": "a sanctioned plan whose counted tot-lot is paved, or the authority's reading"
+  },
+  {
+   "id": "open_space_other_uses",
+   "question": "Does the rule's 'etc.' take in open recreation other than the uses it names?",
+   "alternatives": {
+    "same_kind_only": "only greenery, a tot-lot and soft landscaping count",
+    "any_open_recreation": "any recreation open to the sky counts too (a court, a pool, a paved deck)"
+   },
+   "selected": "ALL",
+   "basis": "UNRESOLVED_INTERPRETATION",
+   "status": "UNVERIFIED",
+   "sources": [
+    "G.O.168 rule 7(a)(vii): 'greenery, tot lot or soft landscaping, etc.'"
+   ],
+   "settles": "the organised open space a sanctioned plan's area statement counts"
   }
  ]
 }

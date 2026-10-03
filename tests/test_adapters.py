@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 from shapely.geometry import box
 
 from siteplan.adapters import (
@@ -17,14 +18,17 @@ from siteplan.adapters import (
     request,
     split_project,
 )
+from siteplan.adapters.legacy_layout import SURFACE_UNSTATED
 from siteplan.contracts import CandidateLayout
 from siteplan.contracts.accounting import LayerKind, Permit, PhysicalUse
-from siteplan.contracts.common import Provenance, Shape, SourceKind
+from siteplan.contracts.common import Basis, FacilityUse, Provenance, Shape, SourceKind, Surface
 from siteplan.contracts.resolved_rules import CIRCULATION_IN_SETBACK
+from siteplan.intake import WorkspaceDefaults
 from siteplan.layout import LayoutRequest, solve
 from siteplan.library import FlatLibrary
 from siteplan.mcp_server import OPTION_KEYS
 from siteplan.project import Project
+from siteplan.site_amenities import AmenityLibrary
 
 EXAMPLE = Path(__file__).parent.parent / "examples" / "example.project.json"
 SITE_NUMBERS = ("gross_area_sqm", "net_area_sqm", "abutting_road_m", "master_plan_road_m",
@@ -37,6 +41,18 @@ LIBRARY = FlatLibrary(
     core_width_m=7.5)
 REQUEST = LayoutRequest(floors=8, unit_mix={"2BHK": 0.7, "3BHK": 0.3}, conservative_parking=True)
 PLOT = box(0, 0, 150, 100)
+# A made-up firm's facilities. Two say nothing of their use or surface, one of them built by its
+# name alone.
+AMENITIES = AmenityLibrary(items=[
+    {"name": "PLAY", "width_m": 8.0, "depth_m": 6.0, "near": "open space",
+     "counts_as_open_space": True, "use": "TOT_LOT", "surface": "SOFT"},
+    {"name": "SEATING", "width_m": 6.0, "depth_m": 4.0, "near": "open space",
+     "counts_as_open_space": True},
+    {"name": "DECK", "width_m": 5.0, "depth_m": 4.0, "near": "edge", "use": "PAVED_DECK",
+     "surface": "HARD"},
+    {"name": "GUARD ROOM", "width_m": 3.0, "depth_m": 3.0, "near": "gate",
+     "use": "BUILT_SERVICE", "surface": "BUILT"},
+    {"name": "SECURITY CABIN", "width_m": 3.0, "depth_m": 3.0, "near": "gate"}])
 
 
 def _intake_style_project() -> Project:
@@ -156,3 +172,95 @@ def test_a_candidate_survives_json(candidates):
     for _, candidate in candidates:
         again = CandidateLayout.model_validate_json(candidate.model_dump_json())
         assert json.loads(again.model_dump_json()) == json.loads(candidate.model_dump_json())
+
+
+def _road_status(site: dict, status: dict | None = None) -> Provenance:
+    project = Project.model_validate({
+        "name": "Made-up road", "site": {"gross_area_sqm": 15000.0, "abutting_road_ft": 40.0,
+                                         **site},
+        "layout": {"floors": 8, "unit_mix": {"2BHK": 1.0}}, "status": status or {}})
+    return split_project(project)[0].access_road().legal_row_m.status
+
+
+def test_a_road_width_is_never_confirmed_merely_because_nobody_said_how_it_is_known():
+    assert _road_status({}) is Provenance.UNVERIFIED
+    assert _road_status({"abutting_road_status": "UNVERIFIED_DRAWING_VALUE"}) is (
+        Provenance.UNVERIFIED)
+    assert _road_status({"abutting_road_status": "DECLARED_ON_SITE_PLAN"}) is (
+        Provenance.USER_CONFIRMED)
+    assert _road_status({"abutting_road_status": "CERTIFIED_ROW"}) is Provenance.VERIFIED
+    # what the project itself records about the width wins over the declared source
+    assert _road_status({"abutting_road_status": "UNVERIFIED_DRAWING_VALUE"},
+                        {"abutting_road": "USER_CONFIRMED"}) is Provenance.USER_CONFIRMED
+    assert _road_status({"abutting_road_status": "CERTIFIED_ROW"},
+                        {"abutting_road": "UNVERIFIED"}) is Provenance.UNVERIFIED
+
+
+def test_the_brief_asks_for_the_firms_facilities_as_its_library_states_them():
+    asked = {a.name: a for a in brief(_intake_style_project(), amenities=AMENITIES)
+             .program.amenities}
+    assert list(asked) == [item.name for item in AMENITIES.items]
+    assert (asked["PLAY"].use, asked["PLAY"].surface) == (FacilityUse.TOT_LOT, Surface.SOFT)
+    assert asked["DECK"].footprint_m == (5.0, 4.0)
+    # it may stand on the tot-lot, and its surface was never stated: neither is assumed
+    assert (asked["SEATING"].use, asked["SEATING"].surface) == (None, None)
+    assert asked["SECURITY CABIN"].surface is None  # a cabin by name only
+    assert brief(_intake_style_project()).program.amenities == []
+
+
+@pytest.fixture(scope="module")
+def furnished() -> CandidateLayout:
+    option = solve(PLOT, LIBRARY, REQUEST, amenities=AMENITIES)[0]
+    return candidate_from_option(
+        option, PLOT, candidate_id="made-up-furnished", site_ref="site", rules_ref="rules",
+        brief_ref="brief", readings=Readings.of(REQUEST).selections, access_side="S",
+        amenities=AMENITIES)
+
+
+def test_a_placed_facility_carries_what_its_library_states_and_nothing_its_name_suggests(
+        furnished):
+    stated = {item.name: item for item in AMENITIES.items}
+    placed = {a.name: a for a in furnished.program.amenities}
+    assert {"PLAY", "DECK", "GUARD ROOM", "SECURITY CABIN"} <= set(placed)
+    for name, facility in placed.items():
+        assert (facility.use, facility.surface) == (stated[name].use, stated[name].surface)
+    assert placed["SECURITY CABIN"].surface is None
+
+
+def test_a_facilitys_ground_follows_its_stated_surface(furnished):
+    ledger = furnished.partition
+    assert ledger.problems(Shape.from_shapely(PLOT)) == []
+    own = {e.ref: e for e in ledger.entries}
+    assert own["GUARD ROOM"].use is PhysicalUse.OTHER_BUILT
+    assert own["DECK"].use is PhysicalUse.HARD_AMENITY and own["DECK"].tags == []
+    # built by its name, but nobody stated it: an amenity whose surface is not stated
+    assert own["SECURITY CABIN"].use is PhysicalUse.HARD_AMENITY
+    assert own["SECURITY CABIN"].tags == [SURFACE_UNSTATED]
+    # a soft facility is soft ground, on the tot-lot or off it, and is never counted twice
+    soft = [e for e in ledger.entries if "AMENITY:PLAY" in e.tags]
+    assert len(soft) == 1 and soft[0].use is PhysicalUse.SOFT_OPEN_SPACE
+
+
+def test_the_firms_margins_reach_the_brief_as_its_standards_and_the_prototype_ignores_them():
+    project = Project.model_validate_json(EXAMPLE.read_text())
+    defaults = WorkspaceDefaults(design_margins={"setback_extra_m": 0.5,
+                                                 "open_space_extra_fraction": 0.005})
+    design = brief(project, defaults)
+    margins = design.design_margins
+    assert margins.setback_extra_m.value == 0.5
+    assert margins.setback_extra_m.source_kind is SourceKind.FIRM_STANDARD
+    assert margins.setback_extra_m.status is Provenance.USER_CONFIRMED
+    assert margins.basis("setback_extra_m") is Basis.FIRM_STANDARD
+    assert margins.open_space_target_sqm(1500.0, 0.10) == pytest.approx(1575.0)
+    assert margins.tower_gap_extra_m.value == 0.0
+    assert margins.basis("tower_gap_extra_m") is Basis.ENGINE_DESIGN_ASSUMPTION
+    plain = brief(project)
+    assert plain.design_margins.any_set is False
+    # the prototype generator plans on the legal minimum: a margin does not change its request
+    readings = Readings.of(project.layout)
+    assert request(design, readings, project.layout.floors) == request(
+        plain, readings, project.layout.floors)
+    with pytest.raises(ValidationError):
+        WorkspaceDefaults(design_margins={"setbak_extra_m": 1.0})
+    with pytest.raises(ValidationError):
+        WorkspaceDefaults(design_margins={"setback_extra_m": -1.0})

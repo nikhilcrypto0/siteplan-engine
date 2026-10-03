@@ -66,6 +66,7 @@
     },
     "BandEnvelope": {
       "additionalProperties": false,
+      "description": "The land one of ResolvedRules' height bands leaves to build on. It carries that band's\ntwo edges and is matched to it by them (`BuildableEnvelope.of_band`); which band a height\nfalls in is ResolvedRules' to say, never worked out again from these edges.",
       "properties": {
         "above_m": {
           "minimum": 0,
@@ -521,8 +522,8 @@
           "type": "array"
         },
         "schema_version": {
-          "const": "1.0",
-          "default": "1.0",
+          "const": "1.1",
+          "default": "1.1",
           "title": "Schema Version",
           "type": "string"
         }
@@ -532,7 +533,7 @@
     },
     "Shape": {
       "additionalProperties": false,
-      "description": "A polygon: its outer ring and any holes, metres, survey frame, not closed (the first\npoint is not repeated).",
+      "description": "A polygon: its outer ring and any holes, metres, survey frame, not closed (the first\npoint is not repeated). Every ring has at least three points and only finite coordinates.",
       "properties": {
         "holes": {
           "default": [],
@@ -709,7 +710,7 @@
       "$ref": "#/$defs/RuleLayers",
       "default": {
         "layers": [],
-        "schema_version": "1.0"
+        "schema_version": "1.1"
       }
     },
     "rules_ref": {
@@ -717,8 +718,8 @@
       "type": "string"
     },
     "schema_version": {
-      "const": "1.0",
-      "default": "1.0",
+      "const": "1.1",
+      "default": "1.1",
       "title": "Schema Version",
       "type": "string"
     },

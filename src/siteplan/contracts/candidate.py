@@ -18,7 +18,15 @@ from shapely import affinity
 from shapely.geometry import Polygon
 
 from siteplan.contracts.accounting import PartitionLedger, RuleLayers
-from siteplan.contracts.common import Contract, Finding, Part, Shape, Side
+from siteplan.contracts.common import (
+    Contract,
+    FacilityUse,
+    Finding,
+    Part,
+    Shape,
+    Side,
+    Surface,
+)
 from siteplan.contracts.design_brief import AmenitySetting
 from siteplan.contracts.prototype import TowerPrototype
 
@@ -59,9 +67,15 @@ class ClubHouse(Part):
 
 
 class PlacedAmenity(Part):
+    """A facility as placed. Its use and surface are what the generator says it placed (from the
+    firm's library, never from the name); None when nobody stated them. A validator holds them
+    against the brief's request of the same name and derives what counts as open space itself."""
+
     name: str
     shape: Shape
     setting: AmenitySetting = AmenitySetting.OUTDOOR
+    use: FacilityUse | None = None
+    surface: Surface | None = None
 
 
 class Cellars(Part):

@@ -1,10 +1,10 @@
 {
- "schema_version": "1.0",
+ "schema_version": "1.1",
  "candidate_id": "rectangle-1",
- "site_ref": "27469de975c61c39",
- "rules_ref": "5be5b81fb85db1b5",
- "brief_ref": "d560402c31b30883",
- "envelope_ref": "4b813d72ed04df12",
+ "site_ref": "c1f4dfd0d1ec156a",
+ "rules_ref": "ae71fbe17c3c0927",
+ "brief_ref": "a8d0e47c3636e4b5",
+ "envelope_ref": "3594b8c94e1a3b6e",
  "strategy": "Option A: Maximum yield",
  "seed": null,
  "interpretation_basis": {
@@ -13,7 +13,7 @@
  },
  "prototypes_used": [
   {
-   "schema_version": "1.0",
+   "schema_version": "1.1",
    "id": "rectangle-1-T1",
    "family": "LEGACY_RECTANGLE",
    "source_kind": "ENGINE_DEFAULT",
@@ -472,7 +472,7 @@
    "stretch": null
   },
   {
-   "schema_version": "1.0",
+   "schema_version": "1.1",
    "id": "rectangle-1-T2",
    "family": "LEGACY_RECTANGLE",
    "source_kind": "ENGINE_DEFAULT",
@@ -931,7 +931,7 @@
    "stretch": null
   },
   {
-   "schema_version": "1.0",
+   "schema_version": "1.1",
    "id": "rectangle-1-T3",
    "family": "LEGACY_RECTANGLE",
    "source_kind": "ENGINE_DEFAULT",
@@ -2698,7 +2698,7 @@
   ]
  },
  "partition": {
-  "schema_version": "1.0",
+  "schema_version": "1.1",
   "net_area_sqm": 15000.0,
   "tolerance": 0.005,
   "entries": [
@@ -4887,7 +4887,7 @@
   ]
  },
  "rule_layers": {
-  "schema_version": "1.0",
+  "schema_version": "1.1",
   "layers": [
    {
     "id": "setback",
