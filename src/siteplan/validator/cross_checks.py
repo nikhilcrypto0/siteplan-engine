@@ -19,9 +19,10 @@ from siteplan.contracts.validation import Check, Discrepancy
 from siteplan.units import sqm_to_sqft
 from siteplan.validator.accounting import Ledger
 from siteplan.validator.context import Context
+from siteplan.validator.drawn import Drawn
 from siteplan.validator.measure import TowerGeometry
 from siteplan.validator.parking import cellar_setback_m
-from siteplan.validator.shapes import union_of_all
+from siteplan.validator.shapes import mended, union_of_all
 
 FOOTPRINT_SQM = 0.1  # a footprint that differs by less than this is the same footprint
 FOOTPRINT_SHARE = 0.001  # or by this share of its area
@@ -58,6 +59,14 @@ def references(site: CanonicalSiteModel, rules: ResolvedRules, brief: DesignBrie
             if theirs != ours:
                 out.append(_d(item, "envelope", theirs, ours, False))
     return out
+
+
+def flaws(towers: tuple[TowerGeometry, ...], drawn: Drawn | None) -> list[Discrepancy]:
+    """Shapes that cross themselves. They were mended to be measured at all, but a layout that
+    draws one is not a layout to pass."""
+    found = [f for t in towers for f in t.flaws] + (list(drawn.flaws) if drawn else [])
+    return [_d("shape that crosses itself", "generator", problem,
+               "judged on the ground the shape encloses, mended", True) for problem in found]
 
 
 def footprints(towers: tuple[TowerGeometry, ...]) -> list[Discrepancy]:
@@ -182,12 +191,13 @@ def envelope_checks(ctx: Context, envelope: BuildableEnvelope) -> list[Discrepan
             out.append(_d(f"envelope setback, band {label}", "envelope", f"{band.setback_m:g} m",
                           f"{mine.setback_m:g} m", band.setback_m < mine.setback_m))
         land = ctx.net.buffer(-mine.setback_m).difference(keep_out)
-        stated = union_of_all([s.to_shapely() for s in band.buildable]).area
+        stated = union_of_all([mended(s.to_shapely())[0] for s in band.buildable]).area
         if abs(stated - land.area) > METRIC_SHARE * max(land.area, 1.0):
             out.append(_d(f"envelope buildable land, band {label}", "envelope",
                           f"{stated:,.1f} m²", f"{land.area:,.1f} m²", stated > land.area))
     if envelope.exclusions or not keep_out.is_empty:
-        stated = union_of_all([s.to_shapely() for e in envelope.exclusions for s in e.shapes])
+        stated = union_of_all([mended(s.to_shapely())[0]
+                               for e in envelope.exclusions for s in e.shapes])
         stated_area = stated.intersection(ctx.net).area
         if abs(stated_area - keep_out.area) > METRIC_SHARE * max(keep_out.area, 1.0):
             out.append(_d("envelope exclusions", "envelope", f"{stated_area:,.1f} m²",

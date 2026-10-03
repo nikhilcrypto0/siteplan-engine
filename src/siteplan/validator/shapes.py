@@ -13,6 +13,7 @@ from shapely.affinity import rotate
 from shapely.geometry import Polygon, box
 from shapely.geometry.base import BaseGeometry
 from shapely.ops import polylabel, unary_union
+from shapely.validation import explain_validity, make_valid
 
 EPS_M = 0.01  # a centimetre: below this a drawn edge and its neighbour are the same edge
 OPENING_SLACK_M = 0.005  # a part this close to the width asked is that wide
@@ -32,6 +33,16 @@ def polygons_of(geometry: BaseGeometry | None) -> list[Polygon]:
 def union_of_all(geometries) -> BaseGeometry:
     """The union of any number of geometries; empty when there are none."""
     return unary_union([g for g in geometries if g is not None and not g.is_empty])
+
+
+def mended(geometry: BaseGeometry) -> tuple[BaseGeometry, str]:
+    """The geometry as it can be measured, and what was wrong with it ('' when nothing was).
+    A shape that crosses itself breaks the geometry library's set operations, so it is rebuilt
+    from the ground it encloses, every lobe kept; whoever asks reports the flaw, for a shape
+    like that is a defect in the drawing, never something to pass."""
+    if geometry.is_valid:
+        return geometry, ""
+    return union_of_all(polygons_of(make_valid(geometry))), explain_validity(geometry)
 
 
 def opening(shape: BaseGeometry, width_m: float) -> BaseGeometry:

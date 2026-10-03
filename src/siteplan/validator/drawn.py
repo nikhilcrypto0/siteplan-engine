@@ -15,13 +15,25 @@ from shapely.geometry.base import BaseGeometry
 from siteplan.contracts.candidate import CandidateLayout, RoadKind
 from siteplan.contracts.common import Shape
 from siteplan.contracts.design_brief import AmenitySetting
-from siteplan.validator.shapes import polygons_of, union_of_all
+from siteplan.validator.shapes import mended, polygons_of, union_of_all
 
 BUILT_WORDS = ("CABIN", "ROOM", "SUBSTATION")
 
 
-def geometry_of(shapes: list[Shape]) -> BaseGeometry:
-    return union_of_all([s.to_shapely() for s in shapes])
+def taken(shapes: list[Shape], label: str, flaws: list[str]) -> list[BaseGeometry]:
+    """Each shape as geometry that can be measured. One that had to be mended (it crosses
+    itself) is written down in `flaws`, named by `label`."""
+    out = []
+    for n, shape in enumerate(shapes, 1):
+        geometry, flaw = mended(shape.to_shapely())
+        if flaw:
+            flaws.append(f"{label}{f', shape {n}' if len(shapes) > 1 else ''}: {flaw}")
+        out.append(geometry)
+    return out
+
+
+def geometry_of(shapes: list[Shape], label: str, flaws: list[str]) -> BaseGeometry:
+    return union_of_all(taken(shapes, label, flaws))
 
 
 @dataclass(frozen=True)
@@ -68,6 +80,7 @@ class Drawn:
     cellar_levels: int
     cellar_outline: BaseGeometry
     cellar_setback_claimed_m: float | None
+    flaws: tuple[str, ...]  # shapes that crossed themselves and were mended to be measured
 
     @property
     def buildings_only(self) -> bool:
@@ -101,20 +114,31 @@ class Drawn:
 def read(candidate: CandidateLayout) -> Drawn:
     program, circulation = candidate.program, candidate.circulation
     cellars = program.cellars
+    flaws: list[str] = []
+
+    def one(shape: Shape, label: str) -> BaseGeometry:
+        return union_of_all(taken([shape], label, flaws))
+
+    def pieces(shapes: list[Shape], label: str) -> tuple[Polygon, ...]:
+        return tuple(p for g in taken(shapes, label, flaws) for p in polygons_of(g))
+
     return Drawn(
-        roads=tuple(DrawnRoad(r.id, r.kind, r.declared_width_m, geometry_of(r.shapes),
-                              tuple(r.tags)) for r in circulation.roads),
-        gates=tuple(Gate(g.shape.to_shapely(), g.width_m) for g in circulation.gates),
-        fire_hardstanding=geometry_of(circulation.fire_hardstanding),
-        club=program.club_house.shape.to_shapely() if program.club_house else Polygon(),
+        roads=tuple(DrawnRoad(r.id, r.kind, r.declared_width_m,
+                              geometry_of(r.shapes, f"road {r.id}", flaws), tuple(r.tags))
+                    for r in circulation.roads),
+        gates=tuple(Gate(one(g.shape, "a gate"), g.width_m) for g in circulation.gates),
+        fire_hardstanding=geometry_of(circulation.fire_hardstanding, "fire hardstanding", flaws),
+        club=one(program.club_house.shape, "the club house") if program.club_house else Polygon(),
         club_floors=program.club_house.floors if program.club_house else 0,
-        amenities=tuple(DrawnAmenity(a.name, a.shape.to_shapely(), a.setting)
+        amenities=tuple(DrawnAmenity(a.name, one(a.shape, f"amenity {a.name}"), a.setting)
                         for a in program.amenities),
-        ramps=tuple(p for r in program.ramps for p in polygons_of(r.to_shapely())),
-        bays=tuple(p for b in program.bays for p in polygons_of(b.to_shapely())),
-        open_space=tuple(p for s in program.open_space for p in polygons_of(s.to_shapely())),
-        green_strip=geometry_of(program.green_strip),
+        ramps=pieces(program.ramps, "a ramp"),
+        bays=pieces(program.bays, "a parking bay"),
+        open_space=pieces(program.open_space, "open space"),
+        green_strip=geometry_of(program.green_strip, "the green strip", flaws),
         cellar_drawn=cellars is not None,
         cellar_levels=cellars.levels if cellars else 0,
-        cellar_outline=geometry_of(cellars.outline) if cellars else Polygon(),
-        cellar_setback_claimed_m=cellars.setback_m if cellars else None)
+        cellar_outline=geometry_of(cellars.outline, "the cellar outline", flaws) if cellars
+        else Polygon(),
+        cellar_setback_claimed_m=cellars.setback_m if cellars else None,
+        flaws=tuple(flaws))

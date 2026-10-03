@@ -18,6 +18,7 @@ from siteplan.contracts.design_brief import DesignBrief
 from siteplan.contracts.prototype import TowerPrototype
 from siteplan.contracts.resolved_rules import Band, BandKind, ResolvedRules
 from siteplan.validator.readings import COUNTED, EACH_OWN, NOT_COUNTED, TALLER_GOVERNS
+from siteplan.validator.shapes import mended
 
 TOL_M = 1e-6  # a length this close to the rule's is the rule's
 
@@ -34,6 +35,7 @@ class TowerGeometry:
     floor_height_m: float
     prototype: TowerPrototype
     placed: PlacedTower
+    flaws: tuple[str, ...] = ()  # shapes that crossed themselves and were mended to be measured
 
     @property
     def physical_height_m(self) -> float:
@@ -68,14 +70,32 @@ def tower_geometries(candidate: CandidateLayout, brief: DesignBrief) -> tuple[To
     towers = []
     for placed in candidate.towers:
         prototype = candidate.prototype(placed.prototype_id)
+        flaws: list[str] = []
+
+        def sound(shape, label: str, flaws=flaws, name=placed.name):
+            geometry, flaw = mended(shape.to_shapely())
+            if flaw:
+                flaws.append(f"{label} of {name}: {flaw}")
+            return geometry
+
+        def block(shape, label: str, sound=sound):
+            """A building as one polygon: a mended outline that falls in two is judged on the
+            ground round both (a building held to more ground can only be held to more)."""
+            geometry = sound(shape, label)
+            if isinstance(geometry, Polygon):
+                return geometry
+            hull = geometry.convex_hull
+            return hull if isinstance(hull, Polygon) else Polygon()
+
         towers.append(TowerGeometry(
-            name=placed.name, footprint=candidate.placed_footprint(placed),
-            stated=placed.footprint.to_shapely(),
-            cores=tuple(placed.world(z.shape.to_shapely()) for z in prototype.core_zones),
+            name=placed.name,
+            footprint=placed.world(block(prototype.footprint, "its prototype's footprint")),
+            stated=sound(placed.footprint, "the footprint it states"),
+            cores=tuple(placed.world(block(z.shape, "a core zone")) for z in prototype.core_zones),
             floors=placed.floors_above_stilt, has_stilt=placed.has_stilt,
             stilt_height_m=prototype.heights.stilt_height_m or standards.stilt_height_m.value,
             floor_height_m=prototype.heights.floor_to_floor_m or standards.floor_to_floor_m.value,
-            prototype=prototype, placed=placed))
+            prototype=prototype, placed=placed, flaws=tuple(flaws)))
     return tuple(towers)
 
 
