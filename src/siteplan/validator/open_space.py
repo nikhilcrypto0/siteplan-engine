@@ -25,8 +25,10 @@ from siteplan.validator.context import Context
 from siteplan.validator.fire import clear_band
 from siteplan.validator.measure import TOL_M
 from siteplan.validator.readings import Assignment, Cell, check_from, plain, run, verdict
-from siteplan.validator.shapes import narrower_than, opening, polygons_of, union_of_all
+from siteplan.validator.shapes import healed, narrower_than, opening, polygons_of, union_of_all
 from siteplan.validator.zones import gap_zones, setback_zone
+
+CRACK_M = 0.02  # pockets drawn this close to each other are one pocket
 
 
 @dataclass(frozen=True)
@@ -55,7 +57,7 @@ def _take_out(remaining: BaseGeometry, zone: BaseGeometry | None, why: str,
 
 def qualifying(ctx: Context, reading: str, spacing: str) -> Qualifying:
     d, rules = ctx.drawn, ctx.rules.open_space
-    declared = union_of_all(list(d.open_space))
+    declared = healed(union_of_all(list(d.open_space)), CRACK_M)
     removed: dict[str, float] = {}
     if declared.difference(ctx.net).area > 0:
         removed["outside the net plot"] = declared.difference(ctx.net).area

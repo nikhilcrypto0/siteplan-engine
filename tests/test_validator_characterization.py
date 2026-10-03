@@ -7,10 +7,10 @@ from pathlib import Path
 
 import pytest
 from contract_fixtures import SITES
-from validator_cases import inputs_of
+from validator_cases import inputs_of, made_up_case
 from validator_helpers import fixture, status, statuses
 
-from siteplan.cases import Case, load_cases, review
+from siteplan.cases import load_cases, review
 from siteplan.contracts.common import Status
 from siteplan.contracts.resolved_rules import STILT_IN_RULE_HEIGHT
 
@@ -67,24 +67,8 @@ def test_what_the_validator_adds_to_todays_checks_on_a_generated_layout():
 # --- cases: the firm's drawings as buildings and a plot ----------------------------------
 
 
-def _made_up_case(setback_of_stilt_6_block: float = 7.0) -> Case:
-    """A plot 200 x 60 m with four stilt + 8 blocks (27 m) and one stilt + 6 (21 m), drawn like
-    a firm that keeps 8 m round and between its tall blocks and 7 m round its low one."""
-    def block(name, floors, x0, y0, x1, y1):
-        return {"name": name, "floors": floors, "stilt_height_m": 3, "floor_height_m": 3,
-                "outline": [(x0, y0), (x1, y0), (x1, y1), (x0, y1)]}
-
-    low = setback_of_stilt_6_block
-    return Case(
-        name="Made up", evidence="firm_drawing", sources=["made up for the test"], authority="CMC",
-        inside_cure=True, abutting_road_m=18.288, net_plot=[(0, 0), (200, 0), (200, 60), (0, 60)],
-        buildings=[block("Tower 1", 8, 8, 8, 48, 26), block("Tower 2", 8, 56, 8, 96, 26),
-                   block("Tower 3", 8, 104, 8, 144, 26), block("Tower 4", 8, 152, 8, 192, 26),
-                   block("Tower 5", 6, low, 60 - low - 19, low + 40, 60 - low)])
-
-
 def test_the_validator_fails_a_made_up_firm_drawing_where_the_checker_does():
-    case = _made_up_case()
+    case = made_up_case()
     expected = {f.rule for f in review(case).failures}
     assert expected  # the drawing keeps 8 m where the stilt-counted figure is 9 m
     report = inputs_of(case).report()
@@ -95,9 +79,9 @@ def test_a_block_at_exactly_the_high_rise_threshold_is_not_passed_without_its_ta
     """Stilt + 6 at 3 m is exactly 21 m. The resolved bands have no Table IV row for exactly 21
     m, so it is held to the row above (the stricter): 7 m round it does not meet 8 m, and the
     validator says UNVERIFIED where the checker, which reads the row below, says PASS."""
-    report = inputs_of(_made_up_case()).report()
+    report = inputs_of(made_up_case()).report()
     assert status(report, "All-round setback: Tower 5") is Status.UNVERIFIED
-    held = status(inputs_of(_made_up_case(setback_of_stilt_6_block=8.5)).report(),
+    held = status(inputs_of(made_up_case(setback_of_stilt_6_block=8.5)).report(),
                   "All-round setback: Tower 5")
     assert held is Status.PASS  # meets the stricter row, so it meets either
 
@@ -105,7 +89,7 @@ def test_a_block_at_exactly_the_high_rise_threshold_is_not_passed_without_its_ta
 def test_with_the_stilt_left_open_the_firms_8_m_is_unverified_not_a_fail():
     """The firm's drawing behaves as if the stilt does not count (24 m needs 8 m): a reading the
     rules have not ruled out, so the validator does not call it illegal."""
-    report = inputs_of(_made_up_case(), stilt_reading=None).report()
+    report = inputs_of(made_up_case(), stilt_reading=None).report()
     assert status(report, "All-round setback: Tower 1") is Status.UNVERIFIED
     assert [c.finding.rule for c in report.legal if c.finding.status is Status.FAIL] == []
 

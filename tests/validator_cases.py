@@ -99,3 +99,19 @@ def inputs_of(case: Case, stilt_reading: str | None = "counted") -> Inputs:
         brief_ref=digest(brief), strategy="case: buildings only", prototypes_used=prototypes,
         towers=towers, caveats=["Only the buildings are drawn: nothing else is known."])
     return Inputs(site, rules, brief, candidate, None)
+
+
+def made_up_case(setback_of_stilt_6_block: float = 7.0) -> Case:
+    """A plot 200 x 60 m with four stilt + 8 blocks (27 m) and one stilt + 6 (21 m), drawn like
+    a firm that keeps 8 m round and between its tall blocks and 7 m round its low one."""
+    def block(name, floors, x0, y0, x1, y1):
+        return {"name": name, "floors": floors, "stilt_height_m": 3, "floor_height_m": 3,
+                "outline": [(x0, y0), (x1, y0), (x1, y1), (x0, y1)]}
+
+    low = setback_of_stilt_6_block
+    return Case(
+        name="Made up", evidence="firm_drawing", sources=["made up for the test"], authority="CMC",
+        inside_cure=True, abutting_road_m=18.288, net_plot=[(0, 0), (200, 0), (200, 60), (0, 60)],
+        buildings=[block("Tower 1", 8, 8, 8, 48, 26), block("Tower 2", 8, 56, 8, 96, 26),
+                   block("Tower 3", 8, 104, 8, 144, 26), block("Tower 4", 8, 152, 8, 192, 26),
+                   block("Tower 5", 6, low, 60 - low - 19, low + 40, 60 - low)])
