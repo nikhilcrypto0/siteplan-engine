@@ -10,6 +10,10 @@ The verdict rule is here, not in the validator, so every report is held to the s
 FAIL if any legal check fails or a discrepancy blocks a pass; otherwise UNVERIFIED if any legal
 check is unverified; otherwise PASS. NOT_CHECKED is listed beside the verdict, never folded
 into it.
+
+Design targets (`design_targets`) sit beside the verdict and never in it: each row shows a legal
+minimum, the target the brief's design margin puts above it, and what the layout provides. The
+legal checks go on holding the layout to the legal minimum alone.
 """
 
 from __future__ import annotations
@@ -17,10 +21,12 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Literal
 
-from pydantic import model_validator
+from pydantic import Field, model_validator
 
 from siteplan.contracts.accounting import PartitionLedger, RuleLayers
-from siteplan.contracts.common import Contract, Finding, Part, Status
+from siteplan.contracts.common import Basis, Contract, Finding, Part, Status
+
+TARGET_TOL = 1e-6  # a target is met when what is provided reaches it within this
 
 
 class Family(StrEnum):
@@ -118,6 +124,56 @@ class Accounting(Part):
     rule_layers: RuleLayers | None = None
 
 
+class TargetItem(StrEnum):
+    SETBACK = "setback"
+    TOWER_GAP = "tower_gap"
+    ROAD_WIDTH = "road_width"
+    OPEN_SPACE = "open_space"
+    PARKING = "parking"
+
+
+class TargetCheck(Part):
+    """A legal minimum, the design target above it and what the layout provides, side by side.
+
+    Never a legal check: the legal verdict comes from the legal checks, which hold the layout to
+    the legal minimum alone. The target is the legal minimum plus the brief's design margin (the
+    firm's standard or the engine's design assumption, never law); with no margin set it is the
+    legal minimum itself, and the row still shows how much the layout keeps in hand. Where the
+    legal minimum depends on an open reading there is a row for each reading."""
+
+    item: TargetItem
+    subject: str | None = None  # the tower, pair of towers or road the row is about
+    readings: dict[str, str] = {}  # interpretation id -> the reading this row holds under
+    unit: Literal["m", "m²"]
+    legal_minimum: float = Field(ge=0)
+    target: float = Field(ge=0)
+    provided: float = Field(ge=0)
+    basis: Basis  # what kind of fact the margin is
+    note: str = ""
+
+    @model_validator(mode="after")
+    def _a_target_is_above_the_law_and_is_not_law(self) -> TargetCheck:
+        if self.target < self.legal_minimum - TARGET_TOL:
+            raise ValueError(f"{self.item}: a design target is never below the legal minimum")
+        if self.basis not in (Basis.FIRM_STANDARD, Basis.ENGINE_DESIGN_ASSUMPTION):
+            raise ValueError(f"{self.item}: a design margin is the firm's standard or the "
+                             f"engine's design assumption, never {self.basis}")
+        return self
+
+    @property
+    def margin(self) -> float:
+        return self.target - self.legal_minimum
+
+    @property
+    def in_hand(self) -> float:
+        """What the layout provides beyond the legal minimum (negative when it falls short)."""
+        return self.provided - self.legal_minimum
+
+    @property
+    def meets_target(self) -> bool:
+        return self.provided >= self.target - TARGET_TOL
+
+
 class Verdict(Part):
     legal: LegalVerdict
     program: ProgramVerdict
@@ -152,6 +208,7 @@ class ValidationReport(Contract):
     recomputed: Recomputed = Recomputed()
     legal: list[Check] = []
     program: list[Check] = []
+    design_targets: list[TargetCheck] = []  # beside the verdict, never in the legal one
     accounting: Accounting = Accounting()
     cross_checks: list[Discrepancy] = []
     not_checked: list[str] = []

@@ -1,10 +1,10 @@
 {
- "schema_version": "1.0",
- "candidate_ref": "382ffc80ba13d621",
- "site_ref": "87617542d2983472",
- "rules_ref": "03ce7be56002e969",
- "brief_ref": "5d7adecf13031b18",
- "envelope_ref": "c73c820e7187dc3c",
+ "schema_version": "1.1",
+ "candidate_ref": "b11944e4315f3e47",
+ "site_ref": "d2b00fe7c3ca387b",
+ "rules_ref": "5bf851c076f6bccf",
+ "brief_ref": "13b2d1409d57f83f",
+ "envelope_ref": "09712be65d0e3b1c",
  "validator_version": "fixture: the generator's own findings restated, not an independent validation",
  "recomputed": {
   "towers": [],
@@ -510,9 +510,10 @@
    "by_reading": {}
   }
  ],
+ "design_targets": [],
  "accounting": {
   "partition": {
-   "schema_version": "1.0",
+   "schema_version": "1.1",
    "net_area_sqm": 16440.0,
    "tolerance": 0.005,
    "entries": [
@@ -2657,7 +2658,7 @@
   },
   "partition_problems": [],
   "rule_layers": {
-   "schema_version": "1.0",
+   "schema_version": "1.1",
    "layers": [
     {
      "id": "setback",

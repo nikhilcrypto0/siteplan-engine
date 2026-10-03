@@ -1,6 +1,7 @@
 # Production architecture
 
-> Last verified: 2026-10-02 (approved 2026-10-02, revision 2 with four semantic corrections)
+> Last verified: 2026-10-03 (approved 2026-10-02, revision 2 with four semantic corrections;
+> contracts 1.1 approved 2026-10-03 with three clarifications)
 
 The prototype (tag `v0.9-prototype`, 1af547a) proved the rules on two real sites. This document
 is the permanent architecture it moves to, stage by stage, without breaking what works. The
@@ -38,7 +39,8 @@ contract.**
   amenities and whether each belongs in the club house, parking preferences), the height intent
   ("Stilt + N" notation with its evidence, the most the law allows, fixed or a range; mixed
   heights allowed), the firm's standards (stilt and floor-to-floor heights, loading, cellar
-  standards, longest block, cores) and the optimizer's objectives (the three Pareto points,
+  standards, longest block, cores), the design margins kept in hand above the legal minimums
+  (none unless the firm sets them) and the optimizer's objectives (the three Pareto points,
   priorities, soft preferences). No site fact, no legal value.
 - **ResolvedRules** (`resolved_rules.py`): what the law asks of this site. Every value carries
   clause, basis and status. **Heights are limits in metres on a named measure** (the Table IV
@@ -46,8 +48,8 @@ contract.**
   questions are Interpretations with their readings; `selected: ALL` means every consumer
   evaluates every reading and a result that holds under only some is UNVERIFIED. Required:
   `stilt_in_rule_height` (ALL), `open_space_basis` (ALL), `circulation_in_setback` (ALL),
-  `fire_turning_radius`, `approach_width`, `mixed_height_spacing`, `visitor_parking`,
-  `amenity_share`.
+  `tot_lot_surface` (ALL), `open_space_other_uses` (ALL), `fire_turning_radius`,
+  `approach_width`, `mixed_height_spacing`, `visitor_parking`, `amenity_share`.
 - **BuildableEnvelope** (`envelope.py`): statutory exclusions fixed in place (water buffers, HT
   corridors), the setback envelope and buildable land per height band, the width profile
   (regions with their inscribed widths, **reported, never judged**: whether a narrow arm can take
@@ -67,7 +69,8 @@ contract.**
   the brief and the candidate, recomputing what it checks; the envelope only for cross-checking.
   Legal verdict FAIL if any legal check fails or a discrepancy blocks a pass, else UNVERIFIED if
   any is unverified, else PASS; NOT_CHECKED listed beside it; the program verdict (mix, units,
-  amenities asked) never changes the legal one.
+  amenities asked) never changes the legal one. Design targets are listed beside the verdict:
+  the legal minimum, the target the brief's margin puts above it, and what is provided.
 
 ### The four semantic corrections (2026-10-02)
 
@@ -90,10 +93,61 @@ contract.**
    site area. Setbacks, buffers, fire bands, green strips and other development restrictions
    never reduce it because building is barred there; they are rule layers.
 
+### Contracts 1.1 (2026-10-03)
+
+Found by the four streams working against 1.0, and approved with three clarifications. The
+meaning lives in the contract as methods, so the optimizer and the validator cannot read it
+differently.
+
+1. **A height limit says three separate things** (`HeightLimit`): whether there is a number
+   (`bound`: BOUNDED, UNBOUNDED, NOT_EVALUATED), whether the limit is in force (`applicability`:
+   APPLIES, DOES_NOT_APPLY, or UNKNOWN when its condition rests on a site fact nobody settled),
+   and how far the inputs behind the number are confirmed (`status`). One table judges a height
+   for everyone (`HeightLimit.evaluate`): not applied when it does not apply; PASS within a
+   bound, even when it is unknown whether the limit applies; FAIL beyond a bound that applies on
+   confirmed inputs; UNVERIFIED beyond a bound that may apply, on unconfirmed inputs, or when
+   the limit cannot be worked out. A generator does not offer a height beyond a bound that
+   applies or may apply (`HeightLimit.beyond`).
+2. **A prohibited high-rise is not a permission for anything lower** (`HeightRules.high_rise`).
+   Eligibility is ALLOWED, PROHIBITED or UNVERIFIED and follows from its grounds (the road, the
+   plot size). PROHIBITED says only that no building of the high-rise height or more may stand
+   here. What may be built below it (the permissible height, Table III setbacks, road
+   conditions, spacing) is A2's to resolve and D2's to validate; until then that band is not
+   modelled and no stream treats "below 21 m" as passing.
+3. **Every height falls in exactly one band** (`HeightRules.band_for`). Band edges say whether
+   they are included: a building of exactly 21 m is a high-rise (rule 2(f)) with a band of its
+   own, on Table IV's first row. An envelope band is matched to its rules band by its edges
+   (`BuildableEnvelope.of_band`).
+4. **A facility states its use and its surface; whether its ground counts as organised open
+   space is derived** (`OpenSpaceRules.qualifies`), never declared and never read off a name.
+   The rule names greenery, tot lot and soft landscaping, "etc.": those uses on soft ground
+   count; whether a tot-lot must be soft (`tot_lot_surface`) and what the "etc." takes in
+   (`open_space_other_uses`) are open readings evaluated every way, so the engine is never
+   stricter than the text; a use or surface the firm's library does not state is UNKNOWN and
+   the result UNVERIFIED. A facility's ledger ground follows its stated surface.
+5. **Design margins are never law** (`DesignBrief.design_margins`, set in the firm's workspace
+   file; none are invented). The optimizer aims at the legal minimum plus the margin; the
+   validator judges against the legal minimum alone; a report shows the legal minimum, the
+   target and what is provided (`ValidationReport.design_targets`). Each margin is the firm's
+   standard or the engine's design assumption. The prototype generator applies none.
+6. **Carried as read:** the clearance from electricity lines (rule 3(c)(i): 3 m high-tension,
+   1.5 m low-tension, vertical and horizontal) and what a ramp in a side or rear setback leaves
+   for fire vehicles (rule 13(c)(vii): 7 m). **Removed:** the 5% of site for amenities above
+   5 acres, which is rule 9(o) and 10(i) (row and cluster housing) and does not apply here.
+7. **Values that cannot be are refused:** coordinates that are not finite, a hole of two
+   points, a bay under a metre, a parking measurement called law, shares outside their range,
+   a cellar table with no row for the largest sites, objective priorities outside the named set.
+
+The adapters follow: an access road's legal width is never marked confirmed merely because the
+project gave no status (its status follows `abutting_road_status`, and is unverified when
+nothing says); the brief and the placed facilities carry the use and surface the firm's
+amenity library states, and nothing its names suggest.
+
 ### Shared types and adapters
 
 `common.py`: `Shape` (coordinates in the survey's metres), `Sourced`, `SourceKind` (SURVEY,
-ARCHITECT, DOCUMENT, FIRM_STANDARD, FIRM_FINISHED_PLAN, ENGINE_DEFAULT, TEST_PROFILE), reuse of
+ARCHITECT, DOCUMENT, FIRM_STANDARD, FIRM_FINISHED_PLAN, ENGINE_DEFAULT, TEST_PROFILE), `Surface`
+and `FacilityUse` (what a facility's ground is made of and what it is for), reuse of
 `Provenance`, `Finding`, `Status` and `Basis` (moved to `basis.py` so the contracts import no
 generator code). `src/siteplan/adapters/` converts Project, LayoutRequest and LayoutOption to
 the contracts and back; `option_keys` keeps the chat tool's reply. Contract fixtures on made-up
@@ -143,7 +197,8 @@ P0  integration (done): contracts, fixtures, adapters, baseline, test classes, l
 
 A1, B, D and C1 start in parallel after P0, against the contracts and the contract fixtures.
 Merge order: P0, D, A1, B, C1, C2, A2, D2, C3. A contract changes only through integration,
-with a version bump; every branch rebases.
+with a version bump; every branch then takes the change in (a merge of the integration branch,
+since pushed branches are never rewritten) and is retested alone before it is integrated.
 
 ## 6. Acceptance criteria
 

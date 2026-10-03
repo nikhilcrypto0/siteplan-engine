@@ -1,7 +1,7 @@
 {
- "schema_version": "1.0",
- "site_ref": "27469de975c61c39",
- "rules_ref": "5be5b81fb85db1b5",
+ "schema_version": "1.1",
+ "site_ref": "c1f4dfd0d1ec156a",
+ "rules_ref": "ae71fbe17c3c0927",
  "exclusions": [],
  "bands": [
   {
@@ -15,6 +15,62 @@
    "area_sqm": 0.0,
    "green_strip_applies": null,
    "note": "Table III (rule 5) is not encoded yet: A2 reads it from the order"
+  },
+  {
+   "above_m": 21.0,
+   "up_to_m": 21.0,
+   "kind": "HIGH_RISE",
+   "modelled": true,
+   "setback_m": 7.0,
+   "setback_envelope": [
+    {
+     "outer": [
+      [
+       143.0,
+       7.0
+      ],
+      [
+       7.0,
+       7.0
+      ],
+      [
+       7.0,
+       93.0
+      ],
+      [
+       143.0,
+       93.0
+      ]
+     ],
+     "holes": []
+    }
+   ],
+   "buildable": [
+    {
+     "outer": [
+      [
+       143.0,
+       7.0
+      ],
+      [
+       7.0,
+       7.0
+      ],
+      [
+       7.0,
+       93.0
+      ],
+      [
+       143.0,
+       93.0
+      ]
+     ],
+     "holes": []
+    }
+   ],
+   "area_sqm": 11696.0,
+   "green_strip_applies": false,
+   "note": ""
   },
   {
    "above_m": 21.0,
@@ -322,8 +378,92 @@
   }
  ],
  "rule_layers": {
-  "schema_version": "1.0",
+  "schema_version": "1.1",
   "layers": [
+   {
+    "id": "setback 21 m",
+    "kind": "SETBACK",
+    "shapes": [
+     {
+      "outer": [
+       [
+        0.0,
+        0.0
+       ],
+       [
+        0.0,
+        100.0
+       ],
+       [
+        150.0,
+        100.0
+       ],
+       [
+        150.0,
+        0.0
+       ]
+      ],
+      "holes": [
+       [
+        [
+         143.0,
+         93.0
+        ],
+        [
+         7.0,
+         93.0
+        ],
+        [
+         7.0,
+         7.0
+        ],
+        [
+         143.0,
+         7.0
+        ]
+       ]
+      ]
+     }
+    ],
+    "clause": "G.O.168 rule 7(a)(x), Table IV as substituted by G.O.Ms.No.50 of 2019; G.O.168 rule 7(a)(iii) (setbacks of a high-rise on the net plot left after road widening); rule 5(f)(ii) for Table III",
+    "basis": "LEGAL_RULE",
+    "status": "VERIFIED",
+    "interpretation_ref": null,
+    "applies_to": "21 m",
+    "permits": [
+     {
+      "use": "TOWER",
+      "permit": "FORBIDDEN",
+      "condition": null,
+      "interpretation_ref": null
+     },
+     {
+      "use": "SURFACE_PARKING",
+      "permit": "FORBIDDEN",
+      "condition": null,
+      "interpretation_ref": null
+     },
+     {
+      "use": "ROAD",
+      "permit": "CONDITIONAL",
+      "condition": "only under the reading that circulation may run inside the setback; not settled by the text",
+      "interpretation_ref": "circulation_in_setback"
+     },
+     {
+      "use": "FIRE_HARDSTANDING",
+      "permit": "CONDITIONAL",
+      "condition": "only under the reading that circulation may run inside the setback; not settled by the text",
+      "interpretation_ref": "circulation_in_setback"
+     },
+     {
+      "use": "RAMP",
+      "permit": "CONDITIONAL",
+      "condition": "side or rear setback only, leaving 7 m (13(c)(vii))",
+      "interpretation_ref": null
+     }
+    ],
+    "area_sqm": 3304.0
+   },
    {
     "id": "setback 21-24 m",
     "kind": "SETBACK",
@@ -588,12 +728,20 @@
    "note": ""
   },
   {
+   "rule": "High-rise eligibility",
+   "status": "INFO",
+   "measured": "ALLOWED",
+   "required": "road_width: 18.29 m, at least 12 m; plot_size: 15,000.0 m², at least 2,000 m²",
+   "clause": "G.O.168 rule 7(a)(ii)",
+   "note": ""
+  },
+  {
    "rule": "Rule-height limit",
    "status": "INFO",
    "measured": "30 m",
    "required": "Table IV by road",
    "clause": "G.O.168 rule 7(a)(x), Table IV as substituted by G.O.Ms.No.50 of 2019",
-   "note": ""
+   "note": "the 18.29 m road serves buildings up to 30 m"
   }
  ]
 }

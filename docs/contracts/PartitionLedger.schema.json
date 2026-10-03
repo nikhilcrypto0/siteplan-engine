@@ -80,7 +80,7 @@
     },
     "Shape": {
       "additionalProperties": false,
-      "description": "A polygon: its outer ring and any holes, metres, survey frame, not closed (the first\npoint is not repeated).",
+      "description": "A polygon: its outer ring and any holes, metres, survey frame, not closed (the first\npoint is not repeated). Every ring has at least three points and only finite coordinates.",
       "properties": {
         "holes": {
           "default": [],
@@ -146,8 +146,8 @@
       "type": "number"
     },
     "schema_version": {
-      "const": "1.0",
-      "default": "1.0",
+      "const": "1.1",
+      "default": "1.1",
       "title": "Schema Version",
       "type": "string"
     },
