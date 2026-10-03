@@ -43,6 +43,8 @@ PRIORITY = (U.TOWER, U.CLUB_HOUSE, U.OTHER_BUILT, U.RAMP, U.ROAD, U.FIRE_HARDSTA
 MAY_SHARE = {frozenset((U.ROAD, U.FIRE_HARDSTANDING)), frozenset((U.SOFT_OPEN_SPACE,
                                                                    U.HARD_AMENITY)),
              frozenset((U.SOFT_OPEN_SPACE, U.GREEN_STRIP))}
+# Uses of which two separate things cannot stand on the same ground.
+ONE_AT_A_TIME = (U.TOWER, U.OTHER_BUILT, U.HARD_AMENITY, U.SURFACE_PARKING)
 CONFLICT_SQM = 0.05  # less than this of overlap is the edges of two drawn shapes meeting
 PLAY_SHARE = 0.5  # an amenity this much on open space is the open space's own ground
 LEFT_UNUSED = "ground the candidate draws nothing on"
@@ -117,11 +119,18 @@ def claims_of(ctx: Context) -> list[Claim]:
 
 
 def _conflicts(claims: list[Claim]) -> list[Overlap]:
-    """Drawn things of different uses on the same ground (a use is merged with itself first, so
-    two roads that meet are one road)."""
+    """Drawn things on the same ground: two of a use that cannot share it (two blocks, two bays),
+    and two of different uses (a use is merged with itself first, so two roads that meet are one
+    road)."""
     by_use = {u: union_of_all([c.ground for c in claims if c.use is u]) for u in PRIORITY}
     names = {u: ", ".join(c.ref for c in claims if c.use is u) for u in PRIORITY}
     out = []
+    for use in ONE_AT_A_TIME:
+        for a, b in combinations([c for c in claims if c.use is use], 2):
+            area = a.ground.intersection(b.ground).area
+            if area > CONFLICT_SQM:
+                out.append(Overlap(f"{use.value} {a.ref} and {use.value} {b.ref} overlap by "
+                                   f"{area:,.2f} m²", area))
     for a, b in combinations([u for u in PRIORITY if u is not U.BUFFER_LAND], 2):
         if frozenset((a, b)) in MAY_SHARE or by_use[a].is_empty or by_use[b].is_empty:
             continue

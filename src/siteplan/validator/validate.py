@@ -50,7 +50,7 @@ def _legal_checks(ctx: Context, ground: Ground, ledger: accounting.Ledger
     legal += blocks.setback_checks(ctx) + blocks.spacing_checks(ctx)
     legal += roads.road_checks(ctx, ground)
     legal += _present(roads.setback_circulation_check(ctx))
-    legal += fire.fire_checks(ctx)
+    legal += fire.fire_checks(ctx, ground)
     space, space_quantities = open_space.open_space_checks(ctx)
     legal += space + open_space.pocket_checks(ctx)
     legal += [land_checks.green_strip_check(ctx)]

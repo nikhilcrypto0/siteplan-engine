@@ -14,11 +14,19 @@ from siteplan.contracts.candidate import CandidateLayout
 from siteplan.contracts.design_brief import DesignBrief
 from siteplan.contracts.resolved_rules import STILT_IN_RULE_HEIGHT, ResolvedRules
 from siteplan.contracts.site_model import CanonicalSiteModel
+from siteplan.provenance import Provenance
 from siteplan.validator import drawn as drawing
 from siteplan.validator import site_geometry
 from siteplan.validator.drawn import Drawn
 from siteplan.validator.measure import HeightClass, TowerGeometry, classify, tower_geometries
 from siteplan.validator.site_geometry import SiteGeometry
+
+
+def is_known(sourced) -> bool:
+    """A site fact that is stated and not marked UNVERIFIED: an answer of 'unknown' is not an
+    answer."""
+    return (sourced is not None and sourced.value is not None
+            and sourced.status is not Provenance.UNVERIFIED)
 
 
 @dataclass(frozen=True)
