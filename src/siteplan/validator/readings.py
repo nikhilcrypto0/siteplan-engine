@@ -16,7 +16,7 @@ import itertools
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 
-from siteplan.contracts.common import Finding, Status
+from siteplan.contracts.common import Basis, Finding, Provenance, Status
 from siteplan.contracts.resolved_rules import ResolvedRules
 from siteplan.contracts.validation import Check, Family, combine_readings
 
@@ -48,6 +48,15 @@ def unknown_reading(interpretation_id: str, reading: str) -> Cell:
     return Cell(Status.UNVERIFIED, f"reading '{reading}' of {interpretation_id}",
                 "a reading this validator can evaluate",
                 "The reading is not one the validator knows how to evaluate; it is not guessed.")
+
+
+def basis_note(rule_value) -> str:
+    """What a rule value rests on, when that is not an order's own text: an unresolved reading, a
+    planning assumption, something nobody has confirmed. Empty for a settled, verified value."""
+    if rule_value.status is Provenance.VERIFIED and rule_value.basis is Basis.LEGAL_RULE:
+        return ""
+    return (f"Rests on {rule_value.basis.value}, {rule_value.status.value}"
+            + (f": {rule_value.note}" if rule_value.note else "."))
 
 
 def verdict(ok: bool) -> Status:

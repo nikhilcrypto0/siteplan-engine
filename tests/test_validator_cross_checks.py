@@ -260,3 +260,10 @@ def test_a_net_plot_nobody_has_confirmed_is_not_a_basis_for_a_pass():
         lambda s: setattr(s.net_plot, "status", Provenance.UNVERIFIED))
     c = check(inputs.report(), "Net plot")
     assert c.finding.status is Z.UNVERIFIED and "not confirmed" in c.finding.note
+
+
+def test_a_tower_floor_area_claimed_smaller_than_it_is_blocks():
+    def shrink(candidate):
+        candidate.metrics.tower_floor_sqft *= 0.9
+    assert _discrepancy(fixture("rectangle").edited(shrink).report(),
+                        "tower floor area").blocks_pass

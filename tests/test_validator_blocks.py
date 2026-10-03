@@ -340,3 +340,47 @@ def test_a_limit_that_rests_on_an_unconfirmed_input_settles_nothing_even_when_ex
     report = fixture("rectangle").with_rules(unconfirmed).report()
     c = next(x for x in report.legal if x.finding.rule.startswith("Rule-height limit"))
     assert c.finding.status is Z.UNVERIFIED
+
+
+def _limit(**fields):
+    from siteplan.contracts.resolved_rules import HeightLimit, HeightMeasure
+
+    def add(rules):
+        base = dict(measure=HeightMeasure.PHYSICAL_HEIGHT, max_m=25.0, reason="a made-up cap",
+                    clause="made up", status=Provenance.VERIFIED, applies_if=None)
+        rules.height.limits.append(HeightLimit(**{**base, **fields}))
+    return add
+
+
+def test_a_limit_on_the_physical_height_in_the_rules_is_held_against_the_tallest_tower():
+    report = fixture("rectangle").with_rules(_limit()).report()
+    c = check(report, "Physical-height limit: a made-up cap")
+    assert c.finding.status is Z.FAIL and "27.00 m" in c.finding.measured
+    ok = fixture("rectangle").with_rules(_limit(max_m=30.0)).report()
+    assert status(ok, "Physical-height limit: a made-up cap") is Z.PASS
+
+
+def test_a_limit_that_depends_on_a_condition_or_an_unconfirmed_input_is_unverified():
+    for fields in ({"applies_if": "the road ends at the plot"}, {"status": Provenance.UNVERIFIED},
+                   {"max_m": None}):
+        report = fixture("rectangle").with_rules(_limit(**fields)).report()
+        assert status(report, "Physical-height limit: a made-up cap") is Z.UNVERIFIED, fields
+
+
+def test_the_dead_end_limit_in_the_rules_is_left_to_the_fire_check_that_reads_the_site():
+    names = [c.finding.rule for c in fixture("rectangle").report().legal]
+    assert not [n for n in names if n.startswith("Physical-height limit")]
+
+
+def _small_site(site):
+    site.net_plot.value = shape(box(0, 0, 40, 40))
+    site.ownership.net_sqm.value = site.ownership.gross_sqm.value = 1600.0
+
+
+def test_a_building_of_18_to_21_m_on_a_plot_of_750_to_2000_m2_is_a_question_about_tdr():
+    inputs = fixture("small_plot").with_site(_small_site)  # 18 m with the stilt, 15 m without
+    c = check(inputs.report(), "TDR for a building of 18 to 21 m")
+    assert c.finding.status is Z.UNVERIFIED and "T1" in c.finding.measured
+    assert c.by_reading[STILT_IN_RULE_HEIGHT] == {COUNTED: Z.UNVERIFIED, NOT_COUNTED: Z.PASS}
+    assert "TDR for a building of 18 to 21 m" not in {
+        x.finding.rule for x in fixture("small_plot").report().legal}  # a 3,000 m² plot: none
