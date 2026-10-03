@@ -325,8 +325,8 @@
           "type": "number"
         },
         "schema_version": {
-          "const": "1.0",
-          "default": "1.0",
+          "const": "1.1",
+          "default": "1.1",
           "title": "Schema Version",
           "type": "string"
         },
@@ -559,8 +559,8 @@
           "type": "array"
         },
         "schema_version": {
-          "const": "1.0",
-          "default": "1.0",
+          "const": "1.1",
+          "default": "1.1",
           "title": "Schema Version",
           "type": "string"
         }
@@ -570,7 +570,7 @@
     },
     "Shape": {
       "additionalProperties": false,
-      "description": "A polygon: its outer ring and any holes, metres, survey frame, not closed (the first\npoint is not repeated).",
+      "description": "A polygon: its outer ring and any holes, metres, survey frame, not closed (the first\npoint is not repeated). Every ring has at least three points and only finite coordinates.",
       "properties": {
         "holes": {
           "default": [],
@@ -627,6 +627,87 @@
         "INFO"
       ],
       "title": "Status",
+      "type": "string"
+    },
+    "TargetCheck": {
+      "additionalProperties": false,
+      "description": "A legal minimum, the design target above it and what the layout provides, side by side.\n\nNever a legal check: the legal verdict comes from the legal checks, which hold the layout to\nthe legal minimum alone. The target is the legal minimum plus the brief's design margin (the\nfirm's standard or the engine's design assumption, never law); with no margin set it is the\nlegal minimum itself, and the row still shows how much the layout keeps in hand. Where the\nlegal minimum depends on an open reading there is a row for each reading.",
+      "properties": {
+        "basis": {
+          "$ref": "#/$defs/Basis"
+        },
+        "item": {
+          "$ref": "#/$defs/TargetItem"
+        },
+        "legal_minimum": {
+          "minimum": 0,
+          "title": "Legal Minimum",
+          "type": "number"
+        },
+        "note": {
+          "default": "",
+          "title": "Note",
+          "type": "string"
+        },
+        "provided": {
+          "minimum": 0,
+          "title": "Provided",
+          "type": "number"
+        },
+        "readings": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "default": {},
+          "title": "Readings",
+          "type": "object"
+        },
+        "subject": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Subject"
+        },
+        "target": {
+          "minimum": 0,
+          "title": "Target",
+          "type": "number"
+        },
+        "unit": {
+          "enum": [
+            "m",
+            "m\u00b2"
+          ],
+          "title": "Unit",
+          "type": "string"
+        }
+      },
+      "required": [
+        "item",
+        "unit",
+        "legal_minimum",
+        "target",
+        "provided",
+        "basis"
+      ],
+      "title": "TargetCheck",
+      "type": "object"
+    },
+    "TargetItem": {
+      "enum": [
+        "setback",
+        "tower_gap",
+        "road_width",
+        "open_space",
+        "parking"
+      ],
+      "title": "TargetItem",
       "type": "string"
     },
     "TowerMeasure": {
@@ -729,6 +810,14 @@
       "title": "Cross Checks",
       "type": "array"
     },
+    "design_targets": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/TargetCheck"
+      },
+      "title": "Design Targets",
+      "type": "array"
+    },
     "envelope_ref": {
       "anyOf": [
         {
@@ -779,8 +868,8 @@
       "type": "string"
     },
     "schema_version": {
-      "const": "1.0",
-      "default": "1.0",
+      "const": "1.1",
+      "default": "1.1",
       "title": "Schema Version",
       "type": "string"
     },

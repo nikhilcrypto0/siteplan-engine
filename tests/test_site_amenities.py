@@ -1,12 +1,17 @@
 """The master-plan layer: facilities placed in the ground the buildings leave."""
 
+from pathlib import Path
+
 import pytest
+from pydantic import ValidationError
 from shapely.geometry import Point, box
 
+from siteplan.contracts.common import FacilityUse, Surface
 from siteplan.layout import LayoutRequest, solve
 from siteplan.library import FlatLibrary
 from siteplan.site_amenities import AmenityLibrary, place_amenities
 
+EXAMPLES = Path(__file__).parent.parent / "examples"
 PLOT = box(0, 0, 180, 140)  # room left for the facilities once the rules have their land
 FLATS = FlatLibrary(
     flats=[
@@ -85,3 +90,30 @@ def test_the_summary_lists_the_facilities_and_what_did_not_fit(option):
     summary = option.summary()
     assert [a["name"] for a in summary["amenities"]] == [a.name for a in option.amenities]
     assert summary["amenities_with_no_room"] == list(option.amenities_missed)
+
+
+def test_a_facilitys_use_and_surface_are_stated_or_unknown_never_guessed():
+    """Where the placer may stand an item says nothing of what its ground is made of."""
+    play = AMENITIES.items[1]
+    assert play.name == "CHILDRENS PLAY" and (play.use, play.surface) == (None, None)
+    seat = AmenityLibrary(items=[{"name": "SEATING", "width_m": 8.0, "depth_m": 6.0,
+                                  "counts_as_open_space": True}]).items[0]
+    assert seat.surface is None
+    stated = AmenityLibrary(items=[{"name": "SEATING", "width_m": 8.0, "depth_m": 6.0,
+                                    "use": "SOFT_LANDSCAPE", "surface": "SOFT"}]).items[0]
+    assert (stated.use, stated.surface) == (FacilityUse.SOFT_LANDSCAPE, Surface.SOFT)
+    with pytest.raises(ValidationError):
+        AmenityLibrary(items=[{"name": "SEATING", "width_m": 8.0, "depth_m": 6.0,
+                               "surface": "GRASS"}])
+
+
+@pytest.mark.parametrize("name", ["amenities.example.json", "amenities.hyderabad.json"])
+def test_the_example_libraries_state_every_items_use_and_surface(name):
+    library = AmenityLibrary.model_validate_json((EXAMPLES / name).read_text())
+    assert all(item.use is not None and item.surface is not None for item in library.items)
+    by_name = {item.name: item for item in library.items}
+    assert by_name["SECURITY CABIN"].surface is Surface.BUILT
+    assert by_name["CHILDRENS PLAY"].use is FacilityUse.TOT_LOT
+    # an item the placer may stand on the open space is one this list states as soft
+    assert all(item.surface is Surface.SOFT for item in library.items
+               if item.counts_as_open_space)
