@@ -13,7 +13,8 @@ from siteplan.contracts.resolved_rules import (
     OPEN_SPACE_BASIS,
     STILT_IN_RULE_HEIGHT,
 )
-from siteplan.validator.parking import cellar_setback_m
+from siteplan.validator import context
+from siteplan.validator.parking import bay_standard, cellar_setback_m
 from siteplan.validator.readings import COUNTED
 
 TEST_CLASS = "normative"
@@ -112,6 +113,26 @@ def _ramps(*boxes):
     return edit
 
 
+def test_parking_a_few_cars_short_fails_where_a_rounding_does_not():
+    """Table V asked 20 m² short of what is provided is short; 0.4 m² short is rounding."""
+    inputs = fixture("rectangle")
+    ctx = context.build(inputs.site, inputs.rules, inputs.brief, inputs.candidate)
+    q = inputs.report().recomputed.quantities
+    _, _, sqm_per_car = bay_standard(ctx)
+    floor = (q["parking_stilt_sqm"] + 10 * 12.5
+             + q["parking_cellar_levels"] * q["parking_cellar_sqm_per_level"])
+    provided = min(floor, q["parking_cars"] * sqm_per_car)
+
+    def needing(sqm):
+        def edit(rules):
+            rules.parking.share_pct.value = 100.0 * sqm / q["built_up_sqm"]
+        return edit
+    assert status(inputs.with_rules(needing(provided + 20.0)).report(), "Parking (Table V)"
+                  ) is Z.FAIL
+    assert status(inputs.with_rules(needing(provided + 0.4)).report(), "Parking (Table V)"
+                  ) is Z.PASS
+
+
 def test_two_ramps_must_each_be_3_6_m_wide():
     report = fixture("rectangle").edited(
         _ramps((127.7, 62.87, 131.3, 86.86), (134.0, 62.87, 136.0, 86.86))).report()
@@ -166,14 +187,32 @@ def test_open_space_drawn_over_the_club_house_is_the_club_houses_ground_not_open
 
 
 def test_ground_between_two_blocks_kept_apart_by_the_table_is_not_open_space():
-    """T2 and T3 15 m apart: a strip 3 m wide between 6 m of clear ground each side is within the
-    9 m of both, so it is the gap between the blocks and no pocket."""
+    """T2 and T3 16 m apart: the 4 m between 6 m of clear ground each side holds a 2 m strip
+    within the 9 m of both, which is the gap between the blocks and no pocket: what is left on
+    either side is under 3 m wide."""
     def apart(candidate):
         candidate.towers = [t for t in candidate.towers if t.name in ("T2", "T3")]
-        move_tower(candidate, "T3", 6.0, 0.0)
+        move_tower(candidate, "T3", 7.0, 0.0)
         candidate.circulation.roads, candidate.circulation.fire_hardstanding = [], []
-        candidate.program = SiteProgram(open_space=[rectangle(89.0, 33.0, 92.0, 51.0)])
+        candidate.program = SiteProgram(open_space=[rectangle(89.0, 33.0, 93.0, 51.0)])
     assert _counted_sqm(_counted(fixture("rectangle")).edited(apart)) == 0.0
+
+    def gap_not_excluded(rules):
+        rules.open_space.block_gaps_excluded.value = False
+    open_gap = _counted(fixture("rectangle")).with_rules(gap_not_excluded).edited(apart)
+    assert _counted_sqm(open_gap) == pytest.approx(72.0, abs=0.5)  # the 4 m strip, if gaps counted
+
+
+def test_the_open_space_a_generator_claims_is_held_to_the_least_any_reading_gives():
+    """A pocket along the south: 9 m of setback takes 0.8 m of it if the stilt counts, 8 m none.
+    The generator claims all of it."""
+    def along_the_south(candidate):
+        candidate.circulation.roads, candidate.circulation.fire_hardstanding = [], []
+        candidate.program = SiteProgram(open_space=[rectangle(20.0, 8.2, 130.0, 12.0)])
+        candidate.metrics.open_space_sqm = 110.0 * 3.8
+    report = fixture("rectangle").edited(along_the_south).report()
+    claim = next(d for d in report.cross_checks if d.item == "open space")
+    assert claim.blocks_pass
 
 
 def test_open_space_a_few_m2_short_of_the_share_fails():

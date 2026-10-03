@@ -49,7 +49,7 @@ def _cul(candidate, *, length=69.0, head=9.0, width=8.0):
         id="road-9", kind=RoadKind.CUL_DE_SAC, shapes=shapes(body), declared_width_m=width))
 
 
-@pytest.mark.parametrize("trouble", [{"length": 120.0}, {"head": 7.5}])
+@pytest.mark.parametrize("trouble", [{"length": 110.0}, {"head": 7.5}])
 def test_a_cul_de_sac_over_100_m_long_or_with_a_head_under_9_m_radius_fails(trouble):
     report = fixture("rectangle").edited(lambda c: _cul(c, **trouble)).report()
     assert status(report, "Internal roads: cul-de-sac road-9") is Z.FAIL, trouble
@@ -122,6 +122,33 @@ def test_a_lane_from_the_gate_that_never_touches_a_block_does_not_reach_it():
     c = check(fixture("rectangle").edited(lambda c: _one_tower_and_one_road(c, away)).report(),
               REACHED)
     assert c.finding.status is Z.FAIL and "cut off: T3" in c.finding.measured
+
+
+def test_a_water_buffer_blocks_the_ground_a_fire_tender_needs():
+    """The nala's buffer stops a vehicle as a building does: a tower whose 6 m of clear ground
+    runs into it has no way round."""
+    def beside_the_buffer(candidate):
+        move_tower(candidate, "T1", 27.9, 0.0)  # 3 m from the buffer
+    c = check(fixture("nala_plot").edited(beside_the_buffer).report(), "Fire access: T1")
+    assert c.finding.status is Z.FAIL and "a water buffer" in c.finding.measured
+
+
+def test_the_bends_of_a_perimeter_lane_are_swept_by_the_turning_tender_like_a_loop_roads():
+    def narrow_lane(candidate):
+        lane = _road(candidate, "road-1")
+        lane.kind = RoadKind.PERIMETER_LANE
+        lane.shapes = shapes(box(2.0, 2.0, 148.0, 98.0).difference(box(8.0, 8.0, 142.0, 92.0)))
+    c = check(fixture("rectangle").edited(narrow_lane).report(),
+              "Fire access: turns along the loop road")
+    assert c.finding.status is Z.FAIL
+
+
+def test_a_site_under_4000_m2_with_no_driveway_drawn_has_no_driveway_check():
+    def none(candidate):
+        candidate.circulation.roads = [r for r in candidate.circulation.roads
+                                       if r.kind is not RoadKind.DRIVEWAY]
+    names = {c.finding.rule for c in fixture("small_plot").edited(none).report().legal}
+    assert "Driveways" not in names
 
 
 def test_the_clear_ground_round_a_block_is_square_at_the_corners():
