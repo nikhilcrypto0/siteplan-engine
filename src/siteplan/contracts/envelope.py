@@ -17,7 +17,7 @@ from pydantic import Field
 
 from siteplan.contracts.accounting import RuleLayers
 from siteplan.contracts.common import Contract, Finding, Line, Part, Shape, Side
-from siteplan.contracts.resolved_rules import BandKind
+from siteplan.contracts.resolved_rules import Band, BandKind
 
 
 class ExclusionKind(StrEnum):
@@ -37,6 +37,10 @@ class Exclusion(Part):
 
 
 class BandEnvelope(Part):
+    """The land one of ResolvedRules' height bands leaves to build on. It carries that band's
+    two edges and is matched to it by them (`BuildableEnvelope.of_band`); which band a height
+    falls in is ResolvedRules' to say, never worked out again from these edges."""
+
     above_m: float = Field(ge=0)
     up_to_m: float = Field(gt=0)
     kind: BandKind
@@ -99,3 +103,9 @@ class BuildableEnvelope(Contract):
     requirements: list[Obligation] = []  # open space, club house, parking, ramp, cellars
     rule_layers: RuleLayers = RuleLayers()
     facts: list[Finding] = []  # category, high-rise eligibility, height limits, unknowns
+
+    def of_band(self, band: Band) -> BandEnvelope | None:
+        """The envelope of one of ResolvedRules' bands (`HeightRules.band_for` picks the band a
+        height falls in); None when the envelope draws none for it."""
+        return next((b for b in self.bands
+                     if (b.above_m, b.up_to_m) == (band.above_m, band.up_to_m)), None)
