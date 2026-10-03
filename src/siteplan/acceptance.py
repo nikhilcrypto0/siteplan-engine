@@ -22,6 +22,8 @@ from shapely.geometry import Point, Polygon
 from siteplan import rules
 from siteplan.access import FIRE_BAND_M
 from siteplan.area_statement import AreaStatement
+from siteplan.blind import BLIND, DEBUG, BlindLeak, finished_values
+from siteplan.blind import check as check_blind
 from siteplan.cases import Case
 from siteplan.constraints import Basis, by_basis
 from siteplan.findings import Status
@@ -54,17 +56,21 @@ class Generated:
     library_note: str = ""
     standards: dict | None = None  # the workspace standards the run used
     profile: AssumptionProfile | None = None  # a site's temporary test assumptions, if any
+    mode: str = BLIND  # 'debug' when the run may use the firm's finished plan
 
 
 def generate(survey: Path, answers: dict, out: Path, workspace: Path | None = None,
              conservative_parking: bool = False,
-             profile: AssumptionProfile | None = None) -> Generated:
+             profile: AssumptionProfile | None = None, mode: str = BLIND) -> Generated:
     """Everything the engine produces from the raw survey and the answers alone. With
     conservative_parking, an unestablished jurisdiction plans the GHMC column (a labelled test
     mode) instead of stopping to ask. A profile sets one site's temporary test assumptions on
-    top of the answers, each recorded ASSUMED_FOR_TEST and listed in the report."""
+    top of the answers, each recorded ASSUMED_FOR_TEST and listed in the report. A blind run
+    (the default) refuses anything taken from the firm's finished plan (blind.py); a debug run
+    may use it and says so in the report."""
     workspace = workspace or survey.parent
     defaults = load_defaults(workspace)
+    check_blind(mode, survey, answers, profile, defaults.finished_plans)
     if not defaults.flat_library:
         raise ValueError(f"Set the firm's flat_library in {workspace}/siteplan.workspace.json.")
     draft = extract(survey)
@@ -75,6 +81,9 @@ def generate(survey: Path, answers: dict, out: Path, workspace: Path | None = No
         project_dict["status"]["conservative_parking"] = Provenance.ASSUMED_FOR_TEST
     if profile is not None:
         project_dict = apply_profile(project_dict, profile)
+    leaked = finished_values(project_dict)
+    if mode == BLIND and leaked:
+        raise BlindLeak(f"A blind acceptance run may not use the firm's finished plan: {leaked}")
     save(project_dict, out / "project.json")
     project = Project.model_validate(project_dict)
     plot, basis = load_plot(project, survey)
@@ -88,7 +97,7 @@ def generate(survey: Path, answers: dict, out: Path, workspace: Path | None = No
     found = run_search(project, library, plot, project.layout, amenities, keep_out)
     options = write_options(found, project, library, plot, project.layout, out)
     return Generated(draft, project_dict, plot, basis, limit, found, options, out, library.note,
-                     defaults.model_dump(exclude={"status"}), profile)
+                     defaults.model_dump(exclude={"status"}), profile, mode)
 
 
 def towers_in(dxf: Path) -> list[Polygon]:
@@ -157,7 +166,7 @@ def report(generated: Generated, rows: list[tuple[str, str, str]]) -> str:
     """Plain text for the terminal and the report file."""
     project = generated.project
     profile = generated.profile
-    debug = profile is not None and profile.debug_fixture
+    debug = generated.mode == DEBUG or (profile is not None and profile.debug_fixture)
     lines = [
         f"{'DEBUG RUN (test fixture, not blind acceptance)' if debug else 'ACCEPTANCE'}: "
         f"{project['name']}",

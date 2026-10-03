@@ -21,6 +21,7 @@ from pydantic import BaseModel, PositiveFloat
 from shapely.geometry import Point
 
 from siteplan import rules
+from siteplan.contracts.common import SourceKind
 from siteplan.max_floors import max_floors
 from siteplan.pdf_survey import PdfProfile, colour_hex
 from siteplan.project import Project
@@ -67,6 +68,9 @@ class WorkspaceDefaults(BaseModel):
     # The firm's longest block, if it has one. No rule limits length (the 40 m note was deleted
     # by G.O.Ms.No.65 of 2019), so without it the layout explores lengths.
     max_tower_length_m: PositiveFloat | None = None
+    # The firm's own finished drawings kept in the workspace (file names). A debug run may use
+    # them; a blind acceptance run refuses one given as its survey (blind.py).
+    finished_plans: list[str] = []
     status: dict[str, Provenance] = {}  # how far each standard is confirmed, when the file says
 
     def standard_status(self, key: str) -> Provenance:
@@ -285,7 +289,9 @@ def missing(draft: Draft, answers: dict[str, str]) -> list[str]:
 def build_project(draft: Draft, answers: dict, defaults: WorkspaceDefaults | None = None) -> dict:
     """The project file from the survey and the answers, with every value's source noted and
     how far it can be trusted. `answers` may carry a `_status` map that relabels a value, keyed
-    as asked or as the sources are (e.g. {"authority": "UNVERIFIED"})."""
+    as asked or as the sources are (e.g. {"authority": "UNVERIFIED"}), a `_source` map that
+    says who gave it (e.g. {"road_row": "architect, 2026-10-02"}) and a `_source_kind` map
+    (e.g. {"road_row": "ARCHITECT"}); a blind acceptance run refuses FIRM_FINISHED_PLAN."""
     defaults = defaults or WorkspaceDefaults()
     problems = missing(draft, answers)
     if problems:
@@ -352,8 +358,13 @@ def build_project(draft: Draft, answers: dict, defaults: WorkspaceDefaults | Non
         layout["floors"] = int(given["floors"])
     for key, value in (answers.get("_status") or {}).items():
         status[STATUS_KEYS.get(key, key)] = Provenance(value)
+    for key, text in (answers.get("_source") or {}).items():
+        sources[STATUS_KEYS.get(key, key)] = text
+    kinds = {STATUS_KEYS.get(key, key): SourceKind(value)
+             for key, value in (answers.get("_source_kind") or {}).items()}
     project = {"name": given["name"], "site": site, "layout": layout, "sources": sources,
-               "status": {k: v.value for k, v in status.items()}}
+               "status": {k: v.value for k, v in status.items()},
+               "source_kinds": {k: v.value for k, v in kinds.items()}}
     Project.model_validate(project)  # an impossible answer fails here, not in the solver
     return project
 

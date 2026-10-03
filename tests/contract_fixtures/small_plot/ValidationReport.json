@@ -1,0 +1,239 @@
+{
+ "schema_version": "1.0",
+ "candidate_ref": "dd2bc31d93cb963d",
+ "site_ref": "1876e2471d584155",
+ "rules_ref": "1aa70dae683bc016",
+ "brief_ref": "2f7436a2e557a814",
+ "envelope_ref": "21e75d27b5bb167c",
+ "validator_version": "fixture: the generator's own findings restated, not an independent validation",
+ "recomputed": {
+  "towers": [],
+  "pairs": [],
+  "quantities": {},
+  "units_by_type": {}
+ },
+ "legal": [
+  {
+   "family": "SETBACK",
+   "subject": null,
+   "finding": {
+    "rule": "Setbacks (Table III)",
+    "status": "UNVERIFIED",
+    "measured": "14.5 m least",
+    "required": "Table III (rule 5)",
+    "clause": "G.O.168 rule 5",
+    "note": "below 21 m: Table III is not encoded yet"
+   },
+   "by_reading": {}
+  }
+ ],
+ "program": [
+  {
+   "family": "PROGRAM",
+   "subject": null,
+   "finding": {
+    "rule": "Unit mix",
+    "status": "FAIL",
+    "measured": "mix error 0.200",
+    "required": "within 0.05 of {'2BHK': 0.7, '3BHK': 0.3}",
+    "clause": "the brief",
+    "note": ""
+   },
+   "by_reading": {}
+  }
+ ],
+ "accounting": {
+  "partition": {
+   "schema_version": "1.0",
+   "net_area_sqm": 3000.0,
+   "tolerance": 0.005,
+   "entries": [
+    {
+     "use": "TOWER",
+     "shapes": [
+      {
+       "outer": [
+        [
+         45.5,
+         12.935
+        ],
+        [
+         45.5,
+         37.065
+        ],
+        [
+         14.5,
+         37.065
+        ],
+        [
+         14.5,
+         12.935
+        ]
+       ],
+       "holes": []
+      }
+     ],
+     "area_sqm": 748.0299999999999,
+     "ref": "T1",
+     "tags": [],
+     "reason": null
+    },
+    {
+     "use": "ROAD",
+     "shapes": [
+      {
+       "outer": [
+        [
+         29.5,
+         0.0
+        ],
+        [
+         29.5,
+         12.935
+        ],
+        [
+         25.0,
+         12.935
+        ],
+        [
+         25.0,
+         0.0
+        ]
+       ],
+       "holes": []
+      }
+     ],
+     "area_sqm": 58.2075,
+     "ref": "road-1",
+     "tags": [],
+     "reason": null
+    },
+    {
+     "use": "SOFT_OPEN_SPACE",
+     "shapes": [
+      {
+       "outer": [
+        [
+         58.0,
+         40.0
+        ],
+        [
+         58.0,
+         48.0
+        ],
+        [
+         2.0,
+         48.0
+        ],
+        [
+         2.0,
+         40.0
+        ]
+       ],
+       "holes": []
+      }
+     ],
+     "area_sqm": 448.0,
+     "ref": "tot-lot 1",
+     "tags": [],
+     "reason": null
+    },
+    {
+     "use": "UNALLOCATED",
+     "shapes": [
+      {
+       "outer": [
+        [
+         60.0,
+         50.0
+        ],
+        [
+         60.0,
+         0.0
+        ],
+        [
+         29.5,
+         0.0
+        ],
+        [
+         29.5,
+         12.935
+        ],
+        [
+         45.5,
+         12.935
+        ],
+        [
+         45.5,
+         37.065
+        ],
+        [
+         14.5,
+         37.065
+        ],
+        [
+         14.5,
+         12.935
+        ],
+        [
+         25.0,
+         12.935
+        ],
+        [
+         25.0,
+         0.0
+        ],
+        [
+         0.0,
+         0.0
+        ],
+        [
+         0.0,
+         50.0
+        ]
+       ],
+       "holes": [
+        [
+         [
+          58.0,
+          48.0
+         ],
+         [
+          2.0,
+          48.0
+         ],
+         [
+          2.0,
+          40.0
+         ],
+         [
+          58.0,
+          40.0
+         ]
+        ]
+       ]
+      }
+     ],
+     "area_sqm": 1745.7625000000003,
+     "ref": null,
+     "tags": [],
+     "reason": "made-up fixture: ground left without a use"
+    }
+   ]
+  },
+  "partition_problems": [],
+  "rule_layers": {
+   "schema_version": "1.0",
+   "layers": []
+  }
+ },
+ "cross_checks": [],
+ "not_checked": [],
+ "verdict": {
+  "legal": "UNVERIFIED",
+  "program": "NOT_MET",
+  "reasons": [
+   "Setbacks (Table III): UNVERIFIED"
+  ]
+ }
+}

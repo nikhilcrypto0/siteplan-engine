@@ -1,0 +1,1022 @@
+{
+  "$defs": {
+    "Access": {
+      "additionalProperties": false,
+      "properties": {
+        "dead_end": {
+          "$ref": "#/$defs/Sourced_Union_bool__NoneType__"
+        },
+        "joins_12m_street": {
+          "$ref": "#/$defs/Sourced_Union_bool__NoneType__"
+        },
+        "road_id": {
+          "$ref": "#/$defs/Sourced_Union_int__NoneType__"
+        },
+        "side": {
+          "$ref": "#/$defs/Sourced_Union_Literal__N____NE____E____SE____S____SW____W____NW____NoneType__"
+        }
+      },
+      "required": [
+        "road_id",
+        "side",
+        "dead_end",
+        "joins_12m_street"
+      ],
+      "title": "Access",
+      "type": "object"
+    },
+    "DeductionKind": {
+      "description": "Only these reduce gross ownership to net ownership: each takes land out of the title.",
+      "enum": [
+        "SURRENDER",
+        "ACQUISITION",
+        "TRANSFER"
+      ],
+      "title": "DeductionKind",
+      "type": "string"
+    },
+    "DeductionLocation": {
+      "additionalProperties": false,
+      "properties": {
+        "extent": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Line"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "how": {
+          "$ref": "#/$defs/LocationHow"
+        },
+        "shape": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Shape"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "side": {
+          "anyOf": [
+            {
+              "enum": [
+                "N",
+                "NE",
+                "E",
+                "SE",
+                "S",
+                "SW",
+                "W",
+                "NW"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Side"
+        },
+        "width_m": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Width M"
+        }
+      },
+      "required": [
+        "how"
+      ],
+      "title": "DeductionLocation",
+      "type": "object"
+    },
+    "Feature": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "title": "Kind",
+          "type": "string"
+        },
+        "lines": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Line"
+          },
+          "title": "Lines",
+          "type": "array"
+        },
+        "shapes": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Shape"
+          },
+          "title": "Shapes",
+          "type": "array"
+        },
+        "source": {
+          "default": "",
+          "title": "Source",
+          "type": "string"
+        },
+        "text": {
+          "default": "",
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "title": "Feature",
+      "type": "object"
+    },
+    "Jurisdiction": {
+      "additionalProperties": false,
+      "properties": {
+        "authority": {
+          "$ref": "#/$defs/Sourced_Union_str__NoneType__"
+        },
+        "inside_cure": {
+          "$ref": "#/$defs/Sourced_Union_bool__NoneType__"
+        }
+      },
+      "required": [
+        "authority",
+        "inside_cure"
+      ],
+      "title": "Jurisdiction",
+      "type": "object"
+    },
+    "Line": {
+      "additionalProperties": false,
+      "description": "An open line (a road edge, a water line, a stretch of boundary), metres, survey frame.",
+      "properties": {
+        "points": {
+          "items": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "type": "array"
+          },
+          "minItems": 2,
+          "title": "Points",
+          "type": "array"
+        }
+      },
+      "required": [
+        "points"
+      ],
+      "title": "Line",
+      "type": "object"
+    },
+    "LocationHow": {
+      "enum": [
+        "OUTLINE",
+        "SIDE_AND_WIDTH",
+        "EXTENT",
+        "UNKNOWN"
+      ],
+      "title": "LocationHow",
+      "type": "string"
+    },
+    "OwnershipDeduction": {
+      "additionalProperties": false,
+      "properties": {
+        "area_sqm": {
+          "$ref": "#/$defs/Sourced_float_"
+        },
+        "kind": {
+          "$ref": "#/$defs/DeductionKind"
+        },
+        "location": {
+          "$ref": "#/$defs/DeductionLocation"
+        },
+        "purpose": {
+          "title": "Purpose",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "purpose",
+        "area_sqm",
+        "location"
+      ],
+      "title": "OwnershipDeduction",
+      "type": "object"
+    },
+    "OwnershipReconciliation": {
+      "additionalProperties": false,
+      "description": "Gross ownership less the land that left the title is net ownership: the net site area\nevery rule is measured on.",
+      "properties": {
+        "deductions": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/OwnershipDeduction"
+          },
+          "title": "Deductions",
+          "type": "array"
+        },
+        "gross_sqm": {
+          "$ref": "#/$defs/Sourced_float_"
+        },
+        "net_sqm": {
+          "$ref": "#/$defs/Sourced_float_"
+        },
+        "tolerance": {
+          "default": 0.02,
+          "maximum": 0.1,
+          "minimum": 0,
+          "title": "Tolerance",
+          "type": "number"
+        },
+        "written_as": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Written As"
+        }
+      },
+      "required": [
+        "gross_sqm",
+        "net_sqm"
+      ],
+      "title": "OwnershipReconciliation",
+      "type": "object"
+    },
+    "PlaceName": {
+      "additionalProperties": false,
+      "properties": {
+        "district": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "District"
+        },
+        "mandal": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Mandal"
+        },
+        "village": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Village"
+        }
+      },
+      "title": "PlaceName",
+      "type": "object"
+    },
+    "Provenance": {
+      "enum": [
+        "VERIFIED",
+        "USER_CONFIRMED",
+        "EXTRACTED",
+        "ASSUMED_FOR_TEST",
+        "UNVERIFIED"
+      ],
+      "title": "Provenance",
+      "type": "string"
+    },
+    "Road": {
+      "additionalProperties": false,
+      "properties": {
+        "distance_m": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Distance M"
+        },
+        "divided": {
+          "default": false,
+          "title": "Divided",
+          "type": "boolean"
+        },
+        "drawn_width_m": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Drawn Width M"
+        },
+        "id": {
+          "title": "Id",
+          "type": "integer"
+        },
+        "legal_row_m": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Sourced_float_"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "master_plan_row_m": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Sourced_float_"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "row_status": {
+          "anyOf": [
+            {
+              "enum": [
+                "CERTIFIED_ROW",
+                "DECLARED_ON_SITE_PLAN",
+                "UNVERIFIED_DRAWING_VALUE"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Row Status"
+        },
+        "side": {
+          "anyOf": [
+            {
+              "enum": [
+                "N",
+                "NE",
+                "E",
+                "SE",
+                "S",
+                "SW",
+                "W",
+                "NW"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Side"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "title": "Road",
+      "type": "object"
+    },
+    "Shape": {
+      "additionalProperties": false,
+      "description": "A polygon: its outer ring and any holes, metres, survey frame, not closed (the first\npoint is not repeated).",
+      "properties": {
+        "holes": {
+          "default": [],
+          "items": {
+            "items": {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "type": "array"
+            },
+            "type": "array"
+          },
+          "title": "Holes",
+          "type": "array"
+        },
+        "outer": {
+          "items": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "type": "array"
+          },
+          "minItems": 3,
+          "title": "Outer",
+          "type": "array"
+        }
+      },
+      "required": [
+        "outer"
+      ],
+      "title": "Shape",
+      "type": "object"
+    },
+    "SourceKind": {
+      "enum": [
+        "SURVEY",
+        "ARCHITECT",
+        "DOCUMENT",
+        "FIRM_STANDARD",
+        "FIRM_FINISHED_PLAN",
+        "ENGINE_DEFAULT",
+        "TEST_PROFILE"
+      ],
+      "title": "SourceKind",
+      "type": "string"
+    },
+    "Sourced_Literal__river____lake_10ha_or_more____lake_under_10ha____nala_over_10m____nala_up_to_10m___": {
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "default": "",
+          "title": "Source",
+          "type": "string"
+        },
+        "source_kind": {
+          "$ref": "#/$defs/SourceKind"
+        },
+        "status": {
+          "$ref": "#/$defs/Provenance"
+        },
+        "value": {
+          "enum": [
+            "river",
+            "lake_10ha_or_more",
+            "lake_under_10ha",
+            "nala_over_10m",
+            "nala_up_to_10m"
+          ],
+          "title": "Value",
+          "type": "string"
+        }
+      },
+      "required": [
+        "value",
+        "status",
+        "source_kind"
+      ],
+      "title": "Sourced[Literal['river', 'lake_10ha_or_more', 'lake_under_10ha', 'nala_over_10m', 'nala_up_to_10m']]",
+      "type": "object"
+    },
+    "Sourced_PlaceName_": {
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "default": "",
+          "title": "Source",
+          "type": "string"
+        },
+        "source_kind": {
+          "$ref": "#/$defs/SourceKind"
+        },
+        "status": {
+          "$ref": "#/$defs/Provenance"
+        },
+        "value": {
+          "$ref": "#/$defs/PlaceName"
+        }
+      },
+      "required": [
+        "value",
+        "status",
+        "source_kind"
+      ],
+      "title": "Sourced[PlaceName]",
+      "type": "object"
+    },
+    "Sourced_Shape_": {
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "default": "",
+          "title": "Source",
+          "type": "string"
+        },
+        "source_kind": {
+          "$ref": "#/$defs/SourceKind"
+        },
+        "status": {
+          "$ref": "#/$defs/Provenance"
+        },
+        "value": {
+          "$ref": "#/$defs/Shape"
+        }
+      },
+      "required": [
+        "value",
+        "status",
+        "source_kind"
+      ],
+      "title": "Sourced[Shape]",
+      "type": "object"
+    },
+    "Sourced_Union_Literal__N____NE____E____SE____S____SW____W____NW____NoneType__": {
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "default": "",
+          "title": "Source",
+          "type": "string"
+        },
+        "source_kind": {
+          "$ref": "#/$defs/SourceKind"
+        },
+        "status": {
+          "$ref": "#/$defs/Provenance"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "enum": [
+                "N",
+                "NE",
+                "E",
+                "SE",
+                "S",
+                "SW",
+                "W",
+                "NW"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Value"
+        }
+      },
+      "required": [
+        "value",
+        "status",
+        "source_kind"
+      ],
+      "title": "Sourced[Union[Literal['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'], NoneType]]",
+      "type": "object"
+    },
+    "Sourced_Union_bool__NoneType__": {
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "default": "",
+          "title": "Source",
+          "type": "string"
+        },
+        "source_kind": {
+          "$ref": "#/$defs/SourceKind"
+        },
+        "status": {
+          "$ref": "#/$defs/Provenance"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Value"
+        }
+      },
+      "required": [
+        "value",
+        "status",
+        "source_kind"
+      ],
+      "title": "Sourced[Union[bool, NoneType]]",
+      "type": "object"
+    },
+    "Sourced_Union_int__NoneType__": {
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "default": "",
+          "title": "Source",
+          "type": "string"
+        },
+        "source_kind": {
+          "$ref": "#/$defs/SourceKind"
+        },
+        "status": {
+          "$ref": "#/$defs/Provenance"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Value"
+        }
+      },
+      "required": [
+        "value",
+        "status",
+        "source_kind"
+      ],
+      "title": "Sourced[Union[int, NoneType]]",
+      "type": "object"
+    },
+    "Sourced_Union_str__NoneType__": {
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "default": "",
+          "title": "Source",
+          "type": "string"
+        },
+        "source_kind": {
+          "$ref": "#/$defs/SourceKind"
+        },
+        "status": {
+          "$ref": "#/$defs/Provenance"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Value"
+        }
+      },
+      "required": [
+        "value",
+        "status",
+        "source_kind"
+      ],
+      "title": "Sourced[Union[str, NoneType]]",
+      "type": "object"
+    },
+    "Sourced_float_": {
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "default": "",
+          "title": "Source",
+          "type": "string"
+        },
+        "source_kind": {
+          "$ref": "#/$defs/SourceKind"
+        },
+        "status": {
+          "$ref": "#/$defs/Provenance"
+        },
+        "value": {
+          "title": "Value",
+          "type": "number"
+        }
+      },
+      "required": [
+        "value",
+        "status",
+        "source_kind"
+      ],
+      "title": "Sourced[float]",
+      "type": "object"
+    },
+    "Sourced_int_": {
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "default": "",
+          "title": "Source",
+          "type": "string"
+        },
+        "source_kind": {
+          "$ref": "#/$defs/SourceKind"
+        },
+        "status": {
+          "$ref": "#/$defs/Provenance"
+        },
+        "value": {
+          "title": "Value",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "value",
+        "status",
+        "source_kind"
+      ],
+      "title": "Sourced[int]",
+      "type": "object"
+    },
+    "Sourced_tuple_float__float__": {
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "default": "",
+          "title": "Source",
+          "type": "string"
+        },
+        "source_kind": {
+          "$ref": "#/$defs/SourceKind"
+        },
+        "status": {
+          "$ref": "#/$defs/Provenance"
+        },
+        "value": {
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Value",
+          "type": "array"
+        }
+      },
+      "required": [
+        "value",
+        "status",
+        "source_kind"
+      ],
+      "title": "Sourced[tuple[float, float]]",
+      "type": "object"
+    },
+    "Water": {
+      "additionalProperties": false,
+      "properties": {
+        "channel": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Shape"
+          },
+          "title": "Channel",
+          "type": "array"
+        },
+        "drawn_as": {
+          "title": "Drawn As",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "lines": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Line"
+          },
+          "title": "Lines",
+          "type": "array"
+        },
+        "water_class": {
+          "$ref": "#/$defs/Sourced_Literal__river____lake_10ha_or_more____lake_under_10ha____nala_over_10m____nala_up_to_10m___"
+        }
+      },
+      "required": [
+        "id",
+        "water_class",
+        "drawn_as"
+      ],
+      "title": "Water",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "access": {
+      "$ref": "#/$defs/Access"
+    },
+    "boundary": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Shape"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "coordinates": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Sourced_tuple_float__float__"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "features": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Feature"
+      },
+      "title": "Features",
+      "type": "array"
+    },
+    "frame": {
+      "default": "survey metres, as drawn",
+      "title": "Frame",
+      "type": "string"
+    },
+    "jurisdiction": {
+      "$ref": "#/$defs/Jurisdiction"
+    },
+    "name": {
+      "title": "Name",
+      "type": "string"
+    },
+    "net_plot": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Sourced_Shape_"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "ownership": {
+      "$ref": "#/$defs/OwnershipReconciliation"
+    },
+    "place": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Sourced_PlaceName_"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "proposed_floors": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Sourced_int_"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "roads": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Road"
+      },
+      "title": "Roads",
+      "type": "array"
+    },
+    "sanctioned_floors": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Sourced_int_"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "schema_version": {
+      "const": "1.0",
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "site_id": {
+      "title": "Site Id",
+      "type": "string"
+    },
+    "spot_levels": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Spot Levels",
+      "type": "integer"
+    },
+    "survey_file": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Survey File"
+    },
+    "water": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Water"
+      },
+      "title": "Water",
+      "type": "array"
+    },
+    "written_area_sqm": {
+      "anyOf": [
+        {
+          "exclusiveMinimum": 0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Written Area Sqm"
+    }
+  },
+  "required": [
+    "site_id",
+    "name",
+    "ownership",
+    "access",
+    "jurisdiction"
+  ],
+  "title": "CanonicalSiteModel",
+  "type": "object"
+}

@@ -8,6 +8,7 @@ import json
 from pathlib import Path
 
 import pytest
+from client_baseline import ANSWERS, FIRM_CASE, PINNED, READINGS, SURVEY, profile_path
 
 from siteplan import rules
 from siteplan.area_statement import render
@@ -15,6 +16,7 @@ from siteplan.checks import check_site
 from siteplan.max_floors import max_floors
 from siteplan.pdf_survey import read_pdf_survey
 from siteplan.project import Project
+from siteplan.units import ft_to_m, sqyd_to_sqm
 
 FIXTURES = Path(__file__).parent.parent / "fixtures"
 EXPECTATIONS = FIXTURES / "expectations.json"
@@ -108,11 +110,11 @@ def test_suchitra_road_is_a_drawing_value_and_its_floors_only_proposed():
     assert max(limit.floors_stilt_counted, limit.floors_stilt_not_counted) < 10
 
 
-# The acceptance run, kept as the permanent regression test: the raw survey and the answers in,
-# the firm's plan read only to compare. The same path `siteplan acceptance` runs.
-SURVEY = FIXTURES / "workspace" / "dhulapally_survey.pdf"
-ANSWERS = FIXTURES / "acceptance" / "dhulapally.answers.json"
-FIRM_CASE = FIXTURES / "cases" / "dhulapally.case.json"
+# Dhulapally, two runs never mixed (client_baseline.py). BLIND: the raw survey, the architect's
+# answers and the firm's standard libraries; it stops and asks until the architect says where the
+# 1,160 m² road strip lies. DEBUG: the firm's net outline, fitted onto the survey and tagged
+# FIRM_FINISHED_PLAN, stands in for the strip; it carries the regression load, pinned under both
+# readings of whether the stilt counts toward the Table IV height.
 
 
 def _answers() -> dict:
@@ -121,79 +123,104 @@ def _answers() -> dict:
     return json.loads(ANSWERS.read_text())
 
 
-def _strip_located(answers: dict) -> bool:
-    """Whether the answers say where the road-widening strip lies (its side and width)."""
-    from siteplan.intake import _surrender
-
-    given = _surrender(answers.get("surrender", "no"))
-    return given is None or bool(given[2] and given[3])
-
-
-@pytest.fixture(scope="module")
-def dhulapally_run(tmp_path_factory):
-    """Whose rules apply is marked unverified in the answers, so this is the conservative test
-    mode; and it needs the answers to say where the road-widening strip lies."""
-    from siteplan.acceptance import generate
-
-    answers = _answers()
-    if not _strip_located(answers):
-        pytest.skip("the answers do not give the road-widening strip's side and width")
-    out = tmp_path_factory.mktemp("acceptance")
-    return generate(SURVEY, answers, out, FIXTURES / "workspace", conservative_parking=True)
-
-
-def test_dhulapally_without_the_strips_location_stops_and_asks(tmp_path):
+def test_dhulapally_blind_run_stops_and_asks_where_the_strip_lies(tmp_path):
     """The engine once cut 1,160 m² off the whole east side at an even 6.6 m, where the firm
     draws a 40 ft road along part of it. It no longer guesses."""
     from siteplan.acceptance import generate
 
-    answers = _answers()
-    if _strip_located(answers):
-        pytest.skip("the answers give the strip's side and width")
     with pytest.raises(ValueError, match="does not guess a strip's location"):
-        generate(SURVEY, answers, tmp_path, FIXTURES / "workspace", conservative_parking=True)
+        generate(SURVEY, _answers(), tmp_path, FIXTURES / "workspace", conservative_parking=True)
 
 
-def test_dhulapally_from_the_survey_alone_finds_the_height_the_law_and_the_ground_allow(
-        dhulapally_run):
-    found = dhulapally_run.found
-    top = found.results[0]
-    assert (top.floors, top.verdict) == (10, "FAIL (law)")  # a 60 ft road stops at 30 m
-    assert "Abutting road width" in top.reasons()[0]
-    assert found.max_legal_floors == 9
-    assert found.max_feasible_floors is not None and found.max_feasible_floors <= 9
+def test_dhulapally_blind_run_refuses_the_firms_finished_plan(tmp_path):
+    from siteplan.acceptance import generate
+    from siteplan.blind import BlindLeak
+    from siteplan.profiles import load_profile
+
+    path = profile_path("counted")
+    if not path.exists():
+        pytest.skip("the debug profile is not present")
+    with pytest.raises(BlindLeak):
+        generate(SURVEY, _answers(), tmp_path, FIXTURES / "workspace", conservative_parking=True,
+                 profile=load_profile(path))
+    with pytest.raises(BlindLeak, match="finished plans"):
+        generate(FIXTURES / "workspace" / "DULAPALLY_SITE_PLANS.dxf", _answers(), tmp_path,
+                 FIXTURES / "workspace", conservative_parking=True)
 
 
-def test_dhulapally_offers_three_different_layouts_that_pass_every_rule(dhulapally_run):
+def test_dhulapally_60_ft_road_allows_30_m_of_rule_height_under_either_reading():
+    """The architect confirmed the 60 ft road (2026-10-02). The law gives a height in metres;
+    floors follow from the floor heights, and both readings of the stilt are kept open."""
+    answers = _answers()
+    assert answers["road_row"] == "60 ft"
+    assert answers["_status"]["road_row"] == "USER_CONFIRMED"
+    assert answers["_source_kind"]["road_row"] == "ARCHITECT"
+    limit = max_floors(sqyd_to_sqm(22686), ft_to_m(60), floor_height_m=3.0, stilt_height_m=3.0)
+    assert limit.max_height_m == 30
+    assert (limit.floors_stilt_counted, limit.floors_stilt_not_counted) == (9, 10)
+
+
+def test_the_fitted_net_outline_matches_the_stated_net_and_strip():
+    from shapely.geometry import Polygon
+
+    from siteplan.profiles import load_profile
+    from siteplan.runner import read_survey
+
+    path = profile_path("counted")
+    if not path.exists():
+        pytest.skip("the debug profile is not present")
+    outline = Polygon(load_profile(path).site["net_plot_m"].value)
+    boundary = read_survey(SURVEY).boundary
+    assert outline.area == pytest.approx(18968.4, rel=0.001)  # 22,686 sq yd
+    assert outline.difference(boundary).area < 0.005 * outline.area
+    assert boundary.area - outline.area == pytest.approx(1160, rel=0.03)
+
+
+@pytest.fixture(scope="module", params=list(READINGS))
+def debug_run(request, tmp_path_factory):
+    from client_baseline import run
+
+    _answers()
+    if not profile_path(request.param).exists():
+        pytest.skip("the debug profiles are not present (run tests/client_baseline.py)")
+    return request.param, run(request.param, tmp_path_factory.mktemp(request.param))
+
+
+def test_the_debug_baseline_is_reproduced(debug_run):
+    from client_baseline import summarise
+
+    if not PINNED.exists():
+        pytest.skip("the debug baseline is not pinned (run tests/client_baseline.py)")
+    reading, generated = debug_run
+    assert summarise(generated) == json.loads(PINNED.read_text())["readings"][reading]
+
+
+def test_every_debug_option_passes_and_each_is_a_different_idea(debug_run):
     from siteplan.layout import same_idea
 
-    options = dhulapally_run.found.options
+    _, generated = debug_run
+    options = generated.found.options
     assert len(options) >= 3
     assert all(not option.fails for option in options)
     assert not any(same_idea(a, b) for i, a in enumerate(options) for b in options[i + 1:])
     for option in options:
         assert option.parking.laid_out_sqm >= option.parking.required_sqm - 0.5
-        assert option.open_space_sqm >= 0.10 * dhulapally_run.plot.area
+        assert option.open_space_sqm >= 0.10 * generated.plot.area
 
 
-def test_dhulapally_is_generated_without_its_own_flats_or_plan(dhulapally_run):
-    # A library sized from Dhulapally's own statement would leak the answer into the layout.
-    assert "calibrated" not in dhulapally_run.standards["flat_library"]
-    assert not any(path.suffix == ".dxf" and "SITE_PLAN" in path.name.upper()
-                   for path in dhulapally_run.out.iterdir())
-
-
-def test_dhulapally_report_carries_every_section_and_the_comparison(dhulapally_run):
+def test_the_debug_run_says_so_and_never_uses_dhulapallys_own_flats(debug_run):
     from siteplan.acceptance import compare, report
     from siteplan.cases import Case
 
+    _, generated = debug_run
+    # A library sized from Dhulapally's own statement would leak the answer into the layout.
+    assert "calibrated" not in generated.standards["flat_library"]
     if not FIRM_CASE.exists():
         pytest.skip("the firm's case is not present")
-    rows = compare(dhulapally_run, Case.model_validate_json(FIRM_CASE.read_text()))
-    text = report(dhulapally_run, rows)
-    for heading in ("1. EXTRACTED FROM THE SURVEY", "2. INPUTS AND HOW FAR EACH IS TRUSTED",
-                    "3. UNRESOLVED FACTS AND ASSUMPTIONS", "Maximum legally allowed",
-                    "Maximum geometrically feasible", "5. LAYOUTS THAT PASS",
-                    "6. REJECTED CANDIDATES", "7. COMPARED WITH THE FIRM'S PLAN"):
+    text = report(generated, compare(generated, Case.model_validate_json(FIRM_CASE.read_text())))
+    assert text.startswith("DEBUG RUN")
+    for heading in ("0. TEST PROFILE", "1. EXTRACTED FROM THE SURVEY", "Maximum legally allowed",
+                    "5. LAYOUTS THAT PASS", "6. REJECTED CANDIDATES",
+                    "7. COMPARED WITH THE FIRM'S PLAN", "FROM THE FIRM'S FINISHED PLAN"):
         assert heading in text, heading
     assert "BHADURPALLE" in text  # the place as the survey writes it, not the ward assumed

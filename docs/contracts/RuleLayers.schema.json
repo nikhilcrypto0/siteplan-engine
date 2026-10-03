@@ -1,0 +1,256 @@
+{
+  "$defs": {
+    "Basis": {
+      "enum": [
+        "LEGAL_RULE",
+        "FIRM_STANDARD",
+        "ENGINE_DESIGN_ASSUMPTION",
+        "UNRESOLVED_INTERPRETATION",
+        "SITE_INPUT"
+      ],
+      "title": "Basis",
+      "type": "string"
+    },
+    "LayerKind": {
+      "enum": [
+        "SETBACK",
+        "BLOCK_GAP",
+        "FIRE_CLEAR_BAND",
+        "FIRE_ACCESS_ROUTE",
+        "TURNING_SECTOR",
+        "WATER_BUFFER",
+        "GREEN_STRIP_ZONE",
+        "QUALIFYING_OPEN_SPACE",
+        "RAMP_FORBIDDEN",
+        "BAYS_FORBIDDEN",
+        "CELLAR_SETBACK"
+      ],
+      "title": "LayerKind",
+      "type": "string"
+    },
+    "Permission": {
+      "additionalProperties": false,
+      "properties": {
+        "condition": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Condition"
+        },
+        "interpretation_ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Interpretation Ref"
+        },
+        "permit": {
+          "$ref": "#/$defs/Permit"
+        },
+        "use": {
+          "$ref": "#/$defs/PhysicalUse"
+        }
+      },
+      "required": [
+        "use",
+        "permit"
+      ],
+      "title": "Permission",
+      "type": "object"
+    },
+    "Permit": {
+      "enum": [
+        "ALLOWED",
+        "FORBIDDEN",
+        "CONDITIONAL"
+      ],
+      "title": "Permit",
+      "type": "string"
+    },
+    "PhysicalUse": {
+      "enum": [
+        "TOWER",
+        "CLUB_HOUSE",
+        "OTHER_BUILT",
+        "ROAD",
+        "FIRE_HARDSTANDING",
+        "SURFACE_PARKING",
+        "RAMP",
+        "SOFT_OPEN_SPACE",
+        "GREEN_STRIP",
+        "HARD_AMENITY",
+        "BUFFER_LAND",
+        "UNALLOCATED"
+      ],
+      "title": "PhysicalUse",
+      "type": "string"
+    },
+    "Provenance": {
+      "enum": [
+        "VERIFIED",
+        "USER_CONFIRMED",
+        "EXTRACTED",
+        "ASSUMED_FOR_TEST",
+        "UNVERIFIED"
+      ],
+      "title": "Provenance",
+      "type": "string"
+    },
+    "RuleLayer": {
+      "additionalProperties": false,
+      "properties": {
+        "applies_to": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Applies To"
+        },
+        "area_sqm": {
+          "default": 0.0,
+          "title": "Area Sqm",
+          "type": "number"
+        },
+        "basis": {
+          "$ref": "#/$defs/Basis"
+        },
+        "clause": {
+          "title": "Clause",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "interpretation_ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Interpretation Ref"
+        },
+        "kind": {
+          "$ref": "#/$defs/LayerKind"
+        },
+        "permits": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Permission"
+          },
+          "title": "Permits",
+          "type": "array"
+        },
+        "shapes": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Shape"
+          },
+          "title": "Shapes",
+          "type": "array"
+        },
+        "status": {
+          "$ref": "#/$defs/Provenance"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "clause",
+        "basis",
+        "status"
+      ],
+      "title": "RuleLayer",
+      "type": "object"
+    },
+    "Shape": {
+      "additionalProperties": false,
+      "description": "A polygon: its outer ring and any holes, metres, survey frame, not closed (the first\npoint is not repeated).",
+      "properties": {
+        "holes": {
+          "default": [],
+          "items": {
+            "items": {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "type": "array"
+            },
+            "type": "array"
+          },
+          "title": "Holes",
+          "type": "array"
+        },
+        "outer": {
+          "items": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "type": "array"
+          },
+          "minItems": 3,
+          "title": "Outer",
+          "type": "array"
+        }
+      },
+      "required": [
+        "outer"
+      ],
+      "title": "Shape",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "layers": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/RuleLayer"
+      },
+      "title": "Layers",
+      "type": "array"
+    },
+    "schema_version": {
+      "const": "1.0",
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    }
+  },
+  "title": "RuleLayers",
+  "type": "object"
+}

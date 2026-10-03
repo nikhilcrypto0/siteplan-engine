@@ -1,0 +1,799 @@
+{
+  "$defs": {
+    "AmenityPriority": {
+      "enum": [
+        "REQUIRED",
+        "PREFERRED",
+        "OPTIONAL"
+      ],
+      "title": "AmenityPriority",
+      "type": "string"
+    },
+    "AmenityRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "footprint_m": {
+          "anyOf": [
+            {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Footprint M"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "priority": {
+          "$ref": "#/$defs/AmenityPriority",
+          "default": "PREFERRED"
+        },
+        "setting": {
+          "$ref": "#/$defs/AmenitySetting",
+          "default": "EITHER"
+        },
+        "surface": {
+          "anyOf": [
+            {
+              "enum": [
+                "SOFT",
+                "HARD"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Surface"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "AmenityRequest",
+      "type": "object"
+    },
+    "AmenitySetting": {
+      "enum": [
+        "CLUB_HOUSE",
+        "OUTDOOR",
+        "EITHER"
+      ],
+      "title": "AmenitySetting",
+      "type": "string"
+    },
+    "ClubHouseRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "floors": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Floors"
+        },
+        "size": {
+          "$ref": "#/$defs/ClubSize",
+          "default": "LEGAL_MINIMUM"
+        },
+        "sqm": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sqm"
+        },
+        "wanted": {
+          "$ref": "#/$defs/Sourced_bool_"
+        }
+      },
+      "required": [
+        "wanted"
+      ],
+      "title": "ClubHouseRequest",
+      "type": "object"
+    },
+    "ClubSize": {
+      "enum": [
+        "LEGAL_MINIMUM",
+        "FIRM_STANDARD",
+        "STATED"
+      ],
+      "title": "ClubSize",
+      "type": "string"
+    },
+    "FirmStandards": {
+      "additionalProperties": false,
+      "properties": {
+        "aisle_m": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Sourced_float_"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "bay_size_m": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Sourced_tuple_float__float__"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "cellar_floor_height_m": {
+          "$ref": "#/$defs/Sourced_float_"
+        },
+        "cellar_utilities_share": {
+          "$ref": "#/$defs/Sourced_float_"
+        },
+        "common_area_loading_pct": {
+          "$ref": "#/$defs/Sourced_float_"
+        },
+        "floor_to_floor_m": {
+          "$ref": "#/$defs/Sourced_float_"
+        },
+        "max_cores_per_tower": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Sourced_int_"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "max_tower_length_m": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Sourced_float_"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "min_flats_per_side": {
+          "$ref": "#/$defs/Sourced_int_"
+        },
+        "preferred_prototype_families": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Preferred Prototype Families",
+          "type": "array"
+        },
+        "stilt_height_m": {
+          "$ref": "#/$defs/Sourced_float_"
+        }
+      },
+      "required": [
+        "stilt_height_m",
+        "floor_to_floor_m",
+        "cellar_floor_height_m",
+        "common_area_loading_pct",
+        "cellar_utilities_share",
+        "min_flats_per_side"
+      ],
+      "title": "FirmStandards",
+      "type": "object"
+    },
+    "HeightIntent": {
+      "additionalProperties": false,
+      "properties": {
+        "floors_above_stilt": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Floors Above Stilt"
+        },
+        "floors_range": {
+          "anyOf": [
+            {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "exclusiveMinimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "exclusiveMinimum": 0,
+                  "type": "integer"
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Floors Range"
+        },
+        "has_stilt": {
+          "default": true,
+          "title": "Has Stilt",
+          "type": "boolean"
+        },
+        "min_floors_above_stilt": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Min Floors Above Stilt"
+        },
+        "mixed_heights_allowed": {
+          "default": true,
+          "title": "Mixed Heights Allowed",
+          "type": "boolean"
+        },
+        "mode": {
+          "$ref": "#/$defs/HeightMode",
+          "default": "MAX_LEGAL"
+        },
+        "notation": {
+          "$ref": "#/$defs/Sourced_str_"
+        }
+      },
+      "required": [
+        "notation"
+      ],
+      "title": "HeightIntent",
+      "type": "object"
+    },
+    "HeightMode": {
+      "enum": [
+        "MAX_LEGAL",
+        "FIXED",
+        "RANGE"
+      ],
+      "title": "HeightMode",
+      "type": "string"
+    },
+    "Objectives": {
+      "additionalProperties": false,
+      "properties": {
+        "options": {
+          "default": 3,
+          "exclusiveMinimum": 0,
+          "title": "Options",
+          "type": "integer"
+        },
+        "pareto": {
+          "default": [
+            "MAX_YIELD",
+            "BALANCED",
+            "CONVENTIONAL_OPEN_SPACE"
+          ],
+          "items": {
+            "$ref": "#/$defs/ParetoPoint"
+          },
+          "title": "Pareto",
+          "type": "array"
+        },
+        "priorities": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "default": {},
+          "title": "Priorities",
+          "type": "object"
+        },
+        "search_budget_s": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Search Budget S"
+        },
+        "soft_preferences": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/SoftPreference"
+          },
+          "title": "Soft Preferences",
+          "type": "array"
+        }
+      },
+      "title": "Objectives",
+      "type": "object"
+    },
+    "ParetoPoint": {
+      "enum": [
+        "MAX_YIELD",
+        "BALANCED",
+        "CONVENTIONAL_OPEN_SPACE"
+      ],
+      "title": "ParetoPoint",
+      "type": "string"
+    },
+    "ParkingPreferences": {
+      "additionalProperties": false,
+      "properties": {
+        "max_cellars": {
+          "$ref": "#/$defs/Sourced_int_"
+        },
+        "surface_bays_allowed": {
+          "default": true,
+          "title": "Surface Bays Allowed",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "max_cellars"
+      ],
+      "title": "ParkingPreferences",
+      "type": "object"
+    },
+    "Program": {
+      "additionalProperties": false,
+      "properties": {
+        "allowed_types": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Allowed Types",
+          "type": "array"
+        },
+        "amenities": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/AmenityRequest"
+          },
+          "title": "Amenities",
+          "type": "array"
+        },
+        "amenity_library": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Sourced_str_"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "club_house": {
+          "$ref": "#/$defs/ClubHouseRequest"
+        },
+        "flat_library": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Sourced_str_"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "mix_tolerance": {
+          "default": 0.05,
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Mix Tolerance",
+          "type": "number"
+        },
+        "parking": {
+          "$ref": "#/$defs/ParkingPreferences"
+        },
+        "unit_mix": {
+          "$ref": "#/$defs/Sourced_dict_str__float__"
+        },
+        "units": {
+          "$ref": "#/$defs/UnitTarget",
+          "default": {
+            "maximum": null,
+            "minimum": null,
+            "mode": "MAXIMISE",
+            "target": null
+          }
+        }
+      },
+      "required": [
+        "unit_mix",
+        "club_house",
+        "parking"
+      ],
+      "title": "Program",
+      "type": "object"
+    },
+    "Provenance": {
+      "enum": [
+        "VERIFIED",
+        "USER_CONFIRMED",
+        "EXTRACTED",
+        "ASSUMED_FOR_TEST",
+        "UNVERIFIED"
+      ],
+      "title": "Provenance",
+      "type": "string"
+    },
+    "SoftPreference": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "title": "Kind",
+          "type": "string"
+        },
+        "params": {
+          "additionalProperties": true,
+          "default": {},
+          "title": "Params",
+          "type": "object"
+        },
+        "weight": {
+          "default": 1.0,
+          "minimum": 0,
+          "title": "Weight",
+          "type": "number"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "title": "SoftPreference",
+      "type": "object"
+    },
+    "SourceKind": {
+      "enum": [
+        "SURVEY",
+        "ARCHITECT",
+        "DOCUMENT",
+        "FIRM_STANDARD",
+        "FIRM_FINISHED_PLAN",
+        "ENGINE_DEFAULT",
+        "TEST_PROFILE"
+      ],
+      "title": "SourceKind",
+      "type": "string"
+    },
+    "Sourced_bool_": {
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "default": "",
+          "title": "Source",
+          "type": "string"
+        },
+        "source_kind": {
+          "$ref": "#/$defs/SourceKind"
+        },
+        "status": {
+          "$ref": "#/$defs/Provenance"
+        },
+        "value": {
+          "title": "Value",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "value",
+        "status",
+        "source_kind"
+      ],
+      "title": "Sourced[bool]",
+      "type": "object"
+    },
+    "Sourced_dict_str__float__": {
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "default": "",
+          "title": "Source",
+          "type": "string"
+        },
+        "source_kind": {
+          "$ref": "#/$defs/SourceKind"
+        },
+        "status": {
+          "$ref": "#/$defs/Provenance"
+        },
+        "value": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "title": "Value",
+          "type": "object"
+        }
+      },
+      "required": [
+        "value",
+        "status",
+        "source_kind"
+      ],
+      "title": "Sourced[dict[str, float]]",
+      "type": "object"
+    },
+    "Sourced_float_": {
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "default": "",
+          "title": "Source",
+          "type": "string"
+        },
+        "source_kind": {
+          "$ref": "#/$defs/SourceKind"
+        },
+        "status": {
+          "$ref": "#/$defs/Provenance"
+        },
+        "value": {
+          "title": "Value",
+          "type": "number"
+        }
+      },
+      "required": [
+        "value",
+        "status",
+        "source_kind"
+      ],
+      "title": "Sourced[float]",
+      "type": "object"
+    },
+    "Sourced_int_": {
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "default": "",
+          "title": "Source",
+          "type": "string"
+        },
+        "source_kind": {
+          "$ref": "#/$defs/SourceKind"
+        },
+        "status": {
+          "$ref": "#/$defs/Provenance"
+        },
+        "value": {
+          "title": "Value",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "value",
+        "status",
+        "source_kind"
+      ],
+      "title": "Sourced[int]",
+      "type": "object"
+    },
+    "Sourced_str_": {
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "default": "",
+          "title": "Source",
+          "type": "string"
+        },
+        "source_kind": {
+          "$ref": "#/$defs/SourceKind"
+        },
+        "status": {
+          "$ref": "#/$defs/Provenance"
+        },
+        "value": {
+          "title": "Value",
+          "type": "string"
+        }
+      },
+      "required": [
+        "value",
+        "status",
+        "source_kind"
+      ],
+      "title": "Sourced[str]",
+      "type": "object"
+    },
+    "Sourced_tuple_float__float__": {
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "default": "",
+          "title": "Source",
+          "type": "string"
+        },
+        "source_kind": {
+          "$ref": "#/$defs/SourceKind"
+        },
+        "status": {
+          "$ref": "#/$defs/Provenance"
+        },
+        "value": {
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Value",
+          "type": "array"
+        }
+      },
+      "required": [
+        "value",
+        "status",
+        "source_kind"
+      ],
+      "title": "Sourced[tuple[float, float]]",
+      "type": "object"
+    },
+    "UnitTarget": {
+      "additionalProperties": false,
+      "properties": {
+        "maximum": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Maximum"
+        },
+        "minimum": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Minimum"
+        },
+        "mode": {
+          "$ref": "#/$defs/UnitsMode",
+          "default": "MAXIMISE"
+        },
+        "target": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Target"
+        }
+      },
+      "title": "UnitTarget",
+      "type": "object"
+    },
+    "UnitsMode": {
+      "enum": [
+        "MAXIMISE",
+        "TARGET",
+        "RANGE"
+      ],
+      "title": "UnitsMode",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "brief_id": {
+      "title": "Brief Id",
+      "type": "string"
+    },
+    "firm_standards": {
+      "$ref": "#/$defs/FirmStandards"
+    },
+    "height_intent": {
+      "$ref": "#/$defs/HeightIntent"
+    },
+    "objectives": {
+      "$ref": "#/$defs/Objectives",
+      "default": {
+        "options": 3,
+        "pareto": [
+          "MAX_YIELD",
+          "BALANCED",
+          "CONVENTIONAL_OPEN_SPACE"
+        ],
+        "priorities": {},
+        "search_budget_s": null,
+        "soft_preferences": []
+      }
+    },
+    "program": {
+      "$ref": "#/$defs/Program"
+    },
+    "project_name": {
+      "title": "Project Name",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0",
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "words": {
+      "default": "",
+      "title": "Words",
+      "type": "string"
+    }
+  },
+  "required": [
+    "brief_id",
+    "project_name",
+    "program",
+    "height_intent",
+    "firm_standards"
+  ],
+  "title": "DesignBrief",
+  "type": "object"
+}

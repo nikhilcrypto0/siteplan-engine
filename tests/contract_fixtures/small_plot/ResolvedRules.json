@@ -1,0 +1,829 @@
+{
+ "schema_version": "1.0",
+ "site_ref": "1876e2471d584155",
+ "rules_digest": "rules.py at P0",
+ "orders": [
+  {
+   "id": "G.O.Ms.No.168 of 2012",
+   "read": "TEXT",
+   "note": ""
+  },
+  {
+   "id": "G.O.Ms.No.7 of 2016",
+   "read": "TEXT",
+   "note": ""
+  },
+  {
+   "id": "G.O.Ms.No.50 of 2019",
+   "read": "SCAN",
+   "note": ""
+  },
+  {
+   "id": "G.O.Ms.No.65 of 2019",
+   "read": "SCAN",
+   "note": ""
+  },
+  {
+   "id": "G.O.Ms.No.95 of 2026",
+   "read": "SCAN",
+   "note": ""
+  },
+  {
+   "id": "G.O.Ms.No.245 of 2012",
+   "read": "UNREAD",
+   "note": ""
+  },
+  {
+   "id": "G.O.Ms.No.103 of 2021",
+   "read": "UNREAD",
+   "note": ""
+  }
+ ],
+ "category": {
+  "group_development": {
+   "value": false,
+   "unit": "",
+   "clause": "G.O.168 rule 2(c) (a Group Development Scheme is residential development on a campus or site of 4,000 m² and above); rule 8 governs it",
+   "basis": "LEGAL_RULE",
+   "status": "VERIFIED",
+   "note": ""
+  },
+  "amenities_from_units": {
+   "value": 100,
+   "unit": "",
+   "clause": "G.O.168 rule 15(a)(x) as substituted by G.O.Ms.No.7 of 2016 (group housing of 100 units or more: 'upto 3% of the total built up area (or) 50,000 Sft. whichever is lower', in a block that is not part of the residential blocks)",
+   "basis": "LEGAL_RULE",
+   "status": "VERIFIED",
+   "note": ""
+  },
+  "above_5_acres": {
+   "value": false,
+   "unit": "",
+   "clause": "G.O.168 rule 8(o), p.16",
+   "basis": "LEGAL_RULE",
+   "status": "VERIFIED",
+   "note": ""
+  }
+ },
+ "jurisdiction": {
+  "table_v_column": "ELSEWHERE",
+  "when_open": "STOP",
+  "note": ""
+ },
+ "height": {
+  "measures": {
+   "RULE_HEIGHT": "the height Table IV and the high-rise class are read on; whether it includes the stilt is stilt_in_rule_height",
+   "PHYSICAL_HEIGHT": "ground to the top, stilt included",
+   "AMSL": "height above mean sea level"
+  },
+  "rule_height_interpretation": "stilt_in_rule_height",
+  "high_rise_from_m": {
+   "value": 21.0,
+   "unit": "m",
+   "clause": "G.O.168 rule 2(f) as substituted by G.O.Ms.No.95 of 2026 (21 m)",
+   "basis": "LEGAL_RULE",
+   "status": "VERIFIED",
+   "note": ""
+  },
+  "tdr_band_m": {
+   "value": [
+    18.0,
+    21.0
+   ],
+   "unit": "m",
+   "clause": "G.O.Ms.No.95 of 2026, rule 17(d)(viii) (18-21 m on 750-2000 m² needs TDR)",
+   "basis": "LEGAL_RULE",
+   "status": "VERIFIED",
+   "note": ""
+  },
+  "tdr_plot_sqm": {
+   "value": [
+    750.0,
+    2000.0
+   ],
+   "unit": "m²",
+   "clause": "G.O.Ms.No.95 of 2026, rule 17(d)(viii) (18-21 m on 750-2000 m² needs TDR)",
+   "basis": "LEGAL_RULE",
+   "status": "VERIFIED",
+   "note": ""
+  },
+  "bands": [
+   {
+    "above_m": 0.0,
+    "up_to_m": 21.0,
+    "kind": "NON_HIGH_RISE",
+    "modelled": false,
+    "min_road_m": null,
+    "setback_m": null,
+    "gap_m": null,
+    "clause": "G.O.168 rule 5, Table III",
+    "status": "UNVERIFIED"
+   },
+   {
+    "above_m": 21.0,
+    "up_to_m": 24.0,
+    "kind": "HIGH_RISE",
+    "modelled": true,
+    "min_road_m": 12.0,
+    "setback_m": 8.0,
+    "gap_m": 8.0,
+    "clause": "G.O.168 rule 7(a)(x), Table IV as substituted by G.O.Ms.No.50 of 2019",
+    "status": "VERIFIED"
+   },
+   {
+    "above_m": 24.0,
+    "up_to_m": 27.0,
+    "kind": "HIGH_RISE",
+    "modelled": true,
+    "min_road_m": 18.0,
+    "setback_m": 9.0,
+    "gap_m": 9.0,
+    "clause": "G.O.168 rule 7(a)(x), Table IV as substituted by G.O.Ms.No.50 of 2019",
+    "status": "VERIFIED"
+   },
+   {
+    "above_m": 27.0,
+    "up_to_m": 30.0,
+    "kind": "HIGH_RISE",
+    "modelled": true,
+    "min_road_m": 18.0,
+    "setback_m": 10.0,
+    "gap_m": 10.0,
+    "clause": "G.O.168 rule 7(a)(x), Table IV as substituted by G.O.Ms.No.50 of 2019",
+    "status": "VERIFIED"
+   },
+   {
+    "above_m": 30.0,
+    "up_to_m": 35.0,
+    "kind": "HIGH_RISE",
+    "modelled": true,
+    "min_road_m": 24.0,
+    "setback_m": 11.0,
+    "gap_m": 11.0,
+    "clause": "G.O.168 rule 7(a)(x), Table IV as substituted by G.O.Ms.No.50 of 2019",
+    "status": "VERIFIED"
+   },
+   {
+    "above_m": 35.0,
+    "up_to_m": 40.0,
+    "kind": "HIGH_RISE",
+    "modelled": true,
+    "min_road_m": 24.0,
+    "setback_m": 12.0,
+    "gap_m": 12.0,
+    "clause": "G.O.168 rule 7(a)(x), Table IV as substituted by G.O.Ms.No.50 of 2019",
+    "status": "VERIFIED"
+   },
+   {
+    "above_m": 40.0,
+    "up_to_m": 45.0,
+    "kind": "HIGH_RISE",
+    "modelled": true,
+    "min_road_m": 24.0,
+    "setback_m": 13.0,
+    "gap_m": 13.0,
+    "clause": "G.O.168 rule 7(a)(x), Table IV as substituted by G.O.Ms.No.50 of 2019",
+    "status": "VERIFIED"
+   },
+   {
+    "above_m": 45.0,
+    "up_to_m": 50.0,
+    "kind": "HIGH_RISE",
+    "modelled": true,
+    "min_road_m": 30.0,
+    "setback_m": 14.0,
+    "gap_m": 14.0,
+    "clause": "G.O.168 rule 7(a)(x), Table IV as substituted by G.O.Ms.No.50 of 2019",
+    "status": "VERIFIED"
+   },
+   {
+    "above_m": 50.0,
+    "up_to_m": 55.0,
+    "kind": "HIGH_RISE",
+    "modelled": true,
+    "min_road_m": 30.0,
+    "setback_m": 16.0,
+    "gap_m": 16.0,
+    "clause": "G.O.168 rule 7(a)(x), Table IV as substituted by G.O.Ms.No.50 of 2019",
+    "status": "VERIFIED"
+   },
+   {
+    "above_m": 55.0,
+    "up_to_m": 70.0,
+    "kind": "HIGH_RISE",
+    "modelled": true,
+    "min_road_m": 30.0,
+    "setback_m": 17.0,
+    "gap_m": 17.0,
+    "clause": "G.O.168 rule 7(a)(x), Table IV as substituted by G.O.Ms.No.50 of 2019",
+    "status": "VERIFIED"
+   },
+   {
+    "above_m": 70.0,
+    "up_to_m": 120.0,
+    "kind": "HIGH_RISE",
+    "modelled": true,
+    "min_road_m": 30.0,
+    "setback_m": 18.0,
+    "gap_m": 18.0,
+    "clause": "G.O.168 rule 7(a)(x), Table IV as substituted by G.O.Ms.No.50 of 2019",
+    "status": "VERIFIED"
+   },
+   {
+    "above_m": 120.0,
+    "up_to_m": 10000.0,
+    "kind": "HIGH_RISE",
+    "modelled": true,
+    "min_road_m": 30.0,
+    "setback_m": 20.0,
+    "gap_m": 20.0,
+    "clause": "G.O.168 rule 7(a)(x), Table IV as substituted by G.O.Ms.No.50 of 2019",
+    "status": "VERIFIED"
+   }
+  ],
+  "limits": [
+   {
+    "measure": "RULE_HEIGHT",
+    "max_m": 24.0,
+    "reason": "the 12.19 m road serves buildings up to 24 m",
+    "clause": "G.O.168 rule 7(a)(x), Table IV as substituted by G.O.Ms.No.50 of 2019",
+    "status": "USER_CONFIRMED",
+    "applies_if": null
+   },
+   {
+    "measure": "PHYSICAL_HEIGHT",
+    "max_m": 30.0,
+    "reason": "no dead-end road for a residential building above 30 m",
+    "clause": "G.O.168 rule 15(b)(iv), bringing in NBC 2016 Part 3 4.6(b) (no dead-end road for a residential building above 30 m)",
+    "status": "UNVERIFIED",
+    "applies_if": "the access road ends at the plot (site: None)"
+   },
+   {
+    "measure": "AMSL",
+    "max_m": null,
+    "reason": "no site coordinates: airport and Air Force limits not evaluated",
+    "clause": "G.O.168 rule 3(d)",
+    "status": "UNVERIFIED",
+    "applies_if": null
+   }
+  ]
+ },
+ "setbacks": {
+  "measured_on": {
+   "value": "net plot",
+   "unit": "",
+   "clause": "G.O.168 rule 7(a)(iii) (setbacks of a high-rise on the net plot left after road widening); rule 5(f)(ii) for Table III",
+   "basis": "LEGAL_RULE",
+   "status": "VERIFIED",
+   "note": ""
+  },
+  "front": {
+   "value": "Table IV",
+   "unit": "",
+   "clause": "G.O.168 p.17, clause (b) (the front setback of a high-rise is as per Table IV of rule 7)",
+   "basis": "LEGAL_RULE",
+   "status": "VERIFIED",
+   "note": ""
+  },
+  "concessions": [
+   {
+    "value": "down to 7 m clear on all sides",
+    "unit": "",
+    "clause": "G.O.168 rule 16 as substituted by G.O.Ms.No.7 of 2016 (surrender free of cost; TDR, extra floors or setback concessions)",
+    "basis": "LEGAL_RULE",
+    "status": "VERIFIED",
+    "note": "applies only when land is surrendered for a road"
+   }
+  ]
+ },
+ "spacing": {
+  "clause": "G.O.168 rule 7(a)(xii) (same as Table IV column 4)",
+  "mixed_heights_interpretation": "mixed_height_spacing"
+ },
+ "open_space": {
+  "share": {
+   "value": 0.1,
+   "unit": "",
+   "clause": "G.O.168 rule 7(a)(vii)",
+   "basis": "LEGAL_RULE",
+   "status": "VERIFIED",
+   "note": ""
+  },
+  "basis_interpretation": "open_space_basis",
+  "requirement_sqm_by_reading": {
+   "gross_before_surrender": 300.0,
+   "gross_after_surrender": 300.0,
+   "net_after_surrender": 300.0
+  },
+  "min_width_m": {
+   "value": 3.0,
+   "unit": "m",
+   "clause": "G.O.168 rule 7(a)(vii)",
+   "basis": "LEGAL_RULE",
+   "status": "VERIFIED",
+   "note": ""
+  },
+  "min_pocket_sqm": {
+   "value": 50.0,
+   "unit": "m²",
+   "clause": "G.O.168 rule 7(a)(vii)",
+   "basis": "LEGAL_RULE",
+   "status": "VERIFIED",
+   "note": ""
+  },
+  "over_and_above_setbacks": {
+   "value": true,
+   "unit": "",
+   "clause": "G.O.168 rule 5(vi)",
+   "basis": "LEGAL_RULE",
+   "status": "VERIFIED",
+   "note": ""
+  },
+  "block_gaps_excluded": {
+   "value": true,
+   "unit": "",
+   "clause": "G.O.168 rule 7(a)(xii) (same as Table IV column 4)",
+   "basis": "LEGAL_RULE",
+   "status": "VERIFIED",
+   "note": ""
+  },
+  "buffer_may_count": {
+   "value": true,
+   "unit": "",
+   "clause": "G.O.168 rule 3(a)(iii)(3)",
+   "basis": "LEGAL_RULE",
+   "status": "VERIFIED",
+   "note": ""
+  }
+ },
+ "green_strip": {
+  "width_m": {
+   "value": 2.0,
+   "unit": "m",
+   "clause": "G.O.168 rule 7(a)(viii) as substituted by G.O.Ms.No.7 of 2016 (setbacks of 9 m and above)",
+   "basis": "LEGAL_RULE",
+   "status": "VERIFIED",
+   "note": ""
+  },
+  "where_setback_from_m": {
+   "value": 9.0,
+   "unit": "m",
+   "clause": "G.O.168 rule 7(a)(viii) as substituted by G.O.Ms.No.7 of 2016 (setbacks of 9 m and above)",
+   "basis": "LEGAL_RULE",
+   "status": "VERIFIED",
+   "note": ""
+  }
+ },
+ "circulation": {
+  "applies": {
+   "value": false,
+   "unit": "",
+   "clause": "G.O.168 rule 2(c) (a Group Development Scheme is residential development on a campus or site of 4,000 m² and above); rule 8 governs it",
+   "basis": "LEGAL_RULE",
+   "status": "VERIFIED",
+   "note": ""
+  },
+  "approach_m": {
+   "value": [
+    9.0,
+    18.0
+   ],
+   "unit": "m",
+   "clause": "G.O.168 rule 8(m) (internal roads of a group development scheme: main approach 9-18 m, other and looped roads 9 m, cul-de-sacs 8 m for 50-100 m with a 9 m radius head)",
+   "basis": "LEGAL_RULE",
+   "status": "VERIFIED",
+   "note": ""
+  },
+  "approach_interpretation": "approach_width",
+  "internal_road_m": {
+   "value": 9.0,
+   "unit": "m",
+   "clause": "G.O.168 rule 8(m) (internal roads of a group development scheme: main approach 9-18 m, other and looped roads 9 m, cul-de-sacs 8 m for 50-100 m with a 9 m radius head)",
+   "basis": "LEGAL_RULE",
+   "status": "VERIFIED",
+   "note": ""
+  },
+  "cul_de_sac_width_m": {
+   "value": 8.0,
+   "unit": "m",
+   "clause": "G.O.168 rule 8(m) (internal roads of a group development scheme: main approach 9-18 m, other and looped roads 9 m, cul-de-sacs 8 m for 50-100 m with a 9 m radius head)",
+   "basis": "LEGAL_RULE",
+   "status": "VERIFIED",
+   "note": ""
+  },
+  "cul_de_sac_length_m": {
+   "value": [
+    50.0,
+    100.0
+   ],
+   "unit": "m",
+   "clause": "G.O.168 rule 8(m) (internal roads of a group development scheme: main approach 9-18 m, other and looped roads 9 m, cul-de-sacs 8 m for 50-100 m with a 9 m radius head)",
+   "basis": "LEGAL_RULE",
+   "status": "VERIFIED",
+   "note": ""
+  },
+  "cul_de_sac_head_radius_m": {
+   "value": 9.0,
+   "unit": "m",
+   "clause": "G.O.168 rule 8(m) (internal roads of a group development scheme: main approach 9-18 m, other and looped roads 9 m, cul-de-sacs 8 m for 50-100 m with a 9 m radius head)",
+   "basis": "LEGAL_RULE",
+   "status": "VERIFIED",
+   "note": ""
+  },
+  "pathway_max_block_height_m": {
+   "value": 12.0,
+   "unit": "m",
+   "clause": "G.O.168 rule 8(l) (6 m pathways only for blocks up to 12 m high)",
+   "basis": "LEGAL_RULE",
+   "status": "VERIFIED",
+   "note": ""
+  },
+  "driveway_min_m": {
+   "value": 4.5,
+   "unit": "m",
+   "clause": "G.O.168 rule 13(c)(viii) (minimum drive way width 4.5 m)",
+   "basis": "LEGAL_RULE",
+   "status": "VERIFIED",
+   "note": ""
+  },
+  "driveway_is_road": {
+   "value": false,
+   "unit": "",
+   "clause": "G.O.168 rule 8(m) (internal roads of a group development scheme: main approach 9-18 m, other and looped roads 9 m, cul-de-sacs 8 m for 50-100 m with a 9 m radius head)",
+   "basis": "LEGAL_RULE",
+   "status": "VERIFIED",
+   "note": ""
+  },
+  "block_over_12m_on_road": {
+   "value": true,
+   "unit": "",
+   "clause": "G.O.168 rule 8(l) (6 m pathways only for blocks up to 12 m high)",
+   "basis": "UNRESOLVED_INTERPRETATION",
+   "status": "UNVERIFIED",
+   "note": "rule 8(l) read as every block above 12 m opening onto a road"
+  },
+  "in_setback_interpretation": "circulation_in_setback"
+ },
+ "fire": {
+  "applies_from_m": {
+   "value": 21.0,
+   "unit": "m",
+   "clause": "G.O.168 rule 2(f) as substituted by G.O.Ms.No.95 of 2026 (21 m)",
+   "basis": "LEGAL_RULE",
+   "status": "VERIFIED",
+   "note": ""
+  },
+  "clear_width_m": {
+   "value": 6.0,
+   "unit": "m",
+   "clause": "G.O.168 rule 15(b)(iv), bringing in NBC 2016 Part 3 4.6(c) (6 m of motorable open space on all sides, a 9 m turning radius, free of obstructions, never parked in)",
+   "basis": "LEGAL_RULE",
+   "status": "VERIFIED",
+   "note": ""
+  },
+  "turning_radius_m": {
+   "value": 9.0,
+   "unit": "m",
+   "clause": "G.O.168 rule 15(b)(iv), bringing in NBC 2016 Part 3 4.6(c) (6 m of motorable open space on all sides, a 9 m turning radius, free of obstructions, never parked in)",
+   "basis": "LEGAL_RULE",
+   "status": "VERIFIED",
+   "note": ""
+  },
+  "turning_interpretation": "fire_turning_radius",
+  "entrance_width_m": {
+   "value": 6.0,
+   "unit": "m",
+   "clause": "G.O.168 rule 15(b)(iv), bringing in NBC 2016 Part 3 4.6(d) (entrance at least 6 m wide)",
+   "basis": "LEGAL_RULE",
+   "status": "VERIFIED",
+   "note": ""
+  },
+  "entrance_clear_height_m": {
+   "value": 4.5,
+   "unit": "m",
+   "clause": "G.O.168 rule 15(b)(iv), bringing in NBC 2016 Part 3 4.6(d) (entrance at least 6 m wide)",
+   "basis": "LEGAL_RULE",
+   "status": "VERIFIED",
+   "note": ""
+  },
+  "load_t": {
+   "value": 45.0,
+   "unit": "t",
+   "clause": "G.O.168 rule 15(b)(iv), bringing in NBC 2016 Part 3 4.6(c) (6 m of motorable open space on all sides, a 9 m turning radius, free of obstructions, never parked in)",
+   "basis": "LEGAL_RULE",
+   "status": "UNVERIFIED",
+   "note": "a paving specification the engine cannot check"
+  },
+  "street_join_m": {
+   "value": 12.0,
+   "unit": "m",
+   "clause": "G.O.168 rule 15(b)(iv), bringing in NBC 2016 Part 3 4.6(a) (the street joins a street at least 12 m wide at one end)",
+   "basis": "LEGAL_RULE",
+   "status": "VERIFIED",
+   "note": ""
+  },
+  "dead_end_max_physical_m": {
+   "value": 30.0,
+   "unit": "m",
+   "clause": "G.O.168 rule 15(b)(iv), bringing in NBC 2016 Part 3 4.6(b) (no dead-end road for a residential building above 30 m)",
+   "basis": "LEGAL_RULE",
+   "status": "VERIFIED",
+   "note": ""
+  }
+ },
+ "parking": {
+  "share_pct_by_column": {
+   "GHMC_OR_CURE": 30.0,
+   "ELSEWHERE": 20.0
+  },
+  "share_pct": {
+   "value": 20.0,
+   "unit": "%",
+   "clause": "G.O.168 rule 13, Table V row 4 (Residential Apartment Complexes)",
+   "basis": "LEGAL_RULE",
+   "status": "VERIFIED",
+   "note": ""
+  },
+  "visitors_fraction": {
+   "value": 0.1,
+   "unit": "",
+   "clause": "G.O.168 rule 13(c)(xii) (visitors' parking, 10% of the Table V area)",
+   "basis": "LEGAL_RULE",
+   "status": "VERIFIED",
+   "note": ""
+  },
+  "visitors_interpretation": "visitor_parking",
+  "cellar_setback_by_site_sqm": {
+   "value": [
+    [
+     1000.0,
+     1.5
+    ],
+    [
+     2000.0,
+     2.0
+    ],
+    [
+     null,
+     3.0
+    ]
+   ],
+   "unit": "m",
+   "clause": "G.O.168 rule 13(c)(x) (cellar setback from the property line)",
+   "basis": "LEGAL_RULE",
+   "status": "VERIFIED",
+   "note": ""
+  },
+  "cellar_extra_setback_per_level_m": {
+   "value": 0.5,
+   "unit": "m",
+   "clause": "G.O.168 rule 13(c)(x) (cellar setback from the property line)",
+   "basis": "LEGAL_RULE",
+   "status": "VERIFIED",
+   "note": ""
+  },
+  "ramp_single_min_m": {
+   "value": 5.4,
+   "unit": "m",
+   "clause": "G.O.168 rule 13(c)(vii) (ramps: one of 5.4 m or two of 3.6 m, 1 in 8)",
+   "basis": "LEGAL_RULE",
+   "status": "VERIFIED",
+   "note": ""
+  },
+  "ramp_pair_min_m": {
+   "value": 3.6,
+   "unit": "m",
+   "clause": "G.O.168 rule 13(c)(vii) (ramps: one of 5.4 m or two of 3.6 m, 1 in 8)",
+   "basis": "LEGAL_RULE",
+   "status": "VERIFIED",
+   "note": ""
+  },
+  "ramp_gradient": {
+   "value": 0.125,
+   "unit": "",
+   "clause": "G.O.168 rule 13(c)(vii) (ramps: one of 5.4 m or two of 3.6 m, 1 in 8)",
+   "basis": "LEGAL_RULE",
+   "status": "VERIFIED",
+   "note": ""
+  },
+  "ramp_in_setbacks": {
+   "value": "never in the front setback or building line; side or rear only leaving 7 m for fire vehicles",
+   "unit": "",
+   "clause": "G.O.168 rule 13(c)(vii) (ramps: one of 5.4 m or two of 3.6 m, 1 in 8)",
+   "basis": "LEGAL_RULE",
+   "status": "VERIFIED",
+   "note": ""
+  },
+  "utilities_max_fraction": {
+   "value": 0.1,
+   "unit": "",
+   "clause": "G.O.168 rule 13(c)(xi) (up to 10% of a cellar for utilities)",
+   "basis": "LEGAL_RULE",
+   "status": "VERIFIED",
+   "note": ""
+  },
+  "measurement": {
+   "bay_m": [
+    2.5,
+    5.0
+   ],
+   "aisle_m": 6.0,
+   "sqm_per_car": 20.0,
+   "basis": "ENGINE_DESIGN_ASSUMPTION",
+   "note": "the engine's parking standard; no order gives it"
+  }
+ },
+ "amenities": {
+  "share_of_built_up": {
+   "value": 0.03,
+   "unit": "",
+   "clause": "G.O.168 rule 15(a)(x) as substituted by G.O.Ms.No.7 of 2016 (group housing of 100 units or more: 'upto 3% of the total built up area (or) 50,000 Sft. whichever is lower', in a block that is not part of the residential blocks)",
+   "basis": "UNRESOLVED_INTERPRETATION",
+   "status": "ASSUMED_FOR_TEST",
+   "note": ""
+  },
+  "share_interpretation": "amenity_share",
+  "cap_sqft_2016": {
+   "value": 50000.0,
+   "unit": "sft",
+   "clause": "G.O.168 rule 15(a)(x) as substituted by G.O.Ms.No.7 of 2016 (group housing of 100 units or more: 'upto 3% of the total built up area (or) 50,000 Sft. whichever is lower', in a block that is not part of the residential blocks)",
+   "basis": "LEGAL_RULE",
+   "status": "VERIFIED",
+   "note": ""
+  },
+  "from_units": {
+   "value": 100,
+   "unit": "",
+   "clause": "G.O.168 rule 15(a)(x) as substituted by G.O.Ms.No.7 of 2016 (group housing of 100 units or more: 'upto 3% of the total built up area (or) 50,000 Sft. whichever is lower', in a block that is not part of the residential blocks)",
+   "basis": "LEGAL_RULE",
+   "status": "VERIFIED",
+   "note": ""
+  },
+  "separate_block": {
+   "value": "not part of a residential block, unless there is one block",
+   "unit": "",
+   "clause": "G.O.168 rule 15(a)(x) as substituted by G.O.Ms.No.7 of 2016 (group housing of 100 units or more: 'upto 3% of the total built up area (or) 50,000 Sft. whichever is lower', in a block that is not part of the residential blocks)",
+   "basis": "LEGAL_RULE",
+   "status": "VERIFIED",
+   "note": ""
+  },
+  "large_project_share_of_site": {
+   "value": 0.05,
+   "unit": "",
+   "clause": "G.O.168 rule 8(o), p.16",
+   "basis": "LEGAL_RULE",
+   "status": "VERIFIED",
+   "note": "read from the 2012 text on 2026-10-02; not yet a rules.py constant"
+  },
+  "large_project_from_acres": {
+   "value": 5.0,
+   "unit": "acre",
+   "clause": "G.O.168 rule 8(o), p.16",
+   "basis": "LEGAL_RULE",
+   "status": "VERIFIED",
+   "note": ""
+  }
+ },
+ "water": {
+  "buffer_m_by_class": {
+   "value": {
+    "river": 50.0,
+    "lake_10ha_or_more": 30.0,
+    "lake_under_10ha": 9.0,
+    "nala_over_10m": 9.0,
+    "nala_up_to_10m": 2.0
+   },
+   "unit": "m",
+   "clause": "G.O.168 rule 3(a)(ii), the river clause as substituted by G.O.Ms.No.7 of 2016; rule 3(a)(iii)(3)",
+   "basis": "LEGAL_RULE",
+   "status": "VERIFIED",
+   "note": ""
+  }
+ },
+ "interpretations": [
+  {
+   "id": "stilt_in_rule_height",
+   "question": "Does the stilt count toward the height that picks the Table IV row and the high-rise class?",
+   "alternatives": {
+    "counted": "the stilt counts toward the Table IV height",
+    "not_counted": "the stilt does not count toward the Table IV height"
+   },
+   "selected": "ALL",
+   "basis": "UNRESOLVED_INTERPRETATION",
+   "status": "UNVERIFIED",
+   "sources": [
+    "rule 2(e) as the engine read it",
+    "G.O.Ms.No.7 of 2016 on parking floors above ground",
+    "the firm's Dhulapally drawing behaves as if not counted (not evidence)"
+   ],
+   "settles": "a sanctioned plan, or the authority's written reading"
+  },
+  {
+   "id": "open_space_basis",
+   "question": "Of which area is the 10% organised open space measured?",
+   "alternatives": {
+    "gross_before_surrender": "the gross site area, before any land is surrendered",
+    "gross_after_surrender": "the gross site area less the land surrendered",
+    "net_after_surrender": "the net site area after every ownership deduction"
+   },
+   "selected": "ALL",
+   "basis": "UNRESOLVED_INTERPRETATION",
+   "status": "UNVERIFIED",
+   "sources": [
+    "rule 8(g)",
+    "rule 5(vi)"
+   ],
+   "settles": "a sanctioned plan's area statement"
+  },
+  {
+   "id": "circulation_in_setback",
+   "question": "May internal roads and fire lanes run inside the mandatory setback?",
+   "alternatives": {
+    "allowed": "roads and fire lanes may run inside the setback",
+    "not_allowed": "roads and fire lanes run outside the setback"
+   },
+   "selected": "ALL",
+   "basis": "UNRESOLVED_INTERPRETATION",
+   "status": "UNVERIFIED",
+   "sources": [
+    "rule 13(c)(vii) lets ramps use side and rear setbacks leaving 7 m for fire vehicles: an implication, not a permission"
+   ],
+   "settles": "the authority's practice on sanctioned plans"
+  },
+  {
+   "id": "fire_turning_radius",
+   "question": "Where is NBC's 9 m turning radius measured?",
+   "alternatives": {
+    "outer_edge": "at the lane's outer edge (inner edge 3 m)",
+    "centreline": "at the lane's centreline"
+   },
+   "selected": "outer_edge",
+   "basis": "UNRESOLVED_INTERPRETATION",
+   "status": "UNVERIFIED",
+   "sources": [
+    "NBC 2016 Part 3 4.6(c)"
+   ],
+   "settles": "the fire department's reading"
+  },
+  {
+   "id": "approach_width",
+   "question": "How wide is the main approach road within rule 8(m)'s 9 to 18 m?",
+   "alternatives": {
+    "minimum": "9 m, the least the rule allows",
+    "authority_choice": "what the authority asks within 9 to 18 m"
+   },
+   "selected": "minimum",
+   "basis": "UNRESOLVED_INTERPRETATION",
+   "status": "UNVERIFIED",
+   "sources": [
+    "rule 8(m)"
+   ],
+   "settles": "the authority's practice"
+  },
+  {
+   "id": "mixed_height_spacing",
+   "question": "Which block's Table IV gap applies between blocks of different heights?",
+   "alternatives": {
+    "taller_governs": "the taller block's gap",
+    "each_own": "each block keeps its own gap"
+   },
+   "selected": "taller_governs",
+   "basis": "UNRESOLVED_INTERPRETATION",
+   "status": "UNVERIFIED",
+   "sources": [
+    "rule 7(a)(xii)"
+   ],
+   "settles": "a sanctioned plan with mixed heights"
+  },
+  {
+   "id": "visitor_parking",
+   "question": "Where must visitors' parking be?",
+   "alternatives": {
+    "at_ground": "at ground level",
+    "anywhere": "anywhere parking is"
+   },
+   "selected": "at_ground",
+   "basis": "UNRESOLVED_INTERPRETATION",
+   "status": "UNVERIFIED",
+   "sources": [
+    "rule 13(c)(xii)"
+   ],
+   "settles": "the authority's practice"
+  },
+  {
+   "id": "amenity_share",
+   "question": "Is 3% of the built-up area a minimum, or a cap with 50,000 sft?",
+   "alternatives": {
+    "minimum_3_percent": "at least 3% (the 2012 wording, kept as the planning minimum)",
+    "up_to_3_percent_or_cap": "up to 3% or 50,000 sft, whichever is lower (the 2016 wording)"
+   },
+   "selected": "minimum_3_percent",
+   "basis": "UNRESOLVED_INTERPRETATION",
+   "status": "ASSUMED_FOR_TEST",
+   "sources": [
+    "G.O.168 rule 15(a)(x) as substituted by G.O.Ms.No.7 of 2016 (group housing of 100 units or more: 'upto 3% of the total built up area (or) 50,000 Sft. whichever is lower', in a block that is not part of the residential blocks)"
+   ],
+   "settles": "the authority's reading of the 2016 text"
+  }
+ ]
+}
