@@ -187,8 +187,9 @@ def _ramp_and_bay_layers(ctx: Context) -> list[RuleLayer]:
     out += _per_stilt(ctx, "bays forbidden", LayerKind.BAYS_FORBIDDEN,
                       "G.O.168 rule 13(b)(iii); " + ctx.rules.fire.clear_width_m.clause, bays,
                       permits=_forbid(U.SURFACE_PARKING))
-    if ctx.drawn.cellar_levels:
-        need = cellar_setback_m(ctx.rules, ctx.net.area, ctx.drawn.cellar_levels)
+    need = (cellar_setback_m(ctx.rules, ctx.net.area, ctx.drawn.cellar_levels)
+            if ctx.drawn.cellar_levels else None)
+    if need is not None:
         out.append(_layer("cellar setback", LayerKind.CELLAR_SETBACK,
                           ctx.net.difference(ctx.net.buffer(-need)),
                           ctx.rules.parking.cellar_setback_by_site_sqm.clause))

@@ -80,11 +80,15 @@ def bay_standard(ctx: Context) -> tuple[tuple[float, float], float, float]:
     return bay, aisle, (bay[0] * (bay[1] + aisle / 2) if own else m.sqm_per_car)
 
 
-def cellar_setback_m(rules: ResolvedRules, site_sqm: float, levels: int) -> float:
+def cellar_setback_m(rules: ResolvedRules, site_sqm: float, levels: int) -> float | None:
     """Rule 13(c)(x): the setback by site size, and 0.5 m more for every cellar beyond the
-    first, applied to all of them (the stricter reading of an unsettled clause)."""
+    first, applied to all of them (the stricter reading of an unsettled clause). None when the
+    rules' table has no row for a site this large (it should end 'and above'): which setback
+    applies is then not known, and nothing is guessed."""
     table = rules.parking.cellar_setback_by_site_sqm.value
-    base = next(m for up_to, m in table if up_to is None or site_sqm <= up_to)
+    base = next((m for up_to, m in table if up_to is None or site_sqm <= up_to), None)
+    if base is None:
+        return None
     return base + rules.parking.cellar_extra_setback_per_level_m.value * max(0, levels - 1)
 
 
@@ -301,6 +305,12 @@ def cellar_setback_check(ctx: Context, f: Floors) -> Check:
     d = ctx.drawn
     need = cellar_setback_m(ctx.rules, ctx.net.area, f.cellar_levels)
     clause = ctx.rules.parking.cellar_setback_by_site_sqm.clause
+    if need is None:
+        return plain(Family.PARKING, "Cellar setback", Status.UNVERIFIED,
+                     f"the rules' table has no row for a site of {ctx.net.area:,.0f} m²",
+                     "the setback rule 13(c)(x) gives for this site", clause,
+                     "The table should end with a row for sites above its last size; which "
+                     "setback applies is not known, so none is held to.")
     required = (f">= {need:g} m from the property line for {f.cellar_levels} cellar "
                 f"level{'s' if f.cellar_levels > 1 else ''}")
     if d.cellar_outline.is_empty:
