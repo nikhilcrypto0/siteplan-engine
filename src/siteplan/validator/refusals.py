@@ -66,9 +66,8 @@ def unusable_rules(rules: ResolvedRules) -> list[str]:
     if min(measure.bay_m) < MIN_BAY_M or measure.aisle_m < 0 or measure.sqm_per_car <= 0:
         found.append(f"parking.measurement: a bay of at least {MIN_BAY_M:g} m, an aisle that is "
                      "not negative and a car that takes floor")
-    table = p.cellar_setback_by_site_sqm.value
-    if not any(up_to is None for up_to, _ in table):
-        found.append("parking.cellar_setback_by_site_sqm needs a row for the largest sites")
+    if not p.cellar_setback_by_site_sqm.value:
+        found.append("parking.cellar_setback_by_site_sqm has no rows")
     return found
 
 

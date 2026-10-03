@@ -140,7 +140,7 @@ def cellars(ctx: Context) -> list[Discrepancy]:
     if d.cellar_setback_claimed_m is None or not d.cellar_levels:
         return []
     need = cellar_setback_m(ctx.rules, ctx.net.area, d.cellar_levels)
-    if d.cellar_setback_claimed_m + SETBACK_SLACK_M < need:
+    if need is not None and d.cellar_setback_claimed_m + SETBACK_SLACK_M < need:
         return [_d("cellar setback", "generator", f"{d.cellar_setback_claimed_m:g} m",
                    f"{need:g} m", True)]
     return []
