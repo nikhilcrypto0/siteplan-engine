@@ -17,24 +17,35 @@ import math
 
 from siteplan import parking, rules
 from siteplan.contracts.accounting import DeductionKind
-from siteplan.contracts.common import Basis, Provenance, digest
+from siteplan.contracts.common import Basis, FacilityUse, Provenance, digest
 from siteplan.contracts.resolved_rules import (
+    Applicability,
     BandKind,
+    Eligibility,
+    EligibilityGround,
     HeightMeasure,
+    HighRiseEligibility,
+    LimitBound,
     ResolvedRules,
+    SiteFact,
     TableVColumn,
     WhenOpen,
 )
 from siteplan.contracts.site_model import CanonicalSiteModel, Road
 from siteplan.legal.readings import OPEN_SPACE_READINGS, interpretations
 from siteplan.provenance import confirmed, weakest
-from siteplan.units import SQM_PER_ACRE
 
 # The airport clause lives in heights.py too; tests/test_resolve.py keeps the two the same.
 AIRPORT_CLAUSE = "G.O.168 rule 3(d) (airport and Air Force height limits)"
 TABLE_III_CLAUSE = "G.O.168 rule 5, Table III"
 LAW = {"basis": Basis.LEGAL_RULE, "status": Provenance.VERIFIED}
 YES_NO = {True: "yes", False: "no", None: "not known"}
+APPLICABILITY = {True: Applicability.APPLIES, False: Applicability.DOES_NOT_APPLY,
+                 None: Applicability.UNKNOWN}
+# What a high-rise's prohibition does not say (the user's clarification of 2026-10-03).
+PROHIBITED_NOTE = ("No building of the high-rise height or more may stand here. That permits "
+                   "nothing below it: the permissible lower height, its Table III setbacks, road "
+                   "conditions and spacing are not encoded yet (A2) and not validated (D2).")
 
 # The orders ResolvedRules rests on, and how each was read (AGENTS.md); the unread ones are
 # listed because they may amend what is relied on.
@@ -93,6 +104,11 @@ def resolve(site: CanonicalSiteModel, *, selections: dict[str, str] | None = Non
                                         rules.PERIPHERAL_GREEN_STRIP_CLAUSE, unit="m")},
         circulation=_circulation(group, gross.status),
         fire=_fire(),
+        electrical={
+            "ht_clearance_m": _rv(rules.ELECTRICAL_HT_CLEARANCE_M, rules.ELECTRICAL_CLAUSE,
+                                  unit="m"),
+            "lt_clearance_m": _rv(rules.ELECTRICAL_LT_CLEARANCE_M, rules.ELECTRICAL_CLAUSE,
+                                  unit="m")},
         parking=_parking(column, column_status, when_open),
         amenities=_amenities(),
         water={"buffer_m_by_class": _rv(dict(rules.WATER_BUFFER_M), rules.WATER_BUFFER_CLAUSE,
@@ -114,13 +130,7 @@ def _category(site: CanonicalSiteModel, group: bool) -> dict:
     gross = site.ownership.gross_sqm
     return {
         "group_development": _from_site(group, rules.GROUP_DEVELOPMENT_CLAUSE, gross.status),
-        "amenities_from_units": _rv(rules.AMENITY_MIN_UNITS, rules.AMENITY_CLAUSE),
-        "above_5_acres": _rv(
-            gross.value > rules.LARGE_PROJECT_FROM_ACRES * SQM_PER_ACRE,
-            rules.LARGE_PROJECT_AMENITY_CLAUSE, basis=Basis.UNRESOLVED_INTERPRETATION,
-            status=Provenance.ASSUMED_FOR_TEST,
-            note="a size class only: the 5% amenity share it triggers is written for row and "
-                 "cluster housing, not group development, and is not applied here")}
+        "amenities_from_units": _rv(rules.AMENITY_MIN_UNITS, rules.AMENITY_CLAUSE)}
 
 
 # --- Height ----------------------------------------------------------------------------------
@@ -130,106 +140,150 @@ def _height(site: CanonicalSiteModel, road: Road | None) -> dict:
     return {
         "measures": MEASURES,
         "high_rise_from_m": _rv(rules.HIGH_RISE_THRESHOLD_M, rules.HIGH_RISE_CLAUSE, unit="m"),
+        "high_rise": _high_rise(site, road),
         "tdr_band_m": _rv(rules.TDR_BAND_M, rules.TDR_BAND_CLAUSE, unit="m"),
         "tdr_plot_sqm": _rv(rules.TDR_PLOT_RANGE_SQM, rules.TDR_BAND_CLAUSE, unit="m²"),
         "bands": _bands(),
-        "limits": [*_road_limits(road), *_plot_limit(site), *_dead_end_limit(site),
-                   _airport_limit(site)]}
+        "limits": [*_road_limits(road), _dead_end_limit(site), _airport_limit(site)]}
 
 
 def _bands() -> list[dict]:
-    """The non-high-rise band, present and not modelled (Table III is stream A2's), then the
-    high-rise rows of Table IV, each with its road, its all-round setback and the gap between two
-    blocks (the same figure, rule 7(a)(xii))."""
-    below = {"above_m": 0.0, "up_to_m": rules.HIGH_RISE_THRESHOLD_M,
+    """Every height in exactly one band. Below the high-rise height, Table III's band, present
+    and not modelled (stream A2). A building of exactly that height is a high-rise (rule 2(f)) on
+    the Table IV row that reaches it, in a band of its own. Then the high-rise rows of Table IV,
+    each with its road, its all-round setback and the gap between two blocks (the same figure,
+    rule 7(a)(xii))."""
+    start = rules.HIGH_RISE_THRESHOLD_M
+    at = rules.band_for_height(start)
+    below = {"above_m": 0.0, "up_to_m": start, "up_to_inclusive": False,
              "kind": BandKind.NON_HIGH_RISE, "modelled": False, "clause": TABLE_III_CLAUSE,
              "status": Provenance.UNVERIFIED}
-    return [below, *({"above_m": b.above_m, "up_to_m": b.up_to_m, "kind": BandKind.HIGH_RISE,
-                      "min_road_m": b.min_road_m, "setback_m": b.min_open_space_m,
-                      "gap_m": b.min_open_space_m, "clause": rules.TABLE_IV_CLAUSE}
-                     for b in rules.TABLE_IV if b.above_m >= rules.HIGH_RISE_THRESHOLD_M)]
+    exactly = {"above_m": start, "up_to_m": start, "above_inclusive": True,
+               "kind": BandKind.HIGH_RISE, "min_road_m": at.min_road_m,
+               "setback_m": at.min_open_space_m, "gap_m": at.min_open_space_m,
+               "clause": rules.TABLE_IV_CLAUSE}
+    return [below, exactly,
+            *({"above_m": b.above_m, "up_to_m": b.up_to_m, "kind": BandKind.HIGH_RISE,
+               "min_road_m": b.min_road_m, "setback_m": b.min_open_space_m,
+               "gap_m": b.min_open_space_m, "clause": rules.TABLE_IV_CLAUSE}
+              for b in rules.TABLE_IV if b.above_m >= start)]
+
+
+def _high_rise(site: CanonicalSiteModel, road: Road | None) -> dict:
+    """Whether a high-rise may stand here at all: the road Table IV asks of its first high-rise
+    height, and the plot size rule 7(a)(ii) asks. PROHIBITED permits nothing lower."""
+    grounds = [_road_ground(road), _plot_ground(site)]
+    eligibility = HighRiseEligibility.of_grounds(grounds)
+    return {"eligibility": eligibility, "grounds": grounds,
+            "note": PROHIBITED_NOTE if eligibility is Eligibility.PROHIBITED else ""}
+
+
+def _road_ground(road: Road | None) -> EligibilityGround:
+    """With a master-plan width as well, the road ground is met only if both widths meet it, not
+    met if neither does, and unsettled when it turns on which width counts."""
+    need = rules.band_for_height(rules.HIGH_RISE_THRESHOLD_M).min_road_m
+    widths = [w for w in ((road.legal_row_m, road.master_plan_row_m) if road else ()) if w]
+    if not widths:
+        return EligibilityGround(id="road_width", met=None, measured="not given",
+                                 required=f"at least {need:g} m", clause=rules.TABLE_IV_CLAUSE,
+                                 status=Provenance.UNVERIFIED)
+    meets = {w.value >= need for w in widths}
+    return EligibilityGround(
+        id="road_width", met=meets.pop() if len(meets) == 1 else None,
+        measured=" or ".join(f"{w.value:.2f} m ({w.status})" for w in widths),
+        required=f"at least {need:g} m", clause=rules.TABLE_IV_CLAUSE,
+        status=weakest(Provenance.VERIFIED, *(w.status for w in widths)))
+
+
+def _plot_ground(site: CanonicalSiteModel) -> EligibilityGround:
+    """Rule 7(a)(ii), on the net plot. Rule 7(a)(iii) lets a site left short by road widening
+    count when the shortfall is small, which is not modelled: a site that falls just short with
+    land surrendered is unsettled rather than refused."""
+    own = site.ownership
+    net, minimum = own.net_sqm, rules.MIN_HIGH_RISE_PLOT_SQM
+    met = net.value >= minimum
+    surrendered = any(d.kind is DeductionKind.SURRENDER for d in own.deductions)
+    near = (not met and surrendered
+            and net.value >= minimum * (1 - rules.ROAD_WIDENING_SHORTFALL_ALLOWANCE))
+    return EligibilityGround(
+        id="plot_size", met=met, measured=f"net plot {net.value:,.0f} m²",
+        required=f"at least {minimum:,.0f} m²"
+        + (f"; {rules.ROAD_WIDENING_SHORTFALL_CLAUSE} may count a small shortfall left by road "
+           "widening, which is not modelled" if near else ""),
+        clause=rules.MIN_HIGH_RISE_PLOT_CLAUSE,
+        status=Provenance.UNVERIFIED if near else weakest(Provenance.VERIFIED, net.status))
 
 
 def _road_limits(road: Road | None) -> list[dict]:
     """Table IV column 3 read on the access road's legal width. A master-plan width gives a second
-    limit, each conditional on which width counts (the table_iv_road_width reading)."""
+    limit; which of the two is in force turns on whether the strip is surrendered, which no site
+    fact settles yet, so both stay UNKNOWN (and the table_iv_road_width reading stays open)."""
     width = road.legal_row_m if road is not None else None
     if width is None:
-        return [{"measure": HeightMeasure.RULE_HEIGHT, "max_m": None,
+        return [{"id": "table_iv_road", "measure": HeightMeasure.RULE_HEIGHT,
+                 "bound": LimitBound.NOT_EVALUATED,
                  "reason": "the access road's legal width is not given, so Table IV cannot be "
                            "read",
                  "clause": rules.TABLE_IV_CLAUSE, "status": Provenance.UNVERIFIED}]
     plan = road.master_plan_row_m
     if plan is None:
-        return [_table_iv_limit(width.value, width.status, road.row_status, "road", None)]
-    return [_table_iv_limit(width.value, width.status, road.row_status, "road",
-                            "the master-plan strip is not surrendered, so the road stays as it "
-                            "is"),
-            _table_iv_limit(plan.value, plan.status, None, "master-plan road",
-                            "the land for the master-plan road is surrendered (rule 16)")]
+        return [_table_iv_limit("table_iv_road", width.value, width.status, road.row_status,
+                                "road", None)]
+    surrendered = SiteFact.MASTER_PLAN_LAND_SURRENDERED
+    return [_table_iv_limit("table_iv_road", width.value, width.status, road.row_status, "road",
+                            {"fact": surrendered, "holds_when": False,
+                             "text": "the master-plan strip is not surrendered, so the road "
+                                     "stays as it is"}),
+            _table_iv_limit("table_iv_master_plan_road", plan.value, plan.status, None,
+                            "master-plan road",
+                            {"fact": surrendered, "holds_when": True,
+                             "text": "the land for the master-plan road is surrendered "
+                                     "(rule 16)"})]
 
 
-def _table_iv_limit(width_m: float, width_status: Provenance, row_status: str | None,
-                    what: str, applies_if: str | None) -> dict:
+def _table_iv_limit(limit_id: str, width_m: float, width_status: Provenance,
+                    row_status: str | None, what: str, condition: dict | None) -> dict:
     top = rules.max_height_for_road(width_m)
     tag = f"{row_status}, {width_status}" if row_status else str(width_status)
     road = f"the {width_m:.2f} m {what} ({tag})"
-    limit = {"measure": HeightMeasure.RULE_HEIGHT, "clause": rules.TABLE_IV_CLAUSE,
-             "status": weakest(Provenance.VERIFIED, width_status), "applies_if": applies_if}
+    limit = {"id": limit_id, "measure": HeightMeasure.RULE_HEIGHT,
+             "clause": rules.TABLE_IV_CLAUSE,
+             "status": weakest(Provenance.VERIFIED, width_status), "condition": condition,
+             "applicability": Applicability.APPLIES if condition is None
+             else Applicability.UNKNOWN}
     if top is None:
         first = rules.TABLE_IV[0].min_road_m
-        return limit | {"max_m": rules.HIGH_RISE_THRESHOLD_M,
+        return limit | {"bound": LimitBound.NOT_EVALUATED,
                         "reason": f"{road} is under the {first:g} m Table IV asks of a "
-                                  f"high-rise: the building must stay under "
-                                  f"{rules.HIGH_RISE_THRESHOLD_M:g} m"}
+                                  "high-rise, so no high-rise may stand on it; what it allows "
+                                  "below the high-rise height is Table III's, not encoded yet"}
     if math.isinf(top):
-        return limit | {"max_m": None,
+        return limit | {"bound": LimitBound.UNBOUNDED,
                         "reason": f"{road} meets every Table IV row: the road sets no height "
                                   "limit, so setbacks, fire and airport norms decide"}
     beyond = next(band for band in rules.TABLE_IV if band.above_m >= top)
-    return limit | {"max_m": top,
+    return limit | {"bound": LimitBound.BOUNDED, "max_m": top,
                     "reason": f"{road} serves buildings up to {top:g} m; up to "
                               f"{beyond.up_to_m:g} m needs {beyond.min_road_m:g} m of road"}
 
 
-def _plot_limit(site: CanonicalSiteModel) -> list[dict]:
-    """Rule 7(a)(ii): a plot under the minimum cannot take a high-rise, so the building stays
-    under the high-rise height. The test is on the net plot; rule 7(a)(iii) lets a site left short
-    by road widening count when the shortfall is small, which is not modelled, so a site that
-    falls just short of the minimum with land surrendered is UNVERIFIED rather than failed."""
-    own = site.ownership
-    net, minimum = own.net_sqm, rules.MIN_HIGH_RISE_PLOT_SQM
-    if net.value >= minimum:
-        return []
-    surrendered = any(d.kind is DeductionKind.SURRENDER for d in own.deductions)
-    near = surrendered and net.value >= minimum * (1 - rules.ROAD_WIDENING_SHORTFALL_ALLOWANCE)
-    reason = (f"a net plot of {net.value:,.0f} m² is under the {minimum:,.0f} m² a high-rise "
-              f"needs: the building must stay under {rules.HIGH_RISE_THRESHOLD_M:g} m")
-    if near:
-        reason += (f"; {rules.ROAD_WIDENING_SHORTFALL_CLAUSE} lets a site left short by road "
-                   "widening count when the shortfall is small, which is not modelled (the text "
-                   "does not say 10% of what)")
-    return [{"measure": HeightMeasure.RULE_HEIGHT, "max_m": rules.HIGH_RISE_THRESHOLD_M,
-             "reason": reason, "clause": rules.MIN_HIGH_RISE_PLOT_CLAUSE,
-             "status": Provenance.UNVERIFIED if near else weakest(Provenance.VERIFIED,
-                                                                  net.status)}]
-
-
-def _dead_end_limit(site: CanonicalSiteModel) -> list[dict]:
+def _dead_end_limit(site: CanonicalSiteModel) -> dict:
     """NBC 4.6(b): above 30 m of physical height a residential building may not stand on a road
-    that ends at the plot. Unknown stays UNVERIFIED; a road known to run on has no such limit."""
+    that ends at the plot. The limit is always listed; whether it is in force follows the site's
+    answer (UNKNOWN while nobody has said where the road leads)."""
     dead_end = site.access.dead_end
-    if dead_end.value is False:
-        return []
-    known = "the road's end is not known" if dead_end.value is None else (
-        "the road ends at the plot")
-    return [{"measure": HeightMeasure.PHYSICAL_HEIGHT, "max_m": rules.DEAD_END_MAX_HEIGHT_M,
-             "reason": "no dead-end road for a residential building above this height, which "
-                       f"NBC measures from the ground, stilt included ({known})",
-             "clause": rules.DEAD_END_CLAUSE,
-             "status": Provenance.UNVERIFIED if dead_end.value is None else weakest(
-                 Provenance.VERIFIED, dead_end.status),
-             "applies_if": "the access road ends at the plot"}]
+    known = {None: "the road's end is not known", True: "the road ends at the plot",
+             False: "the road runs on past the plot"}[dead_end.value]
+    return {"id": "dead_end", "measure": HeightMeasure.PHYSICAL_HEIGHT,
+            "bound": LimitBound.BOUNDED, "max_m": rules.DEAD_END_MAX_HEIGHT_M,
+            "condition": {"fact": SiteFact.ROAD_ENDS_AT_PLOT, "holds_when": True,
+                          "text": "the access road ends at the plot"},
+            "applicability": APPLICABILITY[dead_end.value],
+            "reason": "no dead-end road for a residential building above this height, which "
+                      f"NBC measures from the ground, stilt included ({known})",
+            "clause": rules.DEAD_END_CLAUSE,
+            "status": Provenance.VERIFIED if dead_end.value is None else weakest(
+                Provenance.VERIFIED, dead_end.status)}
 
 
 def _airport_limit(site: CanonicalSiteModel) -> dict:
@@ -238,8 +292,8 @@ def _airport_limit(site: CanonicalSiteModel) -> dict:
               if where is None else
               f"airport and Air Force height limits are not computed; read the maps at "
               f"{where.value[0]:.5f}, {where.value[1]:.5f}")
-    return {"measure": HeightMeasure.AMSL, "max_m": None, "reason": reason,
-            "clause": AIRPORT_CLAUSE, "status": Provenance.UNVERIFIED}
+    return {"id": "airport", "measure": HeightMeasure.AMSL, "bound": LimitBound.NOT_EVALUATED,
+            "reason": reason, "clause": AIRPORT_CLAUSE, "status": Provenance.UNVERIFIED}
 
 
 # --- The rest of the law ---------------------------------------------------------------------
@@ -274,7 +328,12 @@ def _open_space(site: CanonicalSiteModel) -> dict:
                               unit="m²"),
         "over_and_above_setbacks": _rv(True, rules.OPEN_SPACE_CLAUSE),
         "block_gaps_excluded": _rv(True, rules.BLOCK_SPACING_CLAUSE),
-        "buffer_may_count": _rv(True, rules.WATER_BUFFER_CLAUSE)}
+        "buffer_may_count": _rv(True, rules.WATER_BUFFER_CLAUSE),
+        "qualifying_uses": _rv([FacilityUse.GREENERY, FacilityUse.TOT_LOT,
+                                FacilityUse.SOFT_LANDSCAPE], rules.OPEN_SPACE_CLAUSE,
+                               note="the uses the rule names: 'greenery, tot lot or soft "
+                                    "landscaping, etc.'; the 'etc.' and a tot-lot's surface are "
+                                    "open readings")}
 
 
 def _circulation(group: bool, gross_status: Provenance) -> dict:
@@ -362,6 +421,7 @@ def _parking(column: TableVColumn, column_status: Provenance, when_open: WhenOpe
         "ramp_in_setbacks": _rv("never in the front setback or building line; in a side or rear "
                                 "setback only after leaving the width kept for fire vehicles",
                                 rules.RAMP_CLAUSE),
+        "ramp_fire_clearance_m": _rv(rules.RAMP_FIRE_CLEARANCE_M, rules.RAMP_CLAUSE, unit="m"),
         "utilities_max_fraction": _rv(rules.CELLAR_UTILITIES_MAX_FRACTION,
                                       rules.CELLAR_UTILITIES_CLAUSE),
         "measurement": {"bay_m": (parking.BAY_WIDTH_M, parking.BAY_DEPTH_M),
@@ -379,15 +439,5 @@ def _amenities() -> dict:
                              note="the 2016 wording's cap: reported, never applied"),
         "from_units": _rv(rules.AMENITY_MIN_UNITS, rules.AMENITY_CLAUSE),
         "separate_block": _rv("not part of the residential blocks, unless there is a single "
-                              "apartment block", rules.AMENITY_CLAUSE),
-        "large_project_share_of_site": _rv(
-            rules.LARGE_PROJECT_AMENITY_SHARE_OF_SITE, rules.LARGE_PROJECT_AMENITY_CLAUSE,
-            basis=Basis.UNRESOLVED_INTERPRETATION, status=Provenance.ASSUMED_FOR_TEST,
-            note="written for row and cluster housing, not group development: recorded, never "
-                 "applied"),
-        "large_project_from_acres": _rv(
-            rules.LARGE_PROJECT_FROM_ACRES, rules.LARGE_PROJECT_AMENITY_CLAUSE, unit="acre",
-            basis=Basis.UNRESOLVED_INTERPRETATION, status=Provenance.ASSUMED_FOR_TEST,
-            note="written for row and cluster housing, not group development: recorded, never "
-                 "applied")}
+                              "apartment block", rules.AMENITY_CLAUSE)}
 

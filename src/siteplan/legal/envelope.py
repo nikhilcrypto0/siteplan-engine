@@ -20,7 +20,7 @@ from siteplan.contracts.envelope import (
     CirculationRequirements,
     Obligation,
 )
-from siteplan.contracts.resolved_rules import ResolvedRules
+from siteplan.contracts.resolved_rules import Eligibility, ResolvedRules
 from siteplan.contracts.site_model import CanonicalSiteModel
 from siteplan.legal.bands import band_key, band_lands, height_cap
 from siteplan.legal.exclusions import exclusions
@@ -111,7 +111,8 @@ def _band_note(empty: bool, cap_note: str) -> str:
 def _obligations(rules: ResolvedRules, cap: float | None) -> list[Obligation]:
     """What the law will ask of the circulation, each pointing at the value in ResolvedRules."""
     group = rules.circulation.applies.value
-    high_rise = cap is None or cap > rules.height.high_rise_from_m.value
+    high_rise = rules.height.high_rise.eligibility is not Eligibility.PROHIBITED and (
+        cap is None or cap >= rules.height.high_rise_from_m.value)
     return [
         Obligation(id="gate", applies=True, rule_ref="fire.entrance_width_m",
                    note="the entrance a fire tender can use"),

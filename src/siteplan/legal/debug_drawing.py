@@ -24,6 +24,7 @@ from siteplan.contracts.common import Point, Shape
 from siteplan.contracts.envelope import BuildableEnvelope
 from siteplan.contracts.resolved_rules import ResolvedRules
 from siteplan.contracts.site_model import CanonicalSiteModel
+from siteplan.legal.bands import band_key
 from siteplan.legal.envelope import NET_PLOT
 
 SETBACK_ACI = (150, 160, 170, 180, 190, 200)
@@ -120,7 +121,8 @@ def _declutter(labels: list[tuple[str, Point, str]], height: float):
 
 
 def _layer_key(above_m: float, up_to_m: float) -> str:
-    return f"{above_m:g}-{up_to_m:g}"
+    """'21-24', or '21' for the band of one height, as the width regions name it."""
+    return band_key(above_m, up_to_m).removesuffix(" m")
 
 
 def _inside(shape: Shape) -> Point:
@@ -154,15 +156,19 @@ def notes(site: CanonicalSiteModel, rules: ResolvedRules, env: BuildableEnvelope
     lines += [f"  {reading}: {area:,.0f} m2"
               for reading, area in rules.open_space.requirement_sqm_by_reading.items()]
     lines += ["", "HEIGHT LIMITS (metres):"]
+    lines += textwrap.wrap(f"high-rise: {rules.height.high_rise.eligibility.value}", NOTE_WIDTH,
+                           initial_indent="  ", subsequent_indent="      ")
     for limit in rules.height.limits:
-        figure = f"{limit.max_m:g} m" if limit.max_m is not None else "not evaluated"
-        when = f", only if {limit.applies_if}" if limit.applies_if else ""
+        figure = (f"{limit.max_m:g} m" if limit.max_m is not None
+                  else limit.bound.value.lower().replace("_", " "))
+        when = (f", only if {limit.condition.text} ({limit.applicability.value.lower()})"
+                if limit.condition else "")
         lines += textwrap.wrap(f"{limit.measure.value.lower()}: {figure}{when} [{limit.status}]: "
                                f"{limit.reason}", NOTE_WIDTH, initial_indent="  ",
                                subsequent_indent="      ")
     lines += ["", "BANDS (setback, buildable land):"]
     for band in env.bands:
-        key = f"{band.above_m:g}-{band.up_to_m:g} m"
+        key = band_key(band.above_m, band.up_to_m)
         lines.append(f"  {key}: not modelled" if not band.modelled else
                      f"  {key}: {band.setback_m:g} m, {band.area_sqm:,.0f} m2")
     open_readings = [f"{i.id} = {i.selected}" for i in rules.interpretations

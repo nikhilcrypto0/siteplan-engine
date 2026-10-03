@@ -7,7 +7,15 @@ from __future__ import annotations
 
 from siteplan.contracts.common import Finding, Provenance, SourceKind, Status
 from siteplan.contracts.envelope import Obligation
-from siteplan.contracts.resolved_rules import HeightMeasure, ResolvedRules, TableVColumn
+from siteplan.contracts.resolved_rules import (
+    Applicability,
+    Eligibility,
+    HeightLimit,
+    HeightMeasure,
+    LimitBound,
+    ResolvedRules,
+    TableVColumn,
+)
 from siteplan.contracts.site_model import CanonicalSiteModel
 from siteplan.legal.bands import BandLand
 from siteplan.provenance import confirmed
@@ -21,51 +29,47 @@ LIMIT_NAMES = {HeightMeasure.RULE_HEIGHT: "Rule-height limit",
 def facts(site: CanonicalSiteModel, rules: ResolvedRules, cap: float | None,
           lands: list[BandLand], found: list[Finding]) -> list[Finding]:
     """`found` are the findings the exclusions raised (water or an HT line not placed)."""
-    high_rise_from = rules.height.high_rise_from_m
     group = rules.category.group_development
     out = [Finding("Group Development Scheme", Status.INFO, "yes" if group.value else "no",
                    "residential development on a campus or site of the size the clause names",
                    group.clause, f"how far the site's area is trusted: {group.status}"),
-           _eligibility(rules, cap)]
+           _eligibility(rules)]
     out += [_limit(limit) for limit in rules.height.limits]
-    if lands:
-        out.append(Finding(
-            f"A building of exactly {high_rise_from.value:g} m", Status.NOT_CHECKED,
-            "high-rise, but no band carries it",
-            "Table IV's first row, which only that height reaches", high_rise_from.clause,
-            f"the bands start above {high_rise_from.value:g} m, so a block of exactly that "
-            "height has no setback envelope here"))
     out += _street_join(site, rules)
     out += _net_plot(site)
     if rules.jurisdiction.table_v_column is TableVColumn.OPEN:
         out.append(Finding("Table V column", Status.UNVERIFIED, "whose rules apply is open",
                            "the column of the authority and CURE", PARKING_CLAUSE,
                            rules.jurisdiction.note))
-    if rules.category.above_5_acres.value:
-        large = rules.category.above_5_acres
-        out.append(Finding("Very large project", Status.INFO, "the site is above the size",
-                           "common amenities in a share of the site area", large.clause,
-                           large.note))
     return [*out, *found]
 
 
-def _eligibility(rules: ResolvedRules, cap: float | None) -> Finding:
+ELIGIBILITY_STATUS = {Eligibility.ALLOWED: Status.PASS, Eligibility.PROHIBITED: Status.FAIL,
+                      Eligibility.UNVERIFIED: Status.UNVERIFIED}
+MET = {True: "met", False: "not met", None: "not known"}
+
+
+def _eligibility(rules: ResolvedRules) -> Finding:
+    """Whether a high-rise may stand here, from its grounds. A FAIL here permits nothing lower."""
+    high_rise = rules.height.high_rise
     above = rules.height.high_rise_from_m
-    rule = [lim for lim in rules.height.limits if lim.measure is HeightMeasure.RULE_HEIGHT]
-    allowed = cap is None or cap > above.value
-    unverified = any(lim.status is Provenance.UNVERIFIED for lim in rule)
-    status = Status.FAIL if not allowed else Status.UNVERIFIED if unverified else Status.PASS
-    measured = ("the rule-height limit is not known" if cap is None
-                else f"rule-height limit {cap:g} m")
-    return Finding("High-rise eligibility", status, measured, f"above {above.value:g} m",
-                   above.clause, "; ".join(lim.reason for lim in rule))
+    grounds = "; ".join(f"{g.id} {g.measured}, {g.required} ({MET[g.met]}, {g.status})"
+                        for g in high_rise.grounds)
+    return Finding("High-rise eligibility", ELIGIBILITY_STATUS[high_rise.eligibility],
+                   high_rise.eligibility.value, f"a building of {above.value:g} m or more",
+                   above.clause, "; ".join(n for n in (grounds, high_rise.note) if n))
 
 
-def _limit(limit) -> Finding:
-    status = Status.UNVERIFIED if limit.status is Provenance.UNVERIFIED else Status.INFO
-    measured = f"{limit.max_m:g} m" if limit.max_m is not None else "no figure"
-    return Finding(LIMIT_NAMES[limit.measure], status, measured, limit.applies_if or "always",
-                   limit.clause, f"{limit.reason} [{limit.status}]")
+def _limit(limit: HeightLimit) -> Finding:
+    unsettled = (limit.status is Provenance.UNVERIFIED or limit.bound is LimitBound.NOT_EVALUATED
+                 or limit.applicability is Applicability.UNKNOWN)
+    measured = {LimitBound.BOUNDED: f"{limit.max_m:g} m" if limit.max_m else "",
+                LimitBound.UNBOUNDED: "no limit",
+                LimitBound.NOT_EVALUATED: "not evaluated"}[limit.bound]
+    when = limit.condition.text if limit.condition else "always"
+    return Finding(LIMIT_NAMES[limit.measure],
+                   Status.UNVERIFIED if unsettled else Status.INFO, measured, when, limit.clause,
+                   f"{limit.reason} [{limit.status}; {limit.applicability}]")
 
 
 def _street_join(site: CanonicalSiteModel, rules: ResolvedRules) -> list[Finding]:

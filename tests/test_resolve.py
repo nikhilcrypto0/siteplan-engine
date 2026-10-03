@@ -14,7 +14,7 @@ from siteplan import rules as rules_py
 from siteplan.constraints import REGISTRY
 from siteplan.constraints import Basis as ConstraintBasis
 from siteplan.contracts import ResolvedRules
-from siteplan.contracts.common import Basis, Provenance, digest
+from siteplan.contracts.common import Basis, FacilityUse, Provenance, Status, digest
 from siteplan.contracts.resolved_rules import (
     ALL,
     AMENITY_SHARE,
@@ -22,18 +22,23 @@ from siteplan.contracts.resolved_rules import (
     FIRE_TURNING_RADIUS,
     MIXED_HEIGHT_SPACING,
     OPEN_SPACE_BASIS,
+    OPEN_SPACE_OTHER_USES,
     REQUIRED_INTERPRETATIONS,
     STILT_IN_RULE_HEIGHT,
+    TOT_LOT_SURFACE,
+    Applicability,
     BandKind,
+    Eligibility,
     HeightMeasure,
+    LimitBound,
     OrderRead,
     RuleValue,
+    SiteFact,
     TableVColumn,
     WhenOpen,
 )
 from siteplan.legal.readings import (
     CELLAR_EXTRA_SETBACK,
-    LARGE_PROJECT_AMENITY_SHARE,
     ROAD_IN_WATER_BUFFER,
     TABLE_IV_ROAD_WIDTH,
 )
@@ -41,7 +46,8 @@ from siteplan.legal.resolve import AIRPORT_CLAUSE, resolve, rules_digest
 
 TEST_CLASS = "normative"
 PLOT = box(0, 0, 150, 120)  # 18,000 m²: a group development scheme, a high-rise plot
-ACRE_SQM = 4046.8564224
+OPEN_EVERY_WAY = {STILT_IN_RULE_HEIGHT, OPEN_SPACE_BASIS, CIRCULATION_IN_SETBACK, TOT_LOT_SURFACE,
+                  OPEN_SPACE_OTHER_USES}
 
 
 def _keys(node) -> set[str]:
@@ -101,11 +107,11 @@ def test_every_rule_value_has_its_clause_basis_and_status(name):
 
 
 @pytest.mark.parametrize("name", SITES)
-def test_the_required_readings_are_carried_and_the_three_open_ones_are_all(name):
+def test_the_required_readings_are_carried_and_the_five_open_ones_are_all(name):
     rules = resolve(load(name, "CanonicalSiteModel"))
     ids = [i.id for i in rules.interpretations]
     assert set(REQUIRED_INTERPRETATIONS) <= set(ids) and len(ids) == len(set(ids))
-    for open_reading in (STILT_IN_RULE_HEIGHT, OPEN_SPACE_BASIS, CIRCULATION_IN_SETBACK):
+    for open_reading in OPEN_EVERY_WAY:
         reading = rules.interpretation(open_reading)
         assert reading.selected == ALL and reading.status is Provenance.UNVERIFIED
         assert rules.readings(open_reading) == list(reading.alternatives)
@@ -113,8 +119,8 @@ def test_the_required_readings_are_carried_and_the_three_open_ones_are_all(name)
         assert len(reading.alternatives) >= 2 and reading.sources and reading.settles
         if reading.selected != ALL:
             assert reading.status is Provenance.ASSUMED_FOR_TEST, reading.id
-    assert {i.id for i in rules.interpretations if i.selected == ALL} == {
-        STILT_IN_RULE_HEIGHT, OPEN_SPACE_BASIS, CIRCULATION_IN_SETBACK}  # the rest carry a reading
+    # the rest carry a reading
+    assert {i.id for i in rules.interpretations if i.selected == ALL} == OPEN_EVERY_WAY
 
 
 # What constraints.py calls UNRESOLVED_INTERPRETATION, by the start of its sentence, and the
@@ -146,10 +152,7 @@ def test_a_rule_value_resting_on_an_open_reading_points_at_one():
     rules = resolve(load("rectangle", "CanonicalSiteModel"))
     resting = {path for path, value in _values(rules)
                if value.basis is Basis.UNRESOLVED_INTERPRETATION}
-    explained_by = {"amenities.share_of_built_up": AMENITY_SHARE,
-                    "amenities.large_project_share_of_site": LARGE_PROJECT_AMENITY_SHARE,
-                    "amenities.large_project_from_acres": LARGE_PROJECT_AMENITY_SHARE,
-                    "category.above_5_acres": LARGE_PROJECT_AMENITY_SHARE}
+    explained_by = {"amenities.share_of_built_up": AMENITY_SHARE}
     assert resting == set(explained_by)
     assert set(explained_by.values()) <= {i.id for i in rules.interpretations}
     assert rules.amenities.share_interpretation == AMENITY_SHARE
@@ -163,8 +166,11 @@ def test_a_rule_value_resting_on_an_open_reading_points_at_one():
     (29.99, 45.0)])
 def test_table_iv_by_the_roads_legal_width(road_m, top):
     limit, = _limits(resolve(make_site(PLOT, road_m=road_m)), HeightMeasure.RULE_HEIGHT)
-    assert limit.max_m == top and limit.clause == rules_py.TABLE_IV_CLAUSE
-    assert limit.status is Provenance.USER_CONFIRMED and limit.applies_if is None
+    assert (limit.id, limit.bound, limit.max_m) == ("table_iv_road", LimitBound.BOUNDED, top)
+    assert limit.inclusive and limit.clause == rules_py.TABLE_IV_CLAUSE
+    assert limit.status is Provenance.USER_CONFIRMED and limit.condition is None
+    assert limit.applicability is Applicability.APPLIES
+    assert limit.evaluate(top) is Status.PASS and limit.evaluate(top + 0.01) is Status.FAIL
 
 
 def test_a_60_ft_road_serves_30_m_and_the_next_band_needs_24_m_of_road():
@@ -184,29 +190,53 @@ def test_the_limit_is_as_trusted_as_the_roads_width(status, row, expected):
     assert row in limit.reason  # the road says how its width is known
 
 
-def test_a_road_under_the_first_row_leaves_no_high_rise():
-    limit, = _limits(resolve(make_site(PLOT, road_m=11.9)), HeightMeasure.RULE_HEIGHT)
-    assert limit.max_m == rules_py.HIGH_RISE_THRESHOLD_M
-    assert "must stay under" in limit.reason
+def test_a_drawing_value_road_settles_no_height_and_still_holds_heights_back():
+    """Suchitra's case: a limit on an unconfirmed width settles nothing either way, and no
+    generator offers a height beyond it."""
+    limit, = _limits(resolve(make_site(PLOT, road_m=12.38, road_status="UNVERIFIED",
+                                       row_status="UNVERIFIED_DRAWING_VALUE")),
+                     HeightMeasure.RULE_HEIGHT)
+    assert limit.evaluate(24.0) is Status.UNVERIFIED and limit.evaluate(27.0) is Status.UNVERIFIED
+    assert limit.beyond(27.0) and not limit.beyond(24.0)
+
+
+def test_a_road_under_the_first_row_prohibits_a_high_rise_and_permits_nothing_lower():
+    rules = resolve(make_site(PLOT, road_m=11.9))
+    limit, = _limits(rules, HeightMeasure.RULE_HEIGHT)
+    assert limit.bound is LimitBound.NOT_EVALUATED and limit.max_m is None
+    assert "Table III" in limit.reason and limit.evaluate(15.0) is Status.UNVERIFIED
+    high_rise = rules.height.high_rise
+    assert high_rise.eligibility is Eligibility.PROHIBITED
+    assert [g.id for g in high_rise.grounds if g.met is False] == ["road_width"]
+    assert "permits nothing below it" in high_rise.note
+    assert not [lim for lim in rules.height.limits if lim.max_m == 21.0]  # no "under 21 m" pass
+    assert rules.height.band_for(15.0).modelled is False
 
 
 def test_a_road_that_meets_every_row_sets_no_limit_and_says_so():
     limit, = _limits(resolve(make_site(PLOT, road_m=30.0)), HeightMeasure.RULE_HEIGHT)
-    assert limit.max_m is None and "no height limit" in limit.reason
-    assert limit.status is Provenance.USER_CONFIRMED
+    assert limit.bound is LimitBound.UNBOUNDED and limit.max_m is None
+    assert "no height limit" in limit.reason and limit.status is Provenance.USER_CONFIRMED
+    assert limit.evaluate(90.0) is Status.PASS
 
 
 def test_an_unknown_road_width_is_reported_not_guessed():
-    limit, = _limits(resolve(make_site(PLOT, road_m=None)), HeightMeasure.RULE_HEIGHT)
-    assert limit.max_m is None and limit.status is Provenance.UNVERIFIED
+    rules = resolve(make_site(PLOT, road_m=None))
+    limit, = _limits(rules, HeightMeasure.RULE_HEIGHT)
+    assert limit.bound is LimitBound.NOT_EVALUATED and limit.status is Provenance.UNVERIFIED
     assert "not given" in limit.reason
+    assert rules.height.high_rise.eligibility is Eligibility.UNVERIFIED
 
 
 def test_a_master_plan_width_is_a_second_limit_and_an_open_reading():
     rules = resolve(make_site(PLOT, road_m=12.0, master_plan_m=18.0))
     existing, planned = _limits(rules, HeightMeasure.RULE_HEIGHT)
     assert (existing.max_m, planned.max_m) == (24.0, 30.0)
-    assert existing.applies_if and planned.applies_if and existing.applies_if != planned.applies_if
+    assert existing.condition.fact is planned.condition.fact is (
+        SiteFact.MASTER_PLAN_LAND_SURRENDERED)
+    assert (existing.condition.holds_when, planned.condition.holds_when) == (False, True)
+    assert existing.applicability is planned.applicability is Applicability.UNKNOWN
+    assert existing.evaluate(27.0) is Status.UNVERIFIED  # within one reading, beyond the other
     assert rules.interpretation(TABLE_IV_ROAD_WIDTH).selected == ALL
     plain = resolve(make_site(PLOT, road_m=12.0))
     assert TABLE_IV_ROAD_WIDTH not in {i.id for i in plain.interpretations}
@@ -215,58 +245,81 @@ def test_a_master_plan_width_is_a_second_limit_and_an_open_reading():
 # --- The other height limits and the high-rise minimum ----------------------------------------
 
 
-@pytest.mark.parametrize(("dead_end", "listed", "status"), [
-    (None, True, Provenance.UNVERIFIED), (True, True, Provenance.USER_CONFIRMED),
-    (False, False, None)])
+@pytest.mark.parametrize(("dead_end", "applicability", "at_33_m"), [
+    (None, Applicability.UNKNOWN, Status.UNVERIFIED),
+    (True, Applicability.APPLIES, Status.FAIL),
+    (False, Applicability.DOES_NOT_APPLY, Status.INFO)])
 def test_nbc_30_m_on_the_physical_height_applies_only_if_the_road_ends_at_the_plot(
-        dead_end, listed, status):
-    found = _limits(resolve(make_site(PLOT, dead_end=dead_end)), HeightMeasure.PHYSICAL_HEIGHT)
-    assert bool(found) is listed
-    if listed:
-        limit, = found
-        assert limit.max_m == rules_py.DEAD_END_MAX_HEIGHT_M and limit.status is status
-        assert limit.applies_if == "the access road ends at the plot"
-        assert limit.clause == rules_py.DEAD_END_CLAUSE
+        dead_end, applicability, at_33_m):
+    limit, = _limits(resolve(make_site(PLOT, dead_end=dead_end)), HeightMeasure.PHYSICAL_HEIGHT)
+    assert (limit.id, limit.max_m) == ("dead_end", rules_py.DEAD_END_MAX_HEIGHT_M)
+    assert limit.condition.fact is SiteFact.ROAD_ENDS_AT_PLOT and limit.condition.holds_when
+    assert limit.applicability is applicability and limit.clause == rules_py.DEAD_END_CLAUSE
+    assert limit.evaluate(33.0) is at_33_m
+    assert limit.evaluate(30.0) is (Status.INFO if dead_end is False else Status.PASS)
+    assert limit.beyond(33.0) is (dead_end is True)  # an unsettled end is offered, labelled
 
 
 def test_the_airport_height_is_unverified_without_coordinates_and_still_not_computed_with():
     for coordinates in (None, (17.5, 78.4)):
         limit, = _limits(resolve(make_site(PLOT, coordinates=coordinates)), HeightMeasure.AMSL)
-        assert limit.max_m is None and limit.status is Provenance.UNVERIFIED
+        assert limit.bound is LimitBound.NOT_EVALUATED and limit.status is Provenance.UNVERIFIED
+        assert limit.evaluate(30.0) is Status.UNVERIFIED
     assert AIRPORT_CLAUSE == heights.AIRPORT_CLAUSE
 
 
 def test_a_plot_under_2000_m2_cannot_take_a_high_rise():
     rules = resolve(make_site(box(0, 0, 40, 40)))  # 1,600 m²
-    plot = [lim for lim in _limits(rules, HeightMeasure.RULE_HEIGHT)
-            if lim.clause == rules_py.MIN_HIGH_RISE_PLOT_CLAUSE]
-    assert len(plot) == 1 and plot[0].max_m == rules_py.HIGH_RISE_THRESHOLD_M
-    assert plot[0].status is Provenance.USER_CONFIRMED
+    high_rise = rules.height.high_rise
+    assert high_rise.eligibility is Eligibility.PROHIBITED
+    plot = next(g for g in high_rise.grounds if g.id == "plot_size")
+    assert plot.met is False and plot.clause == rules_py.MIN_HIGH_RISE_PLOT_CLAUSE
+    assert plot.status is Provenance.USER_CONFIRMED
+    assert all(lim.clause != rules_py.MIN_HIGH_RISE_PLOT_CLAUSE for lim in rules.height.limits)
     enough = resolve(make_site(box(0, 0, 50, 40)))  # 2,000 m² exactly
-    assert all(lim.clause != rules_py.MIN_HIGH_RISE_PLOT_CLAUSE
-               for lim in _limits(enough, HeightMeasure.RULE_HEIGHT))
+    assert enough.height.high_rise.eligibility is Eligibility.ALLOWED
 
 
 def test_a_site_just_short_by_road_widening_is_unverified_not_failed():
     """Rule 7(a)(iii) lets a site left short by road widening count when the shortfall is
     small; the engine does not model it, so near the minimum with land given up it says so."""
     rules = resolve(make_site(box(0, 0, 45, 42), surrendered=300.0))  # net 1,890, gross 2,190
-    plot = [lim for lim in _limits(rules, HeightMeasure.RULE_HEIGHT)
-            if lim.clause == rules_py.MIN_HIGH_RISE_PLOT_CLAUSE]
-    assert plot[0].status is Provenance.UNVERIFIED and "7(a)(iii)" in plot[0].reason
+    plot = next(g for g in rules.height.high_rise.grounds if g.id == "plot_size")
+    assert plot.met is False and plot.status is Provenance.UNVERIFIED
+    assert "7(a)(iii)" in plot.required
+    assert rules.height.high_rise.eligibility is Eligibility.UNVERIFIED
 
 
-def test_the_non_high_rise_band_is_present_and_not_modelled_and_high_rise_is_from_21_m():
+def test_every_height_has_one_band_and_exactly_21_m_is_a_high_rise():
     rules = resolve(make_site(PLOT))
     assert rules.height.high_rise_from_m.value == 21.0
-    below, *high = rules.height.bands
+    below, at, *high = rules.height.bands
     assert (below.kind, below.above_m, below.up_to_m, below.modelled) == (
         BandKind.NON_HIGH_RISE, 0.0, 21.0, False)
+    assert below.up_to_inclusive is False
+    assert (at.kind, at.above_m, at.up_to_m, at.min_road_m, at.setback_m, at.gap_m) == (
+        BandKind.HIGH_RISE, 21.0, 21.0, 12.0, 7.0, 7.0)
     assert all(b.kind is BandKind.HIGH_RISE and b.modelled for b in high)
     table = [b for b in rules_py.TABLE_IV if b.above_m >= 21.0]
     assert [(b.above_m, b.up_to_m, b.min_road_m, b.setback_m, b.gap_m) for b in high] == [
         (t.above_m, t.up_to_m, t.min_road_m, t.min_open_space_m, t.min_open_space_m)
         for t in table]
+    assert rules.height.band_for(3.0 + 6 * 3.0) is at  # stilt + 6 floors is 21 m
+
+
+def test_the_open_space_rule_names_its_uses_and_keeps_the_rest_open():
+    space = resolve(make_site(PLOT)).open_space
+    assert space.qualifying_uses.value == [FacilityUse.GREENERY, FacilityUse.TOT_LOT,
+                                           FacilityUse.SOFT_LANDSCAPE]
+    assert space.qualifying_uses.clause == rules_py.OPEN_SPACE_CLAUSE
+
+
+def test_the_line_clearances_and_the_ramp_fire_clearance_are_carried_as_read():
+    rules = resolve(make_site(PLOT))
+    assert (rules.electrical.ht_clearance_m.value, rules.electrical.lt_clearance_m.value) == (
+        rules_py.ELECTRICAL_HT_CLEARANCE_M, rules_py.ELECTRICAL_LT_CLEARANCE_M)
+    assert rules.parking.ramp_fire_clearance_m.value == rules_py.RAMP_FIRE_CLEARANCE_M
+    assert rules.parking.ramp_fire_clearance_m.clause == rules_py.RAMP_CLAUSE
 
 
 # --- Criterion 9 (the quantity): open space under every reading of the area -------------------
@@ -357,17 +410,17 @@ def test_a_selection_must_name_a_reading_the_site_carries():
 # --- The rest of what the contract asks -------------------------------------------------------
 
 
-def test_a_group_development_scheme_and_the_large_project_question():
-    big = resolve(make_site(box(0, 0, 200, 110)))  # 22,000 m², above 5 acres (20,234 m²)
+def test_a_group_development_scheme_and_no_five_acre_amenity_share():
+    """The 5% of site area for amenities above 5 acres is rule 9(o) and 10(i), row and cluster
+    housing: recorded in rules.py, never carried in a group scheme's rules."""
+    big = resolve(make_site(box(0, 0, 200, 110)))  # 22,000 m², above 5 acres
     small = resolve(make_site(box(0, 0, 60, 50)))  # 3,000 m²
     assert big.category.group_development.value and not small.category.group_development.value
     assert big.circulation.applies.value and not small.circulation.applies.value
-    assert big.category.above_5_acres.value and not small.category.above_5_acres.value
-    clause = big.category.above_5_acres.clause
-    assert "rule 9(o)" in clause and "rule 10(i)" in clause and "8(o)" not in clause
     assert big.category.group_development.status is Provenance.EXTRACTED  # as trusted as the area
-    assert 22_000 > 5 * ACRE_SQM > 3_000  # the made-up sites are on either side of 5 acres
-    assert big.interpretation(LARGE_PROJECT_AMENITY_SHARE).selected == "not_applied"
+    text = big.model_dump_json()
+    assert "above_5_acres" not in text and "large_project" not in text
+    assert "rule 9(o)" in rules_py.LARGE_PROJECT_AMENITY_CLAUSE
 
 
 def test_the_orders_are_listed_with_how_each_was_read_and_the_unread_ones_named():
@@ -409,15 +462,17 @@ def test_the_real_producer_agrees_with_the_p0_fixtures_on_what_consumers_read(na
         mine, fixture = ours.interpretation(reading), theirs.interpretation(reading)
         assert (mine.selected, set(mine.alternatives)) == (fixture.selected,
                                                            set(fixture.alternatives)), reading
-    keys = ("above_m", "up_to_m", "kind", "modelled", "min_road_m", "setback_m", "gap_m")
+    keys = ("above_m", "up_to_m", "above_inclusive", "up_to_inclusive", "kind", "modelled",
+            "min_road_m", "setback_m", "gap_m")
     assert [b.model_dump(include=set(keys)) for b in ours.height.bands] == [
         b.model_dump(include=set(keys)) for b in theirs.height.bands]
     assert ours.open_space.requirement_sqm_by_reading == pytest.approx(
         theirs.open_space.requirement_sqm_by_reading)
-    mine = [(lim.measure, lim.max_m) for lim in ours.height.limits
-            if lim.measure is HeightMeasure.RULE_HEIGHT]
-    assert mine == [(lim.measure, lim.max_m) for lim in theirs.height.limits
-                    if lim.measure is HeightMeasure.RULE_HEIGHT]
+    limit_keys = ("id", "measure", "bound", "max_m", "inclusive", "applicability")
+    assert [lim.model_dump(include=set(limit_keys)) for lim in ours.height.limits] == [
+        lim.model_dump(include=set(limit_keys)) for lim in theirs.height.limits]
+    assert ours.height.high_rise.eligibility is theirs.height.high_rise.eligibility
+    assert ours.open_space.qualifying_uses.value == theirs.open_space.qualifying_uses.value
     assert ours.jurisdiction.table_v_column == theirs.jurisdiction.table_v_column
     assert ours.parking.share_pct.value == theirs.parking.share_pct.value
     assert ours.category.group_development.value == theirs.category.group_development.value
