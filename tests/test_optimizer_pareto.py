@@ -99,8 +99,10 @@ def test_the_architects_priorities_are_weights_and_a_misspelt_one_is_refused():
     assert priority_weights(BRIEF) == (1.0,) * len(AXES)
     heavy = _brief(priorities={"open_space": 3.0})
     assert priority_weights(heavy)[AXES.index("open_space")] == 3.0
-    with pytest.raises(ValueError, match="unknown priorities"):
-        priority_weights(_brief(priorities={"open-space": 3.0}))
+    with pytest.raises(ValueError, match="open_space"):  # the contract names the axes it takes
+        _brief(priorities={"open-space": 3.0})
+    with pytest.raises(ValueError, match="cannot be negative"):
+        _brief(priorities={"units": -1.0})
     with pytest.raises(ValueError, match="not all zero"):
         priority_weights(_brief(priorities=dict.fromkeys(AXES, 0.0)))
 

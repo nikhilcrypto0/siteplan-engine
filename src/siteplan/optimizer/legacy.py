@@ -31,7 +31,6 @@ from shapely.ops import polygonize, unary_union
 from siteplan import rules as law
 from siteplan.adapters import Readings, candidate_from_option, join_project
 from siteplan.contracts import CanonicalSiteModel, ResolvedRules, digest
-from siteplan.contracts.common import Status
 from siteplan.contracts.design_brief import HeightIntent, HeightMode
 from siteplan.contracts.resolved_rules import CIRCULATION_IN_SETBACK, STILT_IN_RULE_HEIGHT
 from siteplan.heights import HeightSearch, heights_to_try, search_heights
@@ -44,6 +43,11 @@ from siteplan.runner import load_plot, site_facts, why_none
 from siteplan.site_amenities import AmenityLibrary
 
 NAME = "LEGACY"
+# The brief's design margins are targets for the search proper (C2); this generator plans on
+# the legal minimums, and says so when a margin was asked for.
+MARGINS_NOT_APPLIED = ("design margins not applied: the legacy generator plans on the legal "
+                       "minimums; the validator's design-target rows show what each layout "
+                       "keeps in hand")
 CIRCULATION_READINGS = ("allowed", "not_allowed")  # the readings of circulation_in_setback it knows
 # The generator's own defaults (LayoutRequest): the stilt counts, circulation stays out of the
 # setback.
@@ -91,9 +95,9 @@ class LegacyStrategy:
         stilt = self.readings[STILT_IN_RULE_HEIGHT]
         floors = None
         if brief.height_intent.mode is not HeightMode.FIXED:
-            open_counts = feasible_floors(rules, brief, None, stilt, site=site)
+            open_counts = feasible_floors(rules, brief, None, stilt)
             if not open_counts:
-                return LegacyRun(Proposal(NAME, notes=(_no_count(rules, brief, stilt, site),)),
+                return LegacyRun(Proposal(NAME, notes=(_no_count(rules, brief, stilt),)),
                                  None, None)
             floors = open_counts[-1].floors  # the most the law allows: where the search starts
 
@@ -113,13 +117,15 @@ class LegacyStrategy:
         tried = {result.floors for result in found.results}
         untried = [h for h in heights if h not in tried]
         refs = (digest(site), digest(rules), digest(brief))
+        unmet = [MARGINS_NOT_APPLIED] if brief.design_margins.any_set else []
         candidates = tuple(
-            candidate_from_option(
+            (made := candidate_from_option(
                 option, plot, candidate_id=f"{NAME.lower()}-{'-'.join(self.readings.values())}-{i}",
                 site_ref=refs[0], rules_ref=refs[1], brief_ref=refs[2],
                 readings=dict(self.readings), access_side=site.access.side.value,
-                keep_out=keep_out, library_note=self.library.note,
-            ).model_copy(update={"strategy": NAME, "seed": context.seed})
+                keep_out=keep_out, library_note=self.library.note, amenities=self.amenities,
+            )).model_copy(update={"strategy": NAME, "seed": context.seed,
+                                  "caveats": [*made.caveats, *unmet]})
             for i, option in enumerate(found.options, 1))
         return LegacyRun(Proposal(NAME, candidates, _notes(found, untried),
                                   budget_exhausted=bool(untried)), found, request)
@@ -161,9 +167,9 @@ def _cannot_run(site: CanonicalSiteModel, intent: HeightIntent) -> str | None:
     return None
 
 
-def _no_count(rules: ResolvedRules, brief, stilt: str, site: CanonicalSiteModel) -> str:
-    first = next((check.reason for option in assess_floors(rules, brief, None, stilt, site=site)
-                  for check in option.limits if check.status is Status.FAIL), None)
+def _no_count(rules: ResolvedRules, brief, stilt: str) -> str:
+    first = next((check.reason for option in assess_floors(rules, brief, None, stilt)
+                  for check in option.checks if check.holds_back), None)
     return (f"the law leaves no high-rise floor count open under the '{stilt}' reading of the "
             f"stilt, within the brief's height intent{': ' + first if first else ''}")
 

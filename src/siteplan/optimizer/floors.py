@@ -10,14 +10,18 @@ Nothing here picks a height for the design. `feasible_floors` returns every coun
 open, so a tower's height stays a choice for the search: "the most the law allows" never means
 every tower at the maximum.
 
-A limit that applies only on a condition (NBC's dead-end limit) is UNVERIFIED while the condition
-is not known and FAIL once it holds. HeightLimit.applies_if is free text, so the condition is
-read from the site model when the caller passes it, else from the limit's own status.
+What a limit says of a height is the contract's, never worked out again here: the verdict is
+`HeightLimit.evaluate` and whether the height may be offered is `HeightLimit.beyond`, so the
+optimizer and the validator read every limit the same way. A limit that applies holds a height
+back whether or not its inputs are confirmed (it is UNVERIFIED, not FAIL, when they are not);
+one whose condition is unsettled (the dead end nobody has answered) lets the height through,
+labelled UNVERIFIED. The band of a height is `HeightRules.band_for`. Where a high-rise is
+prohibited no count of the high-rise height or more is offered, and that permits nothing lower:
+below it the band is Table III's, not modelled, so no count there is offered or passed.
 """
 
 from __future__ import annotations
 
-import math
 from collections.abc import Iterable
 from dataclasses import dataclass
 
@@ -25,40 +29,42 @@ from siteplan.contracts.common import Provenance, Status
 from siteplan.contracts.design_brief import DesignBrief, HeightIntent, HeightMode
 from siteplan.contracts.prototype import TowerPrototype
 from siteplan.contracts.resolved_rules import (
+    HEIGHT_TOL_M,
     STILT_IN_RULE_HEIGHT,
+    Applicability,
     Band,
+    Eligibility,
     HeightLimit,
     HeightMeasure,
+    LimitBound,
     ResolvedRules,
 )
-from siteplan.contracts.site_model import CanonicalSiteModel
-from siteplan.rules import DEAD_END_CLAUSE
 
 STILT_COUNTED = "counted"  # the readings of stilt_in_rule_height the adapters also use
 STILT_NOT_COUNTED = "not_counted"
 READINGS = (STILT_COUNTED, STILT_NOT_COUNTED)
-EPS_M = 1e-6  # a height that meets its limit to a millionth of a metre meets it
+EPS_M = HEIGHT_TOL_M  # a height that meets its limit to a millionth of a metre meets it
 # A search bound, not a rule: where no limit stops the count (a road of 30 m or more), counts are
 # assessed up to the top of Table IV's last bounded row.
 CEILING_M = 120.0
-
-# The site fact each conditional limit rests on, by its clause. NBC 4.6(b): no dead-end road for
-# a residential building above 30 m, so the limit holds when the access road ends at the plot.
-SITE_CONDITIONS = {DEAD_END_CLAUSE: lambda site: site.access.dead_end.value}
+CONDITION = {Applicability.APPLIES: True, Applicability.DOES_NOT_APPLY: False,
+             Applicability.UNKNOWN: None}
+HIGH_RISE_CHECK = "High-rise eligibility"
 
 
 @dataclass(frozen=True)
 class LimitCheck:
-    """One height limit held against one floor count."""
+    """One height limit (or the site's high-rise eligibility) held against one floor count."""
 
     measure: HeightMeasure
-    limit_m: float | None  # None: the limit cannot be evaluated yet
+    limit_m: float | None  # None: there is no number to hold the height to
     height_m: float | None  # the building's height on that measure; None if floors cannot give it
     status: Status
     reason: str
     clause: str
     limit_status: Provenance  # how far the limit itself can be trusted
-    condition: bool | None = True  # does the limit's condition hold; None: not known
+    condition: bool | None = True  # is the limit in force; None: it rests on an unsettled fact
+    holds_back: bool = False  # the count may not be offered
 
 
 def worst(checks: Iterable[LimitCheck]) -> Status:
@@ -71,7 +77,7 @@ def worst(checks: Iterable[LimitCheck]) -> Status:
 
 @dataclass(frozen=True)
 class FloorOption:
-    """A floor count above the stilt, the heights it makes, its Table IV band and every limit."""
+    """A floor count above the stilt, the heights it makes, its band and every check on it."""
 
     floors: int
     reading: str
@@ -81,6 +87,11 @@ class FloorOption:
     physical_height_m: float  # ground to the top, stilt included (NBC)
     band: Band | None
     limits: tuple[LimitCheck, ...]
+    high_rise: LimitCheck | None = None  # the site's eligibility, for a high-rise count only
+
+    @property
+    def checks(self) -> tuple[LimitCheck, ...]:
+        return (*self.limits, *((self.high_rise,) if self.high_rise else ()))
 
     @property
     def setback_m(self) -> float | None:
@@ -97,12 +108,13 @@ class FloorOption:
 
     @property
     def limits_status(self) -> Status:
-        return worst(self.limits)
+        return worst(self.checks)
 
     @property
     def feasible(self) -> bool:
-        """No limit rules this count out. An UNVERIFIED limit does not: it is reported."""
-        return self.limits_status is not Status.FAIL
+        """Nothing holds this count back. A limit that only may apply does not: it is reported
+        UNVERIFIED."""
+        return not any(check.holds_back for check in self.checks)
 
     @property
     def status(self) -> Status:
@@ -112,7 +124,7 @@ class FloorOption:
 
     @property
     def open_items(self) -> tuple[str, ...]:
-        return tuple(check.reason for check in self.limits if check.status is Status.UNVERIFIED)
+        return tuple(check.reason for check in self.checks if check.status is Status.UNVERIFIED)
 
     def checks_on(self, measure: HeightMeasure) -> tuple[LimitCheck, ...]:
         return tuple(check for check in self.limits if check.measure is measure)
@@ -135,48 +147,57 @@ def standard_heights(brief: DesignBrief, prototype: TowerPrototype | None,
     return (stilt if has_stilt else 0.0), floor
 
 
-def condition_holds(limit: HeightLimit, site: CanonicalSiteModel | None) -> bool | None:
-    """Whether a limit is in force: True, False, or None when that is not known. A limit with no
-    condition always is."""
-    if limit.applies_if is None:
-        return True
-    read = SITE_CONDITIONS.get(limit.clause)
-    if site is not None and read is not None:
-        return read(site)
-    return None if limit.status is Provenance.UNVERIFIED else True
+def _reason(limit: HeightLimit, height: float | None, status: Status) -> str:
+    if height is None or limit.bound is not LimitBound.BOUNDED:
+        return limit.reason
+    if limit.within(height):
+        return f"{height:g} m is within {limit.max_m:g} m: {limit.reason}"
+    over = f"{height:g} m is above the {limit.max_m:g} m limit: {limit.reason}"
+    if limit.applicability is Applicability.DOES_NOT_APPLY:
+        return f"{over}; it does not apply here ({limit.condition.text})"
+    if limit.applicability is Applicability.UNKNOWN:
+        return f"{over}; it applies only if {limit.condition.text}, which is not known"
+    if status is Status.UNVERIFIED:
+        return f"{over}; the limit rests on inputs not yet confirmed ({limit.status})"
+    return over
 
 
-def band_for(rules: ResolvedRules, rule_height_m: float) -> Band | None:
-    """The band a rule height falls in: above its lower edge, up to and including its upper."""
-    return next((band for band in rules.height.bands
-                 if band.above_m < rule_height_m <= band.up_to_m), None)
-
-
-def _check(limit: HeightLimit, rule_m: float, physical_m: float,
-           condition: bool | None) -> LimitCheck:
+def _check(limit: HeightLimit, rule_m: float, physical_m: float) -> LimitCheck:
     height = {HeightMeasure.RULE_HEIGHT: rule_m,
               HeightMeasure.PHYSICAL_HEIGHT: physical_m}.get(limit.measure)
+    if height is not None:
+        status, held = limit.evaluate(height), limit.beyond(height)
+    else:  # no height on this measure (above sea level): only a limit that is not there passes
+        status = {Applicability.DOES_NOT_APPLY: Status.INFO}.get(limit.applicability) or (
+            Status.PASS if limit.bound is LimitBound.UNBOUNDED else Status.UNVERIFIED)
+        held = False
+    return LimitCheck(limit.measure, limit.max_m, height, status, _reason(limit, height, status),
+                      limit.clause, limit.status, CONDITION[limit.applicability], held)
 
-    def result(status: Status, reason: str) -> LimitCheck:
-        return LimitCheck(limit.measure, limit.max_m, height, status, reason, limit.clause,
-                          limit.status, condition)
 
-    if limit.max_m is None or height is None:
-        return result(Status.UNVERIFIED, limit.reason)  # cannot be evaluated: never passed
-    if math.isinf(limit.max_m) or height <= limit.max_m + EPS_M:
-        return result(Status.PASS, f"{height:g} m is within {limit.max_m:g} m: {limit.reason}")
-    over = f"{height:g} m is above the {limit.max_m:g} m limit: {limit.reason}"
-    if condition is True:
-        return result(Status.FAIL, over)
-    if condition is None:
-        return result(Status.UNVERIFIED, f"{over}; it applies only if {limit.applies_if}, "
-                                         "which is not known")
-    return result(Status.PASS, f"{over}; it does not apply here ({limit.applies_if})")
+def _high_rise(rules: ResolvedRules, rule_m: float) -> LimitCheck | None:
+    """The site's eligibility, held against a count of the high-rise height or more."""
+    start = rules.height.high_rise_from_m.value
+    if rule_m < start - EPS_M:
+        return None
+    high_rise = rules.height.high_rise
+    failing = [g for g in high_rise.grounds if g.settled and g.met is False]
+    open_ = [g for g in high_rise.grounds if not g.settled]
+    status = {Eligibility.ALLOWED: Status.PASS, Eligibility.PROHIBITED: Status.FAIL,
+              Eligibility.UNVERIFIED: Status.UNVERIFIED}[high_rise.eligibility]
+    named = failing if failing else open_
+    reason = (f"a high-rise is {high_rise.eligibility.value.lower()} here"
+              + "".join(f"; {g.id}: {g.measured}, {g.required}" for g in named)
+              + (f" ({high_rise.note})" if high_rise.note else ""))
+    clause = "; ".join(sorted({g.clause for g in named})) or rules.height.high_rise_from_m.clause
+    return LimitCheck(HeightMeasure.RULE_HEIGHT, start, rule_m, status, reason, clause,
+                      Provenance.UNVERIFIED if open_ else Provenance.VERIFIED,
+                      holds_back=high_rise.eligibility is Eligibility.PROHIBITED)
 
 
 def assess_floor_count(rules: ResolvedRules, brief: DesignBrief, prototype: TowerPrototype | None,
-                       reading: str, floors: int, *, site: CanonicalSiteModel | None = None,
-                       has_stilt: bool | None = None) -> FloorOption:
+                       reading: str, floors: int, *, has_stilt: bool | None = None
+                       ) -> FloorOption:
     """One floor count held against every height limit under one reading of the stilt."""
     if reading not in READINGS or reading not in rules.interpretation(
             STILT_IN_RULE_HEIGHT).alternatives:
@@ -187,39 +208,39 @@ def assess_floor_count(rules: ResolvedRules, brief: DesignBrief, prototype: Towe
     stilt, floor = standard_heights(brief, prototype, has_stilt)
     physical = stilt + floors * floor
     rule_height = physical if reading == STILT_COUNTED else floors * floor
-    checks = tuple(_check(limit, rule_height, physical, condition_holds(limit, site))
-                   for limit in rules.height.limits)
+    checks = tuple(_check(limit, rule_height, physical) for limit in rules.height.limits)
     return FloorOption(floors, reading, stilt, floor, rule_height, physical,
-                       band_for(rules, rule_height), checks)
+                       rules.height.band_for(rule_height), checks,
+                       _high_rise(rules, rule_height))
 
 
 def assess_floors(rules: ResolvedRules, brief: DesignBrief, prototype: TowerPrototype | None,
-                  reading: str, *, site: CanonicalSiteModel | None = None) -> list[FloorOption]:
-    """Every floor count from one up to the first one a limit rules out (or the ceiling), each
-    with its verdicts. Heights only grow, so a count that fails is followed by none that pass;
-    the first failure is kept so a report can say what stops the next floor."""
+                  reading: str) -> list[FloorOption]:
+    """Every floor count from one up to the first one held back (or the ceiling), each with its
+    verdicts. Heights only grow, so a count held back is followed by none that is offered; the
+    first is kept so a report can say what stops the next floor."""
     options: list[FloorOption] = []
     while True:
-        option = assess_floor_count(rules, brief, prototype, reading, len(options) + 1, site=site)
+        option = assess_floor_count(rules, brief, prototype, reading, len(options) + 1)
         options.append(option)
         if not option.feasible or option.physical_height_m >= CEILING_M:
             return options
 
 
 def feasible_floors(rules: ResolvedRules, brief: DesignBrief, prototype: TowerPrototype | None,
-                    reading: str, *, site: CanonicalSiteModel | None = None) -> list[FloorOption]:
-    """The floor counts a tower may take, lowest first: no limit rules them out, the band's
+                    reading: str) -> list[FloorOption]:
+    """The floor counts a tower may take, lowest first: nothing holds them back, the band's
     setback and gap are modelled (below the high-rise height they are not yet), and the brief's
     height intent allows them. It is the whole set, never only the most."""
-    return [option for option in assess_floors(rules, brief, prototype, reading, site=site)
+    return [option for option in assess_floors(rules, brief, prototype, reading)
             if option.feasible and option.modelled
             and _wanted(option.floors, brief.height_intent)]
 
 
-def floors_by_reading(rules: ResolvedRules, brief: DesignBrief, prototype: TowerPrototype | None,
-                      *, site: CanonicalSiteModel | None = None) -> dict[str, list[FloorOption]]:
+def floors_by_reading(rules: ResolvedRules, brief: DesignBrief, prototype: TowerPrototype | None
+                      ) -> dict[str, list[FloorOption]]:
     """The feasible counts under every reading of the stilt the rules leave open."""
-    return {reading: feasible_floors(rules, brief, prototype, reading, site=site)
+    return {reading: feasible_floors(rules, brief, prototype, reading)
             for reading in rules.readings(STILT_IN_RULE_HEIGHT)}
 
 

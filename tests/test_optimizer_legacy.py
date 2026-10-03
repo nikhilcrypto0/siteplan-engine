@@ -17,7 +17,7 @@ from shapely.geometry import LineString, Polygon
 from siteplan.adapters import Readings, option_keys, request
 from siteplan.contracts import CandidateLayout, digest
 from siteplan.contracts.common import Status
-from siteplan.contracts.design_brief import HeightMode
+from siteplan.contracts.design_brief import DesignMargins, HeightMode
 from siteplan.contracts.resolved_rules import (
     ALL,
     CIRCULATION_IN_SETBACK,
@@ -28,7 +28,12 @@ from siteplan.layout import LayoutRequest, SiteFacts, search
 from siteplan.mcp_server import OPTION_KEYS
 from siteplan.optimizer import Budget, LegacyStrategy, SearchContext
 from siteplan.optimizer.floors import STILT_COUNTED, STILT_NOT_COUNTED, assess_floor_count
-from siteplan.optimizer.legacy import DEFAULT_READINGS, heights_for, water_keep_out
+from siteplan.optimizer.legacy import (
+    DEFAULT_READINGS,
+    MARGINS_NOT_APPLIED,
+    heights_for,
+    water_keep_out,
+)
 from siteplan.units import ft_to_m
 
 TEST_CLASS = "normative"
@@ -168,12 +173,16 @@ def test_floors_from_metres_and_the_generators_legal_findings_agree_on_every_hei
         if asked.rule_height_m < 21:
             continue  # below the high-rise height the generator has no rules to apply
         legal = legal_findings(floors, asked, _facts(site), big)
-        option = assess_floor_count(rules, brief, None, reading, floors, site=site)
+        option = assess_floor_count(rules, brief, None, reading, floors)
         generator_fails = any(f.status is Status.FAIL for f in legal)
         assert (not option.feasible) is generator_fails, (reading, dead_end, floors)
         dead = next((f for f in legal if f.rule == "Dead-end road"), None)
         (physical,) = [c for c in option.limits if c.measure.value == "PHYSICAL_HEIGHT"]
-        assert physical.status is (dead.status if dead else Status.PASS), (floors,)
+        if dead_end is False:  # 1.1: a limit that does not apply is listed, as considered
+            assert physical.status is Status.INFO, (floors,)
+            assert dead is None or dead.status is Status.PASS, (floors,)
+        else:
+            assert physical.status is (dead.status if dead else Status.PASS), (floors,)
 
 
 # --- the heights tried ---------------------------------------------------------------------------
@@ -323,3 +332,19 @@ def test_a_candidate_says_which_readings_it_was_made_under():
     assert run.proposal.candidates
     assert all(c.interpretation_basis == readings for c in run.proposal.candidates)
     assert run.proposal.candidates[0].candidate_id.startswith("legacy-not_counted-not_allowed-")
+
+
+def test_the_legacy_generator_applies_no_design_margin_and_says_so():
+    """Margins are the firm's targets above the legal minimums, for the search proper (C2): the
+    legacy generator plans on the minimums and labels its candidates when a margin was asked."""
+    firm = {"value": 0.5, "status": "USER_CONFIRMED", "source_kind": "FIRM_STANDARD",
+            "source": "made up"}
+    margined = BRIEF.model_copy(update={"design_margins": DesignMargins.model_validate(
+        {"setback_extra_m": firm})})
+    readings = {STILT_IN_RULE_HEIGHT: STILT_COUNTED, CIRCULATION_IN_SETBACK: "not_allowed"}
+    made = LegacyStrategy(LIBRARY, readings=readings).run(
+        SearchContext(SITE, RULES, margined)).proposal.candidates
+    before = legacy_run(maximise=False).proposal.candidates
+    assert made and [c.towers for c in made] == [c.towers for c in before]
+    assert all(MARGINS_NOT_APPLIED in c.caveats for c in made)
+    assert not any(MARGINS_NOT_APPLIED in c.caveats for c in before)
