@@ -6,18 +6,27 @@ site model and the candidate's own geometry. What the generator says about itsel
 its partition, its footprints) and what an envelope says are compared with that recomputation,
 never relied on: they only ever add discrepancies.
 
-A site model with no net plot is refused: the report says so and cannot pass.
+A site model with no net plot, or a candidate holding a number that is not a number, is
+refused: the report says so and cannot pass.
 """
 
 from __future__ import annotations
 
+import math
+
 from siteplan.contracts.candidate import CandidateLayout
-from siteplan.contracts.common import Shape
+from siteplan.contracts.common import Shape, Status
 from siteplan.contracts.design_brief import DesignBrief
 from siteplan.contracts.envelope import BuildableEnvelope
 from siteplan.contracts.resolved_rules import ResolvedRules
 from siteplan.contracts.site_model import CanonicalSiteModel
-from siteplan.contracts.validation import Check, Discrepancy, Recomputed, ValidationReport
+from siteplan.contracts.validation import (
+    Check,
+    Discrepancy,
+    Family,
+    Recomputed,
+    ValidationReport,
+)
 from siteplan.validator import (
     accounting,
     blocks,
@@ -36,6 +45,9 @@ from siteplan.validator import (
 from siteplan.validator.context import Context
 from siteplan.validator.ground import Ground
 from siteplan.validator.measure import tower_geometries
+from siteplan.validator.readings import plain
+
+SHOWN = 5  # how many offending numbers a report names before it says there are more
 
 
 def _present(*checks: Check | None) -> list[Check]:
@@ -84,16 +96,48 @@ def _refuse(site: CanonicalSiteModel, rules: ResolvedRules, brief: DesignBrief,
     return report.assemble(
         site, rules, brief, candidate, envelope,
         recomputed=Recomputed(units_by_type=program.units_by_type(towers)),
-        legal=[land_checks.no_net_plot_check()],
+        legal=[land_checks.no_net_plot_check(site)],
         program=program.program_checks(brief, candidate, towers, rules), partition=None,
         partition_problems=[], rule_layers=None,
         cross_checks=cross_checks.references(site, rules, brief, candidate, envelope)
-        + cross_checks.footprints(towers))
+        + cross_checks.flaws(towers, None) + cross_checks.footprints(towers))
+
+
+def non_finite(value, path: str = "") -> list[str]:
+    """Where a candidate holds a number that is not a number or is infinite, as paths into it."""
+    if isinstance(value, float):
+        return [] if math.isfinite(value) else [f"{path} = {value}"]
+    if isinstance(value, dict):
+        return [bad for k, v in value.items() for bad in non_finite(v, f"{path}.{k}".lstrip("."))]
+    if isinstance(value, list | tuple):
+        return [bad for i, v in enumerate(value) for bad in non_finite(v, f"{path}[{i}]")]
+    return []
+
+
+def _unmeasurable(site: CanonicalSiteModel, rules: ResolvedRules, brief: DesignBrief,
+                  candidate: CandidateLayout, envelope: BuildableEnvelope | None,
+                  bad: list[str]) -> ValidationReport:
+    """A candidate with a number that is not a number cannot be placed on the land, so nothing
+    about it can be measured: the report is one FAIL, and the program is not judged."""
+    more = f" and {len(bad) - SHOWN} more" if len(bad) > SHOWN else ""
+    return report.assemble(
+        site, rules, brief, candidate, envelope, recomputed=Recomputed(),
+        legal=[plain(Family.CONSISTENCY, "Numbers in the candidate", Status.FAIL,
+                     "; ".join(bad[:SHOWN]) + more, "every coordinate and measure a finite number",
+                     "", "A layout holding a number that is not a number cannot be measured, so "
+                     "it cannot pass.")],
+        program=[plain(Family.PROGRAM, "Program", Status.UNVERIFIED, "not judged",
+                       "the brief's program", "", "The candidate could not be measured.")],
+        partition=None, partition_problems=[], rule_layers=None,
+        cross_checks=cross_checks.references(site, rules, brief, candidate, envelope))
 
 
 def validate(site: CanonicalSiteModel, rules: ResolvedRules, brief: DesignBrief,
              candidate: CandidateLayout, envelope: BuildableEnvelope | None = None
              ) -> ValidationReport:
+    bad = non_finite(candidate.model_dump())
+    if bad:
+        return _unmeasurable(site, rules, brief, candidate, envelope, bad)
     ctx = context.build(site, rules, brief, candidate)
     if ctx is None:
         return _refuse(site, rules, brief, candidate, envelope)
@@ -105,7 +149,8 @@ def validate(site: CanonicalSiteModel, rules: ResolvedRules, brief: DesignBrief,
                    default=0.0)
     discrepancies: list[Discrepancy] = [
         *cross_checks.references(site, rules, brief, candidate, envelope),
-        *cross_checks.footprints(ctx.towers), *cross_checks.claims(candidate, legal),
+        *cross_checks.flaws(ctx.towers, ctx.drawn), *cross_checks.footprints(ctx.towers),
+        *cross_checks.claims(candidate, legal),
         *cross_checks.metrics(ctx, clubhouse.built_up_sqm(ctx), counting, units),
         *cross_checks.cars(candidate, found.get("parking_cars", 0.0)),
         *roads.width_discrepancies(ctx, ground), *fire.gate_discrepancies(ctx),

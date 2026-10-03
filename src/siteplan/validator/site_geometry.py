@@ -15,6 +15,7 @@ from shapely.ops import polygonize, unary_union
 
 from siteplan.contracts.resolved_rules import ResolvedRules
 from siteplan.contracts.site_model import CanonicalSiteModel, Water
+from siteplan.validator.shapes import mended
 
 
 @dataclass(frozen=True)
@@ -48,8 +49,12 @@ class SiteGeometry:
 
 
 def net_plot_of(site: CanonicalSiteModel) -> Polygon | None:
-    """The net plot outline as a shapely polygon; None while the site model has none."""
-    return site.net_plot.value.to_shapely() if site.net_plot is not None else None
+    """The net plot outline as a shapely polygon; None while the site model has none, or has one
+    that nothing can be measured on (it crosses itself, or encloses no ground)."""
+    if site.net_plot is None:
+        return None
+    outline = site.net_plot.value.to_shapely()
+    return outline if outline.is_valid and outline.area > 0 else None
 
 
 def build(site: CanonicalSiteModel, rules: ResolvedRules) -> SiteGeometry | None:
@@ -63,7 +68,7 @@ def _zone(water: Water, rules: ResolvedRules) -> WaterZone:
     widths = rules.water.buffer_m_by_class.value
     width = widths.get(water.water_class.value)
     lines = [LineString(line.points) for line in water.lines]
-    channel = [shape.to_shapely() for shape in water.channel]
+    channel = [mended(shape.to_shapely())[0] for shape in water.channel]
     if width is None or not (lines or channel):
         return WaterZone(water.id, water.water_class.value, width, Polygon(), False)
     drawn = unary_union(lines) if lines else None

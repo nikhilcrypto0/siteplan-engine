@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from siteplan.contracts.common import Provenance, Status
 from siteplan.contracts.resolved_rules import STILT_IN_RULE_HEIGHT
-from siteplan.contracts.site_model import NET_PLOT_TOLERANCE
+from siteplan.contracts.site_model import NET_PLOT_TOLERANCE, CanonicalSiteModel
 from siteplan.contracts.validation import Check, Family
 from siteplan.validator.context import Context
 from siteplan.validator.readings import Assignment, Cell, check_from, plain, run, verdict
@@ -26,9 +26,6 @@ def net_plot_check(ctx: Context) -> Check:
     required = f"the net ownership, {own.value:,.1f} m² (within {NET_PLOT_TOLERANCE:.0%})"
     rule = "Net plot"
     clause = "G.O.168 rule 7(a)(iii) (setbacks are measured on the net plot)"
-    if not ctx.net.is_valid or drawn <= 0:
-        return plain(Family.CONSISTENCY, rule, Status.UNVERIFIED, "the outline is not a valid "
-                     "polygon", required, clause)
     ok = abs(drawn - own.value) <= NET_PLOT_TOLERANCE * own.value
     confirmed = ctx.site.net_plot.status is not Provenance.UNVERIFIED
     note = ("" if ok else "The outline and the net ownership disagree: the site model is not "
@@ -38,14 +35,19 @@ def net_plot_check(ctx: Context) -> Check:
                  f"outline {drawn:,.1f} m²", required, clause, note.strip())
 
 
-def no_net_plot_check() -> Check:
+def no_net_plot_check(site: CanonicalSiteModel) -> Check:
+    """The refusal: a site model with no outline of the net plot to measure on, or with one that
+    cannot be measured on."""
+    unusable = site.net_plot is not None
     return plain(
-        Family.CONSISTENCY, "Net plot", Status.UNVERIFIED, "not known",
+        Family.CONSISTENCY, "Net plot", Status.UNVERIFIED,
+        "the outline crosses itself or encloses no ground" if unusable else "not known",
         "an outline of the net plot, after every deduction from ownership",
         "G.O.168 rule 7(a)(iii) (setbacks are measured on the net plot)",
-        "The site model cannot place the net plot (a deduction's location is not known). The "
-        "validator refuses to certify a layout it cannot measure on the land it stands on: the "
-        "pipeline stops and asks where the deduction lies.")
+        "The validator refuses to certify a layout it cannot measure on the land it stands on: "
+        + ("the pipeline stops and asks for an outline that can be measured." if unusable else
+           "the site model cannot place the net plot (a deduction's location is not known), so "
+           "the pipeline stops and asks where the deduction lies."))
 
 
 def water_check(ctx: Context) -> Check | None:

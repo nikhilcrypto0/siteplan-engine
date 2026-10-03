@@ -134,3 +134,71 @@ def test_a_survey_far_from_the_origin_gives_the_same_statuses(name):
         c.finding.rule: c.finding.status for c in near.legal}
     for key, value in near.recomputed.quantities.items():
         assert shifted.recomputed.quantities[key] == pytest.approx(value, rel=1e-4, abs=0.05), key
+
+
+CROSSES_ITSELF = Polygon([(0, 0), (10, 10), (10, 0), (0, 10)])  # a bowtie: not a valid polygon
+
+
+def _draw_bowtie(where):
+    def edit(candidate):
+        bowtie = shape(CROSSES_ITSELF)
+        program, circulation = candidate.program, candidate.circulation
+        if where == "road":
+            circulation.roads[0].shapes = [bowtie]
+        elif where == "fire hardstanding":
+            circulation.fire_hardstanding = [bowtie]
+        elif where == "the club house":
+            program.club_house.shape = bowtie
+        elif where == "a parking bay":
+            program.bays = [*program.bays, bowtie]
+        elif where == "open space":
+            program.open_space = [*program.open_space, bowtie]
+        elif where == "a ramp":
+            program.ramps = [*program.ramps, bowtie]
+        elif where == "the green strip":
+            program.green_strip = [bowtie]
+        elif where == "the cellar outline":
+            program.cellars.outline = [bowtie]
+        elif where == "the footprint it states":
+            candidate.towers[0].footprint = bowtie
+        elif where == "its prototype's footprint":
+            candidate.prototypes_used[0].footprint = bowtie
+    return edit
+
+
+@pytest.mark.parametrize("where", ["road", "fire hardstanding", "the club house", "a parking bay",
+                                   "open space", "a ramp", "the green strip",
+                                   "the cellar outline", "the footprint it states",
+                                   "its prototype's footprint"])
+def test_a_shape_that_crosses_itself_is_named_and_blocks_a_pass_instead_of_stopping_the_run(where):
+    report = fixture("rectangle").edited(_draw_bowtie(where)).report()
+    found = [d for d in report.cross_checks if d.item == "shape that crosses itself"]
+    assert len(found) == 1 and found[0].blocks_pass, where
+    assert where in found[0].theirs and "Self-intersection" in found[0].theirs
+    assert report.verdict.legal is LegalVerdict.FAIL
+    assert ValidationReport.model_validate_json(report.model_dump_json()) == report
+
+
+def test_a_site_whose_net_plot_crosses_itself_or_encloses_nothing_is_refused():
+    for outline in (CROSSES_ITSELF, Polygon([(0, 0), (10, 0), (20, 0)])):
+        def ruin(site, outline=outline):
+            site.net_plot.value = shape(outline)
+        report = fixture("rectangle").with_site(ruin).report()
+        assert [c.finding.status for c in report.legal] == [Z.UNVERIFIED]
+        assert report.legal[0].finding.rule == "Net plot"
+        assert "crosses itself or encloses no ground" in report.legal[0].finding.measured
+        assert report.verdict.legal is LegalVerdict.UNVERIFIED  # never a pass
+
+
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), float("-inf")])
+def test_a_number_that_is_not_a_number_fails_the_candidate_and_names_where(bad):
+    def spoil(candidate):
+        candidate.towers[1].x = bad
+        candidate.metrics.saleable_sqft = bad
+    report = fixture("rectangle").edited(spoil).report()
+    assert [c.finding.status for c in report.legal] == [Z.FAIL]
+    measured = report.legal[0].finding.measured
+    assert "towers[1].x" in measured and "metrics.saleable_sqft" in measured
+    assert report.verdict.legal is LegalVerdict.FAIL
+    assert [c.finding.status for c in report.program] == [Z.UNVERIFIED]
+    assert ValidationReport.model_validate_json(report.model_dump_json()) == report
