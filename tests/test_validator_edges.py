@@ -269,13 +269,17 @@ def test_a_claimed_built_up_area_a_few_percent_under_the_true_one_is_flagged():
 
 
 def test_an_envelope_made_for_other_rules_is_not_compared_even_for_the_same_site():
+    """A wrong envelope (a 3 m setback all through) made for other rules says nothing about these:
+    it is noted, and nothing in it is held against the layout."""
     inputs = fixture("rectangle")
-    envelope = inputs.envelope.model_copy(update={"rules_ref": "0123456789abcdef"})
-    report = fixture("rectangle").report(envelope=False)
-    from dataclasses import replace
-    other = replace(inputs, envelope=envelope).report(envelope=True)
-    assert not [d for d in other.cross_checks if d.item.startswith("envelope setback")]
-    assert report.verdict.legal == other.verdict.legal
+    envelope = inputs.envelope.model_copy(deep=True)
+    for band in envelope.bands:
+        band.setback_m = 3.0
+    other = replace(inputs, envelope=envelope.model_copy(update={"rules_ref": "0123456789abcdef"}))
+    report = other.report(envelope=True)
+    assert not [d for d in report.cross_checks if d.item.startswith("envelope setback")]
+    assert [d for d in replace(inputs, envelope=envelope).report(envelope=True).cross_checks
+            if d.item.startswith("envelope setback")]  # made for these rules, it is compared
 
 
 def test_the_envelopes_buildable_land_is_compared_with_the_water_taken_out():
