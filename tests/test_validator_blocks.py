@@ -163,6 +163,16 @@ def test_a_tower_outside_the_net_plot_has_no_setback_at_all():
     assert status(report, "All-round setback: T3") is Z.FAIL
 
 
+def test_a_tower_outside_the_net_plot_fails_even_where_the_table_row_is_only_an_upper_bound():
+    """Found on Suchitra: at exactly 21 m the row above is only an upper bound, so a short
+    setback is UNVERIFIED there; a block that is not on the plot meets no row of any table."""
+    def push(candidate):
+        set_floors(candidate, "T1", 6)  # 21.0 m exactly if the stilt is not counted
+        move_tower(candidate, "T1", 400.0, 0.0)  # far past the east boundary
+    c = check(_counted_only(fixture("rectangle")).edited(push).report(), "All-round setback: T1")
+    assert c.finding.status is Z.FAIL and "not wholly inside" in c.finding.measured
+
+
 def test_the_gap_between_two_towers_is_the_distance_between_their_footprints():
     report = fixture("rectangle").report()
     pair = next(p for p in report.recomputed.pairs if (p.a, p.b) == ("T1", "T2"))

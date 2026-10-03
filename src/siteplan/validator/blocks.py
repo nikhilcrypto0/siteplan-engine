@@ -266,8 +266,9 @@ def setback_checks(ctx: Context) -> list[Check]:
     out = []
     for t in ctx.towers:
         gap = setback_of(ctx.net, t.footprint)
+        outside = not ctx.net.contains(t.footprint)
 
-        def cell(a: Assignment, t=t, gap=gap) -> Cell:
+        def cell(a: Assignment, t=t, gap=gap, outside=outside) -> Cell:
             reading = a[STILT_IN_RULE_HEIGHT]
             cls = (_classes(ctx, reading) or {}).get(t.name)
             if cls is None:
@@ -276,6 +277,9 @@ def setback_checks(ctx: Context) -> list[Check]:
             if stopped is not None:
                 return Cell(stopped.status, f"{gap:.2f} m", stopped.required, stopped.note)
             need = cls.setback_m
+            if outside:  # no row of any table is met by a block that is not on the plot
+                return Cell(Status.FAIL, f"{gap:.2f} m: not wholly inside the net plot",
+                            f">= {need:.2f} m to the net plot line")
             ok = gap + TOL_M >= need
             return Cell(Status.PASS if ok else _fails_as(cls), f"{gap:.2f} m",
                         f">= {need:.2f} m to the net plot line",
