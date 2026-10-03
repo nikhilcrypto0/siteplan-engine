@@ -4,7 +4,7 @@ must say so. Found by a review: a club house 7 m from a tower that Table IV keep
 drew no check at all."""
 
 from shapely import affinity
-from validator_helpers import check, fixture, select, shape, status
+from validator_helpers import check, fixture, rectangle, select, shape, status
 
 from siteplan.contracts.common import Status
 from siteplan.contracts.resolved_rules import ALL, MIXED_HEIGHT_SPACING, STILT_IN_RULE_HEIGHT
@@ -87,7 +87,18 @@ def test_a_club_house_as_tall_as_a_high_rise_keeps_the_setback_its_height_asks()
         club.shape = shape(affinity.translate(club.shape.to_shapely(), 148.0 - bounds[2], 0.0))
     far = check(fixture("rectangle").edited(tall).report(), "Club house: setback")
     near = check(fixture("rectangle").edited(near_the_boundary).report(), "Club house: setback")
-    assert far.finding.status is Z.PASS and near.finding.status is Z.FAIL
+    assert far.finding.status is Z.UNVERIFIED and near.finding.status is Z.FAIL  # never a pass
+    assert "fire access and spacing are not modelled" in far.finding.note
+
+
+def test_a_club_house_of_a_tiny_footprint_and_dozens_of_floors_cannot_pass_the_3_percent():
+    """30 m² over 38 floors is 1,140 m² of club house, 3% of what is built, and a 114 m block."""
+    def tower(candidate):
+        club = candidate.program.club_house
+        club.floors = 38
+        club.shape = rectangle(40.0, 5.0, 46.0, 10.0)
+    c = check(fixture("rectangle").edited(tower).report(), "Amenities (club house)")
+    assert c.finding.status is Z.UNVERIFIED and "cannot pass" in c.finding.note
 
 
 def test_a_project_over_5_acres_says_rule_8o_is_not_modelled():
