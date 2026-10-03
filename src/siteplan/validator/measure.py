@@ -18,7 +18,7 @@ from siteplan.contracts.design_brief import DesignBrief
 from siteplan.contracts.prototype import TowerPrototype
 from siteplan.contracts.resolved_rules import Band, BandKind, ResolvedRules
 from siteplan.validator.readings import COUNTED, EACH_OWN, NOT_COUNTED, TALLER_GOVERNS
-from siteplan.validator.shapes import mended
+from siteplan.validator.shapes import polygon_of
 
 TOL_M = 1e-6  # a length this close to the rule's is the rule's
 
@@ -73,7 +73,7 @@ def tower_geometries(candidate: CandidateLayout, brief: DesignBrief) -> tuple[To
         flaws: list[str] = []
 
         def sound(shape, label: str, flaws=flaws, name=placed.name):
-            geometry, flaw = mended(shape.to_shapely())
+            geometry, flaw = polygon_of(shape)
             if flaw:
                 flaws.append(f"{label} of {name}: {flaw}")
             return geometry

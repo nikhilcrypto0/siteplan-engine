@@ -22,7 +22,7 @@ from siteplan.validator.context import Context
 from siteplan.validator.drawn import Drawn
 from siteplan.validator.measure import TowerGeometry
 from siteplan.validator.parking import cellar_setback_m
-from siteplan.validator.shapes import mended, union_of_all
+from siteplan.validator.shapes import polygon_of, union_of_all
 
 FOOTPRINT_SQM = 0.1  # a footprint that differs by less than this is the same footprint
 FOOTPRINT_SHARE = 0.001  # or by this share of its area
@@ -62,11 +62,19 @@ def references(site: CanonicalSiteModel, rules: ResolvedRules, brief: DesignBrie
 
 
 def flaws(towers: tuple[TowerGeometry, ...], drawn: Drawn | None) -> list[Discrepancy]:
-    """Shapes that cross themselves. They were mended to be measured at all, but a layout that
-    draws one is not a layout to pass."""
+    """Shapes that cross themselves, or hold a hole too short to be a ring. They were mended to
+    be measured at all, but a layout that draws one is not a layout to pass."""
     found = [f for t in towers for f in t.flaws] + (list(drawn.flaws) if drawn else [])
-    return [_d("shape that crosses itself", "generator", problem,
-               "judged on the ground the shape encloses, mended", True) for problem in found]
+    return [_d("malformed shape", "generator", problem,
+               "judged on the ground the shape encloses, mended", True)
+            for problem in found]
+
+
+def _where(shape) -> str:
+    """How much ground, and where, without asking a shape with no area for its centre."""
+    if shape.is_empty or shape.area <= 0:
+        return f"{shape.area:,.2f} m²"
+    return f"{shape.area:,.2f} m² at ({shape.centroid.x:.1f}, {shape.centroid.y:.1f})"
 
 
 def footprints(towers: tuple[TowerGeometry, ...]) -> list[Discrepancy]:
@@ -75,11 +83,8 @@ def footprints(towers: tuple[TowerGeometry, ...]) -> list[Discrepancy]:
     for t in towers:
         off = t.footprint.symmetric_difference(t.stated).area
         if off > max(FOOTPRINT_SQM, FOOTPRINT_SHARE * t.footprint.area):
-            out.append(_d(f"footprint {t.name}", "generator",
-                          f"{t.stated.area:,.2f} m² at ({t.stated.centroid.x:.1f}, "
-                          f"{t.stated.centroid.y:.1f})",
-                          f"{t.footprint.area:,.2f} m² at ({t.footprint.centroid.x:.1f}, "
-                          f"{t.footprint.centroid.y:.1f}); {off:,.2f} m² differ", True))
+            out.append(_d(f"footprint {t.name}", "generator", _where(t.stated),
+                          f"{_where(t.footprint)}; {off:,.2f} m² differ", True))
     return out
 
 
@@ -120,8 +125,9 @@ def metrics(ctx: Context, built_up_sqm: float, qualifying_sqm: float, units: dic
         out.append(_d("open space", "generator", f"{m.open_space_sqm:,.1f} m²",
                       f"{qualifying_sqm:,.1f} m² counts", True))
     total = sum(units.values())
-    if m.total_flats != total:
-        out.append(_d("flats", "generator", str(m.total_flats), str(total), False))
+    if m.total_flats != total:  # more flats claimed than the modules give: units, and the club
+        out.append(_d("flats", "generator", str(m.total_flats), str(total),  # house from 100 of
+                      m.total_flats > total))  # them, are not what the generator says
     if m.flats_by_type and m.flats_by_type != units:
         out.append(_d("flats by type", "generator", str(dict(sorted(m.flats_by_type.items()))),
                       str(dict(sorted(units.items()))), False))
@@ -140,14 +146,22 @@ def cellars(ctx: Context) -> list[Discrepancy]:
     return []
 
 
+def _claimed_cars(candidate: CandidateLayout) -> float | None:
+    """The cars the generator says fit, or None when it says nothing a number can be read from:
+    its metrics hold whatever it chose to put in them."""
+    parking = candidate.metrics.extra.get("parking") if candidate.metrics else None
+    cars = parking.get("cars") if isinstance(parking, dict) else None
+    numbers = [v for v in cars.values() if isinstance(v, int | float) and not isinstance(v, bool)
+               ] if isinstance(cars, dict) else []
+    return float(sum(numbers)) if numbers else None
+
+
 def cars(candidate: CandidateLayout, laid_out: float) -> list[Discrepancy]:
     """The cars the generator says fit, against the ones laid out here. Said to fit more than
     were found, it is recorded (not blocked: the layout rules are the validator's own)."""
-    m = candidate.metrics
-    claimed = (m.extra.get("parking", {}).get("cars") or {}) if m else {}
-    total = sum(claimed.values())
-    if total > laid_out * (1 + CARS_SHARE) + 1:
-        return [_d("cars that fit", "generator", f"{total:,}", f"{laid_out:,.0f}", False)]
+    total = _claimed_cars(candidate)
+    if total is not None and total > laid_out * (1 + CARS_SHARE) + 1:
+        return [_d("cars that fit", "generator", f"{total:,.0f}", f"{laid_out:,.0f}", False)]
     return []
 
 
@@ -184,19 +198,19 @@ def envelope_checks(ctx: Context, envelope: BuildableEnvelope) -> list[Discrepan
     for band in envelope.bands:
         mine = next((b for b in ctx.rules.height.bands if abs(b.above_m - band.above_m) < 1e-6
                      and abs(b.up_to_m - band.up_to_m) < 1e-6), None)
-        if mine is None or mine.setback_m is None or band.setback_m is None:
+        if mine is None or mine.setback_m is None:
             continue
         label = f"{band.above_m:g}-{band.up_to_m:g} m"
-        if abs(band.setback_m - mine.setback_m) > BAND_SLACK_M:
+        if band.setback_m is not None and abs(band.setback_m - mine.setback_m) > BAND_SLACK_M:
             out.append(_d(f"envelope setback, band {label}", "envelope", f"{band.setback_m:g} m",
                           f"{mine.setback_m:g} m", band.setback_m < mine.setback_m))
         land = ctx.net.buffer(-mine.setback_m).difference(keep_out)
-        stated = union_of_all([mended(s.to_shapely())[0] for s in band.buildable]).area
+        stated = union_of_all([polygon_of(s)[0] for s in band.buildable]).area
         if abs(stated - land.area) > METRIC_SHARE * max(land.area, 1.0):
             out.append(_d(f"envelope buildable land, band {label}", "envelope",
                           f"{stated:,.1f} m²", f"{land.area:,.1f} m²", stated > land.area))
     if envelope.exclusions or not keep_out.is_empty:
-        stated = union_of_all([mended(s.to_shapely())[0]
+        stated = union_of_all([polygon_of(s)[0]
                                for e in envelope.exclusions for s in e.shapes])
         stated_area = stated.intersection(ctx.net).area
         if abs(stated_area - keep_out.area) > METRIC_SHARE * max(keep_out.area, 1.0):

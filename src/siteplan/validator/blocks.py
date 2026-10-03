@@ -11,6 +11,7 @@ from __future__ import annotations
 from itertools import combinations
 
 from siteplan import rules as law
+from siteplan.contracts.accounting import DeductionKind
 from siteplan.contracts.common import Status
 from siteplan.contracts.resolved_rules import (
     MIXED_HEIGHT_SPACING,
@@ -109,16 +110,21 @@ def plot_size_check(ctx: Context) -> Check | None:
                       rule="Plot size for high-rise", clause=law.MIN_HIGH_RISE_PLOT_CLAUSE)
 
 
+def _surrenders_land(site: CanonicalSiteModel) -> bool:
+    """Whether the site gives up land for the road (a SURRENDER deduction from ownership)."""
+    return any(d.kind is DeductionKind.SURRENDER for d in site.ownership.deductions)
+
+
 def road_width(site: CanonicalSiteModel) -> tuple[float | None, str, bool]:
     """The width of the access road the rules take, how it is known, and whether that is
-    settled. The master plan's width wins where there is one (it counts only if the widening
-    strip is surrendered); the width the survey draws is never used, and a width read off a
-    drawing and never confirmed is a value, not a settled fact."""
+    settled. The master plan's width wins where there is one and the widening strip is
+    surrendered (otherwise the road is as wide as it is); the width the survey draws is never
+    used, and a width read off a drawing and never confirmed is a value, not a settled fact."""
     road = site.access_road()
     if road is None:
         return None, "no access road in the site model", False
     settled = road.row_status != UNVERIFIED_DRAWING
-    if is_known(road.master_plan_row_m):
+    if is_known(road.master_plan_row_m) and _surrenders_land(site):
         return road.master_plan_row_m.value, "master plan", settled
     if is_known(road.legal_row_m):
         return road.legal_row_m.value, "existing", settled
@@ -138,7 +144,11 @@ def road_width_check(ctx: Context) -> Check | None:
         basis.append(f"The survey measures {road.drawn_width_m:.2f} m of carriageway; the rules "
                      "use the declared width.")
     if how == "master plan":
-        basis.append("Counts only if the road-widening strip is surrendered.")
+        basis.append("The master plan's width counts because the road-widening strip is "
+                     "surrendered (a deduction from ownership).")
+    elif road is not None and is_known(road.master_plan_row_m):
+        basis.append(f"The master plan's {road.master_plan_row_m.value:.2f} m is not counted: no "
+                     "land is surrendered for the widening, so the road is as wide as it is.")
 
     def cell(a: Assignment) -> Cell:
         reading = a[STILT_IN_RULE_HEIGHT]
@@ -206,6 +216,31 @@ def _physical_height_limit(ctx: Context, limit) -> Check:
     return plain(Family.HEIGHT, f"Physical-height limit: {limit.reason}", status, measured,
                  required, limit.clause, f"Applies if {limit.applies_if}." if limit.applies_if
                  else "", subject=tallest.name)
+
+
+def prototype_height_check(ctx: Context) -> Check | None:
+    """Every height rule is judged on a tower's floors times its floor height, which a prototype
+    may set for itself. A floor or stilt shorter than the firm's standard lowers the building under
+    every rule at once, so a prototype that does is said, and the height rules rest on it."""
+    firm = ctx.brief.firm_standards
+    shorter = {}
+    for t in ctx.towers:
+        heights = t.prototype.heights
+        own = [(label, value, standard) for label, value, standard in (
+            ("floor", heights.floor_to_floor_m, firm.floor_to_floor_m.value),
+            ("stilt", heights.stilt_height_m if t.has_stilt else None, firm.stilt_height_m.value))
+            if value is not None and value + TOL_M < standard]
+        for label, value, standard in own:
+            shorter.setdefault(
+                f"{t.prototype.id} {label} {value:g} m against the firm's {standard:g} m",
+                []).append(t.name)
+    if not shorter:
+        return None
+    return plain(Family.HEIGHT, "Heights of the prototypes", Status.UNVERIFIED,
+                 "; ".join(f"{what} ({', '.join(names)})" for what, names in shorter.items()),
+                 "the firm's standard floor and stilt heights, or a reason for the difference", "",
+                 "The height rules are judged on the prototype's own heights, as the contract "
+                 "says, but nothing here confirms heights below the firm's.")
 
 
 def tdr_check(ctx: Context) -> Check | None:

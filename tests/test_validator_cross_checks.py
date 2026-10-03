@@ -119,14 +119,25 @@ def test_open_space_claimed_larger_than_counts_blocks():
     assert _discrepancy(fixture("rectangle").edited(inflate).report(), "open space").blocks_pass
 
 
-def test_a_wrong_flat_count_is_recorded_without_blocking():
-    def miscount(candidate):
-        candidate.metrics.total_flats += 8
-        candidate.metrics.flats_by_type = {"2BHK": 130, "3BHK": 86}
-    report = fixture("rectangle").edited(miscount).report()
+def test_fewer_flats_claimed_than_the_modules_give_is_recorded_without_blocking():
+    def undersell(candidate):
+        candidate.metrics.total_flats -= 8
+        candidate.metrics.flats_by_type = {"2BHK": 126, "3BHK": 74}
+    report = fixture("rectangle").edited(undersell).report()
     assert not _discrepancy(report, "flats").blocks_pass
     assert not _discrepancy(report, "flats by type").blocks_pass
     assert report.recomputed.units_by_type == {"2BHK": 128, "3BHK": 80}
+
+
+def test_more_flats_claimed_than_the_modules_give_blocks():
+    """Found by review: merging a prototype's modules took 208 flats to 96 and with them the club
+    house the law asks from 100, while the generator's own metrics still said 208."""
+    def oversell(candidate):
+        candidate.metrics.total_flats += 8
+        candidate.metrics.flats_by_type = {"2BHK": 130, "3BHK": 86}
+    report = fixture("rectangle").edited(oversell).report()
+    assert _discrepancy(report, "flats").blocks_pass
+    assert not _discrepancy(report, "flats by type").blocks_pass
 
 
 def test_more_cars_claimed_than_fit_is_recorded_without_blocking():
@@ -192,6 +203,17 @@ def test_an_envelope_with_more_buildable_land_than_there_is_blocks():
     inputs = fixture("rectangle")
     envelope = inputs.envelope.model_copy(deep=True)
     envelope.bands[1].buildable = shapes(NET.buffer(-3.0))
+    d = _discrepancy(replace(inputs, envelope=envelope).report(envelope=True),
+                     "envelope buildable land, band 21-24 m")
+    assert d.blocks_pass and d.source == "envelope"
+
+
+def test_an_envelope_band_that_states_no_setback_is_still_held_to_its_buildable_land():
+    """Found by review: a band with no setback and the whole plot as buildable raised nothing."""
+    inputs = fixture("rectangle")
+    envelope = inputs.envelope.model_copy(deep=True)
+    envelope.bands[1].setback_m = None
+    envelope.bands[1].buildable = shapes(NET)
     d = _discrepancy(replace(inputs, envelope=envelope).report(envelope=True),
                      "envelope buildable land, band 21-24 m")
     assert d.blocks_pass and d.source == "envelope"

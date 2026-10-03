@@ -20,7 +20,7 @@ from siteplan.contracts.resolved_rules import ResolvedRules
 from siteplan.contracts.validation import Check, Family
 from siteplan.validator.measure import TOL_M, TowerGeometry
 from siteplan.validator.readings import plain, verdict
-from siteplan.validator.shapes import sides_of
+from siteplan.validator.shapes import polygon_of, sides_of
 
 BRIEF = "the brief"
 UNITS_TARGET_TOLERANCE = 0.05  # a units target is met within this share
@@ -71,7 +71,7 @@ def _club_check(brief: DesignBrief, candidate: CandidateLayout, units: int,
                 rules: ResolvedRules) -> Check:
     asked, club = brief.program.club_house, candidate.program.club_house
     wanted = asked.wanted.value
-    provided = club.shape.area_sqm * club.floors if club else 0.0
+    provided = polygon_of(club.shape)[0].area * club.floors if club else 0.0
     below = units < rules.amenities.from_units.value
     if wanted and club is None and asked.size is ClubSize.LEGAL_MINIMUM and below:
         return plain(Family.PROGRAM, "Club house", Status.PASS,

@@ -10,10 +10,12 @@ import math
 
 import numpy as np
 from shapely.affinity import rotate
-from shapely.geometry import Polygon, box
+from shapely.geometry import LineString, Polygon, box
 from shapely.geometry.base import BaseGeometry
 from shapely.ops import polylabel, unary_union
 from shapely.validation import explain_validity, make_valid
+
+from siteplan.contracts.common import Shape
 
 EPS_M = 0.01  # a centimetre: below this a drawn edge and its neighbour are the same edge
 OPENING_SLACK_M = 0.005  # a part this close to the width asked is that wide
@@ -54,6 +56,22 @@ def mitred(shape: BaseGeometry, distance_m: float) -> BaseGeometry:
     if grown.is_valid:
         return grown
     return union_of_all([p if p.is_valid else p.buffer(0) for p in polygons_of(grown)])
+
+
+def polygon_of(shape: Shape) -> tuple[BaseGeometry, str]:
+    """A contract Shape as geometry that can be measured, and what was wrong with it ('' when
+    nothing was). A hole too short to be a ring passes the contract but not the geometry library:
+    it is dropped; a shape that crosses itself is mended."""
+    try:
+        return mended(shape.to_shapely())
+    except ValueError:
+        pass
+    holes = [hole for hole in shape.holes if len(hole) >= 3]
+    try:
+        geometry, flaw = mended(Polygon(shape.outer, holes))
+    except ValueError as error:
+        return Polygon(), f"not a polygon ({error})"
+    return geometry, flaw or "a hole too short to be a ring was dropped"
 
 
 def opening(shape: BaseGeometry, width_m: float) -> BaseGeometry:
@@ -136,6 +154,29 @@ def sides_of(polygon: Polygon) -> tuple[float, float]:
     """(long, short) side of the smallest rectangle round a polygon."""
     _, long, short = oriented_box(polygon)
     return long, short
+
+
+def edge_segments(plot: Polygon) -> list[tuple[tuple[float, float], tuple[float, float]]]:
+    """Every straight stretch of a plot's boundary (outer ring and holes), as its two ends."""
+    segments = []
+    for ring in [plot.exterior, *plot.interiors]:
+        coords = list(ring.coords)
+        segments += [(a[:2], b[:2]) for a, b in zip(coords, coords[1:], strict=False)
+                     if math.hypot(b[0] - a[0], b[1] - a[1]) > 1e-9]
+    return segments
+
+
+def width_along_edge(shape: BaseGeometry, plot: Polygon) -> float:
+    """How far a shape reaches along the stretch of the plot's edge nearest to it: a gate's width
+    across its opening, however deep it is drawn."""
+    segments = edge_segments(plot)
+    if shape.is_empty or not segments:
+        return 0.0
+    (x0, y0), (x1, y1) = min(segments, key=lambda e: shape.distance(LineString(e)))
+    length = math.hypot(x1 - x0, y1 - y0)
+    ux, uy = (x1 - x0) / length, (y1 - y0) / length
+    along = [x * ux + y * uy for p in polygons_of(shape) for x, y, *_ in p.exterior.coords]
+    return max(along) - min(along)
 
 
 def end_caps(polygon: Polygon, depth_m: float) -> list[BaseGeometry]:

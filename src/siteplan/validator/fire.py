@@ -20,7 +20,7 @@ from siteplan.contracts.candidate import RoadKind
 from siteplan.contracts.common import Status
 from siteplan.contracts.resolved_rules import FIRE_TURNING_RADIUS, STILT_IN_RULE_HEIGHT
 from siteplan.contracts.validation import Check, Discrepancy, Family
-from siteplan.validator.context import Context, is_known
+from siteplan.validator.context import GATE_ON_BOUNDARY_M, Context, is_known
 from siteplan.validator.ground import Ground
 from siteplan.validator.measure import TOL_M, TowerGeometry
 from siteplan.validator.readings import (
@@ -32,13 +32,25 @@ from siteplan.validator.readings import (
     unknown_reading,
     verdict,
 )
-from siteplan.validator.shapes import NOISE_SQM, mitred, opening, sides_of, union_of_all
+from siteplan.validator.shapes import (
+    NOISE_SQM,
+    mitred,
+    opening,
+    union_of_all,
+    width_along_edge,
+)
 from siteplan.validator.turning import road_bends, round_block, turning_for
+from siteplan.validator.zones import (
+    COMPASS_DEG,
+    FRONT_SECTOR_DEG,
+    angle_between,
+    bearings_near,
+    compass_name,
+)
 
 NON_HIGH_RISE_NOTE = ("Below the high-rise threshold the fire rules of rule 15(a)(i) apply and "
                       "are not modelled yet.")
 REACH_MIN_SQM = 1.0  # a lane that only touches a block's band at a point does not reach it
-GATE_ON_BOUNDARY_M = 0.5  # a gate this close to the boundary is in it
 GATE_SLACK_M = 0.05  # a gate may measure this much under the width it declares
 
 
@@ -51,7 +63,7 @@ def clear_band(footprint: Polygon, lane_m: float) -> BaseGeometry:
 def reached(ctx: Context) -> BaseGeometry:
     """The lanes (ground at least a lane wide) that connect to a gate."""
     lane = ctx.rules.fire.clear_width_m.value
-    start = ctx.drawn.gate_land.buffer(0.5)
+    start = ctx.entrance_land.buffer(0.5)
     if start.is_empty:
         return Polygon()
     passable = opening(ctx.drawn.motorable, lane)
@@ -165,28 +177,59 @@ def reach_check(ctx: Context) -> Check:
                       clause=ctx.rules.fire.clear_width_m.clause)
 
 
+def _road_bearings(ctx: Context) -> list[float]:
+    """The bearings of the sides the street runs on, as far as the site model knows: the access
+    side the architect gave, else the sides of the roads the survey measured. Empty when none
+    is known."""
+    side = ctx.site.access.side
+    if is_known(side):
+        return [float(COMPASS_DEG[side.value])]
+    return [float(COMPASS_DEG[r.side]) for r in ctx.site.roads if r.side is not None]
+
+
+def _gate_problems(ctx: Context) -> tuple[list[str], list[str]]:
+    """What is wrong with each gate, and what only makes it doubtful. Every gate is held to it:
+    a gate that fails is not a way in, whatever else is drawn."""
+    fire = ctx.rules.fire
+    least, most = fire.entrance_width_m.value, ctx.rules.circulation.approach_m.value[1]
+    bearings = _road_bearings(ctx)
+    problems, doubts = [], []
+    for n, gate in enumerate(ctx.drawn.gates, 1):
+        label = f"gate {n}" if len(ctx.drawn.gates) > 1 else "the gate"
+        if gate.shape.distance(ctx.net.boundary) > GATE_ON_BOUNDARY_M:
+            problems.append(f"{label} is not on the plot's boundary")
+            continue
+        width = width_along_edge(gate.shape, ctx.net)
+        if width + TOL_M < least:
+            problems.append(f"{label} is {width:.2f} m wide")
+        elif width > most + TOL_M:
+            doubts.append(f"{label} is {width:.1f} m wide, more than the {most:g} m of the widest "
+                          "main approach road rule 8(m) allows")
+        facing = bearings_near(ctx.net, gate.shape, GATE_ON_BOUNDARY_M)
+        if bearings and facing and not any(
+                angle_between(f, b) <= FRONT_SECTOR_DEG + 1e-6 for f in facing for b in bearings):
+            problems.append(f"{label} is on the {compass_name(facing[0])} side; the road runs on "
+                            + ", ".join(sorted({compass_name(b) for b in bearings})))
+    return problems, doubts
+
+
 def entrance_check(ctx: Context, ground: Ground) -> Check:
     fire = ctx.rules.fire
-    required = (f">= {fire.entrance_width_m.value:g} m wide; {fire.entrance_clear_height_m.value:g}"
-                " m clear under anything built over it")
-    gates = ctx.drawn.gates
-    if not gates:
+    required = (f">= {fire.entrance_width_m.value:g} m wide, in the plot's boundary on the side "
+                f"the road runs; {fire.entrance_clear_height_m.value:g} m clear under anything "
+                "built over it")
+    if not ctx.drawn.gates:
         return plain(Family.FIRE, "Fire access: entrance", Status.FAIL, "no entrance drawn",
                      required, fire.entrance_width_m.clause,
                      "Roads are drawn but nothing connects them to the street.")
-    widest = max(gates, key=lambda g: sides_of(g.shape)[0])
-    width = sides_of(widest.shape)[0]
-    built_over = ground.solid_area(ctx.drawn.gate_land)
-    problems = []
-    if width + TOL_M < fire.entrance_width_m.value:
-        problems.append(f"{width:.2f} m wide")
-    if all(g.shape.distance(ctx.net.boundary) > GATE_ON_BOUNDARY_M for g in gates):
-        problems.append("not on the plot's boundary")
-    if built_over > NOISE_SQM:
+    problems, doubts = _gate_problems(ctx)
+    if ground.solid_area(ctx.entrance_land) > NOISE_SQM:
         problems.append("something is built over it")
-    return plain(Family.FIRE, "Fire access: entrance", verdict(not problems),
-                 "; ".join(problems) if problems else
-                 f"{width:.2f} m wide; nothing built over it", required,
+    widths = [width_along_edge(g.shape, ctx.net) for g in ctx.entrances]
+    status = Status.FAIL if problems else Status.UNVERIFIED if doubts else Status.PASS
+    shown = "; ".join(problems + doubts) if problems or doubts else (
+        f"{max(widths):.2f} m wide; nothing built over it")
+    return plain(Family.FIRE, "Fire access: entrance", status, shown, required,
                  fire.entrance_width_m.clause,
                  "The gate folding back against the compound wall is a detail drawing.")
 
@@ -195,7 +238,7 @@ def gate_discrepancies(ctx: Context) -> list[Discrepancy]:
     """A gate that measures narrower than the width it declares flatters the layout."""
     out = []
     for i, gate in enumerate(ctx.drawn.gates, 1):
-        measured = sides_of(gate.shape)[0]
+        measured = width_along_edge(gate.shape, ctx.net)
         if measured + GATE_SLACK_M < gate.declared_width_m:
             out.append(Discrepancy(
                 item=f"gate width {i}", source="generator", theirs=f"{gate.declared_width_m:g} m",

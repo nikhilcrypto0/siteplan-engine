@@ -62,14 +62,19 @@ def water_check(ctx: Context) -> Check | None:
                      "A water body with no geometry has no buffer to keep clear.")
     d, keep_out = ctx.drawn, ctx.land.keep_out
     buildings = [(t.name, t.footprint) for t in ctx.towers]
-    buildings += [("club house", d.club)] + [(a.name, a.shape) for a in d.amenities if a.roofed]
-    buildings += [("cellar", d.cellar_outline)]
+    buildings += [("club house", d.club), ("cellar", d.cellar_outline)]
+    buildings += [(a.name, a.shape) for a in d.amenities if a.hard]
     inside = [n for n, g in buildings if g.intersection(keep_out).area > WATER_OVERLAP_SQM]
+    unsure = [a.name for a in d.amenities
+              if a.unknown and a.shape.intersection(keep_out).area > WATER_OVERLAP_SQM]
+    status = Status.FAIL if inside else Status.UNVERIFIED if unsure else Status.PASS
+    shown = (f"inside it: {', '.join(inside)}" if inside else
+             f"in it, surface not stated: {', '.join(unsure)}" if unsure else
+             "every block and cellar clear of it")
     return plain(
-        Family.WATER, "Water-body buffer", verdict(not inside),
-        f"inside it: {', '.join(inside)}" if inside else "every block and cellar clear of it",
-        required, clause,
-        "The buffer may count as tot-lot or organised open space, never as the setback.")
+        Family.WATER, "Water-body buffer", status, shown, required, clause,
+        "The buffer may count as tot-lot or organised open space, never as the setback. A paved "
+        "amenity is a building here; one whose surface the brief does not say is not judged.")
 
 
 def green_strip_check(ctx: Context) -> Check:
@@ -101,7 +106,7 @@ def green_strip_check(ctx: Context) -> Check:
             return Cell(status, "not drawn", required,
                         "Needs the landscape layer: soft planting nothing drives, parks or is "
                         "built on.")
-        short = zone.difference(union_of_all([strip, d.gate_land])).area
+        short = zone.difference(union_of_all([strip, ctx.entrance_land])).area
         thin = narrower_than(strip, green.width_m.value - STRIP_WIDTH_SLACK_M)
         problems = []
         if short > max(NOISE_SQM, STRIP_SLACK * zone.area):

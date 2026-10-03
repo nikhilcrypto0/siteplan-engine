@@ -25,7 +25,14 @@ from siteplan.validator.context import Context
 from siteplan.validator.fire import clear_band
 from siteplan.validator.measure import TOL_M
 from siteplan.validator.readings import Assignment, Cell, check_from, plain, run, verdict
-from siteplan.validator.shapes import healed, narrower_than, opening, polygons_of, union_of_all
+from siteplan.validator.shapes import (
+    NOISE_SQM,
+    healed,
+    narrower_than,
+    opening,
+    polygons_of,
+    union_of_all,
+)
 from siteplan.validator.zones import gap_zones, setback_zone
 
 CRACK_M = 0.02  # pockets drawn this close to each other are one pocket
@@ -55,7 +62,11 @@ def _take_out(remaining: BaseGeometry, zone: BaseGeometry | None, why: str,
     return remaining.difference(zone)
 
 
-def qualifying(ctx: Context, reading: str, spacing: str) -> Qualifying:
+def qualifying(ctx: Context, reading: str, spacing: str, unknown_counts: bool = False
+               ) -> Qualifying:
+    """The ground that counts as organized open space under a reading of the stilt and of the
+    spacing. A paved or built amenity stood on it takes it out; one whose surface the brief does
+    not say is taken out unless `unknown_counts` says it is greenery."""
     d, rules = ctx.drawn, ctx.rules.open_space
     declared = healed(union_of_all(list(d.open_space)), CRACK_M)
     removed: dict[str, float] = {}
@@ -74,7 +85,8 @@ def qualifying(ctx: Context, reading: str, spacing: str) -> Qualifying:
     remaining = _take_out(remaining, bands, "in a fire lane's clear ground", removed)
     other_uses = union_of_all([
         *(t.footprint for t in ctx.towers), d.club, d.road_land, d.fire_hardstanding,
-        *d.bays, *d.ramps, *(a.shape for a in d.amenities if a.roofed)])
+        *d.bays, *d.ramps, *(a.shape for a in d.amenities
+                             if a.hard or (a.unknown and not unknown_counts))])
     remaining = _take_out(remaining, other_uses, "under a building, road, lane, bay or ramp",
                           removed)
     width, least = rules.min_width_m.value, rules.min_pocket_sqm.value
@@ -119,17 +131,22 @@ def open_space_checks(ctx: Context) -> tuple[list[Check], dict[str, float]]:
     rules = ctx.rules.open_space
     share = rules.share.value
     requirements = rules.requirement_sqm_by_reading
-    ground = {(r, s): qualifying(ctx, r, s) for r in ctx.stilt_readings
-              for s in ctx.rules.readings(MIXED_HEIGHT_SPACING)}
+    declared = union_of_all(list(ctx.drawn.open_space))
+    unsure = [a.name for a in ctx.drawn.amenities
+              if a.unknown and a.shape.intersection(declared).area > NOISE_SQM]
+    counted = (False, True) if unsure else (False,)
+    ground = {(r, s, u): qualifying(ctx, r, s, u) for r in ctx.stilt_readings
+              for s in ctx.rules.readings(MIXED_HEIGHT_SPACING) for u in counted}
 
     def cell(a: Assignment) -> Cell:
         basis = a[OPEN_SPACE_BASIS]
-        asked = requirements[basis]
+        asked = max(requirements[basis], expected_requirement(ctx, basis) or 0.0)
         if ctx.drawn.buildings_only and not ctx.drawn.open_space:
             return Cell(Status.UNVERIFIED, "no open space drawn",
                         f">= {share:.0%} of the {basis} area = {asked:,.1f} m²",
                         "Only the buildings are drawn: the ground between them is not known.")
-        q = ground[(a[STILT_IN_RULE_HEIGHT], a[MIXED_HEIGHT_SPACING])]
+        reading, spacing = a[STILT_IN_RULE_HEIGHT], a[MIXED_HEIGHT_SPACING]
+        q = ground[(reading, spacing, False)]
         pct = 100 * q.area_sqm / (asked / share) if asked else 0.0
         measured = f"{q.area_sqm:,.1f} m² counts of {q.declared_sqm:,.1f} m² drawn"
         note = ("; ".join(f"{gone:,.1f} m² {why}" for why, gone in q.removed.items())
@@ -140,6 +157,11 @@ def open_space_checks(ctx: Context) -> tuple[list[Check], dict[str, float]]:
             return Cell(Status.UNVERIFIED, measured, required,
                         "The setback is not known under this reading, so which ground is over "
                         "and above it cannot be told.")
+        if q.area_sqm + TOL_M < asked and unsure and (
+                ground[(reading, spacing, True)].area_sqm + TOL_M >= asked):
+            return Cell(Status.UNVERIFIED, measured, required,
+                        f"Counts only if {', '.join(unsure)} is greenery: the brief does not say "
+                        "what surface it has.")
         return Cell(verdict(q.area_sqm + TOL_M >= asked), measured, required,
                     f"Taken out: {note}." if note else "")
 
@@ -151,8 +173,8 @@ def open_space_checks(ctx: Context) -> tuple[list[Check], dict[str, float]]:
     agreement = _requirement_agreement(ctx)
     quantities = {"open_space_declared_sqm": sum(p.area for p in ctx.drawn.open_space)}
     for reading in ctx.stilt_readings:
-        counts = min(ground[(reading, s)].area_sqm for s in ctx.rules.readings(
-            MIXED_HEIGHT_SPACING))
+        counts = min(ground[(reading, s, counted[-1])].area_sqm
+                     for s in ctx.rules.readings(MIXED_HEIGHT_SPACING))
         quantities[f"open_space_counting_sqm[{STILT_IN_RULE_HEIGHT}={reading}]"] = counts
     for basis, asked in requirements.items():
         quantities[f"open_space_required_sqm[{OPEN_SPACE_BASIS}={basis}]"] = asked

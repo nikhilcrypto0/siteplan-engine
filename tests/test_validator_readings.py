@@ -131,11 +131,18 @@ def test_the_front_of_the_plot_is_the_boundary_that_faces_the_access_side(side, 
 
 
 def test_a_corner_plot_faces_the_access_side_on_every_edge_within_45_degrees():
-    from shapely.geometry import Polygon
+    from shapely.geometry import Polygon, box
 
     diamond = Polygon([(0, 50), (50, 0), (100, 50), (50, 100)])
     assert len(zones.front_edges(diamond, "SW")) == 1
-    assert len(zones.front_edges(diamond, "S")) == 0  # exactly 45 degrees either side
+    assert len(zones.front_edges(diamond, "S")) == 2  # exactly 45 degrees either side is front
+    # a diagonal side is both of the sides it lies between (found by review: it used to be none,
+    # so a ramp in the front setback of a plot reached from the north-east passed)
+    for side, faces in {"NE": {"N", "E"}, "SE": {"S", "E"}, "SW": {"S", "W"},
+                        "NW": {"N", "W"}}.items():
+        edges = zones.front_edges(box(0, 0, 100, 50), side)
+        assert {zones.compass_name(b) for e, b in zones.boundary_edges(box(0, 0, 100, 50))
+                if any(e.equals(f) for f in edges)} == faces
 
 
 def test_the_front_zone_is_the_land_within_the_setback_of_the_front():
@@ -225,17 +232,26 @@ def test_a_candidate_with_nothing_but_buildings_is_buildings_only():
 
     inputs = fixture("rectangle").edited(lambda c: (
         setattr(c, "circulation", type(c.circulation)()), setattr(c, "program", SiteProgram())))
-    assert drawn.read(inputs.candidate).buildings_only
-    assert not drawn.read(fixture("rectangle").candidate).buildings_only
+    assert drawn.read(inputs.candidate, inputs.brief).buildings_only
+    rectangle_ = fixture("rectangle")
+    assert not drawn.read(rectangle_.candidate, rectangle_.brief).buildings_only
 
 
-def test_an_amenity_is_roofed_by_its_name():
+def test_an_amenitys_surface_is_what_the_brief_says_of_the_request_with_its_name():
     from siteplan.contracts.candidate import PlacedAmenity
+    from siteplan.contracts.design_brief import AmenityRequest
 
     def add(candidate):
         candidate.program.amenities += [
-            PlacedAmenity(name="SECURITY CABIN", shape=rectangle(150.0, 0.0, 154.0, 4.0)),
-            PlacedAmenity(name="PLAY AREA", shape=rectangle(20.0, 13.0, 40.0, 20.0))]
-    d = drawn.read(fixture("rectangle").edited(add).candidate)
-    cabin, play = d.amenities
-    assert cabin.roofed and not play.roofed
+            PlacedAmenity(name="Security cabin", shape=rectangle(150.0, 0.0, 154.0, 4.0)),
+            PlacedAmenity(name="Play area", shape=rectangle(20.0, 13.0, 40.0, 20.0)),
+            PlacedAmenity(name="PUMP HOUSE", shape=rectangle(60.0, 13.0, 64.0, 17.0))]
+
+    def ask(brief):
+        brief.program.amenities = [AmenityRequest(name="SECURITY CABIN", surface="HARD"),
+                                   AmenityRequest(name="play area", surface="SOFT")]
+    inputs = fixture("rectangle").edited(add).with_brief(ask)
+    cabin, play, pump = drawn.read(inputs.candidate, inputs.brief).amenities
+    assert cabin.hard and not cabin.unknown  # names match without regard to case
+    assert play.surface == "SOFT" and not play.hard
+    assert pump.unknown and not pump.hard  # a name says nothing: it was not asked for

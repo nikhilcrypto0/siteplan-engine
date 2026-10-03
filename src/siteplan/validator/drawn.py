@@ -14,10 +14,8 @@ from shapely.geometry.base import BaseGeometry
 
 from siteplan.contracts.candidate import CandidateLayout, RoadKind
 from siteplan.contracts.common import Shape
-from siteplan.contracts.design_brief import AmenitySetting
-from siteplan.validator.shapes import mended, polygons_of, union_of_all
-
-BUILT_WORDS = ("CABIN", "ROOM", "SUBSTATION")
+from siteplan.contracts.design_brief import AmenitySetting, DesignBrief
+from siteplan.validator.shapes import NOISE_SQM, polygon_of, polygons_of, union_of_all
 
 
 def taken(shapes: list[Shape], label: str, flaws: list[str]) -> list[BaseGeometry]:
@@ -25,7 +23,7 @@ def taken(shapes: list[Shape], label: str, flaws: list[str]) -> list[BaseGeometr
     itself) is written down in `flaws`, named by `label`."""
     out = []
     for n, shape in enumerate(shapes, 1):
-        geometry, flaw = mended(shape.to_shapely())
+        geometry, flaw = polygon_of(shape)
         if flaw:
             flaws.append(f"{label}{f', shape {n}' if len(shapes) > 1 else ''}: {flaw}")
         out.append(geometry)
@@ -50,12 +48,24 @@ class DrawnAmenity:
     name: str
     shape: BaseGeometry
     setting: AmenitySetting
+    surface: str | None  # SOFT or HARD, from the brief's request of the same name; None if unsaid
 
     @property
-    def roofed(self) -> bool:
-        """A small structure with a roof (a cabin, a substation) rather than ground laid out for
-        play or sport: judged by its name, the only thing a placed amenity carries."""
-        return any(word in self.name.upper() for word in BUILT_WORDS)
+    def hard(self) -> bool:
+        """Paved or built: a pool, a court, a cabin. Whether it qualifies as open space is the
+        law's; the brief says what surface it has."""
+        return self.surface == "HARD"
+
+    @property
+    def unknown(self) -> bool:
+        """The brief does not say what surface it has (it was not asked for, or the request does
+        not say), so nothing here may call it greenery or a building on the strength of its name."""
+        return self.surface is None
+
+    def inside(self, club: BaseGeometry) -> bool:
+        """An amenity placed in the club house, and lying in it."""
+        return (self.setting is AmenitySetting.CLUB_HOUSE and not club.is_empty
+                and self.shape.difference(club).area <= NOISE_SQM)
 
 
 @dataclass(frozen=True)
@@ -100,21 +110,23 @@ class Drawn:
         return union_of_all([self.road_land, self.fire_hardstanding])
 
     @property
+    def gate_land_all(self) -> BaseGeometry:
+        """Every gate as drawn, wherever it stands (for the extent of the drawing only)."""
+        return union_of_all([g.shape for g in self.gates])
+
+    @property
     def has_circulation(self) -> bool:
         return bool(self.roads) or not self.fire_hardstanding.is_empty
 
     def roads_of(self, *kinds: RoadKind) -> list[DrawnRoad]:
         return [r for r in self.roads if not kinds or r.kind in kinds]
 
-    @property
-    def gate_land(self) -> BaseGeometry:
-        return union_of_all([g.shape for g in self.gates])
 
-
-def read(candidate: CandidateLayout) -> Drawn:
+def read(candidate: CandidateLayout, brief: DesignBrief) -> Drawn:
     program, circulation = candidate.program, candidate.circulation
     cellars = program.cellars
     flaws: list[str] = []
+    surfaces = {r.name.strip().lower(): r.surface for r in brief.program.amenities}
 
     def one(shape: Shape, label: str) -> BaseGeometry:
         return union_of_all(taken([shape], label, flaws))
@@ -130,7 +142,8 @@ def read(candidate: CandidateLayout) -> Drawn:
         fire_hardstanding=geometry_of(circulation.fire_hardstanding, "fire hardstanding", flaws),
         club=one(program.club_house.shape, "the club house") if program.club_house else Polygon(),
         club_floors=program.club_house.floors if program.club_house else 0,
-        amenities=tuple(DrawnAmenity(a.name, one(a.shape, f"amenity {a.name}"), a.setting)
+        amenities=tuple(DrawnAmenity(a.name, one(a.shape, f"amenity {a.name}"), a.setting,
+                                     surfaces.get(a.name.strip().lower()))
                         for a in program.amenities),
         ramps=pieces(program.ramps, "a ramp"),
         bays=pieces(program.bays, "a parking bay"),
