@@ -27,6 +27,7 @@ SHOWN = 5  # how many offending numbers a report names before it says there are 
 MAX_COUNT = 10**15  # a whole number larger than this is not a count of anything on a site
 EXTENT_FACTOR = 20  # drawn ground reaching this many plot-widths away is not drawn to scale
 EXTENT_FLOOR_M = 2000.0  # ...and never counts as far away within this
+MIN_BAY_M = 1.0  # a bay narrower than this is not a car's, and laying cars out in it never ends
 LIBRARY_MESSAGE_CHARS = 300  # how much of the geometry library's own message a report keeps
 
 
@@ -62,8 +63,9 @@ def unusable_rules(rules: ResolvedRules) -> list[str]:
         found.append("open_space.share must be above zero")
     if p.ramp_gradient.value <= 0:
         found.append("parking.ramp_gradient must be above zero")
-    if min(measure.bay_m) <= 0 or measure.aisle_m < 0 or measure.sqm_per_car <= 0:
-        found.append("parking.measurement: bay, aisle and square metres per car must be positive")
+    if min(measure.bay_m) < MIN_BAY_M or measure.aisle_m < 0 or measure.sqm_per_car <= 0:
+        found.append(f"parking.measurement: a bay of at least {MIN_BAY_M:g} m, an aisle that is "
+                     "not negative and a car that takes floor")
     table = p.cellar_setback_by_site_sqm.value
     if not any(up_to is None for up_to, _ in table):
         found.append("parking.cellar_setback_by_site_sqm needs a row for the largest sites")
