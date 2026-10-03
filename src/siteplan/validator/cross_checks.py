@@ -103,6 +103,10 @@ def metrics(ctx: Context, built_up_sqm: float, qualifying_sqm: float, units: dic
     if abs(m.built_up_sqft - built_up_sqft) > METRIC_SHARE * max(built_up_sqft, 1.0):
         out.append(_d("built-up area", "generator", f"{m.built_up_sqft:,.0f} sft",
                       f"{built_up_sqft:,.0f} sft", m.built_up_sqft < built_up_sqft))
+    tower_floor_sqft = sqm_to_sqft(sum(t.built_up_sqm for t in ctx.towers))
+    if abs(m.tower_floor_sqft - tower_floor_sqft) > METRIC_SHARE * max(tower_floor_sqft, 1.0):
+        out.append(_d("tower floor area", "generator", f"{m.tower_floor_sqft:,.0f} sft",
+                      f"{tower_floor_sqft:,.0f} sft", m.tower_floor_sqft < tower_floor_sqft))
     if m.open_space_sqm > qualifying_sqm + METRIC_SHARE * max(qualifying_sqm, 1.0):
         out.append(_d("open space", "generator", f"{m.open_space_sqm:,.1f} m²",
                       f"{qualifying_sqm:,.1f} m² counts", True))

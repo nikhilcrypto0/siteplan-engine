@@ -173,19 +173,64 @@ def road_width_check(ctx: Context) -> Check | None:
 
 
 def height_limit_checks(ctx: Context) -> list[Check]:
-    """The limits the resolved rules state in metres, held against every tower."""
+    """The limits the resolved rules state in metres, held against the towers. A limit above
+    sea level (the airport's, the Air Force's) cannot be held to a layout: it is UNVERIFIED."""
     out = []
+    above_sea = [lim for lim in ctx.rules.height.limits if lim.measure is HeightMeasure.AMSL]
+    if above_sea:
+        out.append(plain(
+            Family.HEIGHT, "Height above sea level (airport and Air Force)", Status.UNVERIFIED,
+            "not evaluated: " + "; ".join(lim.reason for lim in above_sea),
+            "below the airport and Air Force limits", above_sea[0].clause,
+            "A site with no coordinates, or a survey with no ground level, cannot be held to a "
+            "limit above sea level."))
     for limit in ctx.rules.height.limits:
-        if limit.measure is HeightMeasure.AMSL:
-            out.append(plain(
-                Family.HEIGHT, "Height above sea level (airport and Air Force)",
-                Status.UNVERIFIED, "not evaluated: " + limit.reason, "below the airport and Air "
-                "Force limits", limit.clause,
-                "A site with no coordinates, or a survey with no ground level, cannot be held "
-                "to a limit above sea level."))
-        elif limit.measure is HeightMeasure.RULE_HEIGHT and ctx.towers:
+        if limit.measure is HeightMeasure.RULE_HEIGHT and ctx.towers:
             out.append(_rule_height_limit(ctx, limit))
+        elif (limit.measure is HeightMeasure.PHYSICAL_HEIGHT and ctx.towers
+              and limit.clause != ctx.rules.fire.dead_end_max_physical_m.clause):
+            out.append(_physical_height_limit(ctx, limit))  # the dead-end limit is the fire check's
     return out
+
+
+def _physical_height_limit(ctx: Context, limit) -> Check:
+    """A limit on the height NBC measures (stilt included), whatever the reading of the stilt."""
+    tallest = max(ctx.towers, key=lambda t: t.physical_height_m)
+    measured = f"{tallest.physical_height_m:.2f} m ({tallest.name})"
+    required = ("evaluated once the limit is known" if limit.max_m is None
+                else f"<= {limit.max_m:g} m")
+    if limit.max_m is None or limit.applies_if or limit.status is Provenance.UNVERIFIED:
+        status = Status.UNVERIFIED
+    else:
+        status = verdict(tallest.physical_height_m <= limit.max_m + TOL_M)
+    return plain(Family.HEIGHT, f"Physical-height limit: {limit.reason}", status, measured,
+                 required, limit.clause, f"Applies if {limit.applies_if}." if limit.applies_if
+                 else "", subject=tallest.name)
+
+
+def tdr_check(ctx: Context) -> Check | None:
+    """Rule 17(d)(viii): a building of 18 to 21 m on a plot of 750 to 2,000 m² is permitted only
+    through TDR, which a layout cannot show, so it is a question, not a pass."""
+    height = ctx.rules.height
+    (low, high), (small, large) = height.tdr_band_m.value, height.tdr_plot_sqm.value
+    if not small <= ctx.net.area <= large:
+        return None
+    readings = [r for r in ctx.stilt_readings if r in ctx.classes]
+    inside = {r: [t.name for t in ctx.towers if low <= t.rule_height_m(r) < high - TOL_M]
+              for r in readings}
+    if not any(inside.values()):
+        return None
+
+    def cell(a: Assignment) -> Cell:
+        names = inside.get(a[STILT_IN_RULE_HEIGHT], [])
+        required = f"no building of {low:g} to {high:g} m, unless through TDR"
+        if not names:
+            return Cell(Status.PASS, "none in that band", required)
+        return Cell(Status.UNVERIFIED, f"{', '.join(names)} in that band", required,
+                    "Whether TDR is used is not something a layout shows.")
+
+    return check_from(run(ctx.rules, [STILT_IN_RULE_HEIGHT], cell), family=Family.HEIGHT,
+                      rule="TDR for a building of 18 to 21 m", clause=height.tdr_band_m.clause)
 
 
 def _rule_height_limit(ctx: Context, limit) -> Check:

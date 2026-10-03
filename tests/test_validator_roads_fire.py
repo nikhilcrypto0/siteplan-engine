@@ -308,3 +308,14 @@ def test_rules_and_site_disagreeing_on_a_group_development_scheme_apply_the_stri
     c = check(report, "Rule 8 and the site agree")
     assert c.finding.status is Z.UNVERIFIED and "15,450" in c.finding.measured
     assert status(report, LOOP_ROADS) is Z.PASS  # rule 8 was applied all the same
+
+
+def test_the_reading_that_every_block_above_12_m_needs_a_road_says_what_it_rests_on():
+    c = check(fixture("rectangle").report(), "Internal roads: every block served")
+    assert "UNRESOLVED_INTERPRETATION" in c.finding.note
+
+    def read_otherwise(rules):
+        rules.circulation.block_over_12m_on_road.value = False
+    names = {x.finding.rule for x in fixture("rectangle").with_rules(read_otherwise)
+             .report().legal}
+    assert "Internal roads: every block served" not in names

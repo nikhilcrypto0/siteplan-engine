@@ -46,7 +46,7 @@ def _legal_checks(ctx: Context, ground: Ground, ledger: accounting.Ledger
                   ) -> tuple[list[Check], dict[str, float]]:
     legal = [land_checks.net_plot_check(ctx), *blocks.height_class_checks(ctx)]
     legal += _present(blocks.plot_size_check(ctx), blocks.road_width_check(ctx))
-    legal += blocks.height_limit_checks(ctx)
+    legal += blocks.height_limit_checks(ctx) + _present(blocks.tdr_check(ctx))
     legal += blocks.setback_checks(ctx) + blocks.spacing_checks(ctx)
     legal += roads.road_checks(ctx, ground)
     legal += _present(roads.setback_circulation_check(ctx))

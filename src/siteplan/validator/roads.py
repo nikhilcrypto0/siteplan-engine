@@ -31,6 +31,7 @@ from siteplan.validator.readings import (
     NOT_ALLOWED,
     Assignment,
     Cell,
+    basis_note,
     check_from,
     plain,
     run,
@@ -249,8 +250,10 @@ def _cul_de_sac_checks(ctx: Context, ground: Ground) -> list[Check]:
 # --- Blocks above 12 m open onto a road ------------------------------------------------------
 
 
-def _served_check(ctx: Context, ground: Ground) -> Check:
+def _served_check(ctx: Context, ground: Ground) -> Check | None:
     circ = ctx.rules.circulation
+    if not circ.block_over_12m_on_road.value:
+        return None  # read as allowing a pathway to any block: nothing to hold them to
     limit = circ.pathway_max_block_height_m.value
     tall = [t for t in ctx.towers if t.physical_height_m > limit]
     roads = _ground_of(ctx, ground, *ROAD_KINDS)
@@ -261,14 +264,16 @@ def _served_check(ctx: Context, ground: Ground) -> Check:
     cut_off = [t.name for t in off if lane.is_empty or t.footprint.distance(lane) > TOUCH_M]
     lane_only = [t.name for t in off if t.name not in cut_off]
     rule = "Internal roads: every block served"
+    basis = basis_note(circ.block_over_12m_on_road)
     if cut_off:
         return plain(Family.ROADS, rule, Status.FAIL, f"not on a road: {', '.join(cut_off)}",
-                     required, clause)
+                     required, clause, basis)
     if lane_only:
         return plain(Family.ROADS, rule, Status.UNVERIFIED,
                      f"on the perimeter lane only: {', '.join(lane_only)}", required, clause,
-                     "The perimeter lane is not established as an 8(m) road.")
-    return plain(Family.ROADS, rule, Status.PASS, f"all {len(tall)} blocks", required, clause)
+                     " ".join(("The perimeter lane is not established as an 8(m) road.", basis)))
+    return plain(Family.ROADS, rule, Status.PASS, f"all {len(tall)} blocks", required, clause,
+                 basis)
 
 
 # --- Driveways -------------------------------------------------------------------------------
@@ -392,7 +397,8 @@ def road_checks(ctx: Context, ground: Ground) -> list[Check]:
         out += [network_check] if network_check else []
         out += _perimeter_checks(ctx, ground)
         out += _cul_de_sac_checks(ctx, ground)
-        out += [_dead_end_check(ctx, ground), _served_check(ctx, ground)]
+        served = _served_check(ctx, ground)
+        out += [_dead_end_check(ctx, ground)] + ([served] if served else [])
     drive = driveway_check(ctx, ground, circ.applies.value or by_the_site)
     out += [drive] if drive else []
     return out
