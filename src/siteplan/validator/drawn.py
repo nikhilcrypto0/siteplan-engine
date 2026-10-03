@@ -18,7 +18,6 @@ from siteplan.contracts.design_brief import AmenitySetting
 from siteplan.validator.shapes import polygons_of, union_of_all
 
 BUILT_WORDS = ("CABIN", "ROOM", "SUBSTATION")
-SOFT_AMENITY_SHARE = 0.5  # an amenity this much inside open space is the open space's ground
 
 
 def geometry_of(shapes: list[Shape]) -> BaseGeometry:
@@ -97,15 +96,6 @@ class Drawn:
     @property
     def gate_land(self) -> BaseGeometry:
         return union_of_all([g.shape for g in self.gates])
-
-    @property
-    def amenity_solids(self) -> BaseGeometry:
-        """Amenities that stand on their own ground: not the play areas laid on the tot-lot."""
-        open_space = union_of_all(list(self.open_space))
-        return union_of_all([
-            a.shape for a in self.amenities
-            if open_space.is_empty or a.shape.area == 0
-            or a.shape.intersection(open_space).area <= SOFT_AMENITY_SHARE * a.shape.area])
 
 
 def read(candidate: CandidateLayout) -> Drawn:
