@@ -20,6 +20,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field, model_validator
 
+from siteplan.contracts.common import SourceKind
 from siteplan.layout import LayoutRequest
 from siteplan.project import Project, SiteIn
 from siteplan.provenance import Provenance
@@ -38,6 +39,9 @@ class ProfileValue(BaseModel):
     value: Any
     source: str = Field(description="Where the value comes from, e.g. 'measured from the DXF'")
     status: Provenance = Provenance.ASSUMED_FOR_TEST
+    source_kind: SourceKind = Field(
+        SourceKind.TEST_PROFILE, description="FIRM_FINISHED_PLAN for a value taken from the "
+        "firm's finished drawing: a blind acceptance run refuses it")
     note: str = ""
 
 
@@ -73,6 +77,7 @@ def apply_profile(project: dict, profile: AssumptionProfile) -> dict:
     validated whole, so a profile that makes the project inconsistent is refused."""
     out = copy.deepcopy(project)
     out.setdefault("layout", {})
+    out.setdefault("source_kinds", {})
     for section, values in (("site", profile.site), ("layout", profile.layout)):
         for key, item in values.items():
             out[section][key] = item.value
@@ -80,6 +85,7 @@ def apply_profile(project: dict, profile: AssumptionProfile) -> dict:
             tracked = STATUS_KEY.get(key, key)
             out["sources"][tracked] = f"test profile '{profile.name}': {item.source}"
             out["status"][tracked] = item.status
+            out["source_kinds"][tracked] = item.source_kind
     Project.model_validate(out)
     return out
 
@@ -93,7 +99,11 @@ def describe(profile: AssumptionProfile) -> list[str]:
     for section, values in (("site", profile.site), ("layout", profile.layout)):
         for key, item in values.items():
             note = f" {item.note}" if item.note else ""
-            lines.append(f"  - {section}.{key} = {item.value!r} [{item.status}] "
+            kind = (" [FROM THE FIRM'S FINISHED PLAN]"
+                    if item.source_kind is SourceKind.FIRM_FINISHED_PLAN else "")
+            shown = (f"an outline of {len(item.value)} points" if key.endswith("_m")
+                     and isinstance(item.value, list) else repr(item.value))
+            lines.append(f"  - {section}.{key} = {shown} [{item.status}]{kind} "
                          f"{item.source}.{note}")
     lines += [f"  - kept UNVERIFIED: {fact}" for fact in profile.open_facts]
     return lines

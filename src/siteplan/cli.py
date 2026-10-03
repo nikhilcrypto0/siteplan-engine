@@ -203,7 +203,8 @@ def _cmd_acceptance(args: argparse.Namespace) -> int:
     profile = load_profile(args.profile) if args.profile else None
     generated = generate(Path(args.survey), json.loads(Path(args.answers).read_text()), out,
                          Path(args.workspace) if args.workspace else None,
-                         conservative_parking=args.conservative_parking, profile=profile)
+                         conservative_parking=args.conservative_parking, profile=profile,
+                         mode="debug" if args.debug else "blind")
     rows = []
     if generated.options:
         case = Case.model_validate_json(Path(args.firm_case).read_text())  # read only now
@@ -269,6 +270,14 @@ def _cmd_constraints(args: argparse.Namespace) -> int:
 
     only = Basis(args.basis) if args.basis else None
     print(render_markdown() if args.markdown else render_text(only=only))
+    return 0
+
+
+def _cmd_schema(args: argparse.Namespace) -> int:
+    from siteplan.contracts import export_schemas
+
+    for path in export_schemas(args.out):
+        print(path)
     return 0
 
 
@@ -487,6 +496,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--conservative-parking", action="store_true", help=_CONSERVATIVE_HELP)
     p.add_argument("--profile", help="A site's temporary test assumptions (JSON, kept in "
                    "fixtures/): each value it sets is ASSUMED_FOR_TEST and listed in the report")
+    p.add_argument("--debug", action="store_true", help="A debug run, which may use the "
+                   "firm's finished plan (a debug profile, a value taken from it); a blind run, "
+                   "the default, refuses them")
     p.set_defaults(run=_cmd_acceptance)
 
     p = sub.add_parser("layout", help="Generate tower layout options for a project.")
@@ -522,6 +534,11 @@ def main(argv: list[str] | None = None) -> int:
                                        "UNRESOLVED_INTERPRETATION", "SITE_INPUT"],
                    help="Only this class")
     p.set_defaults(run=_cmd_constraints)
+
+    p = sub.add_parser("schema", help="Write the JSON Schema of every permanent contract "
+                       "(src/siteplan/contracts) into a folder.")
+    p.add_argument("--out", default="docs/contracts")
+    p.set_defaults(run=_cmd_schema)
 
     p = sub.add_parser("floors", help="The most floors a plot can take, from its area and road.")
     plot = p.add_mutually_exclusive_group(required=True)

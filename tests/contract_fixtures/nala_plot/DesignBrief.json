@@ -1,0 +1,116 @@
+{
+ "schema_version": "1.0",
+ "brief_id": "made-up-nala-plot-brief",
+ "project_name": "Made-up nala plot",
+ "words": "",
+ "program": {
+  "unit_mix": {
+   "value": {
+    "2BHK": 0.7,
+    "3BHK": 0.3
+   },
+   "status": "USER_CONFIRMED",
+   "source_kind": "ARCHITECT",
+   "source": "project file"
+  },
+  "mix_tolerance": 0.05,
+  "units": {
+   "mode": "MAXIMISE",
+   "target": null,
+   "minimum": null,
+   "maximum": null
+  },
+  "flat_library": null,
+  "allowed_types": [],
+  "club_house": {
+   "wanted": {
+    "value": true,
+    "status": "USER_CONFIRMED",
+    "source_kind": "ARCHITECT",
+    "source": "project file"
+   },
+   "size": "LEGAL_MINIMUM",
+   "sqm": null,
+   "floors": 2
+  },
+  "amenity_library": null,
+  "amenities": [],
+  "parking": {
+   "max_cellars": {
+    "value": 3,
+    "status": "USER_CONFIRMED",
+    "source_kind": "ARCHITECT",
+    "source": "project file"
+   },
+   "surface_bays_allowed": true
+  }
+ },
+ "height_intent": {
+  "notation": {
+   "value": "Stilt + N means one parking stilt plus N floors above it",
+   "status": "ASSUMED_FOR_TEST",
+   "source_kind": "ENGINE_DEFAULT",
+   "source": "the engine's reading of the notation"
+  },
+  "mode": "FIXED",
+  "floors_above_stilt": 8,
+  "floors_range": null,
+  "has_stilt": true,
+  "mixed_heights_allowed": true,
+  "min_floors_above_stilt": null
+ },
+ "firm_standards": {
+  "stilt_height_m": {
+   "value": 3.0,
+   "status": "USER_CONFIRMED",
+   "source_kind": "ARCHITECT",
+   "source": "project file"
+  },
+  "floor_to_floor_m": {
+   "value": 3.0,
+   "status": "USER_CONFIRMED",
+   "source_kind": "ARCHITECT",
+   "source": "project file"
+  },
+  "cellar_floor_height_m": {
+   "value": 3.0,
+   "status": "USER_CONFIRMED",
+   "source_kind": "ARCHITECT",
+   "source": "project file"
+  },
+  "common_area_loading_pct": {
+   "value": 22.0,
+   "status": "USER_CONFIRMED",
+   "source_kind": "ARCHITECT",
+   "source": "project file"
+  },
+  "cellar_utilities_share": {
+   "value": 0.1,
+   "status": "USER_CONFIRMED",
+   "source_kind": "ARCHITECT",
+   "source": "project file"
+  },
+  "min_flats_per_side": {
+   "value": 2,
+   "status": "ASSUMED_FOR_TEST",
+   "source_kind": "ENGINE_DEFAULT",
+   "source": "engine default"
+  },
+  "max_tower_length_m": null,
+  "max_cores_per_tower": null,
+  "preferred_prototype_families": [],
+  "bay_size_m": null,
+  "aisle_m": null
+ },
+ "objectives": {
+  "pareto": [
+   "MAX_YIELD",
+   "BALANCED",
+   "CONVENTIONAL_OPEN_SPACE"
+  ],
+  "options": 3,
+  "priorities": {},
+  "soft_preferences": [],
+  "search_budget_s": null
+ }
+}

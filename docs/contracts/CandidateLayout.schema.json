@@ -1,0 +1,1322 @@
+{
+  "$defs": {
+    "AmenitySetting": {
+      "enum": [
+        "CLUB_HOUSE",
+        "OUTDOOR",
+        "EITHER"
+      ],
+      "title": "AmenitySetting",
+      "type": "string"
+    },
+    "Basis": {
+      "enum": [
+        "LEGAL_RULE",
+        "FIRM_STANDARD",
+        "ENGINE_DESIGN_ASSUMPTION",
+        "UNRESOLVED_INTERPRETATION",
+        "SITE_INPUT"
+      ],
+      "title": "Basis",
+      "type": "string"
+    },
+    "Cellars": {
+      "additionalProperties": false,
+      "properties": {
+        "levels": {
+          "minimum": 0,
+          "title": "Levels",
+          "type": "integer"
+        },
+        "outline": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Shape"
+          },
+          "title": "Outline",
+          "type": "array"
+        },
+        "setback_m": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Setback M"
+        }
+      },
+      "required": [
+        "levels"
+      ],
+      "title": "Cellars",
+      "type": "object"
+    },
+    "Circulation": {
+      "additionalProperties": false,
+      "properties": {
+        "fire_hardstanding": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Shape"
+          },
+          "title": "Fire Hardstanding",
+          "type": "array"
+        },
+        "gates": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Gate"
+          },
+          "title": "Gates",
+          "type": "array"
+        },
+        "roads": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/RoadPiece"
+          },
+          "title": "Roads",
+          "type": "array"
+        }
+      },
+      "title": "Circulation",
+      "type": "object"
+    },
+    "ClubHouse": {
+      "additionalProperties": false,
+      "properties": {
+        "floors": {
+          "exclusiveMinimum": 0,
+          "title": "Floors",
+          "type": "integer"
+        },
+        "shape": {
+          "$ref": "#/$defs/Shape"
+        }
+      },
+      "required": [
+        "shape",
+        "floors"
+      ],
+      "title": "ClubHouse",
+      "type": "object"
+    },
+    "CoreZone": {
+      "additionalProperties": false,
+      "properties": {
+        "lifts": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Lifts",
+          "type": "integer"
+        },
+        "shape": {
+          "$ref": "#/$defs/Shape"
+        },
+        "stairs": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Stairs",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "shape"
+      ],
+      "title": "CoreZone",
+      "type": "object"
+    },
+    "Finding": {
+      "properties": {
+        "clause": {
+          "title": "Clause",
+          "type": "string"
+        },
+        "measured": {
+          "title": "Measured",
+          "type": "string"
+        },
+        "note": {
+          "default": "",
+          "title": "Note",
+          "type": "string"
+        },
+        "required": {
+          "title": "Required",
+          "type": "string"
+        },
+        "rule": {
+          "title": "Rule",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/Status"
+        }
+      },
+      "required": [
+        "rule",
+        "status",
+        "measured",
+        "required",
+        "clause"
+      ],
+      "title": "Finding",
+      "type": "object"
+    },
+    "FlatModule": {
+      "additionalProperties": false,
+      "properties": {
+        "built_up_sqft": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Built Up Sqft"
+        },
+        "carpet_sqft": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Carpet Sqft"
+        },
+        "category": {
+          "title": "Category",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "saleable_sqft": {
+          "exclusiveMinimum": 0,
+          "title": "Saleable Sqft",
+          "type": "number"
+        },
+        "shape": {
+          "$ref": "#/$defs/Shape"
+        },
+        "type_id": {
+          "title": "Type Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "type_id",
+        "category",
+        "shape",
+        "saleable_sqft"
+      ],
+      "title": "FlatModule",
+      "type": "object"
+    },
+    "Gate": {
+      "additionalProperties": false,
+      "properties": {
+        "note": {
+          "default": "",
+          "title": "Note",
+          "type": "string"
+        },
+        "shape": {
+          "$ref": "#/$defs/Shape"
+        },
+        "side": {
+          "anyOf": [
+            {
+              "enum": [
+                "N",
+                "NE",
+                "E",
+                "SE",
+                "S",
+                "SW",
+                "W",
+                "NW"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Side"
+        },
+        "width_m": {
+          "exclusiveMinimum": 0,
+          "title": "Width M",
+          "type": "number"
+        }
+      },
+      "required": [
+        "shape",
+        "width_m"
+      ],
+      "title": "Gate",
+      "type": "object"
+    },
+    "LayerKind": {
+      "enum": [
+        "SETBACK",
+        "BLOCK_GAP",
+        "FIRE_CLEAR_BAND",
+        "FIRE_ACCESS_ROUTE",
+        "TURNING_SECTOR",
+        "WATER_BUFFER",
+        "GREEN_STRIP_ZONE",
+        "QUALIFYING_OPEN_SPACE",
+        "RAMP_FORBIDDEN",
+        "BAYS_FORBIDDEN",
+        "CELLAR_SETBACK"
+      ],
+      "title": "LayerKind",
+      "type": "string"
+    },
+    "Metrics": {
+      "additionalProperties": false,
+      "description": "The generator's own numbers, for reports; a validator recomputes what it checks.",
+      "properties": {
+        "built_up_sqft": {
+          "minimum": 0,
+          "title": "Built Up Sqft",
+          "type": "number"
+        },
+        "common_core_sqft": {
+          "minimum": 0,
+          "title": "Common Core Sqft",
+          "type": "number"
+        },
+        "extra": {
+          "additionalProperties": true,
+          "default": {},
+          "title": "Extra",
+          "type": "object"
+        },
+        "flats_by_type": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "default": {},
+          "title": "Flats By Type",
+          "type": "object"
+        },
+        "flats_own_sqft": {
+          "minimum": 0,
+          "title": "Flats Own Sqft",
+          "type": "number"
+        },
+        "mix_error": {
+          "minimum": 0,
+          "title": "Mix Error",
+          "type": "number"
+        },
+        "open_space_share_pct": {
+          "minimum": 0,
+          "title": "Open Space Share Pct",
+          "type": "number"
+        },
+        "open_space_sqm": {
+          "minimum": 0,
+          "title": "Open Space Sqm",
+          "type": "number"
+        },
+        "saleable_sqft": {
+          "minimum": 0,
+          "title": "Saleable Sqft",
+          "type": "number"
+        },
+        "total_flats": {
+          "minimum": 0,
+          "title": "Total Flats",
+          "type": "integer"
+        },
+        "tower_floor_sqft": {
+          "minimum": 0,
+          "title": "Tower Floor Sqft",
+          "type": "number"
+        }
+      },
+      "required": [
+        "total_flats",
+        "saleable_sqft",
+        "tower_floor_sqft",
+        "flats_own_sqft",
+        "common_core_sqft",
+        "built_up_sqft",
+        "open_space_sqm",
+        "open_space_share_pct",
+        "mix_error"
+      ],
+      "title": "Metrics",
+      "type": "object"
+    },
+    "PartitionEntry": {
+      "additionalProperties": false,
+      "properties": {
+        "area_sqm": {
+          "minimum": 0,
+          "title": "Area Sqm",
+          "type": "number"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason"
+        },
+        "ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ref"
+        },
+        "shapes": {
+          "items": {
+            "$ref": "#/$defs/Shape"
+          },
+          "minItems": 1,
+          "title": "Shapes",
+          "type": "array"
+        },
+        "tags": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Tags",
+          "type": "array"
+        },
+        "use": {
+          "$ref": "#/$defs/PhysicalUse"
+        }
+      },
+      "required": [
+        "use",
+        "shapes",
+        "area_sqm"
+      ],
+      "title": "PartitionEntry",
+      "type": "object"
+    },
+    "PartitionLedger": {
+      "additionalProperties": false,
+      "description": "The net site, every square metre once, by what it physically is.",
+      "properties": {
+        "entries": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/PartitionEntry"
+          },
+          "title": "Entries",
+          "type": "array"
+        },
+        "net_area_sqm": {
+          "exclusiveMinimum": 0,
+          "title": "Net Area Sqm",
+          "type": "number"
+        },
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "tolerance": {
+          "default": 0.005,
+          "maximum": 0.05,
+          "minimum": 0,
+          "title": "Tolerance",
+          "type": "number"
+        }
+      },
+      "required": [
+        "net_area_sqm"
+      ],
+      "title": "PartitionLedger",
+      "type": "object"
+    },
+    "PerFloor": {
+      "additionalProperties": false,
+      "properties": {
+        "common_core_sqm": {
+          "minimum": 0,
+          "title": "Common Core Sqm",
+          "type": "number"
+        },
+        "flats": {
+          "minimum": 0,
+          "title": "Flats",
+          "type": "integer"
+        },
+        "flats_by_type": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "Flats By Type",
+          "type": "object"
+        },
+        "flats_own_sqm": {
+          "minimum": 0,
+          "title": "Flats Own Sqm",
+          "type": "number"
+        },
+        "gross_floor_sqm": {
+          "exclusiveMinimum": 0,
+          "title": "Gross Floor Sqm",
+          "type": "number"
+        },
+        "saleable_sqft": {
+          "minimum": 0,
+          "title": "Saleable Sqft",
+          "type": "number"
+        }
+      },
+      "required": [
+        "flats",
+        "flats_by_type",
+        "gross_floor_sqm",
+        "flats_own_sqm",
+        "common_core_sqm",
+        "saleable_sqft"
+      ],
+      "title": "PerFloor",
+      "type": "object"
+    },
+    "Permission": {
+      "additionalProperties": false,
+      "properties": {
+        "condition": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Condition"
+        },
+        "interpretation_ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Interpretation Ref"
+        },
+        "permit": {
+          "$ref": "#/$defs/Permit"
+        },
+        "use": {
+          "$ref": "#/$defs/PhysicalUse"
+        }
+      },
+      "required": [
+        "use",
+        "permit"
+      ],
+      "title": "Permission",
+      "type": "object"
+    },
+    "Permit": {
+      "enum": [
+        "ALLOWED",
+        "FORBIDDEN",
+        "CONDITIONAL"
+      ],
+      "title": "Permit",
+      "type": "string"
+    },
+    "PhysicalUse": {
+      "enum": [
+        "TOWER",
+        "CLUB_HOUSE",
+        "OTHER_BUILT",
+        "ROAD",
+        "FIRE_HARDSTANDING",
+        "SURFACE_PARKING",
+        "RAMP",
+        "SOFT_OPEN_SPACE",
+        "GREEN_STRIP",
+        "HARD_AMENITY",
+        "BUFFER_LAND",
+        "UNALLOCATED"
+      ],
+      "title": "PhysicalUse",
+      "type": "string"
+    },
+    "PlacedAmenity": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "setting": {
+          "$ref": "#/$defs/AmenitySetting",
+          "default": "OUTDOOR"
+        },
+        "shape": {
+          "$ref": "#/$defs/Shape"
+        }
+      },
+      "required": [
+        "name",
+        "shape"
+      ],
+      "title": "PlacedAmenity",
+      "type": "object"
+    },
+    "PlacedTower": {
+      "additionalProperties": false,
+      "properties": {
+        "floors_above_stilt": {
+          "exclusiveMinimum": 0,
+          "title": "Floors Above Stilt",
+          "type": "integer"
+        },
+        "footprint": {
+          "$ref": "#/$defs/Shape"
+        },
+        "has_stilt": {
+          "default": true,
+          "title": "Has Stilt",
+          "type": "boolean"
+        },
+        "mirrored": {
+          "default": false,
+          "title": "Mirrored",
+          "type": "boolean"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "prototype_id": {
+          "title": "Prototype Id",
+          "type": "string"
+        },
+        "rotation_deg": {
+          "default": 0.0,
+          "title": "Rotation Deg",
+          "type": "number"
+        },
+        "x": {
+          "title": "X",
+          "type": "number"
+        },
+        "y": {
+          "title": "Y",
+          "type": "number"
+        }
+      },
+      "required": [
+        "name",
+        "prototype_id",
+        "x",
+        "y",
+        "floors_above_stilt",
+        "footprint"
+      ],
+      "title": "PlacedTower",
+      "type": "object"
+    },
+    "PrototypeFamily": {
+      "enum": [
+        "SINGLE_CORE_SMALL",
+        "SINGLE_CORE",
+        "TWO_CORE_MEDIUM",
+        "TWO_CORE_LARGE",
+        "LEGACY_RECTANGLE"
+      ],
+      "title": "PrototypeFamily",
+      "type": "string"
+    },
+    "PrototypeHeights": {
+      "additionalProperties": false,
+      "properties": {
+        "floor_to_floor_m": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Floor To Floor M"
+        },
+        "stilt_height_m": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Stilt Height M"
+        }
+      },
+      "title": "PrototypeHeights",
+      "type": "object"
+    },
+    "Provenance": {
+      "enum": [
+        "VERIFIED",
+        "USER_CONFIRMED",
+        "EXTRACTED",
+        "ASSUMED_FOR_TEST",
+        "UNVERIFIED"
+      ],
+      "title": "Provenance",
+      "type": "string"
+    },
+    "RoadKind": {
+      "enum": [
+        "APPROACH",
+        "LOOP",
+        "INTERNAL",
+        "CUL_DE_SAC",
+        "DRIVEWAY",
+        "PERIMETER_LANE"
+      ],
+      "title": "RoadKind",
+      "type": "string"
+    },
+    "RoadPiece": {
+      "additionalProperties": false,
+      "properties": {
+        "declared_width_m": {
+          "exclusiveMinimum": 0,
+          "title": "Declared Width M",
+          "type": "number"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/RoadKind"
+        },
+        "shapes": {
+          "items": {
+            "$ref": "#/$defs/Shape"
+          },
+          "minItems": 1,
+          "title": "Shapes",
+          "type": "array"
+        },
+        "tags": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Tags",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "shapes",
+        "declared_width_m"
+      ],
+      "title": "RoadPiece",
+      "type": "object"
+    },
+    "RuleLayer": {
+      "additionalProperties": false,
+      "properties": {
+        "applies_to": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Applies To"
+        },
+        "area_sqm": {
+          "default": 0.0,
+          "title": "Area Sqm",
+          "type": "number"
+        },
+        "basis": {
+          "$ref": "#/$defs/Basis"
+        },
+        "clause": {
+          "title": "Clause",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "interpretation_ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Interpretation Ref"
+        },
+        "kind": {
+          "$ref": "#/$defs/LayerKind"
+        },
+        "permits": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Permission"
+          },
+          "title": "Permits",
+          "type": "array"
+        },
+        "shapes": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Shape"
+          },
+          "title": "Shapes",
+          "type": "array"
+        },
+        "status": {
+          "$ref": "#/$defs/Provenance"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "clause",
+        "basis",
+        "status"
+      ],
+      "title": "RuleLayer",
+      "type": "object"
+    },
+    "RuleLayers": {
+      "additionalProperties": false,
+      "properties": {
+        "layers": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/RuleLayer"
+          },
+          "title": "Layers",
+          "type": "array"
+        },
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "title": "RuleLayers",
+      "type": "object"
+    },
+    "Shape": {
+      "additionalProperties": false,
+      "description": "A polygon: its outer ring and any holes, metres, survey frame, not closed (the first\npoint is not repeated).",
+      "properties": {
+        "holes": {
+          "default": [],
+          "items": {
+            "items": {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "type": "array"
+            },
+            "type": "array"
+          },
+          "title": "Holes",
+          "type": "array"
+        },
+        "outer": {
+          "items": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "type": "array"
+          },
+          "minItems": 3,
+          "title": "Outer",
+          "type": "array"
+        }
+      },
+      "required": [
+        "outer"
+      ],
+      "title": "Shape",
+      "type": "object"
+    },
+    "SiteProgram": {
+      "additionalProperties": false,
+      "properties": {
+        "amenities": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/PlacedAmenity"
+          },
+          "title": "Amenities",
+          "type": "array"
+        },
+        "amenities_missed": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Amenities Missed",
+          "type": "array"
+        },
+        "bays": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Shape"
+          },
+          "title": "Bays",
+          "type": "array"
+        },
+        "cellars": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Cellars"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "club_house": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ClubHouse"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "green_strip": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Shape"
+          },
+          "title": "Green Strip",
+          "type": "array"
+        },
+        "open_space": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Shape"
+          },
+          "title": "Open Space",
+          "type": "array"
+        },
+        "ramps": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Shape"
+          },
+          "title": "Ramps",
+          "type": "array"
+        }
+      },
+      "title": "SiteProgram",
+      "type": "object"
+    },
+    "SourceKind": {
+      "enum": [
+        "SURVEY",
+        "ARCHITECT",
+        "DOCUMENT",
+        "FIRM_STANDARD",
+        "FIRM_FINISHED_PLAN",
+        "ENGINE_DEFAULT",
+        "TEST_PROFILE"
+      ],
+      "title": "SourceKind",
+      "type": "string"
+    },
+    "Status": {
+      "enum": [
+        "PASS",
+        "FAIL",
+        "UNVERIFIED",
+        "NOT_CHECKED",
+        "INFO"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "Stretch": {
+      "additionalProperties": false,
+      "description": "A block that can be built longer or shorter by whole modules.",
+      "properties": {
+        "max_modules": {
+          "exclusiveMinimum": 0,
+          "title": "Max Modules",
+          "type": "integer"
+        },
+        "min_modules": {
+          "exclusiveMinimum": 0,
+          "title": "Min Modules",
+          "type": "integer"
+        },
+        "module_pitch_m": {
+          "exclusiveMinimum": 0,
+          "title": "Module Pitch M",
+          "type": "number"
+        }
+      },
+      "required": [
+        "module_pitch_m",
+        "min_modules",
+        "max_modules"
+      ],
+      "title": "Stretch",
+      "type": "object"
+    },
+    "TowerPrototype": {
+      "additionalProperties": false,
+      "properties": {
+        "core_zones": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/CoreZone"
+          },
+          "title": "Core Zones",
+          "type": "array"
+        },
+        "cores": {
+          "minimum": 0,
+          "title": "Cores",
+          "type": "integer"
+        },
+        "corridor": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Shape"
+          },
+          "title": "Corridor",
+          "type": "array"
+        },
+        "depth_m": {
+          "exclusiveMinimum": 0,
+          "title": "Depth M",
+          "type": "number"
+        },
+        "family": {
+          "$ref": "#/$defs/PrototypeFamily"
+        },
+        "footprint": {
+          "$ref": "#/$defs/Shape"
+        },
+        "heights": {
+          "$ref": "#/$defs/PrototypeHeights",
+          "default": {
+            "floor_to_floor_m": null,
+            "stilt_height_m": null
+          }
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "length_m": {
+          "exclusiveMinimum": 0,
+          "title": "Length M",
+          "type": "number"
+        },
+        "modules": {
+          "items": {
+            "$ref": "#/$defs/FlatModule"
+          },
+          "minItems": 1,
+          "title": "Modules",
+          "type": "array"
+        },
+        "per_floor": {
+          "$ref": "#/$defs/PerFloor"
+        },
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source": {
+          "default": "",
+          "title": "Source",
+          "type": "string"
+        },
+        "source_kind": {
+          "$ref": "#/$defs/SourceKind"
+        },
+        "stretch": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Stretch"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "id",
+        "family",
+        "source_kind",
+        "footprint",
+        "length_m",
+        "depth_m",
+        "cores",
+        "modules",
+        "per_floor"
+      ],
+      "title": "TowerPrototype",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "brief_ref": {
+      "title": "Brief Ref",
+      "type": "string"
+    },
+    "candidate_id": {
+      "title": "Candidate Id",
+      "type": "string"
+    },
+    "caveats": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Caveats",
+      "type": "array"
+    },
+    "circulation": {
+      "$ref": "#/$defs/Circulation",
+      "default": {
+        "fire_hardstanding": [],
+        "gates": [],
+        "roads": []
+      }
+    },
+    "envelope_ref": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Envelope Ref"
+    },
+    "generator_claims": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Finding"
+      },
+      "title": "Generator Claims",
+      "type": "array"
+    },
+    "interpretation_basis": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "default": {},
+      "title": "Interpretation Basis",
+      "type": "object"
+    },
+    "metrics": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Metrics"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "pareto_tag": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Pareto Tag"
+    },
+    "partition": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/PartitionLedger"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "program": {
+      "$ref": "#/$defs/SiteProgram",
+      "default": {
+        "amenities": [],
+        "amenities_missed": [],
+        "bays": [],
+        "cellars": null,
+        "club_house": null,
+        "green_strip": [],
+        "open_space": [],
+        "ramps": []
+      }
+    },
+    "prototypes_used": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/TowerPrototype"
+      },
+      "title": "Prototypes Used",
+      "type": "array"
+    },
+    "rule_layers": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/RuleLayers"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "rules_ref": {
+      "title": "Rules Ref",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0",
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "scores": {
+      "additionalProperties": {
+        "type": "number"
+      },
+      "default": {},
+      "title": "Scores",
+      "type": "object"
+    },
+    "seed": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Seed"
+    },
+    "site_ref": {
+      "title": "Site Ref",
+      "type": "string"
+    },
+    "strategy": {
+      "default": "",
+      "title": "Strategy",
+      "type": "string"
+    },
+    "towers": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/PlacedTower"
+      },
+      "title": "Towers",
+      "type": "array"
+    }
+  },
+  "required": [
+    "candidate_id",
+    "site_ref",
+    "rules_ref",
+    "brief_ref"
+  ],
+  "title": "CandidateLayout",
+  "type": "object"
+}

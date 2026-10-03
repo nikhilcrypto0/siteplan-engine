@@ -1,0 +1,1126 @@
+{
+  "$defs": {
+    "AmenityRules": {
+      "additionalProperties": false,
+      "properties": {
+        "cap_sqft_2016": {
+          "$ref": "#/$defs/RuleValue_float_"
+        },
+        "from_units": {
+          "$ref": "#/$defs/RuleValue_int_"
+        },
+        "large_project_from_acres": {
+          "$ref": "#/$defs/RuleValue_float_"
+        },
+        "large_project_share_of_site": {
+          "$ref": "#/$defs/RuleValue_float_"
+        },
+        "separate_block": {
+          "$ref": "#/$defs/RuleValue_str_"
+        },
+        "share_interpretation": {
+          "default": "amenity_share",
+          "title": "Share Interpretation",
+          "type": "string"
+        },
+        "share_of_built_up": {
+          "$ref": "#/$defs/RuleValue_float_"
+        }
+      },
+      "required": [
+        "share_of_built_up",
+        "cap_sqft_2016",
+        "from_units",
+        "separate_block",
+        "large_project_share_of_site",
+        "large_project_from_acres"
+      ],
+      "title": "AmenityRules",
+      "type": "object"
+    },
+    "Band": {
+      "additionalProperties": false,
+      "properties": {
+        "above_m": {
+          "minimum": 0,
+          "title": "Above M",
+          "type": "number"
+        },
+        "clause": {
+          "title": "Clause",
+          "type": "string"
+        },
+        "gap_m": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Gap M"
+        },
+        "kind": {
+          "$ref": "#/$defs/BandKind"
+        },
+        "min_road_m": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Min Road M"
+        },
+        "modelled": {
+          "default": true,
+          "title": "Modelled",
+          "type": "boolean"
+        },
+        "setback_m": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Setback M"
+        },
+        "status": {
+          "$ref": "#/$defs/Provenance",
+          "default": "VERIFIED"
+        },
+        "up_to_m": {
+          "exclusiveMinimum": 0,
+          "title": "Up To M",
+          "type": "number"
+        }
+      },
+      "required": [
+        "above_m",
+        "up_to_m",
+        "kind",
+        "clause"
+      ],
+      "title": "Band",
+      "type": "object"
+    },
+    "BandKind": {
+      "enum": [
+        "HIGH_RISE",
+        "NON_HIGH_RISE"
+      ],
+      "title": "BandKind",
+      "type": "string"
+    },
+    "Basis": {
+      "enum": [
+        "LEGAL_RULE",
+        "FIRM_STANDARD",
+        "ENGINE_DESIGN_ASSUMPTION",
+        "UNRESOLVED_INTERPRETATION",
+        "SITE_INPUT"
+      ],
+      "title": "Basis",
+      "type": "string"
+    },
+    "Category": {
+      "additionalProperties": false,
+      "properties": {
+        "above_5_acres": {
+          "$ref": "#/$defs/RuleValue_bool_"
+        },
+        "amenities_from_units": {
+          "$ref": "#/$defs/RuleValue_int_"
+        },
+        "group_development": {
+          "$ref": "#/$defs/RuleValue_bool_"
+        }
+      },
+      "required": [
+        "group_development",
+        "amenities_from_units",
+        "above_5_acres"
+      ],
+      "title": "Category",
+      "type": "object"
+    },
+    "CirculationRules": {
+      "additionalProperties": false,
+      "properties": {
+        "applies": {
+          "$ref": "#/$defs/RuleValue_bool_"
+        },
+        "approach_interpretation": {
+          "default": "approach_width",
+          "title": "Approach Interpretation",
+          "type": "string"
+        },
+        "approach_m": {
+          "$ref": "#/$defs/RuleValue_tuple_float__float__"
+        },
+        "block_over_12m_on_road": {
+          "$ref": "#/$defs/RuleValue_bool_"
+        },
+        "cul_de_sac_head_radius_m": {
+          "$ref": "#/$defs/RuleValue_float_"
+        },
+        "cul_de_sac_length_m": {
+          "$ref": "#/$defs/RuleValue_tuple_float__float__"
+        },
+        "cul_de_sac_width_m": {
+          "$ref": "#/$defs/RuleValue_float_"
+        },
+        "driveway_is_road": {
+          "$ref": "#/$defs/RuleValue_bool_"
+        },
+        "driveway_min_m": {
+          "$ref": "#/$defs/RuleValue_float_"
+        },
+        "in_setback_interpretation": {
+          "default": "circulation_in_setback",
+          "title": "In Setback Interpretation",
+          "type": "string"
+        },
+        "internal_road_m": {
+          "$ref": "#/$defs/RuleValue_float_"
+        },
+        "pathway_max_block_height_m": {
+          "$ref": "#/$defs/RuleValue_float_"
+        }
+      },
+      "required": [
+        "applies",
+        "approach_m",
+        "internal_road_m",
+        "cul_de_sac_width_m",
+        "cul_de_sac_length_m",
+        "cul_de_sac_head_radius_m",
+        "pathway_max_block_height_m",
+        "driveway_min_m",
+        "driveway_is_road",
+        "block_over_12m_on_road"
+      ],
+      "title": "CirculationRules",
+      "type": "object"
+    },
+    "FireRules": {
+      "additionalProperties": false,
+      "properties": {
+        "applies_from_m": {
+          "$ref": "#/$defs/RuleValue_float_"
+        },
+        "clear_width_m": {
+          "$ref": "#/$defs/RuleValue_float_"
+        },
+        "dead_end_max_physical_m": {
+          "$ref": "#/$defs/RuleValue_float_"
+        },
+        "entrance_clear_height_m": {
+          "$ref": "#/$defs/RuleValue_float_"
+        },
+        "entrance_width_m": {
+          "$ref": "#/$defs/RuleValue_float_"
+        },
+        "load_t": {
+          "$ref": "#/$defs/RuleValue_float_"
+        },
+        "street_join_m": {
+          "$ref": "#/$defs/RuleValue_float_"
+        },
+        "turning_interpretation": {
+          "default": "fire_turning_radius",
+          "title": "Turning Interpretation",
+          "type": "string"
+        },
+        "turning_radius_m": {
+          "$ref": "#/$defs/RuleValue_float_"
+        }
+      },
+      "required": [
+        "applies_from_m",
+        "clear_width_m",
+        "turning_radius_m",
+        "entrance_width_m",
+        "entrance_clear_height_m",
+        "load_t",
+        "street_join_m",
+        "dead_end_max_physical_m"
+      ],
+      "title": "FireRules",
+      "type": "object"
+    },
+    "GreenStripRules": {
+      "additionalProperties": false,
+      "properties": {
+        "where_setback_from_m": {
+          "$ref": "#/$defs/RuleValue_float_"
+        },
+        "width_m": {
+          "$ref": "#/$defs/RuleValue_float_"
+        }
+      },
+      "required": [
+        "width_m",
+        "where_setback_from_m"
+      ],
+      "title": "GreenStripRules",
+      "type": "object"
+    },
+    "HeightLimit": {
+      "additionalProperties": false,
+      "properties": {
+        "applies_if": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Applies If"
+        },
+        "clause": {
+          "title": "Clause",
+          "type": "string"
+        },
+        "max_m": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Max M"
+        },
+        "measure": {
+          "$ref": "#/$defs/HeightMeasure"
+        },
+        "reason": {
+          "title": "Reason",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/Provenance"
+        }
+      },
+      "required": [
+        "measure",
+        "max_m",
+        "reason",
+        "clause",
+        "status"
+      ],
+      "title": "HeightLimit",
+      "type": "object"
+    },
+    "HeightMeasure": {
+      "enum": [
+        "RULE_HEIGHT",
+        "PHYSICAL_HEIGHT",
+        "AMSL"
+      ],
+      "title": "HeightMeasure",
+      "type": "string"
+    },
+    "HeightRules": {
+      "additionalProperties": false,
+      "properties": {
+        "bands": {
+          "items": {
+            "$ref": "#/$defs/Band"
+          },
+          "title": "Bands",
+          "type": "array"
+        },
+        "high_rise_from_m": {
+          "$ref": "#/$defs/RuleValue_float_"
+        },
+        "limits": {
+          "items": {
+            "$ref": "#/$defs/HeightLimit"
+          },
+          "title": "Limits",
+          "type": "array"
+        },
+        "measures": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "propertyNames": {
+            "$ref": "#/$defs/HeightMeasure"
+          },
+          "title": "Measures",
+          "type": "object"
+        },
+        "rule_height_interpretation": {
+          "default": "stilt_in_rule_height",
+          "title": "Rule Height Interpretation",
+          "type": "string"
+        },
+        "tdr_band_m": {
+          "$ref": "#/$defs/RuleValue_tuple_float__float__"
+        },
+        "tdr_plot_sqm": {
+          "$ref": "#/$defs/RuleValue_tuple_float__float__"
+        }
+      },
+      "required": [
+        "measures",
+        "high_rise_from_m",
+        "tdr_band_m",
+        "tdr_plot_sqm",
+        "bands",
+        "limits"
+      ],
+      "title": "HeightRules",
+      "type": "object"
+    },
+    "Interpretation": {
+      "additionalProperties": false,
+      "properties": {
+        "alternatives": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "minProperties": 2,
+          "title": "Alternatives",
+          "type": "object"
+        },
+        "basis": {
+          "$ref": "#/$defs/Basis",
+          "default": "UNRESOLVED_INTERPRETATION"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "question": {
+          "title": "Question",
+          "type": "string"
+        },
+        "selected": {
+          "title": "Selected",
+          "type": "string"
+        },
+        "settles": {
+          "default": "",
+          "title": "Settles",
+          "type": "string"
+        },
+        "sources": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Sources",
+          "type": "array"
+        },
+        "status": {
+          "$ref": "#/$defs/Provenance",
+          "default": "UNVERIFIED"
+        }
+      },
+      "required": [
+        "id",
+        "question",
+        "alternatives",
+        "selected"
+      ],
+      "title": "Interpretation",
+      "type": "object"
+    },
+    "JurisdictionRules": {
+      "additionalProperties": false,
+      "properties": {
+        "note": {
+          "default": "",
+          "title": "Note",
+          "type": "string"
+        },
+        "table_v_column": {
+          "$ref": "#/$defs/TableVColumn"
+        },
+        "when_open": {
+          "$ref": "#/$defs/WhenOpen",
+          "default": "STOP"
+        }
+      },
+      "required": [
+        "table_v_column"
+      ],
+      "title": "JurisdictionRules",
+      "type": "object"
+    },
+    "OpenSpaceRules": {
+      "additionalProperties": false,
+      "properties": {
+        "basis_interpretation": {
+          "default": "open_space_basis",
+          "title": "Basis Interpretation",
+          "type": "string"
+        },
+        "block_gaps_excluded": {
+          "$ref": "#/$defs/RuleValue_bool_"
+        },
+        "buffer_may_count": {
+          "$ref": "#/$defs/RuleValue_bool_"
+        },
+        "min_pocket_sqm": {
+          "$ref": "#/$defs/RuleValue_float_"
+        },
+        "min_width_m": {
+          "$ref": "#/$defs/RuleValue_float_"
+        },
+        "over_and_above_setbacks": {
+          "$ref": "#/$defs/RuleValue_bool_"
+        },
+        "requirement_sqm_by_reading": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "title": "Requirement Sqm By Reading",
+          "type": "object"
+        },
+        "share": {
+          "$ref": "#/$defs/RuleValue_float_"
+        }
+      },
+      "required": [
+        "share",
+        "requirement_sqm_by_reading",
+        "min_width_m",
+        "min_pocket_sqm",
+        "over_and_above_setbacks",
+        "block_gaps_excluded",
+        "buffer_may_count"
+      ],
+      "title": "OpenSpaceRules",
+      "type": "object"
+    },
+    "OrderRead": {
+      "enum": [
+        "TEXT",
+        "SCAN",
+        "UNREAD"
+      ],
+      "title": "OrderRead",
+      "type": "string"
+    },
+    "OrderRef": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "note": {
+          "default": "",
+          "title": "Note",
+          "type": "string"
+        },
+        "read": {
+          "$ref": "#/$defs/OrderRead"
+        }
+      },
+      "required": [
+        "id",
+        "read"
+      ],
+      "title": "OrderRef",
+      "type": "object"
+    },
+    "ParkingMeasurement": {
+      "additionalProperties": false,
+      "description": "How parking is measured where no order says: the engine's own standard.",
+      "properties": {
+        "aisle_m": {
+          "title": "Aisle M",
+          "type": "number"
+        },
+        "basis": {
+          "$ref": "#/$defs/Basis",
+          "default": "ENGINE_DESIGN_ASSUMPTION"
+        },
+        "bay_m": {
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Bay M",
+          "type": "array"
+        },
+        "note": {
+          "default": "",
+          "title": "Note",
+          "type": "string"
+        },
+        "sqm_per_car": {
+          "title": "Sqm Per Car",
+          "type": "number"
+        }
+      },
+      "required": [
+        "bay_m",
+        "aisle_m",
+        "sqm_per_car"
+      ],
+      "title": "ParkingMeasurement",
+      "type": "object"
+    },
+    "ParkingRules": {
+      "additionalProperties": false,
+      "properties": {
+        "cellar_extra_setback_per_level_m": {
+          "$ref": "#/$defs/RuleValue_float_"
+        },
+        "cellar_setback_by_site_sqm": {
+          "$ref": "#/$defs/RuleValue_list_tuple_Union_float__NoneType___float___"
+        },
+        "measurement": {
+          "$ref": "#/$defs/ParkingMeasurement"
+        },
+        "ramp_gradient": {
+          "$ref": "#/$defs/RuleValue_float_"
+        },
+        "ramp_in_setbacks": {
+          "$ref": "#/$defs/RuleValue_str_"
+        },
+        "ramp_pair_min_m": {
+          "$ref": "#/$defs/RuleValue_float_"
+        },
+        "ramp_single_min_m": {
+          "$ref": "#/$defs/RuleValue_float_"
+        },
+        "share_pct": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RuleValue_float_"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "share_pct_by_column": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "propertyNames": {
+            "$ref": "#/$defs/TableVColumn"
+          },
+          "title": "Share Pct By Column",
+          "type": "object"
+        },
+        "utilities_max_fraction": {
+          "$ref": "#/$defs/RuleValue_float_"
+        },
+        "visitors_fraction": {
+          "$ref": "#/$defs/RuleValue_float_"
+        },
+        "visitors_interpretation": {
+          "default": "visitor_parking",
+          "title": "Visitors Interpretation",
+          "type": "string"
+        }
+      },
+      "required": [
+        "share_pct_by_column",
+        "share_pct",
+        "visitors_fraction",
+        "cellar_setback_by_site_sqm",
+        "cellar_extra_setback_per_level_m",
+        "ramp_single_min_m",
+        "ramp_pair_min_m",
+        "ramp_gradient",
+        "ramp_in_setbacks",
+        "utilities_max_fraction",
+        "measurement"
+      ],
+      "title": "ParkingRules",
+      "type": "object"
+    },
+    "Provenance": {
+      "enum": [
+        "VERIFIED",
+        "USER_CONFIRMED",
+        "EXTRACTED",
+        "ASSUMED_FOR_TEST",
+        "UNVERIFIED"
+      ],
+      "title": "Provenance",
+      "type": "string"
+    },
+    "RuleValue_bool_": {
+      "additionalProperties": false,
+      "properties": {
+        "basis": {
+          "$ref": "#/$defs/Basis",
+          "default": "LEGAL_RULE"
+        },
+        "clause": {
+          "title": "Clause",
+          "type": "string"
+        },
+        "note": {
+          "default": "",
+          "title": "Note",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/Provenance",
+          "default": "VERIFIED"
+        },
+        "unit": {
+          "default": "",
+          "title": "Unit",
+          "type": "string"
+        },
+        "value": {
+          "title": "Value",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "value",
+        "clause"
+      ],
+      "title": "RuleValue[bool]",
+      "type": "object"
+    },
+    "RuleValue_dict_str__float__": {
+      "additionalProperties": false,
+      "properties": {
+        "basis": {
+          "$ref": "#/$defs/Basis",
+          "default": "LEGAL_RULE"
+        },
+        "clause": {
+          "title": "Clause",
+          "type": "string"
+        },
+        "note": {
+          "default": "",
+          "title": "Note",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/Provenance",
+          "default": "VERIFIED"
+        },
+        "unit": {
+          "default": "",
+          "title": "Unit",
+          "type": "string"
+        },
+        "value": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "title": "Value",
+          "type": "object"
+        }
+      },
+      "required": [
+        "value",
+        "clause"
+      ],
+      "title": "RuleValue[dict[str, float]]",
+      "type": "object"
+    },
+    "RuleValue_float_": {
+      "additionalProperties": false,
+      "properties": {
+        "basis": {
+          "$ref": "#/$defs/Basis",
+          "default": "LEGAL_RULE"
+        },
+        "clause": {
+          "title": "Clause",
+          "type": "string"
+        },
+        "note": {
+          "default": "",
+          "title": "Note",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/Provenance",
+          "default": "VERIFIED"
+        },
+        "unit": {
+          "default": "",
+          "title": "Unit",
+          "type": "string"
+        },
+        "value": {
+          "title": "Value",
+          "type": "number"
+        }
+      },
+      "required": [
+        "value",
+        "clause"
+      ],
+      "title": "RuleValue[float]",
+      "type": "object"
+    },
+    "RuleValue_int_": {
+      "additionalProperties": false,
+      "properties": {
+        "basis": {
+          "$ref": "#/$defs/Basis",
+          "default": "LEGAL_RULE"
+        },
+        "clause": {
+          "title": "Clause",
+          "type": "string"
+        },
+        "note": {
+          "default": "",
+          "title": "Note",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/Provenance",
+          "default": "VERIFIED"
+        },
+        "unit": {
+          "default": "",
+          "title": "Unit",
+          "type": "string"
+        },
+        "value": {
+          "title": "Value",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "value",
+        "clause"
+      ],
+      "title": "RuleValue[int]",
+      "type": "object"
+    },
+    "RuleValue_list_tuple_Union_float__NoneType___float___": {
+      "additionalProperties": false,
+      "properties": {
+        "basis": {
+          "$ref": "#/$defs/Basis",
+          "default": "LEGAL_RULE"
+        },
+        "clause": {
+          "title": "Clause",
+          "type": "string"
+        },
+        "note": {
+          "default": "",
+          "title": "Note",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/Provenance",
+          "default": "VERIFIED"
+        },
+        "unit": {
+          "default": "",
+          "title": "Unit",
+          "type": "string"
+        },
+        "value": {
+          "items": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "type": "array"
+          },
+          "title": "Value",
+          "type": "array"
+        }
+      },
+      "required": [
+        "value",
+        "clause"
+      ],
+      "title": "RuleValue[list[tuple[Union[float, NoneType], float]]]",
+      "type": "object"
+    },
+    "RuleValue_str_": {
+      "additionalProperties": false,
+      "properties": {
+        "basis": {
+          "$ref": "#/$defs/Basis",
+          "default": "LEGAL_RULE"
+        },
+        "clause": {
+          "title": "Clause",
+          "type": "string"
+        },
+        "note": {
+          "default": "",
+          "title": "Note",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/Provenance",
+          "default": "VERIFIED"
+        },
+        "unit": {
+          "default": "",
+          "title": "Unit",
+          "type": "string"
+        },
+        "value": {
+          "title": "Value",
+          "type": "string"
+        }
+      },
+      "required": [
+        "value",
+        "clause"
+      ],
+      "title": "RuleValue[str]",
+      "type": "object"
+    },
+    "RuleValue_tuple_float__float__": {
+      "additionalProperties": false,
+      "properties": {
+        "basis": {
+          "$ref": "#/$defs/Basis",
+          "default": "LEGAL_RULE"
+        },
+        "clause": {
+          "title": "Clause",
+          "type": "string"
+        },
+        "note": {
+          "default": "",
+          "title": "Note",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/Provenance",
+          "default": "VERIFIED"
+        },
+        "unit": {
+          "default": "",
+          "title": "Unit",
+          "type": "string"
+        },
+        "value": {
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Value",
+          "type": "array"
+        }
+      },
+      "required": [
+        "value",
+        "clause"
+      ],
+      "title": "RuleValue[tuple[float, float]]",
+      "type": "object"
+    },
+    "SetbackRules": {
+      "additionalProperties": false,
+      "properties": {
+        "concessions": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/RuleValue_str_"
+          },
+          "title": "Concessions",
+          "type": "array"
+        },
+        "front": {
+          "$ref": "#/$defs/RuleValue_str_"
+        },
+        "measured_on": {
+          "$ref": "#/$defs/RuleValue_str_"
+        }
+      },
+      "required": [
+        "measured_on",
+        "front"
+      ],
+      "title": "SetbackRules",
+      "type": "object"
+    },
+    "SpacingRules": {
+      "additionalProperties": false,
+      "properties": {
+        "clause": {
+          "title": "Clause",
+          "type": "string"
+        },
+        "mixed_heights_interpretation": {
+          "default": "mixed_height_spacing",
+          "title": "Mixed Heights Interpretation",
+          "type": "string"
+        }
+      },
+      "required": [
+        "clause"
+      ],
+      "title": "SpacingRules",
+      "type": "object"
+    },
+    "TableVColumn": {
+      "enum": [
+        "GHMC_OR_CURE",
+        "ELSEWHERE",
+        "OPEN"
+      ],
+      "title": "TableVColumn",
+      "type": "string"
+    },
+    "WaterRules": {
+      "additionalProperties": false,
+      "properties": {
+        "buffer_m_by_class": {
+          "$ref": "#/$defs/RuleValue_dict_str__float__"
+        }
+      },
+      "required": [
+        "buffer_m_by_class"
+      ],
+      "title": "WaterRules",
+      "type": "object"
+    },
+    "WhenOpen": {
+      "enum": [
+        "STOP",
+        "CONSERVATIVE"
+      ],
+      "title": "WhenOpen",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "amenities": {
+      "$ref": "#/$defs/AmenityRules"
+    },
+    "category": {
+      "$ref": "#/$defs/Category"
+    },
+    "circulation": {
+      "$ref": "#/$defs/CirculationRules"
+    },
+    "fire": {
+      "$ref": "#/$defs/FireRules"
+    },
+    "green_strip": {
+      "$ref": "#/$defs/GreenStripRules"
+    },
+    "height": {
+      "$ref": "#/$defs/HeightRules"
+    },
+    "interpretations": {
+      "items": {
+        "$ref": "#/$defs/Interpretation"
+      },
+      "title": "Interpretations",
+      "type": "array"
+    },
+    "jurisdiction": {
+      "$ref": "#/$defs/JurisdictionRules"
+    },
+    "open_space": {
+      "$ref": "#/$defs/OpenSpaceRules"
+    },
+    "orders": {
+      "items": {
+        "$ref": "#/$defs/OrderRef"
+      },
+      "title": "Orders",
+      "type": "array"
+    },
+    "parking": {
+      "$ref": "#/$defs/ParkingRules"
+    },
+    "rules_digest": {
+      "title": "Rules Digest",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0",
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "setbacks": {
+      "$ref": "#/$defs/SetbackRules"
+    },
+    "site_ref": {
+      "title": "Site Ref",
+      "type": "string"
+    },
+    "spacing": {
+      "$ref": "#/$defs/SpacingRules"
+    },
+    "water": {
+      "$ref": "#/$defs/WaterRules"
+    }
+  },
+  "required": [
+    "site_ref",
+    "rules_digest",
+    "orders",
+    "category",
+    "jurisdiction",
+    "height",
+    "setbacks",
+    "spacing",
+    "open_space",
+    "green_strip",
+    "circulation",
+    "fire",
+    "parking",
+    "amenities",
+    "water",
+    "interpretations"
+  ],
+  "title": "ResolvedRules",
+  "type": "object"
+}

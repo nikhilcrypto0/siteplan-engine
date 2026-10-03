@@ -41,3 +41,7 @@ select = ["E", "F", "I", "B", "UP", "SIM"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "normative: must stay true whatever the implementation (tests/manifest.py)",
+    "characterization: what the prototype produces today; changes only with a normative replacement (tests/manifest.py)",
+]

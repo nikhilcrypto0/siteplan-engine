@@ -23,7 +23,6 @@ a 45 degree test) cannot be caught that way; the ones that shape a result are li
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import StrEnum
 from itertools import groupby
 
 from siteplan import (
@@ -42,14 +41,7 @@ from siteplan import (
     site_amenities,
     towers,
 )
-
-
-class Basis(StrEnum):
-    LEGAL_RULE = "LEGAL_RULE"
-    FIRM_STANDARD = "FIRM_STANDARD"
-    ENGINE_DESIGN_ASSUMPTION = "ENGINE_DESIGN_ASSUMPTION"
-    UNRESOLVED_INTERPRETATION = "UNRESOLVED_INTERPRETATION"
-    SITE_INPUT = "SITE_INPUT"
+from siteplan.basis import Basis  # lives in basis.py so the contracts need not import this module
 
 
 @dataclass(frozen=True)

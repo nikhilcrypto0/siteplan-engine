@@ -1,0 +1,3372 @@
+{
+ "schema_version": "1.0",
+ "candidate_ref": "382ffc80ba13d621",
+ "site_ref": "87617542d2983472",
+ "rules_ref": "03ce7be56002e969",
+ "brief_ref": "5d7adecf13031b18",
+ "envelope_ref": "c73c820e7187dc3c",
+ "validator_version": "fixture: the generator's own findings restated, not an independent validation",
+ "recomputed": {
+  "towers": [],
+  "pairs": [],
+  "quantities": {},
+  "units_by_type": {}
+ },
+ "legal": [
+  {
+   "family": "HEIGHT",
+   "subject": null,
+   "finding": {
+    "rule": "Height class: T1",
+    "status": "INFO",
+    "measured": "27.00 m",
+    "required": "high-rise band above 24 m, up to 27 m",
+    "clause": "G.O.168 rule 7(a)(x), Table IV as substituted by G.O.Ms.No.50 of 2019",
+    "note": "Needs a road at least 18 m wide and 9 m open all round."
+   },
+   "by_reading": {}
+  },
+  {
+   "family": "HEIGHT",
+   "subject": null,
+   "finding": {
+    "rule": "Height class: T2",
+    "status": "INFO",
+    "measured": "27.00 m",
+    "required": "high-rise band above 24 m, up to 27 m",
+    "clause": "G.O.168 rule 7(a)(x), Table IV as substituted by G.O.Ms.No.50 of 2019",
+    "note": "Needs a road at least 18 m wide and 9 m open all round."
+   },
+   "by_reading": {}
+  },
+  {
+   "family": "HEIGHT",
+   "subject": null,
+   "finding": {
+    "rule": "Height class: T3",
+    "status": "INFO",
+    "measured": "27.00 m",
+    "required": "high-rise band above 24 m, up to 27 m",
+    "clause": "G.O.168 rule 7(a)(x), Table IV as substituted by G.O.Ms.No.50 of 2019",
+    "note": "Needs a road at least 18 m wide and 9 m open all round."
+   },
+   "by_reading": {}
+  },
+  {
+   "family": "HEIGHT",
+   "subject": null,
+   "finding": {
+    "rule": "Plot size for high-rise",
+    "status": "PASS",
+    "measured": "16,440 m²",
+    "required": ">= 2,000 m²",
+    "clause": "G.O.168 rule 7(a)(ii)",
+    "note": ""
+   },
+   "by_reading": {}
+  },
+  {
+   "family": "ROADS",
+   "subject": null,
+   "finding": {
+    "rule": "Abutting road width (for T1)",
+    "status": "PASS",
+    "measured": "18.29 m (existing)",
+    "required": ">= 18 m",
+    "clause": "G.O.168 rule 7(a)(x), Table IV as substituted by G.O.Ms.No.50 of 2019",
+    "note": ""
+   },
+   "by_reading": {}
+  },
+  {
+   "family": "SETBACK",
+   "subject": null,
+   "finding": {
+    "rule": "All-round setback: T1",
+    "status": "PASS",
+    "measured": "12.60 m",
+    "required": ">= 9.00 m to the net plot line",
+    "clause": "G.O.168 rule 7(a)(x), Table IV as substituted by G.O.Ms.No.50 of 2019; G.O.168 p.17, clause (b) (the front setback of a high-rise is as per Table IV of rule 7); G.O.168 rule 7(a)(iii) (setbacks of a high-rise on the net plot left after road widening); rule 5(f)(ii) for Table III",
+    "note": "The front of a high-rise keeps the Table IV figure too, measured on the net plot."
+   },
+   "by_reading": {}
+  },
+  {
+   "family": "SETBACK",
+   "subject": null,
+   "finding": {
+    "rule": "All-round setback: T2",
+    "status": "PASS",
+    "measured": "11.01 m",
+    "required": ">= 9.00 m to the net plot line",
+    "clause": "G.O.168 rule 7(a)(x), Table IV as substituted by G.O.Ms.No.50 of 2019; G.O.168 p.17, clause (b) (the front setback of a high-rise is as per Table IV of rule 7); G.O.168 rule 7(a)(iii) (setbacks of a high-rise on the net plot left after road widening); rule 5(f)(ii) for Table III",
+    "note": "The front of a high-rise keeps the Table IV figure too, measured on the net plot."
+   },
+   "by_reading": {}
+  },
+  {
+   "family": "SETBACK",
+   "subject": null,
+   "finding": {
+    "rule": "All-round setback: T3",
+    "status": "PASS",
+    "measured": "16.97 m",
+    "required": ">= 9.00 m to the net plot line",
+    "clause": "G.O.168 rule 7(a)(x), Table IV as substituted by G.O.Ms.No.50 of 2019; G.O.168 p.17, clause (b) (the front setback of a high-rise is as per Table IV of rule 7); G.O.168 rule 7(a)(iii) (setbacks of a high-rise on the net plot left after road widening); rule 5(f)(ii) for Table III",
+    "note": "The front of a high-rise keeps the Table IV figure too, measured on the net plot."
+   },
+   "by_reading": {}
+  },
+  {
+   "family": "SPACING",
+   "subject": null,
+   "finding": {
+    "rule": "Gap between blocks: T1 / T2",
+    "status": "PASS",
+    "measured": "9.02 m",
+    "required": ">= 9.00 m",
+    "clause": "G.O.168 rule 7(a)(xii) (same as Table IV column 4)",
+    "note": "This gap does not count towards the tot-lot."
+   },
+   "by_reading": {}
+  },
+  {
+   "family": "SPACING",
+   "subject": null,
+   "finding": {
+    "rule": "Gap between blocks: T1 / T3",
+    "status": "PASS",
+    "measured": "10.65 m",
+    "required": ">= 9.00 m",
+    "clause": "G.O.168 rule 7(a)(xii) (same as Table IV column 4)",
+    "note": "This gap does not count towards the tot-lot."
+   },
+   "by_reading": {}
+  },
+  {
+   "family": "SPACING",
+   "subject": null,
+   "finding": {
+    "rule": "Gap between blocks: T2 / T3",
+    "status": "PASS",
+    "measured": "9.02 m",
+    "required": ">= 9.00 m",
+    "clause": "G.O.168 rule 7(a)(xii) (same as Table IV column 4)",
+    "note": "This gap does not count towards the tot-lot."
+   },
+   "by_reading": {}
+  },
+  {
+   "family": "OPEN_SPACE",
+   "subject": null,
+   "finding": {
+    "rule": "Organized open space (tot-lot)",
+    "status": "PASS",
+    "measured": "10.01% of net, 10.01% of gross",
+    "required": ">= 10% of site area, over and above setbacks",
+    "clause": "G.O.168 rule 7(a)(vii)",
+    "note": ""
+   },
+   "by_reading": {}
+  },
+  {
+   "family": "OPEN_SPACE",
+   "subject": null,
+   "finding": {
+    "rule": "Open-space pocket 1",
+    "status": "PASS",
+    "measured": "1,530.7 m²",
+    "required": ">= 50 m² and >= 3 m wide",
+    "clause": "G.O.168 rule 7(a)(vii)",
+    "note": ""
+   },
+   "by_reading": {}
+  },
+  {
+   "family": "OPEN_SPACE",
+   "subject": null,
+   "finding": {
+    "rule": "Open-space pocket 2",
+    "status": "PASS",
+    "measured": "115.5 m²",
+    "required": ">= 50 m² and >= 3 m wide",
+    "clause": "G.O.168 rule 7(a)(vii)",
+    "note": ""
+   },
+   "by_reading": {}
+  },
+  {
+   "family": "GREEN_STRIP",
+   "subject": null,
+   "finding": {
+    "rule": "Peripheral green strip",
+    "status": "PASS",
+    "measured": "1,206 m² along the boundary, broken only at the entrance",
+    "required": ">= 2 m on sides with a setback of 9 m or more",
+    "clause": "G.O.168 rule 7(a)(viii) as substituted by G.O.Ms.No.7 of 2016 (setbacks of 9 m and above)",
+    "note": "Soft planting: nothing drives, parks or is built on it."
+   },
+   "by_reading": {}
+  },
+  {
+   "family": "ROADS",
+   "subject": null,
+   "finding": {
+    "rule": "Internal roads: main approach",
+    "status": "PASS",
+    "measured": "9 m wide, from the entrance to the loop road",
+    "required": ">= 9 m (the order gives 9 to 18 m)",
+    "clause": "G.O.168 rule 8(m) (internal roads of a group development scheme: main approach 9-18 m, other and looped roads 9 m, cul-de-sacs 8 m for 50-100 m with a 9 m radius head)",
+    "note": "Drawn at the least the order allows; it gives no test for when a main approach road must be wider, so the authority may ask for up to 18 m."
+   },
+   "by_reading": {}
+  },
+  {
+   "family": "ROADS",
+   "subject": null,
+   "finding": {
+    "rule": "Internal roads: loop and other roads",
+    "status": "PASS",
+    "measured": "a loop road and 1 internal road, all at least 9 m",
+    "required": ">= 9 m",
+    "clause": "G.O.168 rule 8(m) (internal roads of a group development scheme: main approach 9-18 m, other and looped roads 9 m, cul-de-sacs 8 m for 50-100 m with a 9 m radius head)",
+    "note": "A driveway (rule 13(c)(viii), 4.5 m) is not counted as an internal road."
+   },
+   "by_reading": {}
+  },
+  {
+   "family": "ROADS",
+   "subject": null,
+   "finding": {
+    "rule": "Internal roads: dead ends",
+    "status": "PASS",
+    "measured": "every internal road joins the loop at both ends",
+    "required": "through roads; a cul-de-sac only 50-100 m long, 8 m wide, with a 9 m radius head",
+    "clause": "G.O.168 rule 8(m) (internal roads of a group development scheme: main approach 9-18 m, other and looped roads 9 m, cul-de-sacs 8 m for 50-100 m with a 9 m radius head)",
+    "note": ""
+   },
+   "by_reading": {}
+  },
+  {
+   "family": "ROADS",
+   "subject": null,
+   "finding": {
+    "rule": "Internal roads: every block served",
+    "status": "PASS",
+    "measured": "all 3 blocks",
+    "required": "every block above 12 m on an internal road, not a pathway",
+    "clause": "G.O.168 rule 8(l) (6 m pathways only for blocks up to 12 m high)",
+    "note": ""
+   },
+   "by_reading": {}
+  },
+  {
+   "family": "ROADS",
+   "subject": null,
+   "finding": {
+    "rule": "Driveways",
+    "status": "PASS",
+    "measured": "none needed: every block's stilt and the ramp open straight onto an internal road",
+    "required": ">= 4.5 m where one is drawn",
+    "clause": "G.O.168 rule 13(c)(viii) (minimum drive way width 4.5 m)",
+    "note": "No driveway is counted towards the internal-road requirement."
+   },
+   "by_reading": {}
+  },
+  {
+   "family": "FIRE",
+   "subject": null,
+   "finding": {
+    "rule": "Fire access: the street joins a 12 m street",
+    "status": "UNVERIFIED",
+    "measured": "not known: a survey does not show where the road leads",
+    "required": "joins a street at least 12 m wide at one end",
+    "clause": "G.O.168 rule 15(b)(iv), bringing in NBC 2016 Part 3 4.6(a) (the street joins a street at least 12 m wide at one end)",
+    "note": "The architect's to say."
+   },
+   "by_reading": {}
+  },
+  {
+   "family": "FIRE",
+   "subject": null,
+   "finding": {
+    "rule": "Fire access: dead-end road",
+    "status": "PASS",
+    "measured": "tallest 27 m, within 30 m",
+    "required": "no dead-end road for a residential building above 30 m",
+    "clause": "G.O.168 rule 15(b)(iv), bringing in NBC 2016 Part 3 4.6(b) (no dead-end road for a residential building above 30 m)",
+    "note": "A dead end is allowed up to 30 m."
+   },
+   "by_reading": {}
+  },
+  {
+   "family": "FIRE",
+   "subject": null,
+   "finding": {
+    "rule": "Fire access: T1",
+    "status": "PASS",
+    "measured": "6 m clear on every side; all 4 corner turns fit",
+    "required": ">= 6 m motorable on all sides; a 9 m turn at every corner",
+    "clause": "G.O.168 rule 15(b)(iv), bringing in NBC 2016 Part 3 4.6(c) (6 m of motorable open space on all sides, a 9 m turning radius, free of obstructions, never parked in)",
+    "note": "UNRESOLVED_INTERPRETATION: the order gives the 9 m, not where it is measured. Read here as the outer edge of the 6 m lane, which needs 6.88 m of clear ground beside each face; that figure is derived from our reading, not written in the rule (a 9 m centreline would need 7.76 m)."
+   },
+   "by_reading": {}
+  },
+  {
+   "family": "FIRE",
+   "subject": null,
+   "finding": {
+    "rule": "Fire access: T2",
+    "status": "PASS",
+    "measured": "6 m clear on every side; all 4 corner turns fit",
+    "required": ">= 6 m motorable on all sides; a 9 m turn at every corner",
+    "clause": "G.O.168 rule 15(b)(iv), bringing in NBC 2016 Part 3 4.6(c) (6 m of motorable open space on all sides, a 9 m turning radius, free of obstructions, never parked in)",
+    "note": "UNRESOLVED_INTERPRETATION: the order gives the 9 m, not where it is measured. Read here as the outer edge of the 6 m lane, which needs 6.88 m of clear ground beside each face; that figure is derived from our reading, not written in the rule (a 9 m centreline would need 7.76 m)."
+   },
+   "by_reading": {}
+  },
+  {
+   "family": "FIRE",
+   "subject": null,
+   "finding": {
+    "rule": "Fire access: T3",
+    "status": "PASS",
+    "measured": "6 m clear on every side; all 4 corner turns fit",
+    "required": ">= 6 m motorable on all sides; a 9 m turn at every corner",
+    "clause": "G.O.168 rule 15(b)(iv), bringing in NBC 2016 Part 3 4.6(c) (6 m of motorable open space on all sides, a 9 m turning radius, free of obstructions, never parked in)",
+    "note": "UNRESOLVED_INTERPRETATION: the order gives the 9 m, not where it is measured. Read here as the outer edge of the 6 m lane, which needs 6.88 m of clear ground beside each face; that figure is derived from our reading, not written in the rule (a 9 m centreline would need 7.76 m)."
+   },
+   "by_reading": {}
+  },
+  {
+   "family": "FIRE",
+   "subject": null,
+   "finding": {
+    "rule": "Fire access: turns along the loop road",
+    "status": "PASS",
+    "measured": "all 126 bends turn at 9 m",
+    "required": "a 9 m turn at every bend",
+    "clause": "G.O.168 rule 15(b)(iv), bringing in NBC 2016 Part 3 4.6(c) (6 m of motorable open space on all sides, a 9 m turning radius, free of obstructions, never parked in)",
+    "note": ""
+   },
+   "by_reading": {}
+  },
+  {
+   "family": "FIRE",
+   "subject": null,
+   "finding": {
+    "rule": "Fire access: reached from the entrance",
+    "status": "PASS",
+    "measured": "every block, by a 6 m lane or road",
+    "required": "a continuous way in for a fire tender",
+    "clause": "G.O.168 rule 15(b)(iv), bringing in NBC 2016 Part 3 4.6(c) (6 m of motorable open space on all sides, a 9 m turning radius, free of obstructions, never parked in)",
+    "note": ""
+   },
+   "by_reading": {}
+  },
+  {
+   "family": "FIRE",
+   "subject": null,
+   "finding": {
+    "rule": "Fire access: entrance",
+    "status": "PASS",
+    "measured": "9 m, on the S side, where the access road runs; nothing built over it",
+    "required": ">= 6 m wide; 4.5 m clear under anything built over it",
+    "clause": "G.O.168 rule 15(b)(iv), bringing in NBC 2016 Part 3 4.6(d) (entrance at least 6 m wide)",
+    "note": "The gate folding back against the compound wall is a detail drawing."
+   },
+   "by_reading": {}
+  },
+  {
+   "family": "FIRE",
+   "subject": null,
+   "finding": {
+    "rule": "Fire access: nothing parked or built on it",
+    "status": "PASS",
+    "measured": "no bay, facility, ramp or tot-lot on any road or fire lane",
+    "required": "kept free of obstructions; never used for parking",
+    "clause": "G.O.168 rule 15(b)(iv), bringing in NBC 2016 Part 3 4.6(c) (6 m of motorable open space on all sides, a 9 m turning radius, free of obstructions, never parked in)",
+    "note": ""
+   },
+   "by_reading": {}
+  },
+  {
+   "family": "FIRE",
+   "subject": null,
+   "finding": {
+    "rule": "Fire access: 45 t hard surface",
+    "status": "UNVERIFIED",
+    "measured": "a specification, not a drawing",
+    "required": "roads and fire lanes carry a 45 t tender",
+    "clause": "G.O.168 rule 15(b)(iv), bringing in NBC 2016 Part 3 4.6(c) (6 m of motorable open space on all sides, a 9 m turning radius, free of obstructions, never parked in)",
+    "note": "The paving, and any cellar roof under a road or fire lane, must be designed for it."
+   },
+   "by_reading": {}
+  },
+  {
+   "family": "EGRESS",
+   "subject": null,
+   "finding": {
+    "rule": "INTERNAL_EGRESS",
+    "status": "NOT_CHECKED",
+    "measured": "longest block 72 m; travel distance to a staircase and the exits are not modelled",
+    "required": "NBC 2016 Part 4 exit requirements inside each block",
+    "clause": "NBC 2016 Part 4 (not modelled)",
+    "note": "Long slabs with few cores need this checked before they are relied on."
+   },
+   "by_reading": {}
+  },
+  {
+   "family": "AMENITIES",
+   "subject": null,
+   "finding": {
+    "rule": "Amenities (club house)",
+    "status": "PASS",
+    "measured": "1,105 m² (3.00% of built-up)",
+    "required": ">= 3% of built-up area (planning minimum ASSUMED_FOR_TEST) = 1,105 m²",
+    "clause": "G.O.168 rule 15(a)(x) as substituted by G.O.Ms.No.7 of 2016 (group housing of 100 units or more: 'upto 3% of the total built up area (or) 50,000 Sft. whichever is lower', in a block that is not part of the residential blocks)",
+    "note": "UNRESOLVED_INTERPRETATION: the 3% minimum is the 2012 wording, kept as the planning target and ASSUMED_FOR_TEST. G.O.Ms.No.7 of 2016 rewrote the clause as 'upto 3% of the total built up area (or) 50,000 Sft. whichever is lower', which may make 3% a ceiling and adds a cap. Not settled law: a sanctioned plan of 100 units or more, or the architect, settles how it is read. The amenities block is separate from the residential blocks, as the clause requires."
+   },
+   "by_reading": {}
+  },
+  {
+   "family": "PARKING",
+   "subject": null,
+   "finding": {
+    "rule": "Parking (Table V)",
+    "status": "PASS",
+    "measured": "stilt 3,559 m² + surface 75 m² + 1 cellar level x 12,223 m² = 15,858 m² of parking floor; 705 cars fit in bays and aisles = 14,100 m² laid out",
+    "required": ">= 20% of built-up = 7,363 m² (Table V column for HMDA), as floor and as bays and aisles that fit",
+    "clause": "G.O.168 rule 13, Table V row 4 (Residential Apartment Complexes)",
+    "note": ""
+   },
+   "by_reading": {}
+  },
+  {
+   "family": "PARKING",
+   "subject": null,
+   "finding": {
+    "rule": "Visitors' parking",
+    "status": "PASS",
+    "measured": "3,634 m² at ground level (stilt and surface)",
+    "required": ">= 10% of the Table V area = 736 m², marked on the ground",
+    "clause": "G.O.168 rule 13(c)(xii) (visitors' parking, 10% of the Table V area)",
+    "note": "Read as parking at ground level, stilt or open, which a visitor can reach from the entrance; which bays are marked for visitors is for the detailed drawing."
+   },
+   "by_reading": {}
+  },
+  {
+   "family": "SETBACK",
+   "subject": null,
+   "finding": {
+    "rule": "Cellar setback",
+    "status": "PASS",
+    "measured": "3.00 m",
+    "required": ">= 3 m from the property line for 1 cellar level",
+    "clause": "G.O.168 rule 13(c)(x) (cellar setback from the property line)",
+    "note": "Every cellar level keeps the setback of the deepest, the stricter reading."
+   },
+   "by_reading": {}
+  },
+  {
+   "family": "PARKING",
+   "subject": null,
+   "finding": {
+    "rule": "Cellar ramp",
+    "status": "PASS",
+    "measured": "1 x 5.4 m wide, 24 m long for a 3 m drop (1 in 8), beside a road, inside the setbacks",
+    "required": "one ramp >= 5.4 m or two >= 3.6 m, 1 in 8, outside the mandatory setbacks",
+    "clause": "G.O.168 rule 13(c)(vii) (ramps: one of 5.4 m or two of 3.6 m, 1 in 8)",
+    "note": "Each cellar level loses one ramp's footprint to the ramp down to it."
+   },
+   "by_reading": {}
+  },
+  {
+   "family": "PARKING",
+   "subject": null,
+   "finding": {
+    "rule": "Cellar utilities",
+    "status": "INFO",
+    "measured": "10% of each cellar kept for utilities (STP, DG, electrical)",
+    "required": "up to 10%",
+    "clause": "G.O.168 rule 13(c)(xi) (up to 10% of a cellar for utilities)",
+    "note": "Taken in full, so the parking left is not overstated."
+   },
+   "by_reading": {}
+  }
+ ],
+ "program": [
+  {
+   "family": "PROGRAM",
+   "subject": null,
+   "finding": {
+    "rule": "Unit mix",
+    "status": "FAIL",
+    "measured": "mix error 0.085",
+    "required": "within 0.05 of {'2BHK': 0.7, '3BHK': 0.3}",
+    "clause": "the brief",
+    "note": ""
+   },
+   "by_reading": {}
+  }
+ ],
+ "accounting": {
+  "partition": {
+   "schema_version": "1.0",
+   "net_area_sqm": 16440.0,
+   "tolerance": 0.005,
+   "entries": [
+    {
+     "use": "TOWER",
+     "shapes": [
+      {
+       "outer": [
+        [
+         86.35831237825491,
+         87.40269454992232
+        ],
+        [
+         86.35831237825491,
+         63.27269454992232
+        ],
+        [
+         14.358312378254917,
+         63.27269454992232
+        ],
+        [
+         14.358312378254917,
+         87.40269454992232
+        ]
+       ],
+       "holes": []
+      }
+     ],
+     "area_sqm": 1737.3599999999992,
+     "ref": "T1",
+     "tags": [],
+     "reason": null
+    },
+    {
+     "use": "TOWER",
+     "shapes": [
+      {
+       "outer": [
+        [
+         83.00999999999999,
+         54.25269454992232
+        ],
+        [
+         83.00999999999999,
+         30.12269454992232
+        ],
+        [
+         11.009999999999998,
+         30.12269454992232
+        ],
+        [
+         11.009999999999998,
+         54.25269454992232
+        ]
+       ],
+       "holes": []
+      }
+     ],
+     "area_sqm": 1737.36,
+     "ref": "T2",
+     "tags": [],
+     "reason": null
+    },
+    {
+     "use": "TOWER",
+     "shapes": [
+      {
+       "outer": [
+        [
+         133.03,
+         54.25269454992232
+        ],
+        [
+         133.03,
+         30.12269454992232
+        ],
+        [
+         92.03,
+         30.12269454992232
+        ],
+        [
+         92.03,
+         54.25269454992232
+        ]
+       ],
+       "holes": []
+      }
+     ],
+     "area_sqm": 989.3299999999999,
+     "ref": "T3",
+     "tags": [],
+     "reason": null
+    },
+    {
+     "use": "CLUB_HOUSE",
+     "shapes": [
+      {
+       "outer": [
+        [
+         95.37831237825492,
+         81.86122059895644
+        ],
+        [
+         125.1039540567095,
+         81.86122059895644
+        ],
+        [
+         125.1039540567095,
+         63.28269454992232
+        ],
+        [
+         95.37831237825492,
+         63.28269454992232
+        ]
+       ],
+       "holes": []
+      }
+     ],
+     "area_sqm": 552.2586082474227,
+     "ref": "club house",
+     "tags": [],
+     "reason": null
+    },
+    {
+     "use": "RAMP",
+     "shapes": [
+      {
+       "outer": [
+        [
+         133.10395405670948,
+         87.27269454992232
+        ],
+        [
+         133.10395405670948,
+         63.28269454992232
+        ],
+        [
+         127.70395405670949,
+         63.28269454992232
+        ],
+        [
+         127.70395405670949,
+         87.27269454992232
+        ]
+       ],
+       "holes": []
+      }
+     ],
+     "area_sqm": 129.5459999999998,
+     "ref": "ramp 1",
+     "tags": [],
+     "reason": null
+    },
+    {
+     "use": "ROAD",
+     "shapes": [
+      {
+       "outer": [
+        [
+         3.3608907184196988,
+         87.29898141578471
+        ],
+        [
+         4.117015047759097,
+         88.89767199039346
+        ],
+        [
+         5.026197510177903,
+         90.41455128842344
+        ],
+        [
+         6.079682181553313,
+         91.83501093302404
+        ],
+        [
+         7.2673234286067245,
+         93.14537112131556
+        ],
+        [
+         8.577683616898291,
+         94.33301236836903
+        ],
+        [
+         9.998143261498802,
+         95.38649703974437
+        ],
+        [
+         11.515022559528981,
+         96.2956795021633
+        ],
+        [
+         13.11371313413767,
+         97.05180383150264
+        ],
+        [
+         14.77881872115859,
+         97.64758813713149
+        ],
+        [
+         16.494303443549256,
+         98.07729469049778
+        ],
+        [
+         18.243646245653867,
+         98.33678518259106
+        ],
+        [
+         20.01,
+         98.42356057812054
+        ],
+        [
+         21.77635375434616,
+         98.33678518259106
+        ],
+        [
+         22.0,
+         98.30361039588276
+        ],
+        [
+         22.0,
+         98.0
+        ],
+        [
+         24.22118308520129,
+         98.0
+        ],
+        [
+         24.221338934992527,
+         97.99999234359072
+        ],
+        [
+         130.21118308520124,
+         98.0
+        ],
+        [
+         131.75635375434615,
+         97.92409063266874
+        ],
+        [
+         133.5056965564508,
+         97.66460014057543
+        ],
+        [
+         135.22118127884144,
+         97.23489358720917
+        ],
+        [
+         136.88628686586236,
+         96.6391092815803
+        ],
+        [
+         138.48497744047117,
+         95.88298495224088
+        ],
+        [
+         140.001856738501,
+         94.97380248982216
+        ],
+        [
+         141.4223163831019,
+         93.92031781844658
+        ],
+        [
+         142.73267657139326,
+         92.73267657139324
+        ],
+        [
+         143.9203178184466,
+         91.42231638310182
+        ],
+        [
+         144.97380248982213,
+         90.00185673850109
+        ],
+        [
+         145.88298495224097,
+         88.48497744047098
+        ],
+        [
+         146.63910928158032,
+         86.88628686586229
+        ],
+        [
+         147.2348935872092,
+         85.22118127884148
+        ],
+        [
+         147.66460014057543,
+         83.50569655645077
+        ],
+        [
+         147.92409063266874,
+         81.756353754346
+        ],
+        [
+         148.0,
+         80.21118308520174
+        ],
+        [
+         148.0,
+         19.788816914798257
+        ],
+        [
+         147.92409063266874,
+         18.243646245653984
+        ],
+        [
+         147.66460014057543,
+         16.49430344354922
+        ],
+        [
+         147.2348935872092,
+         14.778818721158538
+        ],
+        [
+         146.63910928158026,
+         13.113713134137562
+        ],
+        [
+         145.882984952241,
+         11.51502255952906
+        ],
+        [
+         144.97380248982213,
+         9.998143261498912
+        ],
+        [
+         143.92031781844656,
+         8.577683616898142
+        ],
+        [
+         142.73267657139334,
+         7.267323428606825
+        ],
+        [
+         141.42231638310173,
+         6.079682181553304
+        ],
+        [
+         140.00185673850112,
+         5.026197510177879
+        ],
+        [
+         138.48497744047114,
+         4.117015047759089
+        ],
+        [
+         136.88628686586236,
+         3.360890718419688
+        ],
+        [
+         135.22118127884153,
+         2.765106412790838
+        ],
+        [
+         133.5056965564507,
+         2.335399859424531
+        ],
+        [
+         131.75635375434615,
+         2.0759093673312585
+        ],
+        [
+         130.21118308520144,
+         2.0
+        ],
+        [
+         19.788816914798534,
+         2.0
+        ],
+        [
+         18.243646245653885,
+         2.075909367331257
+        ],
+        [
+         16.49430344354931,
+         2.3353998594245406
+        ],
+        [
+         14.778818721158544,
+         2.7651064127908254
+        ],
+        [
+         13.113713134137662,
+         3.36089071841968
+        ],
+        [
+         11.51502255952886,
+         4.117015047759094
+        ],
+        [
+         9.998143261498878,
+         5.026197510177896
+        ],
+        [
+         8.577683616898252,
+         6.079682181553332
+        ],
+        [
+         7.267323428606725,
+         7.267323428606751
+        ],
+        [
+         6.079682181553333,
+         8.57768361689825
+        ],
+        [
+         5.0261975101778855,
+         9.99814326149889
+        ],
+        [
+         4.117015047759091,
+         11.515022559528868
+        ],
+        [
+         3.3608907184196766,
+         13.113713134137662
+        ],
+        [
+         2.7651064127908214,
+         14.778818721158565
+        ],
+        [
+         2.3353998594245393,
+         16.494303443549303
+        ],
+        [
+         2.075909367331257,
+         18.243646245653878
+        ],
+        [
+         2.0,
+         19.788816914798538
+        ],
+        [
+         2.0,
+         80.62387763512378
+        ],
+        [
+         2.0759093673312585,
+         82.16904830426846
+        ],
+        [
+         2.3353998594245384,
+         83.91839110637301
+        ],
+        [
+         2.765106412790822,
+         85.63387582876373
+        ]
+       ],
+       "holes": [
+        [
+         [
+          11.182932476370924,
+          18.254187101854843
+         ],
+         [
+          11.397536978410118,
+          17.39743790470984
+         ],
+         [
+          11.695084207398416,
+          16.56584910871419
+         ],
+         [
+          12.072708620864802,
+          15.76742936856602
+         ],
+         [
+          12.526773489277089,
+          15.00986790282358
+         ],
+         [
+          13.052905919735364,
+          14.300460442527191
+         ],
+         [
+          13.646038969321069,
+          13.64603896932107
+         ],
+         [
+          14.300460442527186,
+          13.052905919735368
+         ],
+         [
+          15.00986790282358,
+          12.52677348927709
+         ],
+         [
+          15.767429368566017,
+          12.072708620864804
+         ],
+         [
+          16.565849108714186,
+          11.69508420739842
+         ],
+         [
+          17.397437904709836,
+          11.397536978410118
+         ],
+         [
+          18.25418710185484,
+          11.182932476370926
+         ],
+         [
+          19.127845737033955,
+          11.053337459950226
+         ],
+         [
+          20.009999999999998,
+          11.009999999999998
+         ],
+         [
+          129.99,
+          11.009999999999998
+         ],
+         [
+          130.87215426296606,
+          11.053337459950226
+         ],
+         [
+          131.74581289814518,
+          11.182932476370924
+         ],
+         [
+          132.60256209529018,
+          11.397536978410118
+         ],
+         [
+          133.4341508912858,
+          11.695084207398418
+         ],
+         [
+          134.232570631434,
+          12.072708620864804
+         ],
+         [
+          134.99013209717643,
+          12.52677348927709
+         ],
+         [
+          135.69953955747283,
+          13.052905919735366
+         ],
+         [
+          136.35396103067893,
+          13.64603896932107
+         ],
+         [
+          136.94709408026463,
+          14.30046044252719
+         ],
+         [
+          137.47322651072292,
+          15.00986790282358
+         ],
+         [
+          137.9272913791352,
+          15.76742936856602
+         ],
+         [
+          138.30491579260158,
+          16.56584910871419
+         ],
+         [
+          138.6024630215899,
+          17.397437904709836
+         ],
+         [
+          138.81706752362908,
+          18.254187101854843
+         ],
+         [
+          138.94666254004977,
+          19.12784573703395
+         ],
+         [
+          138.99,
+          20.009999999999998
+         ],
+         [
+          138.99,
+          79.99
+         ],
+         [
+          138.94666254004977,
+          80.87215426296603
+         ],
+         [
+          138.81706752362908,
+          81.74581289814515
+         ],
+         [
+          138.6024630215899,
+          82.60256209529015
+         ],
+         [
+          138.30491579260158,
+          83.4341508912858
+         ],
+         [
+          137.9272913791352,
+          84.23257063143397
+         ],
+         [
+          137.47322651072292,
+          84.99013209717641
+         ],
+         [
+          136.94709408026463,
+          85.6995395574728
+         ],
+         [
+          136.35396103067893,
+          86.35396103067892
+         ],
+         [
+          135.69953955747283,
+          86.94709408026463
+         ],
+         [
+          134.99013209717643,
+          87.4732265107229
+         ],
+         [
+          134.232570631434,
+          87.92729137913518
+         ],
+         [
+          133.4341508912858,
+          88.30491579260158
+         ],
+         [
+          132.60256209529018,
+          88.60246302158987
+         ],
+         [
+          131.74581289814518,
+          88.81706752362906
+         ],
+         [
+          130.87215426296606,
+          88.94666254004977
+         ],
+         [
+          129.99,
+          88.99
+         ],
+         [
+          24.110452161416028,
+          88.99
+         ],
+         [
+          23.88968088304948,
+          88.99541963068512
+         ],
+         [
+          23.141502754937953,
+          89.03217526518567
+         ],
+         [
+          22.70228500189225,
+          89.07543443806252
+         ],
+         [
+          22.070601837681668,
+          89.16913578403704
+         ],
+         [
+          21.76581289814516,
+          89.22976207355138
+         ],
+         [
+          20.892154262966052,
+          89.3593570899721
+         ],
+         [
+          20.010000000000005,
+          89.40269454992232
+         ],
+         [
+          19.12784573703396,
+          89.3593570899721
+         ],
+         [
+          18.25418710185485,
+          89.2297620735514
+         ],
+         [
+          17.397437904709843,
+          89.01515757151219
+         ],
+         [
+          16.565849108714197,
+          88.7176103425239
+         ],
+         [
+          15.767429368566026,
+          88.33998592905752
+         ],
+         [
+          15.009867902823583,
+          87.88592106064523
+         ],
+         [
+          14.300460442527193,
+          87.35978863018696
+         ],
+         [
+          13.646038969321074,
+          86.76665558060125
+         ],
+         [
+          13.052905919735368,
+          86.11223410739512
+         ],
+         [
+          12.526773489277094,
+          85.40282664709873
+         ],
+         [
+          12.072708620864804,
+          84.6452651813563
+         ],
+         [
+          11.69508420739842,
+          83.84684544120813
+         ],
+         [
+          11.39753697841012,
+          83.01525664521247
+         ],
+         [
+          11.182932476370924,
+          82.15850744806747
+         ],
+         [
+          11.053337459950226,
+          81.28484881288837
+         ],
+         [
+          11.009999999999998,
+          80.40269454992232
+         ],
+         [
+          11.009999999999998,
+          54.25269454992232
+         ],
+         [
+          11.009999999999998,
+          30.12269454992232
+         ],
+         [
+          11.009999999999998,
+          20.009999999999998
+         ],
+         [
+          11.053337459950226,
+          19.12784573703395
+         ]
+        ]
+       ]
+      }
+     ],
+     "area_sqm": 3830.8657896966506,
+     "ref": "road-1 loop",
+     "tags": [
+      "FIRE_ACCESS"
+     ],
+     "reason": null
+    },
+    {
+     "use": "ROAD",
+     "shapes": [
+      {
+       "outer": [
+        [
+         12.01,
+         0.0
+        ],
+        [
+         2.99,
+         0.0
+        ],
+        [
+         2.99,
+         11.01
+        ],
+        [
+         4.4197139209297,
+         11.01
+        ],
+        [
+         5.0261975101778855,
+         9.99814326149889
+        ],
+        [
+         6.079682181553333,
+         8.57768361689825
+        ],
+        [
+         7.267323428606725,
+         7.267323428606751
+        ],
+        [
+         8.577683616898252,
+         6.079682181553332
+        ],
+        [
+         9.998143261498878,
+         5.026197510177896
+        ],
+        [
+         11.51502255952886,
+         4.117015047759094
+        ],
+        [
+         12.01,
+         3.8829081535554035
+        ]
+       ],
+       "holes": []
+      }
+     ],
+     "area_sqm": 66.85234876514032,
+     "ref": "road-2 main approach",
+     "tags": [
+      "FIRE_ACCESS"
+     ],
+     "reason": null
+    },
+    {
+     "use": "ROAD",
+     "shapes": [
+      {
+       "outer": [
+        [
+         14.358312378254917,
+         63.27269454992232
+        ],
+        [
+         86.35831237825491,
+         63.27269454992232
+        ],
+        [
+         138.99,
+         63.27269454992232
+        ],
+        [
+         138.99,
+         54.26269454992232
+        ],
+        [
+         11.009999999999998,
+         54.26269454992232
+        ],
+        [
+         11.009999999999998,
+         63.27269454992232
+        ]
+       ],
+       "holes": []
+      }
+     ],
+     "area_sqm": 1153.0997999999997,
+     "ref": "road-3 internal",
+     "tags": [
+      "FIRE_ACCESS"
+     ],
+     "reason": null
+    },
+    {
+     "use": "SURFACE_PARKING",
+     "shapes": [
+      {
+       "outer": [
+        [
+         134.60395405670948,
+         68.27269454992232
+        ],
+        [
+         137.10395405670948,
+         68.27269454992232
+        ],
+        [
+         137.10395405670948,
+         63.27269454992232
+        ],
+        [
+         134.60395405670948,
+         63.27269454992232
+        ]
+       ],
+       "holes": []
+      }
+     ],
+     "area_sqm": 12.5,
+     "ref": "bay 1",
+     "tags": [],
+     "reason": null
+    },
+    {
+     "use": "SURFACE_PARKING",
+     "shapes": [
+      {
+       "outer": [
+        [
+         134.60395405670948,
+         79.27269454992232
+        ],
+        [
+         137.10395405670948,
+         79.27269454992232
+        ],
+        [
+         137.10395405670948,
+         74.27269454992232
+        ],
+        [
+         134.60395405670948,
+         74.27269454992232
+        ]
+       ],
+       "holes": []
+      }
+     ],
+     "area_sqm": 12.5,
+     "ref": "bay 2",
+     "tags": [],
+     "reason": null
+    },
+    {
+     "use": "SURFACE_PARKING",
+     "shapes": [
+      {
+       "outer": [
+        [
+         113.76111690002236,
+         88.36122059895644
+        ],
+        [
+         116.26111690002236,
+         88.36122059895644
+        ],
+        [
+         116.26111690002236,
+         83.36122059895644
+        ],
+        [
+         113.76111690002236,
+         83.36122059895644
+        ]
+       ],
+       "holes": []
+      }
+     ],
+     "area_sqm": 12.5,
+     "ref": "bay 3",
+     "tags": [],
+     "reason": null
+    },
+    {
+     "use": "SURFACE_PARKING",
+     "shapes": [
+      {
+       "outer": [
+        [
+         116.26111690002236,
+         88.36122059895644
+        ],
+        [
+         118.76111690002236,
+         88.36122059895644
+        ],
+        [
+         118.76111690002236,
+         83.36122059895644
+        ],
+        [
+         116.26111690002236,
+         83.36122059895644
+        ]
+       ],
+       "holes": []
+      }
+     ],
+     "area_sqm": 12.5,
+     "ref": "bay 4",
+     "tags": [],
+     "reason": null
+    },
+    {
+     "use": "SURFACE_PARKING",
+     "shapes": [
+      {
+       "outer": [
+        [
+         118.76111690002236,
+         88.36122059895644
+        ],
+        [
+         121.26111690002236,
+         88.36122059895644
+        ],
+        [
+         121.26111690002236,
+         83.36122059895644
+        ],
+        [
+         118.76111690002236,
+         83.36122059895644
+        ]
+       ],
+       "holes": []
+      }
+     ],
+     "area_sqm": 12.5,
+     "ref": "bay 5",
+     "tags": [],
+     "reason": null
+    },
+    {
+     "use": "SURFACE_PARKING",
+     "shapes": [
+      {
+       "outer": [
+        [
+         121.26111690002236,
+         88.36122059895644
+        ],
+        [
+         123.76111690002236,
+         88.36122059895644
+        ],
+        [
+         123.76111690002236,
+         83.36122059895644
+        ],
+        [
+         121.26111690002236,
+         83.36122059895644
+        ]
+       ],
+       "holes": []
+      }
+     ],
+     "area_sqm": 12.5,
+     "ref": "bay 6",
+     "tags": [],
+     "reason": null
+    },
+    {
+     "use": "FIRE_HARDSTANDING",
+     "shapes": [
+      {
+       "outer": [
+        [
+         83.00999999999999,
+         30.12269454992232
+        ],
+        [
+         83.00999999999999,
+         54.25269454992232
+        ],
+        [
+         11.009999999999998,
+         54.25269454992232
+        ],
+        [
+         11.009999999999998,
+         54.26269454992232
+        ],
+        [
+         138.99,
+         54.26269454992232
+        ],
+        [
+         138.99,
+         23.24401489348196
+        ],
+        [
+         89.88867965644035,
+         23.24401489348196
+        ],
+        [
+         85.15132034355965,
+         23.24401489348196
+        ],
+        [
+         11.009999999999998,
+         23.24401489348196
+        ],
+        [
+         11.009999999999998,
+         30.12269454992232
+        ]
+       ],
+       "holes": [
+        [
+         [
+          92.03,
+          30.12269454992232
+         ],
+         [
+          133.03,
+          30.12269454992232
+         ],
+         [
+          133.03,
+          54.25269454992232
+         ],
+         [
+          92.03,
+          54.25269454992232
+         ]
+        ]
+       ]
+      },
+      {
+       "outer": [
+        [
+         11.009999999999998,
+         63.27269454992232
+        ],
+        [
+         11.009999999999998,
+         80.40269454992232
+        ],
+        [
+         11.053337459950226,
+         81.28484881288837
+        ],
+        [
+         11.182932476370924,
+         82.15850744806747
+        ],
+        [
+         11.39753697841012,
+         83.01525664521247
+        ],
+        [
+         11.69508420739842,
+         83.84684544120813
+        ],
+        [
+         12.072708620864804,
+         84.6452651813563
+        ],
+        [
+         12.526773489277094,
+         85.40282664709873
+        ],
+        [
+         13.052905919735368,
+         86.11223410739512
+        ],
+        [
+         13.646038969321074,
+         86.76665558060125
+        ],
+        [
+         14.300460442527193,
+         87.35978863018696
+        ],
+        [
+         15.009867902823583,
+         87.88592106064523
+        ],
+        [
+         15.767429368566026,
+         88.33998592905752
+        ],
+        [
+         16.565849108714197,
+         88.7176103425239
+        ],
+        [
+         17.397437904709843,
+         89.01515757151219
+        ],
+        [
+         18.25418710185485,
+         89.2297620735514
+        ],
+        [
+         19.12784573703396,
+         89.3593570899721
+        ],
+        [
+         20.010000000000005,
+         89.40269454992232
+        ],
+        [
+         20.892154262966052,
+         89.3593570899721
+        ],
+        [
+         21.76581289814516,
+         89.22976207355138
+        ],
+        [
+         22.070601837681668,
+         89.16913578403704
+        ],
+        [
+         22.70228500189225,
+         89.07543443806252
+        ],
+        [
+         23.141502754937953,
+         89.03217526518567
+        ],
+        [
+         23.88968088304948,
+         88.99541963068512
+        ],
+        [
+         24.110452161416028,
+         88.99
+        ],
+        [
+         93.23699203469526,
+         88.99
+        ],
+        [
+         93.23699203469526,
+         63.27269454992232
+        ],
+        [
+         86.35831237825491,
+         63.27269454992232
+        ],
+        [
+         86.35831237825491,
+         87.40269454992232
+        ],
+        [
+         14.358312378254917,
+         87.40269454992232
+        ],
+        [
+         14.358312378254917,
+         63.27269454992232
+        ]
+       ],
+       "holes": []
+      },
+      {
+       "outer": [
+        [
+         7.479632721814559,
+         93.33779704817094
+        ],
+        [
+         7.479632721814559,
+         94.28137420636267
+        ],
+        [
+         8.520709684864897,
+         94.28137420636267
+        ]
+       ],
+       "holes": []
+      }
+     ],
+     "area_sqm": 1607.9026723325435,
+     "ref": "fire lanes",
+     "tags": [
+      "FIRE_ACCESS"
+     ],
+     "reason": null
+    },
+    {
+     "use": "SOFT_OPEN_SPACE",
+     "shapes": [
+      {
+       "outer": [
+        [
+         137.92729137913534,
+         15.767429368566269
+        ],
+        [
+         137.4732265107228,
+         15.009867902823403
+        ],
+        [
+         136.94709408026472,
+         14.300460442527301
+        ],
+        [
+         136.353961030679,
+         13.646038969321129
+        ],
+        [
+         135.69953955747275,
+         13.052905919735293
+        ],
+        [
+         134.9901320971764,
+         12.526773489277062
+        ],
+        [
+         134.23257063143396,
+         12.072708620864786
+        ],
+        [
+         133.43415089128584,
+         11.695084207398416
+        ],
+        [
+         132.6025620952902,
+         11.397536978410129
+        ],
+        [
+         131.74581289814518,
+         11.182932476370924
+        ],
+        [
+         130.87215426296606,
+         11.053337459950226
+        ],
+        [
+         129.99000000000004,
+         11.01
+        ],
+        [
+         20.009999999999962,
+         11.01
+        ],
+        [
+         19.127845737033983,
+         11.053337459950223
+        ],
+        [
+         18.254187101854814,
+         11.18293247637093
+        ],
+        [
+         17.397437904709832,
+         11.397536978410118
+        ],
+        [
+         16.565849108714186,
+         11.69508420739842
+        ],
+        [
+         15.767429368565997,
+         12.072708620864812
+        ],
+        [
+         15.009867902823588,
+         12.526773489277085
+        ],
+        [
+         14.30046044252718,
+         13.052905919735371
+        ],
+        [
+         13.646038969321069,
+         13.64603896932107
+        ],
+        [
+         13.05290591973536,
+         14.300460442527195
+        ],
+        [
+         12.526773489277096,
+         15.00986790282357
+        ],
+        [
+         12.07270862086481,
+         15.767429368566003
+        ],
+        [
+         11.695084207398416,
+         16.56584910871419
+        ],
+        [
+         11.397536978410114,
+         17.39743790470985
+        ],
+        [
+         11.182932476370924,
+         18.25418710185484
+        ],
+        [
+         11.053337459950223,
+         19.127845737033965
+        ],
+        [
+         11.01,
+         20.009999999999966
+        ],
+        [
+         11.01,
+         23.24401489348196
+        ],
+        [
+         85.15132034355965,
+         23.24401489348196
+        ],
+        [
+         89.88867965644035,
+         23.24401489348196
+        ],
+        [
+         138.99,
+         23.24401489348196
+        ],
+        [
+         138.99,
+         20.009999999999998
+        ],
+        [
+         138.94666254004977,
+         19.12784573703395
+        ],
+        [
+         138.81706752362908,
+         18.25418710185479
+        ],
+        [
+         138.60246302158984,
+         17.397437904709633
+        ],
+        [
+         138.3049157926016,
+         16.565849108714193
+        ]
+       ],
+       "holes": []
+      }
+     ],
+     "area_sqm": 1530.7394399349323,
+     "ref": "tot-lot 1",
+     "tags": [],
+     "reason": null
+    },
+    {
+     "use": "SOFT_OPEN_SPACE",
+     "shapes": [
+      {
+       "outer": [
+        [
+         93.87831237825492,
+         83.36122059895644
+        ],
+        [
+         93.23699203469526,
+         83.36122059895644
+        ],
+        [
+         93.23699203469526,
+         88.99
+        ],
+        [
+         113.76111690002236,
+         88.99
+        ],
+        [
+         113.76111690002236,
+         88.36122059895644
+        ],
+        [
+         113.76111690002236,
+         83.36122059895644
+        ]
+       ],
+       "holes": []
+      }
+     ],
+     "area_sqm": 115.52577126639906,
+     "ref": "tot-lot 2",
+     "tags": [],
+     "reason": null
+    },
+    {
+     "use": "GREEN_STRIP",
+     "shapes": [
+      {
+       "outer": [
+        [
+         150.0,
+         100.0
+        ],
+        [
+         150.0,
+         0.0
+        ],
+        [
+         12.01,
+         0.0
+        ],
+        [
+         12.01,
+         2.0
+        ],
+        [
+         19.788816914798534,
+         2.0
+        ],
+        [
+         130.21118308520144,
+         2.0
+        ],
+        [
+         148.0,
+         2.0
+        ],
+        [
+         148.0,
+         19.788816914798257
+        ],
+        [
+         148.0,
+         80.21118308520174
+        ],
+        [
+         148.0,
+         98.0
+        ],
+        [
+         130.21118308520124,
+         98.0
+        ],
+        [
+         24.22118308520129,
+         98.0
+        ],
+        [
+         22.0,
+         98.0
+        ],
+        [
+         22.0,
+         98.30361039588276
+        ],
+        [
+         22.0,
+         158.0
+        ],
+        [
+         2.0,
+         158.0
+        ],
+        [
+         2.0,
+         80.62387763512378
+        ],
+        [
+         2.0,
+         19.788816914798538
+        ],
+        [
+         2.0,
+         2.0
+        ],
+        [
+         2.99,
+         2.0
+        ],
+        [
+         2.99,
+         0.0
+        ],
+        [
+         0.0,
+         0.0
+        ],
+        [
+         0.0,
+         160.0
+        ],
+        [
+         24.0,
+         160.0
+        ],
+        [
+         24.0,
+         100.0
+        ]
+       ],
+       "holes": []
+      }
+     ],
+     "area_sqm": 1205.960000000001,
+     "ref": "green strip",
+     "tags": [],
+     "reason": null
+    },
+    {
+     "use": "UNALLOCATED",
+     "shapes": [
+      {
+       "outer": [
+        [
+         12.01,
+         3.8829081535554035
+        ],
+        [
+         13.113713134137662,
+         3.36089071841968
+        ],
+        [
+         14.778818721158544,
+         2.7651064127908254
+        ],
+        [
+         16.49430344354931,
+         2.3353998594245406
+        ],
+        [
+         18.243646245653885,
+         2.075909367331257
+        ],
+        [
+         19.788816914798534,
+         2.0
+        ],
+        [
+         12.01,
+         2.0
+        ]
+       ],
+       "holes": []
+      },
+      {
+       "outer": [
+        [
+         131.75635375434615,
+         2.0759093673312585
+        ],
+        [
+         133.5056965564507,
+         2.335399859424531
+        ],
+        [
+         135.22118127884153,
+         2.765106412790838
+        ],
+        [
+         136.88628686586236,
+         3.360890718419688
+        ],
+        [
+         138.48497744047114,
+         4.117015047759089
+        ],
+        [
+         140.00185673850112,
+         5.026197510177879
+        ],
+        [
+         141.42231638310173,
+         6.079682181553304
+        ],
+        [
+         142.73267657139334,
+         7.267323428606825
+        ],
+        [
+         143.92031781844656,
+         8.577683616898142
+        ],
+        [
+         144.97380248982213,
+         9.998143261498912
+        ],
+        [
+         145.882984952241,
+         11.51502255952906
+        ],
+        [
+         146.63910928158026,
+         13.113713134137562
+        ],
+        [
+         147.2348935872092,
+         14.778818721158538
+        ],
+        [
+         147.66460014057543,
+         16.49430344354922
+        ],
+        [
+         147.92409063266874,
+         18.243646245653984
+        ],
+        [
+         148.0,
+         19.788816914798257
+        ],
+        [
+         148.0,
+         2.0
+        ],
+        [
+         130.21118308520144,
+         2.0
+        ]
+       ],
+       "holes": []
+      },
+      {
+       "outer": [
+        [
+         2.075909367331257,
+         18.243646245653878
+        ],
+        [
+         2.3353998594245393,
+         16.494303443549303
+        ],
+        [
+         2.7651064127908214,
+         14.778818721158565
+        ],
+        [
+         3.3608907184196766,
+         13.113713134137662
+        ],
+        [
+         4.117015047759091,
+         11.515022559528868
+        ],
+        [
+         4.4197139209297,
+         11.01
+        ],
+        [
+         2.99,
+         11.01
+        ],
+        [
+         2.99,
+         2.0
+        ],
+        [
+         2.0,
+         2.0
+        ],
+        [
+         2.0,
+         19.788816914798538
+        ]
+       ],
+       "holes": []
+      },
+      {
+       "outer": [
+        [
+         138.99,
+         63.27269454992232
+        ],
+        [
+         137.10395405670948,
+         63.27269454992232
+        ],
+        [
+         137.10395405670948,
+         68.27269454992232
+        ],
+        [
+         134.60395405670948,
+         68.27269454992232
+        ],
+        [
+         134.60395405670948,
+         63.27269454992232
+        ],
+        [
+         93.23699203469526,
+         63.27269454992232
+        ],
+        [
+         93.23699203469526,
+         83.36122059895644
+        ],
+        [
+         93.87831237825492,
+         83.36122059895644
+        ],
+        [
+         113.76111690002236,
+         83.36122059895644
+        ],
+        [
+         116.26111690002236,
+         83.36122059895644
+        ],
+        [
+         118.76111690002236,
+         83.36122059895644
+        ],
+        [
+         121.26111690002236,
+         83.36122059895644
+        ],
+        [
+         123.76111690002236,
+         83.36122059895644
+        ],
+        [
+         123.76111690002236,
+         88.36122059895644
+        ],
+        [
+         121.26111690002236,
+         88.36122059895644
+        ],
+        [
+         118.76111690002236,
+         88.36122059895644
+        ],
+        [
+         116.26111690002236,
+         88.36122059895644
+        ],
+        [
+         113.76111690002236,
+         88.36122059895644
+        ],
+        [
+         113.76111690002236,
+         88.99
+        ],
+        [
+         129.99,
+         88.99
+        ],
+        [
+         130.87215426296606,
+         88.94666254004977
+        ],
+        [
+         131.74581289814518,
+         88.81706752362906
+        ],
+        [
+         132.60256209529018,
+         88.60246302158987
+        ],
+        [
+         133.4341508912858,
+         88.30491579260158
+        ],
+        [
+         134.232570631434,
+         87.92729137913518
+        ],
+        [
+         134.99013209717643,
+         87.4732265107229
+        ],
+        [
+         135.69953955747283,
+         86.94709408026463
+        ],
+        [
+         136.35396103067893,
+         86.35396103067892
+        ],
+        [
+         136.94709408026463,
+         85.6995395574728
+        ],
+        [
+         137.47322651072292,
+         84.99013209717641
+        ],
+        [
+         137.9272913791352,
+         84.23257063143397
+        ],
+        [
+         138.30491579260158,
+         83.4341508912858
+        ],
+        [
+         138.6024630215899,
+         82.60256209529015
+        ],
+        [
+         138.81706752362908,
+         81.74581289814515
+        ],
+        [
+         138.94666254004977,
+         80.87215426296603
+        ],
+        [
+         138.99,
+         79.99
+        ]
+       ],
+       "holes": [
+        [
+         [
+          95.37831237825492,
+          81.86122059895644
+         ],
+         [
+          95.37831237825492,
+          63.28269454992232
+         ],
+         [
+          125.1039540567095,
+          63.28269454992232
+         ],
+         [
+          125.1039540567095,
+          81.86122059895644
+         ]
+        ],
+        [
+         [
+          127.70395405670949,
+          63.28269454992232
+         ],
+         [
+          133.10395405670948,
+          63.28269454992232
+         ],
+         [
+          133.10395405670948,
+          87.27269454992232
+         ],
+         [
+          127.70395405670949,
+          87.27269454992232
+         ]
+        ],
+        [
+         [
+          134.60395405670948,
+          74.27269454992232
+         ],
+         [
+          137.10395405670948,
+          74.27269454992232
+         ],
+         [
+          137.10395405670948,
+          79.27269454992232
+         ],
+         [
+          134.60395405670948,
+          79.27269454992232
+         ]
+        ]
+       ]
+      },
+      {
+       "outer": [
+        [
+         147.66460014057543,
+         83.50569655645077
+        ],
+        [
+         147.2348935872092,
+         85.22118127884148
+        ],
+        [
+         146.63910928158032,
+         86.88628686586229
+        ],
+        [
+         145.88298495224097,
+         88.48497744047098
+        ],
+        [
+         144.97380248982213,
+         90.00185673850109
+        ],
+        [
+         143.9203178184466,
+         91.42231638310182
+        ],
+        [
+         142.73267657139326,
+         92.73267657139324
+        ],
+        [
+         141.4223163831019,
+         93.92031781844658
+        ],
+        [
+         140.001856738501,
+         94.97380248982216
+        ],
+        [
+         138.48497744047117,
+         95.88298495224088
+        ],
+        [
+         136.88628686586236,
+         96.6391092815803
+        ],
+        [
+         135.22118127884144,
+         97.23489358720917
+        ],
+        [
+         133.5056965564508,
+         97.66460014057543
+        ],
+        [
+         131.75635375434615,
+         97.92409063266874
+        ],
+        [
+         130.21118308520124,
+         98.0
+        ],
+        [
+         148.0,
+         98.0
+        ],
+        [
+         148.0,
+         80.21118308520174
+        ],
+        [
+         147.92409063266874,
+         81.756353754346
+        ]
+       ],
+       "holes": []
+      },
+      {
+       "outer": [
+        [
+         22.0,
+         98.30361039588276
+        ],
+        [
+         21.77635375434616,
+         98.33678518259106
+        ],
+        [
+         20.01,
+         98.42356057812054
+        ],
+        [
+         18.243646245653867,
+         98.33678518259106
+        ],
+        [
+         16.494303443549256,
+         98.07729469049778
+        ],
+        [
+         14.77881872115859,
+         97.64758813713149
+        ],
+        [
+         13.11371313413767,
+         97.05180383150264
+        ],
+        [
+         11.515022559528981,
+         96.2956795021633
+        ],
+        [
+         9.998143261498802,
+         95.38649703974437
+        ],
+        [
+         8.577683616898291,
+         94.33301236836903
+        ],
+        [
+         7.2673234286067245,
+         93.14537112131556
+        ],
+        [
+         6.079682181553313,
+         91.83501093302404
+        ],
+        [
+         5.026197510177903,
+         90.41455128842344
+        ],
+        [
+         4.117015047759097,
+         88.89767199039346
+        ],
+        [
+         3.3608907184196988,
+         87.29898141578471
+        ],
+        [
+         2.765106412790822,
+         85.63387582876373
+        ],
+        [
+         2.3353998594245384,
+         83.91839110637301
+        ],
+        [
+         2.0759093673312585,
+         82.16904830426846
+        ],
+        [
+         2.0,
+         80.62387763512378
+        ],
+        [
+         2.0,
+         158.0
+        ],
+        [
+         22.0,
+         158.0
+        ]
+       ],
+       "holes": [
+        [
+         [
+          7.479632721814559,
+          93.33779704817094
+         ],
+         [
+          8.520709684864897,
+          94.28137420636267
+         ],
+         [
+          7.479632721814559,
+          94.28137420636267
+         ]
+        ]
+       ]
+      }
+     ],
+     "area_sqm": 1708.1991640054964,
+     "ref": null,
+     "tags": [],
+     "reason": "ground the prototype generator left without a use"
+    }
+   ]
+  },
+  "partition_problems": [],
+  "rule_layers": {
+   "schema_version": "1.0",
+   "layers": [
+    {
+     "id": "setback",
+     "kind": "SETBACK",
+     "shapes": [
+      {
+       "outer": [
+        [
+         0.0,
+         160.0
+        ],
+        [
+         24.0,
+         160.0
+        ],
+        [
+         24.0,
+         100.0
+        ],
+        [
+         150.0,
+         100.0
+        ],
+        [
+         150.0,
+         0.0
+        ],
+        [
+         0.0,
+         0.0
+        ]
+       ],
+       "holes": [
+        [
+         [
+          141.0,
+          9.0
+         ],
+         [
+          141.0,
+          91.0
+         ],
+         [
+          24.0,
+          91.0
+         ],
+         [
+          23.117845737033957,
+          91.04333745995022
+         ],
+         [
+          22.24418710185484,
+          91.17293247637093
+         ],
+         [
+          21.387437904709838,
+          91.38753697841013
+         ],
+         [
+          20.555849108714188,
+          91.68508420739842
+         ],
+         [
+          19.75742936856602,
+          92.06270862086481
+         ],
+         [
+          18.99986790282358,
+          92.5167734892771
+         ],
+         [
+          18.290460442527188,
+          93.04290591973538
+         ],
+         [
+          17.63603896932107,
+          93.63603896932108
+         ],
+         [
+          17.042905919735368,
+          94.29046044252719
+         ],
+         [
+          16.516773489277092,
+          94.99986790282358
+         ],
+         [
+          16.062708620864804,
+          95.75742936856602
+         ],
+         [
+          15.685084207398418,
+          96.5558491087142
+         ],
+         [
+          15.38753697841012,
+          97.38743790470984
+         ],
+         [
+          15.172932476370926,
+          98.24418710185485
+         ],
+         [
+          15.043337459950228,
+          99.11784573703396
+         ],
+         [
+          15.0,
+          100.0
+         ],
+         [
+          15.0,
+          151.0
+         ],
+         [
+          9.0,
+          151.0
+         ],
+         [
+          9.0,
+          9.0
+         ]
+        ]
+       ]
+      }
+     ],
+     "clause": "G.O.168 rule 7(a)(x), Table IV as substituted by G.O.Ms.No.50 of 2019; G.O.168 rule 7(a)(iii) (setbacks of a high-rise on the net plot left after road widening); rule 5(f)(ii) for Table III",
+     "basis": "LEGAL_RULE",
+     "status": "VERIFIED",
+     "interpretation_ref": null,
+     "applies_to": "24-27 m",
+     "permits": [
+      {
+       "use": "TOWER",
+       "permit": "FORBIDDEN",
+       "condition": null,
+       "interpretation_ref": null
+      },
+      {
+       "use": "SURFACE_PARKING",
+       "permit": "FORBIDDEN",
+       "condition": null,
+       "interpretation_ref": null
+      },
+      {
+       "use": "ROAD",
+       "permit": "CONDITIONAL",
+       "condition": "only under the reading that circulation may run inside the setback; not settled by the text",
+       "interpretation_ref": "circulation_in_setback"
+      },
+      {
+       "use": "FIRE_HARDSTANDING",
+       "permit": "CONDITIONAL",
+       "condition": "only under the reading that circulation may run inside the setback; not settled by the text",
+       "interpretation_ref": "circulation_in_setback"
+      },
+      {
+       "use": "RAMP",
+       "permit": "CONDITIONAL",
+       "condition": "G.O.168 rule 13(c)(vii) (ramps: one of 5.4 m or two of 3.6 m, 1 in 8): never in the front setback or building line; in a side or rear setback only leaving 7 m for fire vehicles",
+       "interpretation_ref": null
+      }
+     ],
+     "area_sqm": 5238.515106933555
+    },
+    {
+     "id": "fire-clear-bands",
+     "kind": "FIRE_CLEAR_BAND",
+     "shapes": [
+      {
+       "outer": [
+        [
+         8.520709684864897,
+         94.28137420636267
+        ],
+        [
+         7.479632721814559,
+         93.33779704817094
+        ],
+        [
+         7.479632721814559,
+         94.28137420636267
+        ]
+       ],
+       "holes": []
+      },
+      {
+       "outer": [
+        [
+         86.35831237825491,
+         63.27269454992232
+        ],
+        [
+         86.35831237825491,
+         87.40269454992232
+        ],
+        [
+         14.358312378254917,
+         87.40269454992232
+        ],
+        [
+         14.358312378254917,
+         63.27269454992232
+        ],
+        [
+         11.009999999999998,
+         63.27269454992232
+        ],
+        [
+         11.009999999999998,
+         80.40269454992232
+        ],
+        [
+         11.053337459950226,
+         81.28484881288837
+        ],
+        [
+         11.182932476370924,
+         82.15850744806747
+        ],
+        [
+         11.39753697841012,
+         83.01525664521247
+        ],
+        [
+         11.69508420739842,
+         83.84684544120813
+        ],
+        [
+         12.072708620864804,
+         84.6452651813563
+        ],
+        [
+         12.526773489277094,
+         85.40282664709873
+        ],
+        [
+         13.052905919735368,
+         86.11223410739512
+        ],
+        [
+         13.646038969321074,
+         86.76665558060125
+        ],
+        [
+         14.300460442527193,
+         87.35978863018696
+        ],
+        [
+         15.009867902823583,
+         87.88592106064523
+        ],
+        [
+         15.767429368566026,
+         88.33998592905752
+        ],
+        [
+         16.565849108714197,
+         88.7176103425239
+        ],
+        [
+         17.397437904709843,
+         89.01515757151219
+        ],
+        [
+         18.25418710185485,
+         89.2297620735514
+        ],
+        [
+         19.12784573703396,
+         89.3593570899721
+        ],
+        [
+         20.010000000000005,
+         89.40269454992232
+        ],
+        [
+         20.892154262966052,
+         89.3593570899721
+        ],
+        [
+         21.76581289814516,
+         89.22976207355138
+        ],
+        [
+         22.070601837681668,
+         89.16913578403704
+        ],
+        [
+         22.70228500189225,
+         89.07543443806252
+        ],
+        [
+         23.141502754937953,
+         89.03217526518567
+        ],
+        [
+         23.88968088304948,
+         88.99541963068512
+        ],
+        [
+         24.110452161416028,
+         88.99
+        ],
+        [
+         93.23699203469526,
+         88.99
+        ],
+        [
+         93.23699203469526,
+         63.27269454992232
+        ]
+       ],
+       "holes": []
+      },
+      {
+       "outer": [
+        [
+         85.15132034355965,
+         23.24401489348196
+        ],
+        [
+         11.009999999999998,
+         23.24401489348196
+        ],
+        [
+         11.009999999999998,
+         30.12269454992232
+        ],
+        [
+         83.00999999999999,
+         30.12269454992232
+        ],
+        [
+         83.00999999999999,
+         54.25269454992232
+        ],
+        [
+         11.009999999999998,
+         54.25269454992232
+        ],
+        [
+         11.009999999999998,
+         54.26269454992232
+        ],
+        [
+         138.99,
+         54.26269454992232
+        ],
+        [
+         138.99,
+         23.24401489348196
+        ],
+        [
+         89.88867965644035,
+         23.24401489348196
+        ]
+       ],
+       "holes": [
+        [
+         [
+          133.03,
+          30.12269454992232
+         ],
+         [
+          133.03,
+          54.25269454992232
+         ],
+         [
+          92.03,
+          54.25269454992232
+         ],
+         [
+          92.03,
+          30.12269454992232
+         ]
+        ]
+       ]
+      }
+     ],
+     "clause": "G.O.168 rule 15(b)(iv), bringing in NBC 2016 Part 3 4.6(c) (6 m of motorable open space on all sides, a 9 m turning radius, free of obstructions, never parked in)",
+     "basis": "UNRESOLVED_INTERPRETATION",
+     "status": "UNVERIFIED",
+     "interpretation_ref": "fire_turning_radius",
+     "applies_to": null,
+     "permits": [
+      {
+       "use": "TOWER",
+       "permit": "FORBIDDEN",
+       "condition": null,
+       "interpretation_ref": null
+      },
+      {
+       "use": "CLUB_HOUSE",
+       "permit": "FORBIDDEN",
+       "condition": null,
+       "interpretation_ref": null
+      },
+      {
+       "use": "OTHER_BUILT",
+       "permit": "FORBIDDEN",
+       "condition": null,
+       "interpretation_ref": null
+      },
+      {
+       "use": "SURFACE_PARKING",
+       "permit": "FORBIDDEN",
+       "condition": null,
+       "interpretation_ref": null
+      },
+      {
+       "use": "HARD_AMENITY",
+       "permit": "FORBIDDEN",
+       "condition": null,
+       "interpretation_ref": null
+      }
+     ],
+     "area_sqm": 1607.9026723325444
+    },
+    {
+     "id": "green-strip",
+     "kind": "GREEN_STRIP_ZONE",
+     "shapes": [
+      {
+       "outer": [
+        [
+         24.0,
+         160.0
+        ],
+        [
+         24.0,
+         100.0
+        ],
+        [
+         150.0,
+         100.0
+        ],
+        [
+         150.0,
+         0.0
+        ],
+        [
+         12.01,
+         0.0
+        ],
+        [
+         12.01,
+         2.0
+        ],
+        [
+         148.0,
+         2.0
+        ],
+        [
+         148.0,
+         98.0
+        ],
+        [
+         22.0,
+         98.0
+        ],
+        [
+         22.0,
+         158.0
+        ],
+        [
+         2.0,
+         158.0
+        ],
+        [
+         2.0,
+         2.0
+        ],
+        [
+         2.99,
+         2.0
+        ],
+        [
+         2.99,
+         0.0
+        ],
+        [
+         0.0,
+         0.0
+        ],
+        [
+         0.0,
+         160.0
+        ]
+       ],
+       "holes": []
+      }
+     ],
+     "clause": "G.O.168 rule 7(a)(viii) as substituted by G.O.Ms.No.7 of 2016 (setbacks of 9 m and above)",
+     "basis": "LEGAL_RULE",
+     "status": "VERIFIED",
+     "interpretation_ref": null,
+     "applies_to": null,
+     "permits": [],
+     "area_sqm": 1205.9599999999991
+    },
+    {
+     "id": "qualifying-open-space",
+     "kind": "QUALIFYING_OPEN_SPACE",
+     "shapes": [
+      {
+       "outer": [
+        [
+         138.3049157926016,
+         16.565849108714193
+        ],
+        [
+         137.92729137913534,
+         15.767429368566269
+        ],
+        [
+         137.4732265107228,
+         15.009867902823403
+        ],
+        [
+         136.94709408026472,
+         14.300460442527301
+        ],
+        [
+         136.353961030679,
+         13.646038969321129
+        ],
+        [
+         135.69953955747275,
+         13.052905919735293
+        ],
+        [
+         134.9901320971764,
+         12.526773489277062
+        ],
+        [
+         134.23257063143396,
+         12.072708620864786
+        ],
+        [
+         133.43415089128584,
+         11.695084207398416
+        ],
+        [
+         132.6025620952902,
+         11.397536978410129
+        ],
+        [
+         131.74581289814518,
+         11.182932476370924
+        ],
+        [
+         130.87215426296606,
+         11.053337459950226
+        ],
+        [
+         129.99000000000004,
+         11.01
+        ],
+        [
+         20.009999999999962,
+         11.01
+        ],
+        [
+         19.127845737033983,
+         11.053337459950223
+        ],
+        [
+         18.254187101854814,
+         11.18293247637093
+        ],
+        [
+         17.397437904709832,
+         11.397536978410118
+        ],
+        [
+         16.565849108714186,
+         11.69508420739842
+        ],
+        [
+         15.767429368565997,
+         12.072708620864812
+        ],
+        [
+         15.009867902823588,
+         12.526773489277085
+        ],
+        [
+         14.30046044252718,
+         13.052905919735371
+        ],
+        [
+         13.646038969321069,
+         13.64603896932107
+        ],
+        [
+         13.05290591973536,
+         14.300460442527195
+        ],
+        [
+         12.526773489277096,
+         15.00986790282357
+        ],
+        [
+         12.07270862086481,
+         15.767429368566003
+        ],
+        [
+         11.695084207398416,
+         16.56584910871419
+        ],
+        [
+         11.397536978410114,
+         17.39743790470985
+        ],
+        [
+         11.182932476370924,
+         18.25418710185484
+        ],
+        [
+         11.053337459950223,
+         19.127845737033965
+        ],
+        [
+         11.01,
+         20.009999999999966
+        ],
+        [
+         11.01,
+         23.24401489348196
+        ],
+        [
+         85.15132034355965,
+         23.24401489348196
+        ],
+        [
+         89.88867965644035,
+         23.24401489348196
+        ],
+        [
+         138.99,
+         23.24401489348196
+        ],
+        [
+         138.99,
+         20.009999999999998
+        ],
+        [
+         138.94666254004977,
+         19.12784573703395
+        ],
+        [
+         138.81706752362908,
+         18.25418710185479
+        ],
+        [
+         138.60246302158984,
+         17.397437904709633
+        ]
+       ],
+       "holes": []
+      },
+      {
+       "outer": [
+        [
+         113.76111690002236,
+         83.36122059895644
+        ],
+        [
+         93.87831237825492,
+         83.36122059895644
+        ],
+        [
+         93.23699203469526,
+         83.36122059895644
+        ],
+        [
+         93.23699203469526,
+         88.99
+        ],
+        [
+         113.76111690002236,
+         88.99
+        ]
+       ],
+       "holes": []
+      }
+     ],
+     "clause": "G.O.168 rule 7(a)(vii)",
+     "basis": "UNRESOLVED_INTERPRETATION",
+     "status": "UNVERIFIED",
+     "interpretation_ref": "open_space_basis",
+     "applies_to": null,
+     "permits": [],
+     "area_sqm": 1646.2652112013309
+    }
+   ]
+  }
+ },
+ "cross_checks": [],
+ "not_checked": [
+  "INTERNAL_EGRESS"
+ ],
+ "verdict": {
+  "legal": "UNVERIFIED",
+  "program": "NOT_MET",
+  "reasons": [
+   "Fire access: the street joins a 12 m street: UNVERIFIED",
+   "Fire access: 45 t hard surface: UNVERIFIED"
+  ]
+ }
+}
