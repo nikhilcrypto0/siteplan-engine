@@ -19,6 +19,10 @@ class FlatType(BaseModel):
     width_m: PositiveFloat = Field(description="Frontage along the corridor")
     depth_m: PositiveFloat
     saleable_sqft: PositiveFloat
+    # Where the library knows them (a firm's own floor plan does; example sizes do not), so a
+    # tower prototype's flat can carry all three areas, which are not interchangeable.
+    carpet_sqft: PositiveFloat | None = None
+    built_up_sqft: PositiveFloat | None = None
 
 
 class FlatLibrary(BaseModel):
