@@ -260,9 +260,11 @@ class HeightLimit(Part):
         return Status.FAIL if self.applicability is Applicability.APPLIES else Status.UNVERIFIED
 
     def beyond(self, height_m: float, tol_m: float = HEIGHT_TOL_M) -> bool:
-        """Whether the height passes a bound that applies or may apply: a generator does not
-        offer such a height, whatever the verdict on it would be."""
-        return (self.applicability is not Applicability.DOES_NOT_APPLY
+        """Whether the height passes a bound that applies: a generator does not offer such a
+        height, whether or not the inputs behind the bound are confirmed. Beyond a bound that
+        only may apply (its condition rests on an unsettled site fact) the height may be
+        offered, and `evaluate` labels it UNVERIFIED."""
+        return (self.applicability is Applicability.APPLIES
                 and self.within(height_m, tol_m) is False)
 
 
