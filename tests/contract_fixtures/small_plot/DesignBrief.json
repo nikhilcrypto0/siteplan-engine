@@ -1,5 +1,5 @@
 {
- "schema_version": "1.0",
+ "schema_version": "1.1",
  "brief_id": "made-up-small-plot-brief",
  "project_name": "Made-up small plot",
  "words": "",
@@ -101,6 +101,38 @@
   "preferred_prototype_families": [],
   "bay_size_m": null,
   "aisle_m": null
+ },
+ "design_margins": {
+  "setback_extra_m": {
+   "value": 0.0,
+   "status": "ASSUMED_FOR_TEST",
+   "source_kind": "ENGINE_DEFAULT",
+   "source": "no design margin set"
+  },
+  "tower_gap_extra_m": {
+   "value": 0.0,
+   "status": "ASSUMED_FOR_TEST",
+   "source_kind": "ENGINE_DEFAULT",
+   "source": "no design margin set"
+  },
+  "road_width_extra_m": {
+   "value": 0.0,
+   "status": "ASSUMED_FOR_TEST",
+   "source_kind": "ENGINE_DEFAULT",
+   "source": "no design margin set"
+  },
+  "open_space_extra_fraction": {
+   "value": 0.0,
+   "status": "ASSUMED_FOR_TEST",
+   "source_kind": "ENGINE_DEFAULT",
+   "source": "no design margin set"
+  },
+  "parking_extra_fraction": {
+   "value": 0.0,
+   "status": "ASSUMED_FOR_TEST",
+   "source_kind": "ENGINE_DEFAULT",
+   "source": "no design margin set"
+  }
  },
  "objectives": {
   "pareto": [

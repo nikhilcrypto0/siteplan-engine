@@ -17,7 +17,7 @@ import re
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
-from pydantic import BaseModel, PositiveFloat
+from pydantic import BaseModel, ConfigDict, NonNegativeFloat, PositiveFloat
 from shapely.geometry import Point
 
 from siteplan import rules
@@ -51,6 +51,21 @@ ROW_SOURCES = ("CERTIFIED_ROW", "DECLARED_ON_SITE_PLAN", "UNVERIFIED_DRAWING_VAL
 WATER_CLASSES = "river, lake 10 ha or more, lake under 10 ha, nala over 10 m, nala up to 10 m"
 
 
+class WorkspaceMargins(BaseModel):
+    """What the firm keeps in hand above each legal minimum, so that a layout is not planned on a
+    legal cliff (a setback of exactly the minimum, open space of exactly 10%). The firm's choice,
+    never law: the optimizer aims at the legal minimum plus the margin, and every check goes on
+    judging against the legal minimum alone. One the file leaves out is no margin."""
+
+    model_config = ConfigDict(extra="forbid")  # a misspelt margin is an error, not no margin
+
+    setback_extra_m: NonNegativeFloat = 0.0
+    tower_gap_extra_m: NonNegativeFloat = 0.0
+    road_width_extra_m: NonNegativeFloat = 0.0
+    open_space_extra_fraction: NonNegativeFloat = 0.0  # of the area the legal share is of
+    parking_extra_fraction: NonNegativeFloat = 0.0  # of the parking the law asks
+
+
 class WorkspaceDefaults(BaseModel):
     """What a firm sets once for every project: its flats, its amenities, its floor heights and
     its parking standards. These are the firm's choices, never Telangana law; what the rules
@@ -68,6 +83,8 @@ class WorkspaceDefaults(BaseModel):
     # The firm's longest block, if it has one. No rule limits length (the 40 m note was deleted
     # by G.O.Ms.No.65 of 2019), so without it the layout explores lengths.
     max_tower_length_m: PositiveFloat | None = None
+    # What the firm keeps in hand above the legal minimums; none until the firm sets them.
+    design_margins: WorkspaceMargins = WorkspaceMargins()
     # The firm's own finished drawings kept in the workspace (file names). A debug run may use
     # them; a blind acceptance run refuses one given as its survey (blind.py).
     finished_plans: list[str] = []

@@ -11,6 +11,7 @@
     },
     "AmenityRequest": {
       "additionalProperties": false,
+      "description": "A facility the firm wants. Its use and surface are the firm's to state, in its amenity\nlibrary; left unstated they are None, and nothing downstream assumes them from the name.\nWhether its ground counts as organised open space is the law's (ResolvedRules), not ours.",
       "properties": {
         "footprint_m": {
           "anyOf": [
@@ -49,18 +50,24 @@
         "surface": {
           "anyOf": [
             {
-              "enum": [
-                "SOFT",
-                "HARD"
-              ],
-              "type": "string"
+              "$ref": "#/$defs/Surface"
             },
             {
               "type": "null"
             }
           ],
-          "default": null,
-          "title": "Surface"
+          "default": null
+        },
+        "use": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FacilityUse"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "required": [
@@ -128,6 +135,44 @@
         "STATED"
       ],
       "title": "ClubSize",
+      "type": "string"
+    },
+    "DesignMargins": {
+      "additionalProperties": false,
+      "description": "What to keep in hand above each legal minimum. Each margin is the firm's standard or the\nengine's design assumption, never law, and none is invented here: with nothing set every\nmargin is zero and the target is the legal minimum itself.",
+      "properties": {
+        "open_space_extra_fraction": {
+          "$ref": "#/$defs/Sourced_float_"
+        },
+        "parking_extra_fraction": {
+          "$ref": "#/$defs/Sourced_float_"
+        },
+        "road_width_extra_m": {
+          "$ref": "#/$defs/Sourced_float_"
+        },
+        "setback_extra_m": {
+          "$ref": "#/$defs/Sourced_float_"
+        },
+        "tower_gap_extra_m": {
+          "$ref": "#/$defs/Sourced_float_"
+        }
+      },
+      "title": "DesignMargins",
+      "type": "object"
+    },
+    "FacilityUse": {
+      "description": "What a facility is for. The first three are the uses rule 7(a)(vii) names for organised\nopen space ('greenery, tot lot or soft landscaping etc.').",
+      "enum": [
+        "GREENERY",
+        "TOT_LOT",
+        "SOFT_LANDSCAPE",
+        "SPORT_COURT",
+        "POOL",
+        "PAVED_DECK",
+        "BUILT_SERVICE",
+        "OTHER"
+      ],
+      "title": "FacilityUse",
       "type": "string"
     },
     "FirmStandards": {
@@ -327,6 +372,9 @@
             "type": "number"
           },
           "default": {},
+          "propertyNames": {
+            "$ref": "#/$defs/Priority"
+          },
           "title": "Priorities",
           "type": "object"
         },
@@ -381,6 +429,18 @@
       ],
       "title": "ParkingPreferences",
       "type": "object"
+    },
+    "Priority": {
+      "description": "What an objective may weigh. A priority left out counts as 1.",
+      "enum": [
+        "saleable_area",
+        "units",
+        "open_space",
+        "mix_fit",
+        "conventionality"
+      ],
+      "title": "Priority",
+      "type": "string"
     },
     "Program": {
       "additionalProperties": false,
@@ -682,6 +742,16 @@
       "title": "Sourced[tuple[float, float]]",
       "type": "object"
     },
+    "Surface": {
+      "description": "What a facility's ground is made of. Stated by whoever specifies the facility (the firm's\namenity library); never read off its name.",
+      "enum": [
+        "SOFT",
+        "HARD",
+        "BUILT"
+      ],
+      "title": "Surface",
+      "type": "string"
+    },
     "UnitTarget": {
       "additionalProperties": false,
       "properties": {
@@ -748,6 +818,9 @@
       "title": "Brief Id",
       "type": "string"
     },
+    "design_margins": {
+      "$ref": "#/$defs/DesignMargins"
+    },
     "firm_standards": {
       "$ref": "#/$defs/FirmStandards"
     },
@@ -776,8 +849,8 @@
       "type": "string"
     },
     "schema_version": {
-      "const": "1.0",
-      "default": "1.0",
+      "const": "1.1",
+      "default": "1.1",
       "title": "Schema Version",
       "type": "string"
     },

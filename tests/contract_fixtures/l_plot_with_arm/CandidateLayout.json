@@ -1,10 +1,10 @@
 {
- "schema_version": "1.0",
+ "schema_version": "1.1",
  "candidate_id": "l_plot_with_arm-1",
- "site_ref": "87617542d2983472",
- "rules_ref": "03ce7be56002e969",
- "brief_ref": "5d7adecf13031b18",
- "envelope_ref": "c73c820e7187dc3c",
+ "site_ref": "d2b00fe7c3ca387b",
+ "rules_ref": "5bf851c076f6bccf",
+ "brief_ref": "13b2d1409d57f83f",
+ "envelope_ref": "09712be65d0e3b1c",
  "strategy": "Option A: Maximum yield",
  "seed": null,
  "interpretation_basis": {
@@ -13,7 +13,7 @@
  },
  "prototypes_used": [
   {
-   "schema_version": "1.0",
+   "schema_version": "1.1",
    "id": "l_plot_with_arm-1-T1",
    "family": "LEGACY_RECTANGLE",
    "source_kind": "ENGINE_DEFAULT",
@@ -472,7 +472,7 @@
    "stretch": null
   },
   {
-   "schema_version": "1.0",
+   "schema_version": "1.1",
    "id": "l_plot_with_arm-1-T2",
    "family": "LEGACY_RECTANGLE",
    "source_kind": "ENGINE_DEFAULT",
@@ -931,7 +931,7 @@
    "stretch": null
   },
   {
-   "schema_version": "1.0",
+   "schema_version": "1.1",
    "id": "l_plot_with_arm-1-T3",
    "family": "LEGACY_RECTANGLE",
    "source_kind": "ENGINE_DEFAULT",
@@ -2714,7 +2714,7 @@
   ]
  },
  "partition": {
-  "schema_version": "1.0",
+  "schema_version": "1.1",
   "net_area_sqm": 16440.0,
   "tolerance": 0.005,
   "entries": [
@@ -4858,7 +4858,7 @@
   ]
  },
  "rule_layers": {
-  "schema_version": "1.0",
+  "schema_version": "1.1",
   "layers": [
    {
     "id": "setback",

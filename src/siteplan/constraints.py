@@ -206,6 +206,15 @@ REGISTRY: tuple[Constraint, ...] = (
         Basis.LEGAL_RULE, rules.WATER_BUFFER_CLAUSE, ("rules.WATER_BUFFER_M",),
     ),
     Constraint(
+        "Open space", "The distance, vertical and horizontal, a building keeps from an "
+                      "electricity line.",
+        f"{rules.ELECTRICAL_HT_CLEARANCE_M:g} m high-tension, "
+        f"{rules.ELECTRICAL_LT_CLEARANCE_M:g} m low-tension", Basis.LEGAL_RULE,
+        rules.ELECTRICAL_CLAUSE,
+        ("rules.ELECTRICAL_HT_CLEARANCE_M", "rules.ELECTRICAL_LT_CLEARANCE_M"),
+        note="Carried in ResolvedRules; the prototype's layout does not model it.",
+    ),
+    Constraint(
         "Open space", "The water buffer is measured from the lines the surveyor drew for the "
                       "water body, which stand in for its Full Tank Level or defined boundary.",
         "from the drawn lines", Basis.ENGINE_DESIGN_ASSUMPTION, "none (runner.load_water)",
@@ -473,8 +482,11 @@ REGISTRY: tuple[Constraint, ...] = (
     Constraint(
         "Parking", "Cellar ramps: the single ramp's width, the pair's, and the gradient.",
         f"one of {rules.RAMP_SINGLE_MIN_WIDTH_M:g} m or two of {rules.RAMP_PAIR_MIN_WIDTH_M:g} m "
-        f"at 1 in {round(1 / rules.RAMP_MAX_GRADIENT)}", Basis.LEGAL_RULE, rules.RAMP_CLAUSE,
-        ("rules.RAMP_SINGLE_MIN_WIDTH_M", "rules.RAMP_PAIR_MIN_WIDTH_M", "rules.RAMP_MAX_GRADIENT"),
+        f"at 1 in {round(1 / rules.RAMP_MAX_GRADIENT)}; in a side or rear setback only leaving "
+        f"{rules.RAMP_FIRE_CLEARANCE_M:g} m for fire vehicles", Basis.LEGAL_RULE,
+        rules.RAMP_CLAUSE,
+        ("rules.RAMP_SINGLE_MIN_WIDTH_M", "rules.RAMP_PAIR_MIN_WIDTH_M", "rules.RAMP_MAX_GRADIENT",
+         "rules.RAMP_FIRE_CLEARANCE_M"),
         note="The layout draws the single ramp, outside every setback (stricter than the side "
              "and rear allowance) and out of the fire lanes, with its top on a road.",
     ),
@@ -591,6 +603,19 @@ REGISTRY: tuple[Constraint, ...] = (
         ("layout.EXPLORED_TOWER_LENGTHS_M",),
         note="No order limits a block's length since G.O.Ms.No.65 of 2019; the two shorter caps "
              "explored are the engine's choice of what to try.",
+    ),
+    Constraint(
+        "Towers", "Design margins: what is kept in hand above each legal minimum (setbacks, the "
+                  "gap between blocks, road widths, organised open space, parking), so that a "
+                  "layout is not planned on a legal cliff.",
+        "none set: " + ", ".join(f"{name} {field.default:g}"
+                                 for name, field in intake.WorkspaceMargins.model_fields.items()),
+        Basis.FIRM_STANDARD, f"{_WORKSPACE}, design_margins",
+        tuple(f"intake.WorkspaceMargins.{name}" for name in intake.WorkspaceMargins.model_fields),
+        note="Never law. The optimizer aims at the legal minimum plus the margin; every check "
+             "goes on judging against the legal minimum alone, and a report shows the legal "
+             "minimum, the target and what is provided. A margin the firm leaves out is no "
+             "margin. The prototype generator plans on the legal minimum and applies none.",
     ),
     Constraint(
         "Towers", "The fewest flats per side a tower may have.",
