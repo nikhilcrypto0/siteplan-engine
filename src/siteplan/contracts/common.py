@@ -15,10 +15,11 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 from enum import StrEnum
 from typing import Generic, Literal, TypeVar
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from shapely.geometry import LineString, Polygon
 from shapely.geometry.base import BaseGeometry
 from shapely.ops import unary_union
@@ -27,11 +28,13 @@ from siteplan.basis import Basis
 from siteplan.findings import Finding, Status
 from siteplan.provenance import Provenance
 
-__all__ = ["CONTRACTS_VERSION", "Basis", "Contract", "Finding", "Line", "Part", "Point",
-           "Provenance", "Ring", "Shape", "Side", "SourceKind", "Sourced", "Status", "digest",
-           "shapes_from", "union_of"]
+__all__ = ["CONTRACTS_VERSION", "Basis", "Contract", "FacilityUse", "Finding", "Line", "Part",
+           "Point", "Provenance", "Ring", "Shape", "Side", "SourceKind", "Sourced", "Status",
+           "Surface", "digest", "shapes_from", "union_of"]
 
-CONTRACTS_VERSION = "1.0"
+# 1.1 (2026-10-03): height limits with an explicit bound and applicability, high-rise eligibility,
+# inclusive band edges, facility use and surface, design margins, bounds on rule values.
+CONTRACTS_VERSION = "1.1"
 
 Point = tuple[float, float]
 Ring = list[Point]
@@ -48,7 +51,7 @@ class Part(BaseModel):
 class Contract(Part):
     """A permanent contract between pipeline stages, versioned."""
 
-    schema_version: Literal["1.0"] = CONTRACTS_VERSION
+    schema_version: Literal["1.1"] = CONTRACTS_VERSION
 
 
 class SourceKind(StrEnum):
@@ -61,6 +64,29 @@ class SourceKind(StrEnum):
     TEST_PROFILE = "TEST_PROFILE"  # a site's temporary test assumption
 
 
+class Surface(StrEnum):
+    """What a facility's ground is made of. Stated by whoever specifies the facility (the firm's
+    amenity library); never read off its name."""
+
+    SOFT = "SOFT"  # planted or soft-landscaped ground
+    HARD = "HARD"  # paved, water or a sports surface, open to the sky
+    BUILT = "BUILT"  # under a roof
+
+
+class FacilityUse(StrEnum):
+    """What a facility is for. The first three are the uses rule 7(a)(vii) names for organised
+    open space ('greenery, tot lot or soft landscaping etc.')."""
+
+    GREENERY = "GREENERY"
+    TOT_LOT = "TOT_LOT"
+    SOFT_LANDSCAPE = "SOFT_LANDSCAPE"
+    SPORT_COURT = "SPORT_COURT"
+    POOL = "POOL"
+    PAVED_DECK = "PAVED_DECK"
+    BUILT_SERVICE = "BUILT_SERVICE"  # a cabin, a substation
+    OTHER = "OTHER"
+
+
 class Sourced(Part, Generic[T]):
     """A value with how far it can be trusted and where it came from."""
 
@@ -70,12 +96,26 @@ class Sourced(Part, Generic[T]):
     source: str = ""
 
 
+def _finite(points: Ring, what: str) -> None:
+    if not all(math.isfinite(c) for point in points for c in point):
+        raise ValueError(f"{what} has a coordinate that is not a finite number")
+
+
 class Shape(Part):
     """A polygon: its outer ring and any holes, metres, survey frame, not closed (the first
-    point is not repeated)."""
+    point is not repeated). Every ring has at least three points and only finite coordinates."""
 
     outer: Ring = Field(min_length=3)
     holes: list[Ring] = []
+
+    @model_validator(mode="after")
+    def _measurable(self) -> Shape:
+        _finite(self.outer, "a shape's outline")
+        for hole in self.holes:
+            if len(hole) < 3:
+                raise ValueError("a hole needs at least three points")
+            _finite(hole, "a hole")
+        return self
 
     @classmethod
     def from_shapely(cls, polygon: Polygon, digits: int | None = None) -> Shape:
@@ -98,6 +138,11 @@ class Line(Part):
     """An open line (a road edge, a water line, a stretch of boundary), metres, survey frame."""
 
     points: list[Point] = Field(min_length=2)
+
+    @model_validator(mode="after")
+    def _measurable(self) -> Line:
+        _finite(self.points, "a line")
+        return self
 
     def to_shapely(self) -> LineString:
         return LineString(self.points)

@@ -5,6 +5,8 @@ and the design asked for. `split_project` turns it into a CanonicalSiteModel, a 
 the readings; `join_project` makes the project file again. A round trip changes no number the
 engine uses (tests/test_adapters.py). Where a project file says nothing about where a value
 came from, the value is taken as the architect's: a project file is what the architect fills in.
+The access road's legal width is the exception, because the project says how that width is known
+(`abutting_road_status`): its status follows that, and is unverified when nothing says.
 """
 
 from __future__ import annotations
@@ -16,16 +18,17 @@ from shapely.geometry import Polygon
 
 from siteplan.contracts.accounting import DeductionKind, LocationHow
 from siteplan.contracts.common import Provenance, Shape, SourceKind
-from siteplan.contracts.design_brief import ClubSize, DesignBrief, HeightMode
+from siteplan.contracts.design_brief import AmenitySetting, ClubSize, DesignBrief, HeightMode
 from siteplan.contracts.resolved_rules import (
     CIRCULATION_IN_SETBACK,
     STILT_IN_RULE_HEIGHT,
     WhenOpen,
 )
 from siteplan.contracts.site_model import CanonicalSiteModel
-from siteplan.intake import Draft, WorkspaceDefaults
+from siteplan.intake import ROW_STATUS, WORKSPACE_FILE, Draft, WorkspaceDefaults
 from siteplan.layout import LayoutRequest
 from siteplan.project import Project, _metres
+from siteplan.site_amenities import AmenityItem, AmenityLibrary
 
 KIND_BY_PREFIX = (("survey", SourceKind.SURVEY), ("architect", SourceKind.ARCHITECT),
                   ("firm standard", SourceKind.FIRM_STANDARD),
@@ -71,14 +74,27 @@ def sourced(project: Project, key: str, value) -> dict:
             "source": project.sources.get(key, "project file")}
 
 
+def row_status(project: Project) -> Provenance:
+    """How far the access road's legal width is confirmed: the project's own status for it, else
+    what the width's declared source says (a certified right of way, the site plan, a value off
+    a drawing). With neither it is unverified: a width is never confirmed merely because nobody
+    said how it is known."""
+    stated = project.status.get("abutting_road")
+    if stated is not None:
+        return stated
+    declared = project.site.abutting_road_status
+    return ROW_STATUS[declared] if declared else Provenance.UNVERIFIED
+
+
 def split_project(project: Project, *, site_id: str | None = None,
                   boundary: Polygon | None = None, draft: Draft | None = None,
-                  defaults: WorkspaceDefaults | None = None,
-                  notation: dict | None = None) -> tuple[CanonicalSiteModel, DesignBrief, Readings]:
+                  defaults: WorkspaceDefaults | None = None, notation: dict | None = None,
+                  amenities: AmenityLibrary | None = None
+                  ) -> tuple[CanonicalSiteModel, DesignBrief, Readings]:
     if project.layout is None:
         raise ValueError("The project has no layout request to split into a brief.")
     site = site_model(project, site_id=site_id, boundary=boundary, draft=draft)
-    return site, brief(project, defaults, notation), Readings.of(project.layout)
+    return site, brief(project, defaults, notation, amenities), Readings.of(project.layout)
 
 
 def site_model(project: Project, *, site_id: str | None = None, boundary: Polygon | None = None,
@@ -160,7 +176,8 @@ def _roads(project: Project, draft: Draft | None) -> tuple[list[dict], int | Non
     if road is not None:
         legal = _metres(s.abutting_road_m, s.abutting_road_ft)
         if legal is not None:
-            road["legal_row_m"] = sourced(project, "abutting_road", legal)
+            road["legal_row_m"] = {**sourced(project, "abutting_road", legal),
+                                   "status": row_status(project)}
         road["row_status"] = s.abutting_road_status
         planned = _metres(s.master_plan_road_m, s.master_plan_road_ft)
         if planned is not None:
@@ -184,8 +201,28 @@ def _place(draft: Draft | None) -> dict | None:
             "source": f"survey: {text}"}
 
 
+def amenity_request(item: AmenityItem) -> dict:
+    """A facility of the firm's library as the brief asks for it. Its use and surface are the
+    library's own words, or nothing: neither is read off its name, nor off where the generator
+    may stand it."""
+    return {"name": item.name, "setting": AmenitySetting.OUTDOOR,
+            "footprint_m": (item.width_m, item.depth_m), "use": item.use,
+            "surface": item.surface}
+
+
+def design_margins(defaults: WorkspaceDefaults) -> dict:
+    """The margins the firm's workspace file sets, as the firm's standards. One the file leaves
+    out is left to the brief's own 'no design margin set'."""
+    margins = defaults.design_margins
+    return {name: {"value": getattr(margins, name),
+                   "status": defaults.standard_status("design_margins"),
+                   "source_kind": SourceKind.FIRM_STANDARD,
+                   "source": f"firm standard: {WORKSPACE_FILE}, design_margins.{name}"}
+            for name in sorted(margins.model_fields_set)}
+
+
 def brief(project: Project, defaults: WorkspaceDefaults | None = None,
-          notation: dict | None = None) -> DesignBrief:
+          notation: dict | None = None, amenities: AmenityLibrary | None = None) -> DesignBrief:
     r = project.layout
     defaults = defaults or WorkspaceDefaults()
     standards = {name: sourced(project, key, getattr(r, key))
@@ -199,6 +236,7 @@ def brief(project: Project, defaults: WorkspaceDefaults | None = None,
             if defaults.flat_library else None,
             "amenity_library": sourced(project, "amenities", defaults.amenities)
             if defaults.amenities else None,
+            "amenities": [amenity_request(item) for item in amenities.items] if amenities else [],
             "club_house": {"wanted": sourced(project, "club_house", r.club_house),
                            "size": ClubSize.STATED if r.club_house_sqm else ClubSize.LEGAL_MINIMUM,
                            "sqm": r.club_house_sqm, "floors": r.club_house_floors},
@@ -220,6 +258,7 @@ def brief(project: Project, defaults: WorkspaceDefaults | None = None,
                                    "source": "engine default"},
             "max_tower_length_m": sourced(project, "max_tower_length_m", r.max_tower_length_m)
             if r.max_tower_length_m else None},
+        design_margins=design_margins(defaults),
         objectives={"options": r.options})
 
 

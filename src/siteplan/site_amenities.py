@@ -20,6 +20,8 @@ from shapely.affinity import rotate
 from shapely.geometry import Point, Polygon
 from shapely.ops import unary_union
 
+from siteplan.contracts.common import FacilityUse, Surface
+
 SCAN_STEP_M = 2.0
 CLEARANCE_M = 1.5  # walking room between one facility and the next
 EPS_M = 0.01
@@ -32,10 +34,16 @@ class AmenityItem(BaseModel):
     depth_m: PositiveFloat
     near: str = Field("edge", description="club, gate, open space or edge")
     # Rule 7(a)(vii) says the organized open space is to be used as "greenery, tot lot or soft
-    # landscaping", so a play area or seating belongs in it. A pool or a court does not.
+    # landscaping", so a play area or seating belongs in it. A pool or a court does not. This is
+    # only where the generator may stand the item; it is never read as the item's surface.
     counts_as_open_space: bool = Field(
         False, description="May stand on the organized open space the rules require"
     )
+    # What the item is for and what its ground is made of, as the firm states them. Left out they
+    # are unknown: nothing reads them off the name, and a validator then leaves the item's ground
+    # out of the organized open space as UNVERIFIED rather than counting it.
+    use: FacilityUse | None = Field(None, description="What the facility is for")
+    surface: Surface | None = Field(None, description="SOFT, HARD or BUILT, as the firm states")
 
     @property
     def area_sqm(self) -> float:

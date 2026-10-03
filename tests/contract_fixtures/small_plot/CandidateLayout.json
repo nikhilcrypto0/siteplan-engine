@@ -1,10 +1,10 @@
 {
- "schema_version": "1.0",
+ "schema_version": "1.1",
  "candidate_id": "small_plot-1",
- "site_ref": "1876e2471d584155",
- "rules_ref": "1aa70dae683bc016",
- "brief_ref": "2f7436a2e557a814",
- "envelope_ref": "21e75d27b5bb167c",
+ "site_ref": "a3ef41f7ee2c7ea9",
+ "rules_ref": "75ccdbc7b5a1b77e",
+ "brief_ref": "ce0812345ac34130",
+ "envelope_ref": "41dcaed41bebeaa2",
  "strategy": "hand-made",
  "seed": null,
  "interpretation_basis": {
@@ -13,7 +13,7 @@
  },
  "prototypes_used": [
   {
-   "schema_version": "1.0",
+   "schema_version": "1.1",
    "id": "single-core-small-4",
    "family": "SINGLE_CORE_SMALL",
    "source_kind": "ENGINE_DEFAULT",
@@ -377,7 +377,7 @@
   "bays": []
  },
  "partition": {
-  "schema_version": "1.0",
+  "schema_version": "1.1",
   "net_area_sqm": 3000.0,
   "tolerance": 0.005,
   "entries": [
@@ -555,7 +555,7 @@
   ]
  },
  "rule_layers": {
-  "schema_version": "1.0",
+  "schema_version": "1.1",
   "layers": []
  },
  "metrics": {
