@@ -41,6 +41,7 @@ from siteplan.validator.readings import (
     verdict,
 )
 
+UNVERIFIED_DRAWING = "UNVERIFIED_DRAWING_VALUE"  # a road's width as drawn, never confirmed
 TABLE_III_NOTE = ("Below the high-rise threshold Table III (rule 5) applies and is not modelled "
                   "yet: the validator does not judge it.")
 SEAM_NOTE = ("A height exactly at the high-rise threshold falls between the table rows in the "
@@ -113,24 +114,26 @@ def _known(sourced) -> bool:
             and sourced.status is not Provenance.UNVERIFIED)
 
 
-def road_width(site: CanonicalSiteModel) -> tuple[float | None, str]:
-    """The width of the access road the rules take, and how it is known. The master plan's
-    width wins where there is one (it counts only if the widening strip is surrendered); the
-    width the survey draws is never used."""
+def road_width(site: CanonicalSiteModel) -> tuple[float | None, str, bool]:
+    """The width of the access road the rules take, how it is known, and whether that is
+    settled. The master plan's width wins where there is one (it counts only if the widening
+    strip is surrendered); the width the survey draws is never used, and a width read off a
+    drawing and never confirmed is a value, not a settled fact."""
     road = site.access_road()
     if road is None:
-        return None, "no access road in the site model"
+        return None, "no access road in the site model", False
+    settled = road.row_status != UNVERIFIED_DRAWING
     if _known(road.master_plan_row_m):
-        return road.master_plan_row_m.value, "master plan"
+        return road.master_plan_row_m.value, "master plan", settled
     if _known(road.legal_row_m):
-        return road.legal_row_m.value, "existing"
-    return None, "the legal width is not known"
+        return road.legal_row_m.value, "existing", settled
+    return None, "the legal width is not known", False
 
 
 def road_width_check(ctx: Context) -> Check | None:
     if not ctx.high_rise_anywhere():
         return None
-    width, how = road_width(ctx.site)
+    width, how, settled = road_width(ctx.site)
     road = ctx.site.access_road()
     tallest = max(ctx.high_rise_anywhere(), key=lambda t: t.physical_height_m)
     basis = []
@@ -160,6 +163,9 @@ def road_width_check(ctx: Context) -> Check | None:
         required = f">= {need:g} m"
         if width is None:
             return Cell(Status.UNVERIFIED, f"unknown ({how})", required)
+        if not settled:
+            return Cell(Status.UNVERIFIED, f"{width:.2f} m ({how}), not confirmed", required,
+                        " ".join([*basis, "The width is a drawing's, never confirmed."]))
         if width + TOL_M >= need:
             return Cell(Status.PASS, f"{width:.2f} m ({how})", required, " ".join(basis))
         status = Status.FAIL if width + TOL_M < sure else Status.UNVERIFIED
@@ -198,15 +204,14 @@ def _rule_height_limit(ctx: Context, limit) -> Check:
             return unknown_reading(STILT_IN_RULE_HEIGHT, reading)
         tallest = max(heights, key=heights.get)
         measured = f"{heights[tallest]:.2f} m ({tallest})"
-        if limit.max_m is None or limit.applies_if:
+        if limit.max_m is None or limit.applies_if or limit.status is Provenance.UNVERIFIED:
+            # A limit that cannot be evaluated, that depends on a condition, or that itself
+            # rests on an input nobody has confirmed settles nothing either way.
             return Cell(Status.UNVERIFIED, measured, required,
                         f"{limit.reason}" + (f"; applies if {limit.applies_if}"
                                              if limit.applies_if else ""))
-        if heights[tallest] > limit.max_m + TOL_M:
-            return Cell(Status.FAIL, measured, required, limit.reason)
-        # Within a limit that itself rests on an unverified input is not a settled pass.
-        status = Status.UNVERIFIED if limit.status is Provenance.UNVERIFIED else Status.PASS
-        return Cell(status, measured, required, limit.reason)
+        over = heights[tallest] > limit.max_m + TOL_M
+        return Cell(Status.FAIL if over else Status.PASS, measured, required, limit.reason)
 
     return check_from(run(ctx.rules, [STILT_IN_RULE_HEIGHT], cell), family=Family.HEIGHT,
                       rule=f"Rule-height limit: {limit.reason}", clause=limit.clause)

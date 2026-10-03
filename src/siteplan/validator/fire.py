@@ -18,7 +18,7 @@ from shapely.geometry.base import BaseGeometry
 from siteplan.contracts.candidate import RoadKind
 from siteplan.contracts.common import Status
 from siteplan.contracts.resolved_rules import FIRE_TURNING_RADIUS, STILT_IN_RULE_HEIGHT
-from siteplan.contracts.validation import Check, Family
+from siteplan.contracts.validation import Check, Discrepancy, Family
 from siteplan.provenance import Provenance
 from siteplan.validator.context import Context
 from siteplan.validator.ground import Ground
@@ -38,6 +38,8 @@ from siteplan.validator.turning import road_bends, round_block, turning_for
 NON_HIGH_RISE_NOTE = ("Below the high-rise threshold the fire rules of rule 15(a)(i) apply and "
                       "are not modelled yet.")
 REACH_MIN_SQM = 1.0  # a lane that only touches a block's band at a point does not reach it
+GATE_ON_BOUNDARY_M = 0.5  # a gate this close to the boundary is in it
+GATE_SLACK_M = 0.05  # a gate may measure this much under the width it declares
 
 
 def clear_band(footprint: Polygon, lane_m: float) -> BaseGeometry:
@@ -176,6 +178,8 @@ def entrance_check(ctx: Context, ground: Ground) -> Check:
     problems = []
     if width + TOL_M < fire.entrance_width_m.value:
         problems.append(f"{width:.2f} m wide")
+    if all(g.shape.distance(ctx.net.boundary) > GATE_ON_BOUNDARY_M for g in gates):
+        problems.append("not on the plot's boundary")
     if built_over > NOISE_SQM:
         problems.append("something is built over it")
     return plain(Family.FIRE, "Fire access: entrance", verdict(not problems),
@@ -183,6 +187,18 @@ def entrance_check(ctx: Context, ground: Ground) -> Check:
                  f"{width:.2f} m wide; nothing built over it", required,
                  fire.entrance_width_m.clause,
                  "The gate folding back against the compound wall is a detail drawing.")
+
+
+def gate_discrepancies(ctx: Context) -> list[Discrepancy]:
+    """A gate that measures narrower than the width it declares flatters the layout."""
+    out = []
+    for i, gate in enumerate(ctx.drawn.gates, 1):
+        measured = sides_of(gate.shape)[0]
+        if measured + GATE_SLACK_M < gate.declared_width_m:
+            out.append(Discrepancy(
+                item=f"gate width {i}", source="generator", theirs=f"{gate.declared_width_m:g} m",
+                ours=f"{measured:.2f} m", blocks_pass=True))
+    return out
 
 
 def obstruction_check(ctx: Context) -> Check:

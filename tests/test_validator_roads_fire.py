@@ -284,3 +284,27 @@ def test_a_block_that_is_high_rise_only_if_the_stilt_counts_has_its_fire_access_
     c = check(inputs.report(), "Fire access: T3")
     assert c.by_reading[STILT_IN_RULE_HEIGHT]["not_counted"] is Z.NOT_CHECKED
     assert c.finding.status is Z.UNVERIFIED
+
+
+def test_a_gate_that_is_not_on_the_plots_boundary_is_not_an_entrance():
+    def middle(candidate):
+        candidate.circulation.gates[0].shape = rectangle(70.0, 48.0, 79.0, 50.0)
+    c = check(fixture("rectangle").edited(middle).report(), "Fire access: entrance")
+    assert c.finding.status is Z.FAIL and "boundary" in c.finding.measured
+
+
+def test_a_gate_that_declares_more_than_it_measures_is_a_blocking_discrepancy():
+    def lie(candidate):
+        candidate.circulation.gates[0].shape = rectangle(5.0, 0.0, 9.0, 2.0)
+    report = fixture("rectangle").edited(lie).report()
+    d = next(d for d in report.cross_checks if d.item == "gate width 1")
+    assert d.blocks_pass and d.theirs == "9 m" and d.ours == "4.00 m"
+
+
+def test_rules_and_site_disagreeing_on_a_group_development_scheme_apply_the_stricter():
+    inputs = fixture("rectangle").with_rules(
+        lambda r: setattr(r.circulation.applies, "value", False))
+    report = inputs.report()
+    c = check(report, "Rule 8 and the site agree")
+    assert c.finding.status is Z.UNVERIFIED and "15,450" in c.finding.measured
+    assert status(report, LOOP_ROADS) is Z.PASS  # rule 8 was applied all the same

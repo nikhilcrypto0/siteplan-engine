@@ -6,7 +6,7 @@ is refused (validate.py), and one whose outline does not match the net ownership
 
 from __future__ import annotations
 
-from siteplan.contracts.common import Status
+from siteplan.contracts.common import Provenance, Status
 from siteplan.contracts.resolved_rules import STILT_IN_RULE_HEIGHT
 from siteplan.contracts.site_model import NET_PLOT_TOLERANCE
 from siteplan.contracts.validation import Check, Family
@@ -30,10 +30,12 @@ def net_plot_check(ctx: Context) -> Check:
         return plain(Family.CONSISTENCY, rule, Status.UNVERIFIED, "the outline is not a valid "
                      "polygon", required, clause)
     ok = abs(drawn - own.value) <= NET_PLOT_TOLERANCE * own.value
-    return plain(Family.CONSISTENCY, rule, Status.PASS if ok else Status.UNVERIFIED,
-                 f"outline {drawn:,.1f} m²", required, clause,
-                 "" if ok else "The outline and the net ownership disagree: the site model is "
-                 "not consistent, so nothing measured on it can be trusted.")
+    confirmed = ctx.site.net_plot.status is not Provenance.UNVERIFIED
+    note = ("" if ok else "The outline and the net ownership disagree: the site model is not "
+            "consistent, so nothing measured on it can be trusted.") + (
+        "" if confirmed else " The outline is not confirmed by anyone.")
+    return plain(Family.CONSISTENCY, rule, Status.PASS if ok and confirmed else Status.UNVERIFIED,
+                 f"outline {drawn:,.1f} m²", required, clause, note.strip())
 
 
 def no_net_plot_check() -> Check:
