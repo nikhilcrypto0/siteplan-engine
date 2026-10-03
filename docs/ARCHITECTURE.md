@@ -107,7 +107,8 @@ differently.
    bound, even when it is unknown whether the limit applies; FAIL beyond a bound that applies on
    confirmed inputs; UNVERIFIED beyond a bound that may apply, on unconfirmed inputs, or when
    the limit cannot be worked out. A generator does not offer a height beyond a bound that
-   applies or may apply (`HeightLimit.beyond`).
+   applies, confirmed or not (`HeightLimit.beyond`); beyond a bound that only may apply the
+   height may be offered, labelled UNVERIFIED.
 2. **A prohibited high-rise is not a permission for anything lower** (`HeightRules.high_rise`).
    Eligibility is ALLOWED, PROHIBITED or UNVERIFIED and follows from its grounds (the road, the
    plot size). PROHIBITED says only that no building of the high-rise height or more may stand
