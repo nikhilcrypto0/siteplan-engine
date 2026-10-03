@@ -359,7 +359,10 @@ def parking_checks(ctx: Context, ground: Ground) -> tuple[list[Check], dict[str,
     out += [surface] if surface else []
     if f.cellar_levels:
         out += [cellar_setback_check(ctx, f), ramp_check(ctx, f), utilities_check(ctx)]
+    first = ctx.stilt_readings[0]
+    surface_cars = surface_bays(ctx, ground, first).valid
     quantities = {"built_up_sqm": f.built_up_sqm, "parking_stilt_sqm": f.stilt_sqm,
+                  "parking_cars": float(f.stilt_cars + f.cellar_cars + surface_cars),
                   "parking_stilt_cars": float(f.stilt_cars),
                   "parking_cellar_levels": float(f.cellar_levels),
                   "parking_cellar_sqm_per_level": f.cellar_sqm_per_level,

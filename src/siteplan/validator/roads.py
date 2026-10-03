@@ -19,7 +19,7 @@ from siteplan.contracts.resolved_rules import (
     CIRCULATION_IN_SETBACK,
     STILT_IN_RULE_HEIGHT,
 )
-from siteplan.contracts.validation import Check, Family
+from siteplan.contracts.validation import Check, Discrepancy, Family
 from siteplan.validator.context import Context
 from siteplan.validator.drawn import DrawnRoad
 from siteplan.validator.ground import Ground
@@ -50,7 +50,7 @@ from siteplan.validator.shapes import (
 )
 from siteplan.validator.zones import deepest_setback_m, setback_zone
 
-WIDTH_SLACK_M = 0.02  # a road drawn this close to its width is that width
+DECLARED_SLACK_M = 0.05  # a road may measure this much under the width it declares
 TOUCH_M = 0.5  # a block or a road this close to a road opens onto it
 END_M = 1.0  # how much of a road's length counts as its end
 ROAD_KINDS = (RoadKind.APPROACH, RoadKind.LOOP, RoadKind.INTERNAL, RoadKind.CUL_DE_SAC)
@@ -89,10 +89,10 @@ def _approach_checks(ctx: Context, ground: Ground, network: BaseGeometry) -> lis
         def cell(a: Assignment, width=width, measured=measured, road=road) -> Cell:
             reading = a[APPROACH_WIDTH]
             shown = (f"{measured:.2f} m wide, from the entrance to the loop road"
-                     + ("" if abs(measured - road.declared_width_m) <= WIDTH_SLACK_M * 5
+                     + ("" if abs(measured - road.declared_width_m) <= DECLARED_SLACK_M
                         else f" (declared {road.declared_width_m:g} m)"))
             required = f">= {low:g} m (the order gives {low:g} to {high:g} m)"
-            if width + TOL_M < low - WIDTH_SLACK_M:
+            if width + TOL_M < low:
                 return Cell(Status.FAIL, shown, required)
             if reading == MINIMUM_APPROACH:
                 return Cell(Status.PASS, shown, required,
@@ -100,7 +100,7 @@ def _approach_checks(ctx: Context, ground: Ground, network: BaseGeometry) -> lis
                             f"main approach road must be wider, so the authority may ask up to "
                             f"{high:g} m.")
             if reading == AUTHORITY_CHOICE:
-                status = Status.PASS if width >= high - WIDTH_SLACK_M else Status.UNVERIFIED
+                status = Status.PASS if width >= high - TOL_M else Status.UNVERIFIED
                 return Cell(status, shown, required, f"The authority may ask for up to "
                             f"{high:g} m; only that width settles it.")
             return unknown_reading(APPROACH_WIDTH, reading)
@@ -114,21 +114,24 @@ def _approach_checks(ctx: Context, ground: Ground, network: BaseGeometry) -> lis
 
 
 def _network_check(ctx: Context, ground: Ground, network: BaseGeometry) -> Check | None:
+    """Every loop, internal and approach road held to 9 m, each against its own ground, so a
+    pinch in one road is not lost among the area of the others."""
     nine = ctx.rules.circulation.internal_road_m.value
     loops, inner = ctx.drawn.roads_of(RoadKind.LOOP), ctx.drawn.roads_of(RoadKind.INTERNAL)
     if not (loops or inner):
         return None
-    tested = _ground_of(ctx, ground, *RULE_8M_KINDS)
-    wide = opening(network, nine - WIDTH_SLACK_M).intersection(tested)
-    thin = tested.area > 0 and wide.area < tested.area * 0.98
+    wide = opening(network, nine)
+    thin = {r.id: width_in(network, _usable(r, ground), nine)
+            for r in ctx.drawn.roads_of(*RULE_8M_KINDS)
+            if _usable(r, ground).difference(wide).area > NOISE_SQM}
     declared = [r for r in ctx.drawn.roads_of(*RULE_8M_KINDS)
-                if r.declared_width_m + TOL_M < nine - WIDTH_SLACK_M]
-    measured = width_in(network, tested, nine)
+                if r.declared_width_m + TOL_M < nine]
     what = (f"a loop road and {_plural(len(inner), 'internal road')}" if loops
             else _plural(len(inner), "internal road"))
     problems = []
     if thin:
-        problems.append(f"narrower than {nine:g} m in places ({measured:.2f} m)")
+        problems.append(f"narrower than {nine:g} m in places: " + ", ".join(
+            f"{i} ({w:.2f} m)" for i, w in thin.items()))
     if declared:
         problems.append("declared narrower: " + ", ".join(r.id for r in declared))
     return plain(
@@ -147,7 +150,7 @@ def _perimeter_checks(ctx: Context, ground: Ground) -> list[Check]:
     lane = ctx.rules.fire.clear_width_m.value
     usable = union_of_all([_usable(r, ground) for r in ring])
     width = width_in(usable, usable, lane)
-    thin = width + TOL_M < lane - WIDTH_SLACK_M
+    thin = width + TOL_M < lane
     out = [plain(
         Family.ROADS, "Fire lane: perimeter lane inside the setback", verdict(not thin),
         f"narrower than {lane:g} m in places ({width:.2f} m)" if thin else
@@ -225,7 +228,7 @@ def _cul_de_sac_checks(ctx: Context, ground: Ground) -> list[Check]:
         width = min(width_in(usable, usable, wide), road.declared_width_m)
         head = inscribed_radius(usable)
         problems = []
-        if width + TOL_M < wide - WIDTH_SLACK_M:
+        if width + TOL_M < wide:
             problems.append(f"{width:.2f} m wide")
         if not low - TOL_M <= length <= high + TOL_M:
             problems.append(f"{length:.0f} m long")
@@ -278,7 +281,7 @@ def driveway_check(ctx: Context, ground: Ground) -> Check | None:
     least = circ.driveway_min_m.value
     widths = {d.id: min(width_in(_usable(d, ground), _usable(d, ground), least),
                         d.declared_width_m) for d in drives}
-    thin = [i for i, w in widths.items() if w + TOL_M < least - WIDTH_SLACK_M]
+    thin = [i for i, w in widths.items() if w + TOL_M < least]
     return plain(
         Family.ROADS, "Driveways", verdict(not thin),
         (f"narrower than {least:g} m: " + ", ".join(thin)) if thin else
@@ -325,6 +328,26 @@ def setback_circulation_check(ctx: Context) -> Check | None:
         clause=law.SETBACK_ON_NET_PLOT_CLAUSE,
         note="Not settled law: rule 13(c)(vii) lets ramps use side and rear setbacks leaving 7 m "
         "for fire vehicles, which implies circulation there without saying so.")
+
+
+# --- Declared against drawn ------------------------------------------------------------------
+
+
+def width_discrepancies(ctx: Context, ground: Ground) -> list[Discrepancy]:
+    """A road that measures narrower than the width it declares: the declaration flatters the
+    layout, so it blocks a pass."""
+    network = healed(_ground_of(ctx, ground, *ROAD_KINDS, RoadKind.PERIMETER_LANE,
+                                RoadKind.DRIVEWAY))
+    out = []
+    for road in ctx.drawn.roads:
+        usable = _usable(road, ground)
+        measured = width_in(network, usable, road.declared_width_m + 1.0)
+        if measured + DECLARED_SLACK_M < road.declared_width_m:
+            out.append(Discrepancy(
+                item=f"road width {road.id}", source="generator",
+                theirs=f"{road.declared_width_m:g} m wide", ours=f"{measured:.2f} m wide",
+                blocks_pass=True))
+    return out
 
 
 # --- All of it -------------------------------------------------------------------------------

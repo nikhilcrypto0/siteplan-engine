@@ -26,6 +26,7 @@ FOOTPRINT_SQM = 0.1  # a footprint that differs by less than this is the same fo
 FOOTPRINT_SHARE = 0.001  # or by this share of its area
 METRIC_SHARE = 0.005  # a figure that differs by less than this share is the same figure
 PARTITION_SHARE = 0.005  # a ledger use that differs by less than this share of the net area
+CARS_SHARE = 0.02  # a count of cars that differs by less than this share is the same count
 BAND_SLACK_M = 1e-6
 Z = Status
 
@@ -110,6 +111,17 @@ def metrics(ctx: Context, built_up_sqm: float, qualifying_sqm: float, units: dic
         out.append(_d("flats by type", "generator", str(dict(sorted(m.flats_by_type.items()))),
                       str(dict(sorted(units.items()))), False))
     return out
+
+
+def cars(candidate: CandidateLayout, laid_out: float) -> list[Discrepancy]:
+    """The cars the generator says fit, against the ones laid out here. Said to fit more than
+    were found, it is recorded (not blocked: the layout rules are the validator's own)."""
+    m = candidate.metrics
+    claimed = (m.extra.get("parking", {}).get("cars") or {}) if m else {}
+    total = sum(claimed.values())
+    if total > laid_out * (1 + CARS_SHARE) + 1:
+        return [_d("cars that fit", "generator", f"{total:,}", f"{laid_out:,.0f}", False)]
+    return []
 
 
 def partition(candidate: CandidateLayout, ledger: Ledger, net: Shape) -> list[Discrepancy]:
