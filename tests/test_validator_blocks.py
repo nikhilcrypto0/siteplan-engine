@@ -322,3 +322,21 @@ def test_the_verdict_follows_the_contracts_rule_and_a_report_survives_json():
     assert report.verdict.legal is legal_verdict(report.legal, report.cross_checks)
     assert ValidationReport.model_validate_json(report.model_dump_json()) == report
     assert all(c.family.value != "PROGRAM" for c in report.legal)
+
+
+def test_a_road_width_read_off_a_drawing_and_never_confirmed_is_unverified_either_way():
+    inputs = fixture("rectangle").with_site(
+        lambda s: setattr(s.access_road(), "row_status", "UNVERIFIED_DRAWING_VALUE"))
+    c = check(inputs.report(), "Abutting road width (for T1)")
+    assert c.finding.status is Z.UNVERIFIED and "not confirmed" in c.finding.measured
+    too_narrow = _road(inputs, legal=10.0)
+    assert status(too_narrow.report(), "Abutting road width (for T1)") is Z.UNVERIFIED
+
+
+def test_a_limit_that_rests_on_an_unconfirmed_input_settles_nothing_even_when_exceeded():
+    def unconfirmed(rules):
+        rules.height.limits[0].max_m = 20.0  # every tower is over it
+        rules.height.limits[0].status = Provenance.UNVERIFIED
+    report = fixture("rectangle").with_rules(unconfirmed).report()
+    c = next(x for x in report.legal if x.finding.rule.startswith("Rule-height limit"))
+    assert c.finding.status is Z.UNVERIFIED

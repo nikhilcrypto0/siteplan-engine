@@ -20,6 +20,7 @@ from siteplan.units import sqm_to_sqft
 from siteplan.validator.accounting import Ledger
 from siteplan.validator.context import Context
 from siteplan.validator.measure import TowerGeometry
+from siteplan.validator.parking import cellar_setback_m
 from siteplan.validator.shapes import union_of_all
 
 FOOTPRINT_SQM = 0.1  # a footprint that differs by less than this is the same footprint
@@ -27,6 +28,7 @@ FOOTPRINT_SHARE = 0.001  # or by this share of its area
 METRIC_SHARE = 0.005  # a figure that differs by less than this share is the same figure
 PARTITION_SHARE = 0.005  # a ledger use that differs by less than this share of the net area
 CARS_SHARE = 0.02  # a count of cars that differs by less than this share is the same count
+SETBACK_SLACK_M = 0.01
 BAND_SLACK_M = 1e-6
 Z = Status
 
@@ -111,6 +113,18 @@ def metrics(ctx: Context, built_up_sqm: float, qualifying_sqm: float, units: dic
         out.append(_d("flats by type", "generator", str(dict(sorted(m.flats_by_type.items()))),
                       str(dict(sorted(units.items()))), False))
     return out
+
+
+def cellars(ctx: Context) -> list[Discrepancy]:
+    """A cellar setback stated smaller than rule 13(c)(x) asks flatters the layout."""
+    d = ctx.drawn
+    if d.cellar_setback_claimed_m is None or not d.cellar_levels:
+        return []
+    need = cellar_setback_m(ctx.rules, ctx.net.area, d.cellar_levels)
+    if d.cellar_setback_claimed_m + SETBACK_SLACK_M < need:
+        return [_d("cellar setback", "generator", f"{d.cellar_setback_claimed_m:g} m",
+                   f"{need:g} m", True)]
+    return []
 
 
 def cars(candidate: CandidateLayout, laid_out: float) -> list[Discrepancy]:

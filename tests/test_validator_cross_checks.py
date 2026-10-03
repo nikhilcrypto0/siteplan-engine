@@ -242,3 +242,21 @@ def test_a_footprint_outside_what_the_generator_stated_is_a_blocking_discrepancy
         t.footprint = shape(box(0, 0, 10, 10))
     d = _discrepancy(fixture("rectangle").edited(lie).report(), "footprint T2")
     assert d.blocks_pass and "m² at (" in d.theirs and "differ" in d.ours
+
+
+def test_a_cellar_setback_stated_smaller_than_the_rule_asks_blocks():
+    def understate(candidate):
+        candidate.program.cellars.setback_m = 1.0
+    d = _discrepancy(fixture("rectangle").edited(understate).report(), "cellar setback")
+    assert d.blocks_pass and d.theirs == "1 m" and d.ours == "3 m"
+    assert not [x for x in fixture("rectangle").report().cross_checks
+                if x.item == "cellar setback"]
+
+
+def test_a_net_plot_nobody_has_confirmed_is_not_a_basis_for_a_pass():
+    from siteplan.contracts.common import Provenance
+
+    inputs = fixture("rectangle").with_site(
+        lambda s: setattr(s.net_plot, "status", Provenance.UNVERIFIED))
+    c = check(inputs.report(), "Net plot")
+    assert c.finding.status is Z.UNVERIFIED and "not confirmed" in c.finding.note

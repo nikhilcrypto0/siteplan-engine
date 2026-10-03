@@ -83,7 +83,7 @@ def _approach_checks(ctx: Context, ground: Ground, network: BaseGeometry) -> lis
     out = []
     for road in roads:
         usable = _usable(road, ground)
-        measured = width_in(network, usable, high)
+        measured = width_in(network, usable, max(high, road.declared_width_m) + 1.0)
         width = min(measured, road.declared_width_m)
 
         def cell(a: Assignment, width=width, measured=measured, road=road) -> Cell:
@@ -355,9 +355,18 @@ def width_discrepancies(ctx: Context, ground: Ground) -> list[Discrepancy]:
 
 def road_checks(ctx: Context, ground: Ground) -> list[Check]:
     circ = ctx.rules.circulation
+    area = ctx.site.ownership.gross_sqm.value
+    by_the_site = law.is_group_development(area)
     out: list[Check] = []
-    if not circ.applies.value:
-        area = ctx.site.ownership.gross_sqm.value
+    if circ.applies.value != by_the_site:
+        out.append(plain(
+            Family.CONSISTENCY, "Rule 8 and the site agree", Status.UNVERIFIED,
+            f"the rules say rule 8 {'applies' if circ.applies.value else 'does not apply'}; the "
+            f"site, {area:,.0f} m², {'is' if by_the_site else 'is not'} a Group Development Scheme",
+            f"rule 8 applies from {law.GROUP_DEVELOPMENT_MIN_SITE_SQM:,.0f} m²",
+            law.GROUP_DEVELOPMENT_CLAUSE,
+            "The rules and the site disagree; rule 8 is applied, the stricter."))
+    if not (circ.applies.value or by_the_site):
         out.append(plain(
             Family.ROADS, "Internal roads (rule 8)", Status.INFO,
             f"site {area:,.0f} m²: not a Group Development Scheme",
