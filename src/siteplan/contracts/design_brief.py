@@ -4,19 +4,34 @@ It holds no site fact and no legal value. A firm standard may be stricter than t
 utilities in a cellar than rule 13(c)(xi) allows) but never restates it. Floors here are intent
 ("Stilt + 8", or the most the law allows); what the law allows is ResolvedRules', in metres, and
 the optimizer turns metres into floors with the heights given here.
+
+Design margins are what the firm, or the engine in its place, wants to keep in hand above each
+legal minimum, so that a layout is not planned on a legal cliff (a setback of exactly the minimum,
+open space of exactly 10%). They are never law: the optimizer aims at the legal minimum plus the
+margin, the validator goes on judging against the legal minimum alone, and a report shows both.
 """
 
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Any, Literal
+from typing import Any
 
 from pydantic import Field, PositiveInt, model_validator
 
 from siteplan import rules
-from siteplan.contracts.common import Contract, Part, Sourced
+from siteplan.contracts.common import (
+    Basis,
+    Contract,
+    FacilityUse,
+    Part,
+    Provenance,
+    Sourced,
+    SourceKind,
+    Surface,
+)
 
 MIX_SUM_TOLERANCE = 0.01
+MARGIN_SOURCES = (SourceKind.FIRM_STANDARD, SourceKind.ENGINE_DEFAULT, SourceKind.TEST_PROFILE)
 
 
 class UnitsMode(StrEnum):
@@ -55,6 +70,16 @@ class ParetoPoint(StrEnum):
     CONVENTIONAL_OPEN_SPACE = "CONVENTIONAL_OPEN_SPACE"
 
 
+class Priority(StrEnum):
+    """What an objective may weigh. A priority left out counts as 1."""
+
+    SALEABLE_AREA = "saleable_area"
+    UNITS = "units"
+    OPEN_SPACE = "open_space"
+    MIX_FIT = "mix_fit"
+    CONVENTIONALITY = "conventionality"
+
+
 class UnitTarget(Part):
     mode: UnitsMode = UnitsMode.MAXIMISE
     target: PositiveInt | None = None
@@ -84,11 +109,16 @@ class ClubHouseRequest(Part):
 
 
 class AmenityRequest(Part):
+    """A facility the firm wants. Its use and surface are the firm's to state, in its amenity
+    library; left unstated they are None, and nothing downstream assumes them from the name.
+    Whether its ground counts as organised open space is the law's (ResolvedRules), not ours."""
+
     name: str
     priority: AmenityPriority = AmenityPriority.PREFERRED
     setting: AmenitySetting = AmenitySetting.EITHER
     footprint_m: tuple[float, float] | None = None  # width, depth
-    surface: Literal["SOFT", "HARD"] | None = None  # whether it qualifies is the law's, not ours
+    use: FacilityUse | None = None
+    surface: Surface | None = None
 
 
 class ParkingPreferences(Part):
@@ -156,6 +186,64 @@ class FirmStandards(Part):
         return self
 
 
+def _no_margin() -> Sourced[float]:
+    return Sourced[float](value=0.0, status=Provenance.ASSUMED_FOR_TEST,
+                          source_kind=SourceKind.ENGINE_DEFAULT, source="no design margin set")
+
+
+class DesignMargins(Part):
+    """What to keep in hand above each legal minimum. Each margin is the firm's standard or the
+    engine's design assumption, never law, and none is invented here: with nothing set every
+    margin is zero and the target is the legal minimum itself."""
+
+    setback_extra_m: Sourced[float] = Field(default_factory=_no_margin)
+    tower_gap_extra_m: Sourced[float] = Field(default_factory=_no_margin)
+    road_width_extra_m: Sourced[float] = Field(default_factory=_no_margin)
+    # Added to the open space the law asks, as a share of the same area: 0.005 is half a point.
+    open_space_extra_fraction: Sourced[float] = Field(default_factory=_no_margin)
+    # Parking beyond what the law asks, as a share of it: 0.05 is 5% more.
+    parking_extra_fraction: Sourced[float] = Field(default_factory=_no_margin)
+
+    @model_validator(mode="after")
+    def _never_law(self) -> DesignMargins:
+        for name in type(self).model_fields:
+            margin = getattr(self, name)
+            if margin.value < 0:
+                raise ValueError(f"{name} is a margin above the legal minimum: it cannot be "
+                                 "negative")
+            if margin.source_kind not in MARGIN_SOURCES:
+                raise ValueError(f"{name} is the firm's standard or the engine's assumption, "
+                                 f"never {margin.source_kind}")
+        return self
+
+    def basis(self, name: str) -> Basis:
+        """What kind of fact a margin is: the firm's standard when the firm set it, else the
+        engine's design assumption."""
+        kind = getattr(self, name).source_kind
+        return (Basis.FIRM_STANDARD if kind is SourceKind.FIRM_STANDARD
+                else Basis.ENGINE_DESIGN_ASSUMPTION)
+
+    @property
+    def any_set(self) -> bool:
+        return any(getattr(self, name).value > 0 for name in type(self).model_fields)
+
+    def setback_target_m(self, legal_m: float) -> float:
+        return legal_m + self.setback_extra_m.value
+
+    def gap_target_m(self, legal_m: float) -> float:
+        return legal_m + self.tower_gap_extra_m.value
+
+    def road_width_target_m(self, legal_m: float) -> float:
+        return legal_m + self.road_width_extra_m.value
+
+    def open_space_target_sqm(self, legal_sqm: float, legal_share: float) -> float:
+        """The legal area plus the margin's share of the same area the legal share is of."""
+        return legal_sqm * (1 + self.open_space_extra_fraction.value / legal_share)
+
+    def parking_target_sqm(self, legal_sqm: float) -> float:
+        return legal_sqm * (1 + self.parking_extra_fraction.value)
+
+
 class SoftPreference(Part):
     kind: str  # e.g. 'keep_away_from_road'
     params: dict[str, Any] = {}
@@ -165,9 +253,15 @@ class SoftPreference(Part):
 class Objectives(Part):
     pareto: list[ParetoPoint] = list(ParetoPoint)
     options: PositiveInt = 3
-    priorities: dict[str, float] = {}  # weights over saleable area, units, open space, mix fit
+    priorities: dict[Priority, float] = {}  # weights; a priority left out counts as 1
     soft_preferences: list[SoftPreference] = []
     search_budget_s: float | None = Field(None, gt=0)
+
+    @model_validator(mode="after")
+    def _weights(self) -> Objectives:
+        if any(weight < 0 for weight in self.priorities.values()):
+            raise ValueError("a priority's weight cannot be negative")
+        return self
 
 
 class DesignBrief(Contract):
@@ -177,4 +271,5 @@ class DesignBrief(Contract):
     program: Program
     height_intent: HeightIntent
     firm_standards: FirmStandards
+    design_margins: DesignMargins = Field(default_factory=DesignMargins)
     objectives: Objectives = Objectives()
