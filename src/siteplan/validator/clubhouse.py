@@ -9,6 +9,8 @@ generator's metrics.
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from siteplan.contracts.common import Status
 from siteplan.contracts.resolved_rules import (
     AMENITY_SHARE,
@@ -37,6 +39,8 @@ from siteplan.validator.shapes import NOISE_SQM, union_of_all
 SIZE_SLACK_SQM = 0.5  # a club house this close to the size asked is that size
 TABLE_III_NOTE = ("Below the high-rise threshold Table III (rule 5) applies and is not modelled "
                   "yet: the validator does not judge it.")
+TALL_CLUB_NOTE = ("A club house as tall as a high-rise is a block like the towers: its fire access "
+                  "and spacing are not modelled for it, so it cannot pass.")
 
 
 def units_of(ctx: Context) -> int:
@@ -59,7 +63,7 @@ def club_house_check(ctx: Context) -> Check:
              f"{a.share_of_built_up.note}" if a.share_of_built_up.note else
              f"{a.share_of_built_up.basis.value}, {a.share_of_built_up.status.value}")
 
-    def cell(x: Assignment) -> Cell:
+    def size_cell(x: Assignment) -> Cell:
         reading = x[AMENITY_SHARE]
         if units < a.from_units.value:
             return Cell(Status.INFO, f"{units} units", f"the clause applies from "
@@ -82,6 +86,15 @@ def club_house_check(ctx: Context) -> Check:
                         f"up to {share:.0%} of built-up or {a.cap_sqft_2016.value:,.0f} sft, "
                         f"whichever is lower = {ceiling:,.0f} m²", basis)
         return unknown_reading(AMENITY_SHARE, reading)
+
+    tall = _club_class(ctx)
+
+    def cell(x: Assignment) -> Cell:
+        result = size_cell(x)
+        if tall is not None and tall.high_rise and result.status is Status.PASS:
+            return replace(result, status=Status.UNVERIFIED,
+                           note=" ".join((result.note, TALL_CLUB_NOTE)).strip())
+        return result
 
     return check_from(run(ctx.rules, [AMENITY_SHARE], cell), family=Family.AMENITIES,
                       rule="Amenities (club house)", clause=a.share_of_built_up.clause)
@@ -110,8 +123,10 @@ def club_setback_check(ctx: Context) -> Check | None:
                      f"{cls.height_m:g} m high: {cls.label}", "the setback its height asks",
                      clause, TABLE_III_NOTE)
     gap = setback_of(ctx.net, ctx.drawn.club)
-    return plain(Family.SETBACK, rule, verdict(gap + TOL_M >= cls.setback_m), f"{gap:.2f} m",
-                 f">= {cls.setback_m:.2f} m to the net plot line", clause)
+    status = verdict(gap + TOL_M >= cls.setback_m)
+    return plain(Family.SETBACK, rule, Status.UNVERIFIED if status is Status.PASS else status,
+                 f"{gap:.2f} m", f">= {cls.setback_m:.2f} m to the net plot line", clause,
+                 TALL_CLUB_NOTE if status is Status.PASS else "")
 
 
 def club_gap_checks(ctx: Context) -> list[Check]:

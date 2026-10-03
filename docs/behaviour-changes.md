@@ -23,6 +23,20 @@ pinned and explained in a characterization test:
   planned as if the stilt is not counted and draw no strip, but if it counts the setback reaches
   9 m and a strip is asked for, so the validator says UNVERIFIED naming the reading where the
   checker says INFO.
+- **Checks the checker does not make** (each found by an adversarial review that drew a layout
+  the first version of the validator passed, each pinned by a test): a gate is as wide as its
+  opening, stands in the boundary on the side the street runs, and only such a gate starts a lane
+  or relaxes the planted strip; the roads are one network entered from a gate (no floating
+  piece, a loop that closes, a main approach from the gate to the loop, a way in drawn as a
+  driveway is not one); the club house keeps a Table IV gap from each tower; the master plan's
+  road width counts only where the strip is surrendered; a prototype floor shorter than the
+  firm's is said; bays are rectangles a car fits in and ramps are measured across and reach the
+  cellar; what a facility's surface is comes from the brief's request of that name (without it a
+  play area on the tot-lot leaves the open space UNVERIFIED, because the adapters do not yet fill
+  `AmenityRequest.surface` from the firm's library); a club house as tall as a high-rise can
+  never pass on its size alone. On the generator's real options (Dhulapally and Suchitra) none
+  of these produces a FAIL, and the open space is UNVERIFIED without the facility surfaces in the
+  brief and PASS with the firm's.
 - **A bad shape gets a report, not a crash** (`test_validator_robustness.py`): a polygon that
   crosses itself anywhere in a candidate is mended to be measured and named in a blocking
   cross-check; a net plot that crosses itself or encloses nothing is refused like a missing one;
