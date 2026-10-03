@@ -57,8 +57,9 @@ def _setback_permits(rules: ResolvedRules) -> list[dict]:
         _permit(PhysicalUse.ROAD, **roads),
         _permit(PhysicalUse.FIRE_HARDSTANDING, **roads),
         _permit(PhysicalUse.RAMP, Permit.CONDITIONAL,
-                condition=f"a side or rear setback only, after leaving the width kept for "
-                          f"fire-fighting vehicles ({rules.parking.ramp_in_setbacks.clause})")]
+                condition=f"a side or rear setback only, after leaving "
+                          f"{rules.parking.ramp_fire_clearance_m.value:g} m for fire-fighting "
+                          f"vehicles ({rules.parking.ramp_fire_clearance_m.clause})")]
 
 
 def _front_zone(net: Polygon, side: str | None, setback_m: float, setback_zone):

@@ -1,9 +1,10 @@
 """The open readings of the law, as ResolvedRules carries them.
 
 Where the orders leave a question open, the contract keeps every reading as an Interpretation.
-Three are carried as ALL, so every consumer evaluates every reading and a result that holds under
+Five are carried as ALL, so every consumer evaluates every reading and a result that holds under
 only some of them is UNVERIFIED: whether the stilt counts toward the Table IV height, of which
-area the open space is measured, and whether roads may run inside a setback. The others carry the
+area the open space is measured, whether roads may run inside a setback, whether a tot-lot must
+be soft to count as open space, and what the rule's "etc." takes in. The others carry the
 reading the engine takes for the test (ASSUMED_FOR_TEST, never evidence). A test profile picks a
 reading with `selections`; that choice is recorded ASSUMED_FOR_TEST and never stronger.
 
@@ -23,16 +24,18 @@ from siteplan.contracts.resolved_rules import (
     FIRE_TURNING_RADIUS,
     MIXED_HEIGHT_SPACING,
     OPEN_SPACE_BASIS,
+    OPEN_SPACE_OTHER_USES,
     STILT_IN_RULE_HEIGHT,
+    TOT_LOT_SURFACE,
     VISITOR_PARKING,
 )
 
-# Readings beyond the eight every ResolvedRules must carry.
+# Readings beyond the ten every ResolvedRules must carry.
 VISITOR_PARKING_IN_SETBACK = "visitor_parking_in_setback"
 ROAD_IN_WATER_BUFFER = "road_in_water_buffer"
 CELLAR_EXTRA_SETBACK = "cellar_extra_setback"
-LARGE_PROJECT_AMENITY_SHARE = "large_project_amenity_share"
 TABLE_IV_ROAD_WIDTH = "table_iv_road_width"  # carried only when a master-plan width is known
+NAMED_USES = "'greenery, tot lot or soft landscaping, etc.'"
 
 # The three denominators of the organised open space: ResolvedRules gives the area under each.
 OPEN_SPACE_READINGS = ("gross_before_surrender", "gross_after_surrender", "net_after_surrender")
@@ -184,15 +187,24 @@ def _defaults(master_plan_road: bool) -> list[dict]:
                      "cellar floor' fixes the amounts, not which floors keep them"],
             settles="the cellar section on a sanctioned plan with two or more cellars"),
         _reading(
-            LARGE_PROJECT_AMENITY_SHARE,
-            "Does the share of the site area for common amenities in a project above a set "
-            "size, written for row and cluster housing, also bind a group development scheme?",
-            {"not_applied": "no: rule 8 has no such clause, and a group scheme's amenities are "
-                            "rule 15(a)(x)'s share of the built-up area",
-             "applied": "yes: the authority holds every very large project to it"},
-            "not_applied",
-            sources=[rules.LARGE_PROJECT_AMENITY_CLAUSE],
-            settles="the authority's practice on a sanctioned group scheme above the size"),
+            TOT_LOT_SURFACE,
+            "Must a tot-lot stand on soft ground to count as organised open space?",
+            {"any_surface": "a tot-lot counts whatever its surface: the rule names the tot-lot "
+                            "and does not say what it is laid on",
+             "soft_only": "a tot-lot counts only on soft ground"},
+            ALL,
+            sources=[f"{rules.OPEN_SPACE_CLAUSE}: {NAMED_USES}"],
+            settles="a sanctioned plan whose counted tot-lot is paved, or the authority's "
+                    "reading"),
+        _reading(
+            OPEN_SPACE_OTHER_USES,
+            "Does the rule's 'etc.' take in open recreation other than the uses it names?",
+            {"same_kind_only": "only greenery, a tot-lot and soft landscaping count",
+             "any_open_recreation": "any recreation open to the sky counts too (a court, a "
+                                    "pool, a paved deck)"},
+            ALL,
+            sources=[f"{rules.OPEN_SPACE_CLAUSE}: {NAMED_USES}"],
+            settles="the organised open space a sanctioned plan's area statement counts"),
     ]
     if master_plan_road:
         readings.append(_reading(

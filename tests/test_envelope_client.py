@@ -23,7 +23,10 @@ from siteplan.contracts.resolved_rules import (
     CIRCULATION_IN_SETBACK,
     OPEN_SPACE_BASIS,
     STILT_IN_RULE_HEIGHT,
+    Applicability,
+    Eligibility,
     HeightMeasure,
+    LimitBound,
     TableVColumn,
 )
 from siteplan.intake import build_project, extract, load_defaults, save
@@ -97,24 +100,30 @@ def test_dhulapally_on_its_60_ft_road_may_rise_to_30_m_of_rule_height():
     _, site = _dhulapally()
     rules = resolve(site)
     limit, = _limit(rules, HeightMeasure.RULE_HEIGHT)
-    assert limit.max_m == 30.0 and limit.status is Provenance.USER_CONFIRMED
+    assert (limit.id, limit.bound, limit.max_m) == ("table_iv_road", LimitBound.BOUNDED, 30.0)
+    assert limit.status is Provenance.USER_CONFIRMED
+    assert limit.applicability is Applicability.APPLIES
     assert "the 18.29 m road" in limit.reason and "serves buildings up to 30 m" in limit.reason
     assert "up to 35 m needs 24 m of road" in limit.reason  # the next band needs the wider road
     assert "substituted by G.O.Ms.No.50 of 2019" in limit.clause
     assert rules.height.high_rise_from_m.value == 21.0
+    assert rules.height.high_rise.eligibility is Eligibility.ALLOWED
     assert rules.category.group_development.value and rules.circulation.applies.value
     assert [b.setback_m for b in rules.height.bands if b.modelled] == [
-        8, 9, 10, 11, 12, 13, 14, 16, 17, 18, 20]
+        7, 8, 9, 10, 11, 12, 13, 14, 16, 17, 18, 20]  # 7 m: a block of exactly 21 m
 
 
 def test_dhulapally_keeps_the_dead_end_street_join_and_airport_open_not_guessed():
     project, site = _dhulapally()
     rules = resolve(site)
     physical, = _limit(rules, HeightMeasure.PHYSICAL_HEIGHT)
-    assert physical.max_m == 30.0 and physical.status is Provenance.UNVERIFIED
-    assert physical.applies_if == "the access road ends at the plot"
+    assert physical.max_m == 30.0 and physical.applicability is Applicability.UNKNOWN
+    assert physical.condition.text == "the access road ends at the plot"
+    # stilt + 10 is 33 m: not refused, not passed, until the architect says where the road leads
+    assert physical.evaluate(33.0) is Status.UNVERIFIED and not physical.beyond(33.0)
+    assert physical.evaluate(30.0) is Status.PASS
     airport, = _limit(rules, HeightMeasure.AMSL)
-    assert airport.max_m is None and airport.status is Provenance.UNVERIFIED
+    assert airport.bound is LimitBound.NOT_EVALUATED and airport.status is Provenance.UNVERIFIED
     assert site.access.joins_12m_street.value is None
     assert site.access.joins_12m_street.status is Provenance.UNVERIFIED
     assert rules.jurisdiction.table_v_column is TableVColumn.OPEN  # CMC and CURE not confirmed
@@ -175,10 +184,13 @@ def test_the_debug_envelope_cuts_each_band_from_the_firms_net_outline():
     env = envelope(site, rules)
     net = site.net_plot.value.to_shapely()
     assert net.area == pytest.approx(18_968.9, rel=1e-3)
-    below, *high = env.bands
+    below, exactly, *high = env.bands
     assert not below.modelled and below.kind.value == "NON_HIGH_RISE"
+    assert (exactly.above_m, exactly.up_to_m, exactly.setback_m) == (21.0, 21.0, 7.0)
+    assert exactly.area_sqm > high[0].area_sqm  # the 21 m block's 7 m leaves more land
     assert [(b.up_to_m, b.setback_m) for b in high] == [(24.0, 8.0), (27.0, 9.0), (30.0, 10.0)]
     assert [b.area_sqm for b in high] == pytest.approx([13_198, 12_512, 11_834], rel=1e-3)
+    high = [exactly, *high]
     for shorter, taller in zip(high, high[1:], strict=False):
         assert _land(taller.buildable).difference(_land(shorter.buildable)).area < 1e-6
     for band in high:
@@ -201,13 +213,14 @@ def test_the_northern_arm_is_in_every_width_profile_and_held_back_by_nothing():
                  if r.shape.to_shapely().centroid.y > 180]  # the tail, above the main body
         assert north, profile.applies_to
         arms[profile.applies_to] = max(north, key=lambda r: r.area_sqm)
-    assert list(arms) == ["net plot", "21-24 m", "24-27 m", "27-30 m"]
+    assert list(arms) == ["net plot", "21 m", "21-24 m", "24-27 m", "27-30 m"]
     assert 20 < arms["net plot"].max_inscribed_width_m < 30  # about 24 m where it tapers
-    bands = ["21-24 m", "24-27 m", "27-30 m"]
+    bands = ["21 m", "21-24 m", "24-27 m", "27-30 m"]
     widths = [arms[b].max_inscribed_width_m for b in bands]
     areas = [arms[b].area_sqm for b in bands]
     assert widths == sorted(widths, reverse=True) and areas == sorted(areas, reverse=True)
-    assert 10 < widths[-1] < widths[0] < 18 and all(a > 900 for a in areas)
+    # 18.6 m wide at 21 m (a 7 m setback), about 12 m at 27-30 m (10 m)
+    assert 10 < widths[-1] < widths[0] < 20 and all(a > 900 for a in areas)
     assert env.exclusions == [] and all(r.length_m > 40 for r in arms.values())
     for band, key in zip(env.bands[1:], bands, strict=True):  # kept in the buildable land
         kept = _land(band.buildable).intersection(arms[key].shape.to_shapely())
@@ -318,8 +331,11 @@ def test_suchitras_12_38_m_road_allows_24_m_and_says_the_width_is_only_a_drawing
     limit, = _limit(rules, HeightMeasure.RULE_HEIGHT)
     assert limit.max_m == 24.0 and limit.status is Provenance.UNVERIFIED
     assert "UNVERIFIED_DRAWING_VALUE" in limit.reason
+    # a limit on a drawing value settles nothing, and still holds a taller block back
+    assert limit.evaluate(24.0) is Status.UNVERIFIED and limit.beyond(27.0)
+    assert rules.height.high_rise.eligibility is Eligibility.UNVERIFIED
     env = envelope(site, rules)
-    assert [b.up_to_m for b in env.bands if b.modelled] == [24.0]
+    assert [b.up_to_m for b in env.bands if b.modelled] == [21.0, 24.0]
     eligibility = next(f for f in env.facts if f.rule == "High-rise eligibility")
     assert eligibility.status is Status.UNVERIFIED  # a high-rise rests on an unverified road
     assert next(f for f in env.facts if f.rule == "Rule-height limit").status is Status.UNVERIFIED

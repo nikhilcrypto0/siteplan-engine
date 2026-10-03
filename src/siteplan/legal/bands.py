@@ -13,7 +13,16 @@ from dataclasses import dataclass
 
 from shapely.geometry.base import BaseGeometry
 
-from siteplan.contracts.resolved_rules import Band, HeightMeasure, ResolvedRules
+from siteplan.contracts.resolved_rules import (
+    HEIGHT_TOL_M,
+    Applicability,
+    Band,
+    BandKind,
+    Eligibility,
+    HeightMeasure,
+    LimitBound,
+    ResolvedRules,
+)
 
 
 @dataclass(frozen=True)
@@ -25,35 +34,46 @@ class BandLand:
 
 
 def band_key(above_m: float, up_to_m: float) -> str:
-    """A band as people write it, e.g. '27-30 m'."""
-    return f"{above_m:g}-{up_to_m:g} m"
+    """A band as people write it, e.g. '27-30 m', or '21 m' for a band of one height."""
+    return f"{above_m:g} m" if above_m == up_to_m else f"{above_m:g}-{up_to_m:g} m"
 
 
 def height_cap(rules: ResolvedRules) -> tuple[float | None, str]:
     """The tallest rule height the law allows here, in metres, and why there is none to give.
 
-    A limit with no condition always binds. Limits with a condition are alternatives (which road
+    A limit in force binds. Limits whose condition is unsettled are alternatives (which road
     width counts, say): the envelope takes the most any of them allows, so it shows the land of
-    every reading. A limit that cannot be evaluated, or that is not there, caps nothing; the
-    second value then says why, and is empty when there is a cap.
+    every reading. A limit that does not apply, has no number or cannot be worked out caps
+    nothing; the second value then says why, and is empty when there is a cap.
     """
-    limits = [lim for lim in rules.height.limits if lim.measure is HeightMeasure.RULE_HEIGHT]
-    caps = [lim.max_m for lim in limits if lim.applies_if is None and lim.max_m is not None]
-    either = [lim for lim in limits if lim.applies_if is not None]
-    if either and all(lim.max_m is not None for lim in either):
+    limits = [lim for lim in rules.height.limits if lim.measure is HeightMeasure.RULE_HEIGHT
+              and lim.applicability is not Applicability.DOES_NOT_APPLY]
+    bounded = [lim for lim in limits if lim.bound is LimitBound.BOUNDED]
+    caps = [lim.max_m for lim in bounded if lim.applicability is Applicability.APPLIES]
+    either = [lim for lim in limits if lim.applicability is Applicability.UNKNOWN]
+    if either and all(lim.bound is LimitBound.BOUNDED for lim in either):
         caps.append(max(lim.max_m for lim in either))
     if caps:
         return min(caps), ""
-    return None, "; ".join(lim.reason for lim in limits if lim.max_m is None)
+    return None, "; ".join(lim.reason for lim in limits if lim.bound is not LimitBound.BOUNDED)
+
+
+def _lowest(band: Band) -> float:
+    """The lowest height a band holds."""
+    return band.above_m if band.above_inclusive else band.above_m + 2 * HEIGHT_TOL_M
 
 
 def band_lands(rules: ResolvedRules, net, excluded) -> list[BandLand]:
-    """The modelled bands up to the height cap, tallest last, each inside the one before."""
+    """The modelled bands up to the height cap, tallest last, each inside the one before. Where
+    a high-rise is prohibited no high-rise band has land, and nothing lower is drawn either: the
+    band below is Table III's, not modelled."""
     cap, _ = height_cap(rules)
+    prohibited = rules.height.high_rise.eligibility is Eligibility.PROHIBITED
     lands: list[BandLand] = []
     previous = net
     for band in rules.height.bands:
-        if not band.modelled or (cap is not None and band.above_m >= cap):
+        if (not band.modelled or (prohibited and band.kind is BandKind.HIGH_RISE)
+                or (cap is not None and _lowest(band) > cap + HEIGHT_TOL_M)):
             continue
         if band.setback_m is None:
             raise ValueError(f"the band {band_key(band.above_m, band.up_to_m)} is modelled but "
