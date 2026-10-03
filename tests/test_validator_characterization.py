@@ -27,9 +27,6 @@ DIFFERENT = {
         "a hand-made claim, not the checker's: under 21 m Table III applies, which neither "
         "models, so the validator says NOT_CHECKED under 'All-round setback: T1'",
 }
-# What the checker says on every layout and the validator says only when it has something to
-# say: with no driveway drawn there is nothing to judge.
-NOT_CARRIED = {"Driveways"}
 
 
 @pytest.mark.parametrize("site", SITES)
@@ -37,7 +34,7 @@ def test_the_validator_gives_todays_statuses_on_the_contract_fixtures(site):
     inputs = fixture(site)
     ours = statuses(inputs.report())
     for claim in inputs.candidate.generator_claims:
-        if claim.rule in NOT_CARRIED or (site, claim.rule) in DIFFERENT:
+        if (site, claim.rule) in DIFFERENT:
             continue
         assert ours.get(claim.rule) is claim.status, (site, claim.rule, claim.status,
                                                       ours.get(claim.rule))

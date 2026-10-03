@@ -274,11 +274,18 @@ def _served_check(ctx: Context, ground: Ground) -> Check:
 # --- Driveways -------------------------------------------------------------------------------
 
 
-def driveway_check(ctx: Context, ground: Ground) -> Check | None:
+def driveway_check(ctx: Context, ground: Ground, scheme: bool) -> Check | None:
+    """Driveways at least 4.5 m wide, none counted as an internal road. On a group development
+    scheme with none drawn it says so; elsewhere there is nothing to say."""
     drives = ctx.drawn.roads_of(RoadKind.DRIVEWAY)
-    if not drives:
-        return None
     circ = ctx.rules.circulation
+    if not drives:
+        return plain(Family.ROADS, "Driveways", Status.PASS,
+                     "none drawn: every block opens onto an internal road",
+                     f">= {circ.driveway_min_m.value:g} m where one is drawn",
+                     circ.driveway_min_m.clause,
+                     "No driveway is counted towards the internal-road requirement."
+                     ) if scheme else None
     least = circ.driveway_min_m.value
     widths = {d.id: min(width_of(_usable(d, ground), least), d.declared_width_m)
               for d in drives}
@@ -386,6 +393,6 @@ def road_checks(ctx: Context, ground: Ground) -> list[Check]:
         out += _perimeter_checks(ctx, ground)
         out += _cul_de_sac_checks(ctx, ground)
         out += [_dead_end_check(ctx, ground), _served_check(ctx, ground)]
-    drive = driveway_check(ctx, ground)
+    drive = driveway_check(ctx, ground, circ.applies.value or by_the_site)
     out += [drive] if drive else []
     return out
