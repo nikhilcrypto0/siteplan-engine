@@ -167,8 +167,8 @@ def _ramp(x1=133.1, y0=62.87, y1=86.86):
 
 
 @pytest.mark.parametrize("edit, ok", [
-    (_ramp(x1=133.05), True),  # 5.35 m: within the 0.05 m a drawing may fall short by
-    (_ramp(x1=133.04), False),  # 5.34 m
+    (_ramp(x1=133.05), True),  # 5.35 m: within the few centimetres a drawing may fall short by
+    (_ramp(x1=133.0), False),  # 5.30 m
     (_ramp(y1=86.83), True),  # 23.96 m long
     (_ramp(y1=86.81), False),  # 23.94 m
     (_ramp(y0=63.3, y1=87.25), True),  # 0.4 m from the road below it

@@ -43,6 +43,7 @@ from siteplan.validator.readings import (
 )
 from siteplan.validator.shapes import (
     NOISE_SQM,
+    bent,
     polygons_of,
     sides_of,
     union_of_all,
@@ -62,12 +63,43 @@ NO_SETBACK_NOTE = ("The setback is not known under this reading (below the high-
                    "not known.")
 
 
+def site_columns(ctx: Context) -> set[str]:
+    """The Table V columns the site's own jurisdiction allows (rules.parking_columns): one when
+    it settles whose rules apply, both when it does not."""
+    j = ctx.site.jurisdiction
+    pcts = law.parking_columns(j.authority.value, j.inside_cure.value)
+    return {c.value for c, pct in ctx.rules.parking.share_pct_by_column.items()
+            if c is not TableVColumn.OPEN and pct in pcts}
+
+
 def table_v_columns(ctx: Context) -> dict[str, float]:
-    """Each Table V share the site could take: the one its jurisdiction settles, or both."""
+    """Each Table V share the site could take: the one the rules settled on, or both, and any
+    column the site's own jurisdiction allows that the rules left out."""
     p = ctx.rules.parking
     if p.share_pct is not None:
-        return {ctx.rules.jurisdiction.table_v_column.value: p.share_pct.value}
-    return {c.value: pct for c, pct in p.share_pct_by_column.items() if c is not TableVColumn.OPEN}
+        carried = {ctx.rules.jurisdiction.table_v_column.value: p.share_pct.value}
+    else:
+        carried = {c.value: pct for c, pct in p.share_pct_by_column.items()
+                   if c is not TableVColumn.OPEN}
+    by_name = {c.value: pct for c, pct in p.share_pct_by_column.items()}
+    return {**carried, **{name: by_name[name] for name in site_columns(ctx)
+                          if name in by_name and name not in carried}}
+
+
+def table_v_agreement(ctx: Context) -> Check | None:
+    """The rules and the site's jurisdiction must name the same Table V column. Where the site
+    allows one the rules left out, both are evaluated and the disagreement is said."""
+    p = ctx.rules.parking
+    carried = ({ctx.rules.jurisdiction.table_v_column.value} if p.share_pct is not None
+               else {c.value for c in p.share_pct_by_column if c is not TableVColumn.OPEN})
+    missing = site_columns(ctx) - carried
+    if not missing:
+        return None
+    return plain(Family.CONSISTENCY, "Table V column: rules and site agree", Status.UNVERIFIED,
+                 f"the rules carry {', '.join(sorted(carried))}; the site's jurisdiction also "
+                 f"allows {', '.join(sorted(missing))}", "the column the site's jurisdiction gives",
+                 law.PARKING_CLAUSE, "ResolvedRules and the site disagree on whose rules apply; "
+                 "both columns are evaluated and the stricter decides what can be passed.")
 
 
 def bay_standard(ctx: Context) -> tuple[tuple[float, float], float, float]:
@@ -155,6 +187,7 @@ def surface_bays(ctx: Context, ground: Ground, reading: str) -> Surface:
     lane = ctx.rules.fire.clear_width_m.value
     bands = union_of_all([clear_band(t.footprint, lane) for t in ctx.high_rise(reading)])
     others = union_of_all([g for owner, g in ground.solids if owner != BAYS])
+    motorable = d.motorable
     tree = shapely.STRtree(list(d.bays))
     problems: dict[str, int] = {}
     valid = 0
@@ -171,7 +204,7 @@ def surface_bays(ctx: Context, ground: Ground, reading: str) -> Surface:
             why = "in the setback"
         elif b.intersection(bands).area > BAY_OVERLAP_SQM:
             why = "in a fire lane's clear ground"
-        elif b.intersection(d.motorable).area > BAY_OVERLAP_SQM:
+        elif b.intersection(motorable).area > BAY_OVERLAP_SQM:
             why = "on a road or fire lane"
         elif b.intersection(others).area > BAY_OVERLAP_SQM:
             why = "on a building, ramp or facility"
@@ -347,12 +380,16 @@ def ramp_check(ctx: Context, f: Floors) -> Check:
             return Cell(Status.FAIL, "no ramp drawn", required)
         widths = [width_of(r, max(single, pair) + 1.0) for r in ramps]
         lengths = [sides_of(r)[0] for r in ramps]
-        problems = []
+        problems, doubts = [], []
         if not (any(w + RAMP_SLACK_M >= single for w in widths)
                 or (len(widths) >= 2 and all(w + RAMP_SLACK_M >= pair for w in widths))):
             problems.append(f"width {', '.join(f'{w:.2f}' for w in widths)} m")
-        if any(n + RAMP_SLACK_M < length_needed for n in lengths):
+        short = [(r, w) for r, w, n in zip(ramps, widths, lengths, strict=True)
+                 if n + RAMP_SLACK_M < length_needed]
+        if any(not bent(r, w) for r, w in short):
             problems.append("too short for a 1 in 8 slope")
+        elif short:  # the box round a ramp that folds is shorter than the ramp
+            doubts.append("a ramp round a bend: its length along its own middle is not measured")
         if road_land.is_empty or any(r.distance(road_land) > RAMP_TOUCH_M for r in ramps):
             problems.append("top not on a road")
         if d.cellar_outline.is_empty or all(
@@ -365,6 +402,10 @@ def ramp_check(ctx: Context, f: Floors) -> Check:
         measured = ("; ".join(problems) if problems else
                     f"{len(ramps)} x {widths[0]:.2f} m wide, {lengths[0]:.1f} m long, beside a "
                     "road, clear of the setbacks")
+        if not problems and doubts:
+            return Cell(Status.UNVERIFIED, "; ".join(doubts), required,
+                        "The box round a ramp that bends is shorter than the ramp; whether it is "
+                        f"{length_needed:g} m along its middle is for a person to check.")
         if not problems and deepest_setback_m(ctx, reading) is None:
             return Cell(Status.UNVERIFIED, measured, required, NO_SETBACK_NOTE)
         if not problems and into.intersection(front_only).area > NOISE_SQM:
@@ -393,6 +434,8 @@ def utilities_check(ctx: Context) -> Check:
 def parking_checks(ctx: Context, ground: Ground) -> tuple[list[Check], dict[str, float]]:
     f = measure_floors(ctx)
     out = [table_v_check(ctx, ground, f), visitors_check(ctx, ground, f)]
+    agreement = table_v_agreement(ctx)
+    out += [agreement] if agreement else []
     surface = surface_check(ctx, ground)
     out += [surface] if surface else []
     if f.cellar_levels:

@@ -37,6 +37,15 @@ pinned and explained in a characterization test:
   never pass on its size alone. On the generator's real options (Dhulapally and Suchitra) none
   of these produces a FAIL, and the open space is UNVERIFIED without the facility surfaces in the
   brief and PASS with the firm's.
+- **Legal layouts it must not fail** (found by a review that drew what an architect or an
+  optimizer would; `test_validator_false_fails.py`): a gate at a corner of the plot is measured
+  along the edge it lies on; a second entrance on a second surveyed road is UNVERIFIED, not
+  failed; a plot turned a hair keeps both edges a diagonal road side faces; a ramp or
+  cul-de-sac that bends or folds is UNVERIFIED on its length, not failed on the length of its
+  box (a straight one that is short still fails); a 9 m loop drawn as chords of an arc passes;
+  a shape that only touches itself is no defect; a seed, a score or a claim is recorded, not
+  measured; rules that name another Table V column than the site's jurisdiction does are held
+  to both. Shapes are snapped to a micrometre grid, so drawn shared edges are shared.
 - **A bad shape gets a report, not a crash** (`test_validator_robustness.py`): a polygon that
   crosses itself anywhere in a candidate is mended to be measured and named in a blocking
   cross-check; a net plot that crosses itself or encloses nothing is refused like a missing one;

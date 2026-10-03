@@ -194,14 +194,28 @@ def test_a_site_whose_net_plot_crosses_itself_or_encloses_nothing_is_refused():
 def test_a_number_that_is_not_a_number_fails_the_candidate_and_names_where(bad):
     def spoil(candidate):
         candidate.towers[1].x = bad
-        candidate.metrics.saleable_sqft = bad
+        candidate.towers[2].y = bad
     report = fixture("rectangle").edited(spoil).report()
     assert [c.finding.status for c in report.legal] == [Z.FAIL]
     measured = report.legal[0].finding.measured
-    assert "towers[1].x" in measured and "metrics.saleable_sqft" in measured
+    assert "towers[1].x" in measured and "towers[2].y" in measured
     assert report.verdict.legal is LegalVerdict.FAIL
     assert [c.finding.status for c in report.program] == [Z.UNVERIFIED]
     assert ValidationReport.model_validate_json(report.model_dump_json()) == report
+
+
+def test_what_a_candidate_only_records_is_not_measured_and_costs_it_nothing():
+    """A 64-bit seed, a score of infinity, a metric of nan: none is a coordinate or a count, and
+    refusing the candidate for one would make an optimizer that records its seed unvalidatable."""
+    def record(candidate):
+        candidate.seed = 2 ** 63 - 1
+        candidate.scores = {"yield": float("inf"), "spread": float("nan")}
+        candidate.metrics.mix_error = float("nan")
+        candidate.metrics.extra = {"note": 10 ** 30}
+    clean = fixture("rectangle").report()
+    report = fixture("rectangle").edited(record).report()
+    assert len(report.legal) == len(clean.legal) > 20
+    assert report.verdict.legal is clean.verdict.legal
 
 
 def _give_up(error):

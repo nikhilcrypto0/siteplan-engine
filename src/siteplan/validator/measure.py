@@ -18,7 +18,7 @@ from siteplan.contracts.design_brief import DesignBrief
 from siteplan.contracts.prototype import TowerPrototype
 from siteplan.contracts.resolved_rules import Band, BandKind, ResolvedRules
 from siteplan.validator.readings import COUNTED, EACH_OWN, NOT_COUNTED, TALLER_GOVERNS
-from siteplan.validator.shapes import polygon_of
+from siteplan.validator.shapes import polygon_of, snapped
 
 TOL_M = 1e-6  # a length this close to the rule's is the rule's
 
@@ -89,9 +89,11 @@ def tower_geometries(candidate: CandidateLayout, brief: DesignBrief) -> tuple[To
 
         towers.append(TowerGeometry(
             name=placed.name,
-            footprint=placed.world(block(prototype.footprint, "its prototype's footprint")),
+            footprint=snapped(placed.world(
+                block(prototype.footprint, "its prototype's footprint"))),
             stated=sound(placed.footprint, "the footprint it states"),
-            cores=tuple(placed.world(block(z.shape, "a core zone")) for z in prototype.core_zones),
+            cores=tuple(snapped(placed.world(block(z.shape, "a core zone")))
+                        for z in prototype.core_zones),
             floors=placed.floors_above_stilt, has_stilt=placed.has_stilt,
             stilt_height_m=prototype.heights.stilt_height_m or standards.stilt_height_m.value,
             floor_height_m=prototype.heights.floor_to_floor_m or standards.floor_to_floor_m.value,

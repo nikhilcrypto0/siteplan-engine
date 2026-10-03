@@ -42,8 +42,9 @@ from siteplan.validator.readings import (
 )
 from siteplan.validator.shapes import (
     NOISE_SQM,
+    bent,
     healed,
-    inscribed_radius,
+    inscribed_circle,
     opening,
     polygons_of,
     sides_of,
@@ -56,6 +57,8 @@ from siteplan.validator.zones import deepest_setback_m, setback_zone
 DECLARED_SLACK_M = 0.05  # a road may measure this much under the width it declares
 ROAD_KINDS = (RoadKind.APPROACH, RoadKind.LOOP, RoadKind.INTERNAL, RoadKind.CUL_DE_SAC)
 RULE_8M_KINDS = (RoadKind.APPROACH, RoadKind.LOOP, RoadKind.INTERNAL)
+BEND_NOTE = ("A road round a bend is longer along its own middle than the box round it, which is "
+             "all this validator measures: its length is for a person to check.")
 
 
 def _clause(ctx: Context) -> str:
@@ -173,17 +176,28 @@ def _perimeter_checks(ctx: Context, ground: Ground) -> list[Check]:
 # --- Dead ends and cul-de-sacs ---------------------------------------------------------------
 
 
-def _head_radius(body: Polygon | None, joint: BaseGeometry, radius_m: float,
-                 width_m: float) -> float:
-    """The largest circle in the free end of a cul-de-sac, the end furthest from where it joins
-    the road: a head at the wrong end turns nothing."""
+def _head(body: Polygon | None, joint: BaseGeometry, radius_m: float,
+          width_m: float) -> tuple[float, Point | None]:
+    """The largest circle in the free end of a cul-de-sac (the end furthest from where it joins
+    the road) and where it is: a head at the wrong end turns nothing."""
     if body is None:
-        return 0.0
+        return 0.0, None
     if joint.is_empty:
-        return inscribed_radius(body)
+        return inscribed_circle(body)
     anchor = joint.centroid
     far = max((Point(c) for c in body.exterior.coords), key=anchor.distance)
-    return inscribed_radius(body.intersection(far.buffer(2 * radius_m + width_m)))
+    return inscribed_circle(body.intersection(far.buffer(2 * radius_m + width_m)))
+
+
+def _stem(body: Polygon | None, head: float, centre: Point | None, width_m: float
+          ) -> Polygon | None:
+    """The cul-de-sac without its turning head: the head's circle is taken out, and any sliver or
+    corner of a head that is not round is opened away."""
+    if body is None or centre is None:
+        return body
+    left = body.difference(centre.buffer(head + 0.1))
+    pieces = polygons_of(opening(left, width_m / 2) if not left.is_empty else left)
+    return max(pieces, key=lambda p: p.area) if pieces else None
 
 
 def _cul_de_sac_checks(ctx: Context, ground: Ground) -> list[Check]:
@@ -195,26 +209,33 @@ def _cul_de_sac_checks(ctx: Context, ground: Ground) -> list[Check]:
     for road in ctx.drawn.roads_of(RoadKind.CUL_DE_SAC):
         usable = _usable(road, ground)
         parts = polygons_of(usable)
-        length = sides_of(max(parts, key=lambda p: p.area))[0] if parts else 0.0
+        body = max(parts, key=lambda p: p.area) if parts else None
+        length = sides_of(body)[0] if body is not None else 0.0
         width = min(width_of(usable, wide), road.declared_width_m)
         joint = usable.buffer(TOUCH_M).intersection(network)
-        head = _head_radius(max(parts, key=lambda p: p.area) if parts else None, joint, radius,
-                            wide)
-        problems = []
+        head, centre = _head(body, joint, radius, wide)
+        stem = _stem(body, head, centre, wide)
+        crooked = stem is not None and bent(stem, width)
+        problems, doubts = [], []
         if width + TOL_M < wide:
             problems.append(f"{width:.2f} m wide")
-        if not low - TOL_M <= length <= high + TOL_M:
+        if length > high + TOL_M:  # the box is never longer than the road: too long for certain
             problems.append(f"{length:.0f} m long")
+        elif length < low - TOL_M:
+            (doubts if crooked else problems).append(f"{length:.0f} m long")
+        elif crooked:
+            doubts.append(f"{length:.0f} m across a bend")
         if head + TOL_M < radius - 0.05:
             problems.append(f"head radius {head:.1f} m")
         if usable.distance(network) > TOUCH_M:
             problems.append("not joined to the road network")
+        status = Status.FAIL if problems else Status.UNVERIFIED if doubts else Status.PASS
+        shown = "; ".join(problems + doubts) if problems or doubts else (
+            f"{width:.2f} m wide, {length:.0f} m long, head radius {head:.1f} m")
         out.append(plain(
-            Family.ROADS, f"Internal roads: cul-de-sac {road.id}", verdict(not problems),
-            "; ".join(problems) if problems else
-            f"{width:.2f} m wide, {length:.0f} m long, head radius {head:.1f} m",
+            Family.ROADS, f"Internal roads: cul-de-sac {road.id}", status, shown,
             f"{wide:g} m wide, {low:g}-{high:g} m long, a {radius:g} m radius head",
-            _clause(ctx), subject=road.id))
+            _clause(ctx), BEND_NOTE if doubts and not problems else "", subject=road.id))
     return out
 
 
