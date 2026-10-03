@@ -243,6 +243,19 @@ INVENTORY: tuple[Entry, ...] = (
                 "whether a road or fire lane runs inside the buffer.",
     ),
     Entry(
+        "Plot", "A building keeps its distance, vertical and horizontal, from an electricity "
+                "line.",
+        f"{rules.ELECTRICAL_HT_CLEARANCE_M:g} m from a high-tension line, "
+        f"{rules.ELECTRICAL_LT_CLEARANCE_M:g} m from a low-tension line",
+        rules.ELECTRICAL_CLAUSE, Reading.NOT_MODELLED,
+        uses=("ELECTRICAL_HT_CLEARANCE_M", "ELECTRICAL_LT_CLEARANCE_M", "ELECTRICAL_CLAUSE"),
+        choice="The prototype's layout and checker do not model it. The value is carried in "
+               "ResolvedRules for the legal envelope and the validator, which can hold a "
+               "building to it only where the survey draws the line; a line that is only "
+               "marked is reported UNVERIFIED. Rule 3(c)(ii), the green belt and 10 m roads "
+               "under a tower line, is not modelled at all.",
+    ),
+    Entry(
         "Plot", "No building within the buffers of railways, power lines and protected "
                 "monuments.",
         "e.g. 3 m clear of a high-tension line; 100 m from a protected monument",
@@ -441,9 +454,11 @@ INVENTORY: tuple[Entry, ...] = (
         "Parking", "Cellar ramps.",
         f"one ramp of {rules.RAMP_SINGLE_MIN_WIDTH_M:g} m or two of "
         f"{rules.RAMP_PAIR_MIN_WIDTH_M:g} m at 1 in 8; never in the front setback or building "
-        "line, and in a side or rear setback only after leaving 7 m for fire vehicles",
+        f"line, and in a side or rear setback only after leaving {rules.RAMP_FIRE_CLEARANCE_M:g} "
+        "m for fire vehicles",
         rules.RAMP_CLAUSE, Reading.AS_WRITTEN, _BOTH,
-        ("RAMP_SINGLE_MIN_WIDTH_M", "RAMP_PAIR_MIN_WIDTH_M", "RAMP_MAX_GRADIENT", "RAMP_CLAUSE"),
+        ("RAMP_SINGLE_MIN_WIDTH_M", "RAMP_PAIR_MIN_WIDTH_M", "RAMP_MAX_GRADIENT",
+         "RAMP_FIRE_CLEARANCE_M", "RAMP_CLAUSE"),
         choice="The layout draws the single 5.4 m ramp, as long as the cellar storey times 8, "
                "with its top on a road, outside every setback (stricter than the side and rear "
                "allowance) and out of the fire lanes. Each cellar level loses one ramp's "

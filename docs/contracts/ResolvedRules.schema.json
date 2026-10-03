@@ -9,12 +9,6 @@
         "from_units": {
           "$ref": "#/$defs/RuleValue_int_"
         },
-        "large_project_from_acres": {
-          "$ref": "#/$defs/RuleValue_float_"
-        },
-        "large_project_share_of_site": {
-          "$ref": "#/$defs/RuleValue_float_"
-        },
         "separate_block": {
           "$ref": "#/$defs/RuleValue_str_"
         },
@@ -31,16 +25,29 @@
         "share_of_built_up",
         "cap_sqft_2016",
         "from_units",
-        "separate_block",
-        "large_project_share_of_site",
-        "large_project_from_acres"
+        "separate_block"
       ],
       "title": "AmenityRules",
       "type": "object"
     },
+    "Applicability": {
+      "enum": [
+        "APPLIES",
+        "DOES_NOT_APPLY",
+        "UNKNOWN"
+      ],
+      "title": "Applicability",
+      "type": "string"
+    },
     "Band": {
       "additionalProperties": false,
+      "description": "One row of the height tables: the heights it covers and what it asks of them. Each edge\nsays whether it belongs to the band, so every height falls in exactly one band: a building of\nexactly 21 m is a high-rise (rule 2(f)) and has its own row.",
       "properties": {
+        "above_inclusive": {
+          "default": false,
+          "title": "Above Inclusive",
+          "type": "boolean"
+        },
         "above_m": {
           "minimum": 0,
           "title": "Above M",
@@ -98,6 +105,11 @@
           "$ref": "#/$defs/Provenance",
           "default": "VERIFIED"
         },
+        "up_to_inclusive": {
+          "default": true,
+          "title": "Up To Inclusive",
+          "type": "boolean"
+        },
         "up_to_m": {
           "exclusiveMinimum": 0,
           "title": "Up To M",
@@ -135,9 +147,6 @@
     "Category": {
       "additionalProperties": false,
       "properties": {
-        "above_5_acres": {
-          "$ref": "#/$defs/RuleValue_bool_"
-        },
         "amenities_from_units": {
           "$ref": "#/$defs/RuleValue_int_"
         },
@@ -147,8 +156,7 @@
       },
       "required": [
         "group_development",
-        "amenities_from_units",
-        "above_5_acres"
+        "amenities_from_units"
       ],
       "title": "Category",
       "type": "object"
@@ -211,6 +219,94 @@
       ],
       "title": "CirculationRules",
       "type": "object"
+    },
+    "ElectricalRules": {
+      "additionalProperties": false,
+      "description": "Rule 3(c)(i): the distance, vertical and horizontal, a building keeps from a line.",
+      "properties": {
+        "ht_clearance_m": {
+          "$ref": "#/$defs/RuleValue_float_"
+        },
+        "lt_clearance_m": {
+          "$ref": "#/$defs/RuleValue_float_"
+        }
+      },
+      "required": [
+        "ht_clearance_m",
+        "lt_clearance_m"
+      ],
+      "title": "ElectricalRules",
+      "type": "object"
+    },
+    "Eligibility": {
+      "enum": [
+        "ALLOWED",
+        "PROHIBITED",
+        "UNVERIFIED"
+      ],
+      "title": "Eligibility",
+      "type": "string"
+    },
+    "EligibilityGround": {
+      "additionalProperties": false,
+      "description": "One thing a high-rise needs of the site (its road, its plot), and whether the site has\nit. `met` is None when it cannot be told.",
+      "properties": {
+        "clause": {
+          "title": "Clause",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "measured": {
+          "title": "Measured",
+          "type": "string"
+        },
+        "met": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Met"
+        },
+        "required": {
+          "title": "Required",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/Provenance"
+        }
+      },
+      "required": [
+        "id",
+        "met",
+        "measured",
+        "required",
+        "clause",
+        "status"
+      ],
+      "title": "EligibilityGround",
+      "type": "object"
+    },
+    "FacilityUse": {
+      "description": "What a facility is for. The first three are the uses rule 7(a)(vii) names for organised\nopen space ('greenery, tot lot or soft landscaping etc.').",
+      "enum": [
+        "GREENERY",
+        "TOT_LOT",
+        "SOFT_LANDSCAPE",
+        "SPORT_COURT",
+        "POOL",
+        "PAVED_DECK",
+        "BUILT_SERVICE",
+        "OTHER"
+      ],
+      "title": "FacilityUse",
+      "type": "string"
     },
     "FireRules": {
       "additionalProperties": false,
@@ -277,22 +373,38 @@
     },
     "HeightLimit": {
       "additionalProperties": false,
+      "description": "One limit on a height. `bound` says whether there is a number; `applicability` whether\nthe limit is in force; `status` how far the inputs behind the number are confirmed. A limit\nthat does not apply stays in the list, so a report can say it was considered.",
       "properties": {
-        "applies_if": {
+        "applicability": {
+          "$ref": "#/$defs/Applicability",
+          "default": "APPLIES"
+        },
+        "bound": {
+          "$ref": "#/$defs/LimitBound"
+        },
+        "clause": {
+          "title": "Clause",
+          "type": "string"
+        },
+        "condition": {
           "anyOf": [
             {
-              "type": "string"
+              "$ref": "#/$defs/LimitCondition"
             },
             {
               "type": "null"
             }
           ],
-          "default": null,
-          "title": "Applies If"
+          "default": null
         },
-        "clause": {
-          "title": "Clause",
+        "id": {
+          "title": "Id",
           "type": "string"
+        },
+        "inclusive": {
+          "default": true,
+          "title": "Inclusive",
+          "type": "boolean"
         },
         "max_m": {
           "anyOf": [
@@ -303,6 +415,7 @@
               "type": "null"
             }
           ],
+          "default": null,
           "title": "Max M"
         },
         "measure": {
@@ -317,11 +430,12 @@
         }
       },
       "required": [
+        "id",
         "measure",
-        "max_m",
+        "bound",
+        "status",
         "reason",
-        "clause",
-        "status"
+        "clause"
       ],
       "title": "HeightLimit",
       "type": "object"
@@ -342,8 +456,12 @@
           "items": {
             "$ref": "#/$defs/Band"
           },
+          "minItems": 1,
           "title": "Bands",
           "type": "array"
+        },
+        "high_rise": {
+          "$ref": "#/$defs/HighRiseEligibility"
         },
         "high_rise_from_m": {
           "$ref": "#/$defs/RuleValue_float_"
@@ -380,12 +498,41 @@
       "required": [
         "measures",
         "high_rise_from_m",
+        "high_rise",
         "tdr_band_m",
         "tdr_plot_sqm",
         "bands",
         "limits"
       ],
       "title": "HeightRules",
+      "type": "object"
+    },
+    "HighRiseEligibility": {
+      "additionalProperties": false,
+      "description": "Whether the site may take a high-rise at all. PROHIBITED says only that no building of\nthe high-rise height or more may stand here. It says nothing about what may be built below\nthat height: the non-high-rise band, its permissible height, Table III setbacks, road\nconditions and spacing are their own rules, and a height in a band that is not modelled is\nnot validated by anyone until it is.",
+      "properties": {
+        "eligibility": {
+          "$ref": "#/$defs/Eligibility"
+        },
+        "grounds": {
+          "items": {
+            "$ref": "#/$defs/EligibilityGround"
+          },
+          "minItems": 1,
+          "title": "Grounds",
+          "type": "array"
+        },
+        "note": {
+          "default": "",
+          "title": "Note",
+          "type": "string"
+        }
+      },
+      "required": [
+        "eligibility",
+        "grounds"
+      ],
+      "title": "HighRiseEligibility",
       "type": "object"
     },
     "Interpretation": {
@@ -464,6 +611,38 @@
       "title": "JurisdictionRules",
       "type": "object"
     },
+    "LimitBound": {
+      "enum": [
+        "BOUNDED",
+        "UNBOUNDED",
+        "NOT_EVALUATED"
+      ],
+      "title": "LimitBound",
+      "type": "string"
+    },
+    "LimitCondition": {
+      "additionalProperties": false,
+      "properties": {
+        "fact": {
+          "$ref": "#/$defs/SiteFact"
+        },
+        "holds_when": {
+          "title": "Holds When",
+          "type": "boolean"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "fact",
+        "holds_when",
+        "text"
+      ],
+      "title": "LimitCondition",
+      "type": "object"
+    },
     "OpenSpaceRules": {
       "additionalProperties": false,
       "properties": {
@@ -484,8 +663,16 @@
         "min_width_m": {
           "$ref": "#/$defs/RuleValue_float_"
         },
+        "other_uses_interpretation": {
+          "default": "open_space_other_uses",
+          "title": "Other Uses Interpretation",
+          "type": "string"
+        },
         "over_and_above_setbacks": {
           "$ref": "#/$defs/RuleValue_bool_"
+        },
+        "qualifying_uses": {
+          "$ref": "#/$defs/RuleValue_list_FacilityUse__"
         },
         "requirement_sqm_by_reading": {
           "additionalProperties": {
@@ -496,6 +683,11 @@
         },
         "share": {
           "$ref": "#/$defs/RuleValue_float_"
+        },
+        "tot_lot_surface_interpretation": {
+          "default": "tot_lot_surface",
+          "title": "Tot Lot Surface Interpretation",
+          "type": "string"
         }
       },
       "required": [
@@ -505,7 +697,8 @@
         "min_pocket_sqm",
         "over_and_above_setbacks",
         "block_gaps_excluded",
-        "buffer_may_count"
+        "buffer_may_count",
+        "qualifying_uses"
       ],
       "title": "OpenSpaceRules",
       "type": "object"
@@ -547,6 +740,7 @@
       "description": "How parking is measured where no order says: the engine's own standard.",
       "properties": {
         "aisle_m": {
+          "exclusiveMinimum": 0,
           "title": "Aisle M",
           "type": "number"
         },
@@ -574,6 +768,7 @@
           "type": "string"
         },
         "sqm_per_car": {
+          "exclusiveMinimum": 0,
           "title": "Sqm Per Car",
           "type": "number"
         }
@@ -597,6 +792,9 @@
         },
         "measurement": {
           "$ref": "#/$defs/ParkingMeasurement"
+        },
+        "ramp_fire_clearance_m": {
+          "$ref": "#/$defs/RuleValue_float_"
         },
         "ramp_gradient": {
           "$ref": "#/$defs/RuleValue_float_"
@@ -652,6 +850,7 @@
         "ramp_pair_min_m",
         "ramp_gradient",
         "ramp_in_setbacks",
+        "ramp_fire_clearance_m",
         "utilities_max_fraction",
         "measurement"
       ],
@@ -820,6 +1019,46 @@
       "title": "RuleValue[int]",
       "type": "object"
     },
+    "RuleValue_list_FacilityUse__": {
+      "additionalProperties": false,
+      "properties": {
+        "basis": {
+          "$ref": "#/$defs/Basis",
+          "default": "LEGAL_RULE"
+        },
+        "clause": {
+          "title": "Clause",
+          "type": "string"
+        },
+        "note": {
+          "default": "",
+          "title": "Note",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/Provenance",
+          "default": "VERIFIED"
+        },
+        "unit": {
+          "default": "",
+          "title": "Unit",
+          "type": "string"
+        },
+        "value": {
+          "items": {
+            "$ref": "#/$defs/FacilityUse"
+          },
+          "title": "Value",
+          "type": "array"
+        }
+      },
+      "required": [
+        "value",
+        "clause"
+      ],
+      "title": "RuleValue[list[FacilityUse]]",
+      "type": "object"
+    },
     "RuleValue_list_tuple_Union_float__NoneType___float___": {
       "additionalProperties": false,
       "properties": {
@@ -986,6 +1225,15 @@
       "title": "SetbackRules",
       "type": "object"
     },
+    "SiteFact": {
+      "description": "The site facts a height limit may depend on.",
+      "enum": [
+        "access.dead_end",
+        "master_plan_land_surrendered"
+      ],
+      "title": "SiteFact",
+      "type": "string"
+    },
     "SpacingRules": {
       "additionalProperties": false,
       "properties": {
@@ -1047,6 +1295,9 @@
     "circulation": {
       "$ref": "#/$defs/CirculationRules"
     },
+    "electrical": {
+      "$ref": "#/$defs/ElectricalRules"
+    },
     "fire": {
       "$ref": "#/$defs/FireRules"
     },
@@ -1084,8 +1335,8 @@
       "type": "string"
     },
     "schema_version": {
-      "const": "1.0",
-      "default": "1.0",
+      "const": "1.1",
+      "default": "1.1",
       "title": "Schema Version",
       "type": "string"
     },
@@ -1116,6 +1367,7 @@
     "green_strip",
     "circulation",
     "fire",
+    "electrical",
     "parking",
     "amenities",
     "water",
