@@ -307,8 +307,9 @@ def test_the_contracts_are_version_1_1_and_refuse_an_older_document():
     ({}, Status.PASS, Status.FAIL, False),
     # a limit that applies, on inputs nobody confirmed: it settles nothing either way
     ({"status": "UNVERIFIED"}, Status.UNVERIFIED, Status.UNVERIFIED, False),
-    # a conditional limit whose condition is not settled: met anyway it passes
-    ({"condition": CONDITION, "applicability": "UNKNOWN"}, Status.PASS, Status.UNVERIFIED, False),
+    # a conditional limit whose condition is not settled: met anyway it passes; beyond it the
+    # height may be offered, labelled UNVERIFIED
+    ({"condition": CONDITION, "applicability": "UNKNOWN"}, Status.PASS, Status.UNVERIFIED, True),
     ({"condition": CONDITION, "applicability": "APPLIES"}, Status.PASS, Status.FAIL, False),
     ({"condition": CONDITION, "applicability": "DOES_NOT_APPLY"}, Status.INFO, Status.INFO, True),
     ({"bound": "UNBOUNDED", "max_m": None}, Status.PASS, Status.PASS, True),
