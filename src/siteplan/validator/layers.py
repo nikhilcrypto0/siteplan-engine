@@ -117,7 +117,7 @@ def _gap_layers(ctx: Context) -> list[RuleLayer]:
         widest = union_of_all(found)
         if widest.is_empty:
             continue
-        differs = widest.symmetric_difference(found[0]).area >= SAME_ZONE_SQM
+        differs = any(widest.symmetric_difference(z).area >= SAME_ZONE_SQM for z in found)
         out.append(_layer(f"block gap {pair}", LayerKind.BLOCK_GAP, widest,
                           ctx.rules.spacing.clause, applies_to=pair,
                           open_reading=MIXED_HEIGHT_SPACING if differs else None,
