@@ -4,6 +4,37 @@ A characterization test (tests/manifest.py) pins what the engine produces today.
 only together with a normative replacement test and an entry here: what changed, why, the
 evidence, and the test that now holds the behaviour. Newest first.
 
+## 2026-10-03: D (independent validator)
+
+No existing test changed. `siteplan.validator.validate` is new and `checks.py`, `access_checks.py`
+and `parking_checks.py` are untouched, so their logic still exists in two places until the legacy
+generator retires. Where the validator's verdict differs from today's checker, each case is
+pinned and explained in a characterization test:
+
+- **On the four contract fixtures** (`test_validator_characterization.py`) its statuses equal the
+  generator's claims except two: `rectangle`, "Fire access: the street joins a 12 m street" (the
+  generator ran without the architect's answer and said UNVERIFIED; the site model holds it, so
+  PASS), and `small_plot`, "Setbacks (Table III)" (a hand-made claim; under 21 m Table III
+  applies, which neither models, so NOT_CHECKED).
+- **On the firm's Dhulapally case** it fails exactly where `siteplan cases` does (the known list).
+- **On the generator's own Dhulapally options** under both readings of the stilt
+  (`test_validator_client_run.py`, client data, skips without it) there is no FAIL, and every
+  claim is reproduced except "Peripheral green strip" under `not_counted`: the options were
+  planned as if the stilt is not counted and draw no strip, but if it counts the setback reaches
+  9 m and a strip is asked for, so the validator says UNVERIFIED naming the reading where the
+  checker says INFO.
+- **A bad shape gets a report, not a crash** (`test_validator_robustness.py`): a polygon that
+  crosses itself anywhere in a candidate is mended to be measured and named in a blocking
+  cross-check; a net plot that crosses itself or encloses nothing is refused like a missing one;
+  a candidate holding nan or infinity fails as unmeasurable.
+- **Stricter by design**: a result that holds under only some readings of an open question is
+  UNVERIFIED naming the reading (the checker knows only the reading it planned for); an input
+  nobody confirmed (a road width read off a drawing) settles nothing; a block at exactly 21 m,
+  which falls between the resolved Table IV rows, is held to the row above and, short of it, is
+  UNVERIFIED rather than FAIL. Circulation inside the setback is UNVERIFIED on the generator's
+  layouts: its roads and fire lanes lie in the setback, which passes if circulation may stand
+  there and fails if not, and the rules leave that reading open.
+
 ## 2026-10-02: P0 (contracts, baseline, leak guard)
 
 - **Dhulapally's regression moves from a blind run to a pinned debug run.** The blind run cannot
