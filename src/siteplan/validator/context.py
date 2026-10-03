@@ -68,6 +68,7 @@ def build(site: CanonicalSiteModel, rules: ResolvedRules, brief: DesignBrief,
     classes: dict[str, dict[str, HeightClass]] = {}
     for reading in rules.readings(STILT_IN_RULE_HEIGHT):
         heights = {t.name: t.rule_height_m(reading) for t in towers}
-        classes[reading] = {name: classify(rules, h) for name, h in heights.items()
-                            if h is not None}
+        if None in heights.values():
+            continue  # a reading this validator cannot evaluate: its checks say so
+        classes[reading] = {name: classify(rules, h) for name, h in heights.items()}
     return Context(site, rules, brief, candidate, land, towers, drawing.read(candidate), classes)

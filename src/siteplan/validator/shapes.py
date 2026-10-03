@@ -15,8 +15,8 @@ from shapely.geometry.base import BaseGeometry
 from shapely.ops import polylabel, unary_union
 
 EPS_M = 0.01  # a centimetre: below this a drawn edge and its neighbour are the same edge
+OPENING_SLACK_M = 0.005  # a part this close to the width asked is that wide
 NOISE_SQM = 0.5  # less than this of overlap is drawing noise, not a car, a wall or a lane
-NARROW_SHARE = 0.02  # a shape is "narrower than w" when this share of it is thinner than w
 
 
 def polygons_of(geometry: BaseGeometry | None) -> list[Polygon]:
@@ -36,26 +36,36 @@ def union_of_all(geometries) -> BaseGeometry:
 
 def opening(shape: BaseGeometry, width_m: float) -> BaseGeometry:
     """The shape without any part narrower than `width_m`: shrunk by half the width and grown
-    back. Square (mitre) corners, so a corner that is wide enough on both sides is kept."""
-    half = width_m / 2 - 1e-6
-    return shape.buffer(-half, join_style="mitre").buffer(half, join_style="mitre")
+    back. Square (mitre) corners, so a corner that is wide enough on both sides is kept.
+    A part within a centimetre of the width is kept: shrunk by exactly half its width a part
+    leaves a hairline that the geometry library drops or swells, so the shrink stops half a
+    centimetre short on each side."""
+    half = width_m / 2 - OPENING_SLACK_M
+    with np.errstate(divide="ignore", invalid="ignore"):  # GEOS notes a collapsed shape
+        return shape.buffer(-half, join_style="mitre").buffer(half, join_style="mitre")
+
+
+def narrow_part(shape: BaseGeometry, width_m: float) -> BaseGeometry:
+    """The parts of a shape narrower than `width_m`."""
+    return shape.difference(opening(shape, width_m))
 
 
 def narrower_than(shape: BaseGeometry, width_m: float) -> bool:
-    """Whether a noticeable share of the shape is thinner than `width_m`."""
-    return shape.area > 0 and opening(shape, width_m).area < shape.area * (1 - NARROW_SHARE)
+    """Whether any part of the shape worth noticing (more than drawing noise) is thinner than
+    `width_m`: a pinch in a long road counts however small a share of the road it is."""
+    return narrow_part(shape, width_m).area > NOISE_SQM
 
 
 def width_in(network: BaseGeometry, part: BaseGeometry, ceiling_m: float) -> float:
     """How wide `part` is as a stretch of `network`: the widest opening of the network that
-    keeps all but a noticeable share of the part, to the centimetre and never above
-    `ceiling_m`. Measured in the network, so a road's end, where it meets another road, is not
-    taken for a narrowing; zero for a part with no ground."""
+    keeps all of the part but drawing noise, to the centimetre and never above `ceiling_m`.
+    Measured in the network, so a road's end, where it meets another road, is not taken for a
+    narrowing; zero for a part with no ground."""
     if part.is_empty or part.area <= 0:
         return 0.0
 
     def keeps(width: float) -> bool:
-        return opening(network, width).intersection(part).area >= part.area * (1 - NARROW_SHARE)
+        return part.difference(opening(network, width)).area <= NOISE_SQM
 
     if keeps(ceiling_m):
         return ceiling_m
@@ -67,14 +77,15 @@ def width_in(network: BaseGeometry, part: BaseGeometry, ceiling_m: float) -> flo
 
 
 def width_of(shape: BaseGeometry, ceiling_m: float) -> float:
-    """How wide a shape is everywhere (to within a noticeable share of its area). A road drawn
-    8.9 m wide measures 8.9 whatever width it declares."""
+    """How wide a shape is everywhere (to within drawing noise). A road drawn 8.9 m wide measures
+    8.9 whatever width it declares."""
     return width_in(shape, shape, ceiling_m)
 
 
 def healed(shape: BaseGeometry, gap_m: float = 0.05) -> BaseGeometry:
     """The shape with hairline cracks closed: pieces drawn to meet can miss by a hair."""
-    return shape.buffer(gap_m, join_style="mitre").buffer(-gap_m, join_style="mitre")
+    with np.errstate(divide="ignore", invalid="ignore"):
+        return shape.buffer(gap_m, join_style="mitre").buffer(-gap_m, join_style="mitre")
 
 
 def oriented_box(polygon: Polygon) -> tuple[float, float, float]:

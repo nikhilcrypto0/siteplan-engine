@@ -25,7 +25,7 @@ from siteplan.validator.context import Context
 from siteplan.validator.fire import clear_band
 from siteplan.validator.measure import TOL_M
 from siteplan.validator.readings import Assignment, Cell, check_from, plain, run, verdict
-from siteplan.validator.shapes import opening, polygons_of, union_of_all
+from siteplan.validator.shapes import narrower_than, opening, polygons_of, union_of_all
 from siteplan.validator.zones import gap_zones, setback_zone
 
 
@@ -164,8 +164,7 @@ def pocket_checks(ctx: Context) -> list[Check]:
     width, least = rules.min_width_m.value, rules.min_pocket_sqm.value
     out = []
     for i, pocket in enumerate(ctx.drawn.open_space, 1):
-        wide = opening(pocket, width)
-        narrow = pocket.area > 0 and wide.area < pocket.area * 0.98
+        narrow = narrower_than(pocket, width)
         small = pocket.area + TOL_M < least
         problems = []
         if small:

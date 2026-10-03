@@ -71,6 +71,8 @@ def _no_layout(ctx: Context) -> Check:
 
 def _tower_cell(ctx: Context, ground: Ground, t: TowerGeometry, a: Assignment) -> Cell:
     reading = a[STILT_IN_RULE_HEIGHT]
+    if reading not in ctx.classes:
+        return unknown_reading(STILT_IN_RULE_HEIGHT, reading)
     lane = ctx.rules.fire.clear_width_m.value
     required = (f">= {lane:g} m motorable on all sides; a "
                 f"{ctx.rules.fire.turning_radius_m.value:g} m turn at every corner")
@@ -118,6 +120,8 @@ def loop_turns_check(ctx: Context, ground: Ground) -> Check:
     radius = ctx.rules.fire.turning_radius_m.value
 
     def cell(a: Assignment) -> Cell:
+        if a[STILT_IN_RULE_HEIGHT] not in ctx.classes:
+            return unknown_reading(STILT_IN_RULE_HEIGHT, a[STILT_IN_RULE_HEIGHT])
         if not ctx.high_rise(a[STILT_IN_RULE_HEIGHT]):
             return Cell(Status.NOT_CHECKED, "no high-rise under this reading",
                         f"a {radius:g} m turn at every bend", NON_HIGH_RISE_NOTE)
@@ -140,6 +144,8 @@ def reach_check(ctx: Context) -> Check:
     network = reached(ctx)
 
     def cell(a: Assignment) -> Cell:
+        if a[STILT_IN_RULE_HEIGHT] not in ctx.classes:
+            return unknown_reading(STILT_IN_RULE_HEIGHT, a[STILT_IN_RULE_HEIGHT])
         towers = ctx.high_rise(a[STILT_IN_RULE_HEIGHT])
         if not towers:
             return Cell(Status.NOT_CHECKED, "no high-rise under this reading",

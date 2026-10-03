@@ -19,6 +19,7 @@ from shapely.geometry.base import BaseGeometry
 from siteplan.validator.shapes import polygons_of
 
 EPS_M = 0.01
+EDGE_M = 1e-4  # a tenth of a millimetre
 OFFSETS_ALONG = (0.0, 1.25)  # where the first bay of a row starts, from the floor's edge
 OFFSETS_ACROSS = (0.0, 2.7, 5.3, 8.0, 10.7, 13.3)  # where the first row starts
 
@@ -40,8 +41,10 @@ def _rows(low: float, high: float, bay_depth: float, aisle: float) -> list[float
 def _count(part: Polygon, angle_deg: float, bay: tuple[float, float], aisle: float,
            along: float, across: float) -> int:
     width, depth = bay
-    turned = rotate(part, -angle_deg, origin="centroid")
+    # A bay on the floor's own edge is on the floor, whatever turning it did to the last digit.
+    turned = rotate(part, -angle_deg, origin="centroid").buffer(EDGE_M, join_style="mitre")
     minx, miny, maxx, maxy = turned.bounds
+    minx, miny, maxx, maxy = minx + EDGE_M, miny + EDGE_M, maxx - EDGE_M, maxy - EDGE_M
     rows = _rows(miny + across, maxy, depth, aisle)
     columns = np.arange(minx + along, maxx - width + EPS_M, width)
     if not rows or not len(columns):

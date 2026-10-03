@@ -107,6 +107,8 @@ def validate(site: CanonicalSiteModel, rules: ResolvedRules, brief: DesignBrief,
         *cross_checks.references(site, rules, brief, candidate, envelope),
         *cross_checks.footprints(ctx.towers), *cross_checks.claims(candidate, legal),
         *cross_checks.metrics(ctx, clubhouse.built_up_sqm(ctx), counting, units),
+        *cross_checks.cars(candidate, found.get("parking_cars", 0.0)),
+        *roads.width_discrepancies(ctx, ground),
         *cross_checks.partition(candidate, ledger, Shape.from_shapely(ctx.net))]
     if envelope is not None:
         discrepancies += cross_checks.envelope_checks(ctx, envelope)

@@ -44,7 +44,8 @@ from siteplan.validator.readings import (
 TABLE_III_NOTE = ("Below the high-rise threshold Table III (rule 5) applies and is not modelled "
                   "yet: the validator does not judge it.")
 SEAM_NOTE = ("A height exactly at the high-rise threshold falls between the table rows in the "
-             "resolved rules, so which row applies is not settled.")
+             "resolved rules, so which row applies is not settled: the row above is the stricter, "
+             "and the block does not meet it.")
 
 
 def _table_clause(rules: ResolvedRules) -> str:
@@ -57,13 +58,16 @@ def _classes(ctx: Context, reading: str) -> dict[str, HeightClass] | None:
 
 
 def _stopped(cls: HeightClass, what: str) -> Cell | None:
-    """A cell for a height the table cannot settle: a seam (UNVERIFIED) or beyond what is
-    modelled (NOT_CHECKED); None when the row is usable."""
-    if cls.state == "seam":
-        return Cell(Status.UNVERIFIED, f"{cls.height_m:.2f} m: {cls.label}", what, SEAM_NOTE)
+    """A cell for a height the table does not cover (Table III, or beyond the bands), which is
+    NOT_CHECKED; None when there is a row to hold the block to."""
     if cls.state == "unmodelled":
         return Cell(Status.NOT_CHECKED, f"{cls.height_m:.2f} m: {cls.label}", what, TABLE_III_NOTE)
     return None
+
+
+def _fails_as(cls: HeightClass) -> Status:
+    """What falling short of a row means: FAIL, unless the row is only an upper bound."""
+    return Status.FAIL if cls.settled else Status.UNVERIFIED
 
 
 # --- Height class, plot size, road width ----------------------------------------------------
@@ -152,11 +156,15 @@ def road_width_check(ctx: Context) -> Check | None:
             if stopped is not None:
                 return stopped
         need = max(c.min_road_m or 0.0 for c in high)
+        sure = max((c.min_road_m or 0.0 for c in high if c.settled), default=0.0)
         required = f">= {need:g} m"
         if width is None:
             return Cell(Status.UNVERIFIED, f"unknown ({how})", required)
-        return Cell(verdict(width + TOL_M >= need), f"{width:.2f} m ({how})", required,
-                    " ".join(basis))
+        if width + TOL_M >= need:
+            return Cell(Status.PASS, f"{width:.2f} m ({how})", required, " ".join(basis))
+        status = Status.FAIL if width + TOL_M < sure else Status.UNVERIFIED
+        return Cell(status, f"{width:.2f} m ({how})", required,
+                    " ".join([*basis, SEAM_NOTE] if status is Status.UNVERIFIED else basis))
 
     return check_from(run(ctx.rules, [STILT_IN_RULE_HEIGHT], cell), family=Family.HEIGHT,
                       rule=f"Abutting road width (for {tallest.name})",
@@ -223,10 +231,11 @@ def setback_checks(ctx: Context) -> list[Check]:
             if stopped is not None:
                 return Cell(stopped.status, f"{gap:.2f} m", stopped.required, stopped.note)
             need = cls.setback_m
-            return Cell(verdict(gap + TOL_M >= need), f"{gap:.2f} m",
+            ok = gap + TOL_M >= need
+            return Cell(Status.PASS if ok else _fails_as(cls), f"{gap:.2f} m",
                         f">= {need:.2f} m to the net plot line",
                         "The front of a high-rise keeps the Table IV figure too, measured on the "
-                        "net plot.")
+                        "net plot." + ("" if cls.settled or ok else " " + SEAM_NOTE))
 
         out.append(check_from(run(ctx.rules, [STILT_IN_RULE_HEIGHT], cell), family=Family.SETBACK,
                               rule=f"All-round setback: {t.name}", clause=clause, subject=t.name))
@@ -240,16 +249,17 @@ def _gap_cell(ca: HeightClass, cb: HeightClass, ha: float, hb: float, spacing: s
               gap: float) -> Cell:
     need, why = required_gap(ca, cb, ha, hb, spacing)
     shown = f"{gap:.2f} m"
-    if why == "seam":
-        return Cell(Status.UNVERIFIED, shown, "Table IV gap", SEAM_NOTE)
     if why == "unmodelled":
         return Cell(Status.NOT_CHECKED, shown, "Table IV gap", TABLE_III_NOTE)
     if why == "unknown":
         return unknown_reading(MIXED_HEIGHT_SPACING, spacing)
     suffix = (" (the mean of the two blocks' gaps, each keeping its own half)"
               if spacing == EACH_OWN else "")
-    return Cell(verdict(gap + TOL_M >= need), shown, f">= {need:.2f} m{suffix}",
-                "This gap does not count towards the tot-lot.")
+    ok = gap + TOL_M >= need
+    status = Status.PASS if ok else (Status.FAIL if why == "ok" else Status.UNVERIFIED)
+    note = "This gap does not count towards the tot-lot." + (
+        " " + SEAM_NOTE if why == "seam" and not ok else "")
+    return Cell(status, shown, f">= {need:.2f} m{suffix}", note)
 
 
 def pair_gap(a: TowerGeometry, b: TowerGeometry) -> float:
