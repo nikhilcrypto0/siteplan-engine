@@ -47,6 +47,7 @@ from siteplan.validator.shapes import (
     sides_of,
     union_of_all,
     width_in,
+    width_of,
 )
 from siteplan.validator.zones import deepest_setback_m, setback_zone
 
@@ -149,7 +150,7 @@ def _perimeter_checks(ctx: Context, ground: Ground) -> list[Check]:
         return []
     lane = ctx.rules.fire.clear_width_m.value
     usable = union_of_all([_usable(r, ground) for r in ring])
-    width = width_in(usable, usable, lane)
+    width = width_of(usable, lane)
     thin = width + TOL_M < lane
     out = [plain(
         Family.ROADS, "Fire lane: perimeter lane inside the setback", verdict(not thin),
@@ -225,7 +226,7 @@ def _cul_de_sac_checks(ctx: Context, ground: Ground) -> list[Check]:
         usable = _usable(road, ground)
         parts = polygons_of(usable)
         length = sides_of(max(parts, key=lambda p: p.area))[0] if parts else 0.0
-        width = min(width_in(usable, usable, wide), road.declared_width_m)
+        width = min(width_of(usable, wide), road.declared_width_m)
         head = inscribed_radius(usable)
         problems = []
         if width + TOL_M < wide:
@@ -279,8 +280,8 @@ def driveway_check(ctx: Context, ground: Ground) -> Check | None:
         return None
     circ = ctx.rules.circulation
     least = circ.driveway_min_m.value
-    widths = {d.id: min(width_in(_usable(d, ground), _usable(d, ground), least),
-                        d.declared_width_m) for d in drives}
+    widths = {d.id: min(width_of(_usable(d, ground), least), d.declared_width_m)
+              for d in drives}
     thin = [i for i, w in widths.items() if w + TOL_M < least]
     return plain(
         Family.ROADS, "Driveways", verdict(not thin),

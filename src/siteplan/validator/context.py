@@ -48,9 +48,6 @@ class Context:
     def stilt_readings(self) -> list[str]:
         return self.rules.readings(STILT_IN_RULE_HEIGHT)
 
-    def tower(self, name: str) -> TowerGeometry:
-        return next(t for t in self.towers if t.name == name)
-
     def high_rise(self, reading: str) -> list[TowerGeometry]:
         """The towers that are high-rise under a reading of the stilt (a height exactly at the
         threshold counts: it is high-rise, only its table row is unsettled)."""
@@ -60,10 +57,6 @@ class Context:
     def high_rise_anywhere(self) -> list[TowerGeometry]:
         names = {t.name for r in self.stilt_readings for t in self.high_rise(r)}
         return [t for t in self.towers if t.name in names]
-
-    @property
-    def tallest(self) -> TowerGeometry | None:
-        return max(self.towers, key=lambda t: t.physical_height_m, default=None)
 
 
 def build(site: CanonicalSiteModel, rules: ResolvedRules, brief: DesignBrief,
