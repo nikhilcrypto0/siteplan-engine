@@ -20,8 +20,9 @@ from collections import Counter
 from dataclasses import dataclass
 
 from siteplan.contracts import CandidateLayout, DesignBrief
+from siteplan.contracts.design_brief import Priority
 
-AXES = ("saleable_area", "units", "open_space", "mix_fit", "conventionality")
+AXES = tuple(priority.value for priority in Priority)  # the brief names its priorities by these
 
 
 def mix_error(counts: dict[str, int], target: dict[str, float]) -> float:
@@ -78,13 +79,10 @@ def measure(candidate: CandidateLayout, brief: DesignBrief) -> Scores:
 
 
 def priority_weights(brief: DesignBrief) -> tuple[float, ...]:
-    """The brief's priorities as weights in AXES order. An unknown name is an error: a priority
-    that silently counted for nothing would be worse than none."""
+    """The brief's priorities as weights in AXES order. The contract refuses a name that is not
+    one of the axes and a negative weight, so a priority can never silently count for nothing."""
     given = brief.objectives.priorities
-    unknown = sorted(set(given) - set(AXES))
-    if unknown:
-        raise ValueError(f"unknown priorities {unknown}; the objective's axes are {list(AXES)}")
-    weights = tuple(float(given.get(axis, 1.0)) for axis in AXES)
-    if any(w < 0 for w in weights) or not sum(weights):
-        raise ValueError(f"priorities must not be negative and not all zero: {given}")
+    weights = tuple(float(given.get(Priority(axis), 1.0)) for axis in AXES)
+    if not sum(weights):
+        raise ValueError(f"priorities must be not all zero: {given}")
     return weights

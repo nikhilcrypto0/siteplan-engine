@@ -28,7 +28,7 @@ from siteplan.contracts import (
 )
 from siteplan.contracts.candidate import PlacedTower
 from siteplan.contracts.common import Finding, Status
-from siteplan.contracts.resolved_rules import STILT_IN_RULE_HEIGHT
+from siteplan.contracts.resolved_rules import STILT_IN_RULE_HEIGHT, LimitBound
 from siteplan.contracts.validation import (
     Check,
     Family,
@@ -110,9 +110,9 @@ def _height(site: CanonicalSiteModel, rules: ResolvedRules, brief: DesignBrief,
     stilt. A limit with no value (the airport's) is listed in `not_checked`, not passed."""
     prototype = candidate.prototype(tower.prototype_id)
     options = {reading: assess_floor_count(
-        rules, brief, prototype, reading, tower.floors_above_stilt, site=site,
+        rules, brief, prototype, reading, tower.floors_above_stilt,
         has_stilt=tower.has_stilt) for reading in rules.readings(STILT_IN_RULE_HEIGHT)}
-    held = {reading: [c for c in option.limits if c.limit_m is not None]
+    held = {reading: [c for c in option.checks if c.limit_m is not None]
             for reading, option in options.items()}
     by_reading = {reading: worst(checks) for reading, checks in held.items()}
     every = [c for checks in held.values() for c in checks]
@@ -147,5 +147,6 @@ def _units(candidate: CandidateLayout) -> dict[str, int]:
 
 
 def _unevaluated(rules: ResolvedRules) -> list[str]:
-    """Limits with no value to hold a height against (the airport's, without coordinates)."""
-    return [limit.reason for limit in rules.height.limits if limit.max_m is None]
+    """Limits that cannot be worked out yet (the airport's, without coordinates)."""
+    return [limit.reason for limit in rules.height.limits
+            if limit.bound is LimitBound.NOT_EVALUATED]
