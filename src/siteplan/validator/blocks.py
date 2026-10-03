@@ -22,7 +22,7 @@ from siteplan.contracts.resolved_rules import (
 from siteplan.contracts.site_model import CanonicalSiteModel
 from siteplan.contracts.validation import Check, Family, PairMeasure, TowerMeasure
 from siteplan.provenance import Provenance
-from siteplan.validator.context import Context
+from siteplan.validator.context import Context, is_known
 from siteplan.validator.measure import (
     TOL_M,
     HeightClass,
@@ -109,11 +109,6 @@ def plot_size_check(ctx: Context) -> Check | None:
                       rule="Plot size for high-rise", clause=law.MIN_HIGH_RISE_PLOT_CLAUSE)
 
 
-def _known(sourced) -> bool:
-    return (sourced is not None and sourced.value is not None
-            and sourced.status is not Provenance.UNVERIFIED)
-
-
 def road_width(site: CanonicalSiteModel) -> tuple[float | None, str, bool]:
     """The width of the access road the rules take, how it is known, and whether that is
     settled. The master plan's width wins where there is one (it counts only if the widening
@@ -123,9 +118,9 @@ def road_width(site: CanonicalSiteModel) -> tuple[float | None, str, bool]:
     if road is None:
         return None, "no access road in the site model", False
     settled = road.row_status != UNVERIFIED_DRAWING
-    if _known(road.master_plan_row_m):
+    if is_known(road.master_plan_row_m):
         return road.master_plan_row_m.value, "master plan", settled
-    if _known(road.legal_row_m):
+    if is_known(road.legal_row_m):
         return road.legal_row_m.value, "existing", settled
     return None, "the legal width is not known", False
 

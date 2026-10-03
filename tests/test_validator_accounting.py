@@ -78,6 +78,15 @@ def test_two_drawn_things_on_the_same_ground_are_a_conflict_with_its_area_and_th
     assert ledger.problems(_net(fixture("rectangle"))) == []  # the ground was given to one use
 
 
+def test_two_blocks_on_the_same_ground_are_a_conflict_too():
+    def overlap(candidate):
+        move_tower(candidate, "T3", -30.0, 0.0)  # T3 slid back over T2
+    report = fixture("rectangle").edited(overlap).report()
+    problems = report.accounting.partition_problems
+    assert any("TOWER T2 and TOWER T3 overlap by" in p for p in problems)
+    assert status(report, LEDGER) is Z.FAIL
+
+
 def test_a_road_that_is_also_the_fire_tenders_route_is_one_road_entry_never_two_areas():
     report = fixture("rectangle").report()
     entries = report.accounting.partition.entries

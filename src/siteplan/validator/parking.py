@@ -28,7 +28,7 @@ from siteplan.contracts.validation import Check, Family
 from siteplan.validator.cars import cars_on_floor
 from siteplan.validator.context import Context
 from siteplan.validator.fire import clear_band
-from siteplan.validator.ground import Ground
+from siteplan.validator.ground import BAYS, Ground
 from siteplan.validator.readings import (
     ANYWHERE,
     AT_GROUND,
@@ -139,7 +139,7 @@ def surface_bays(ctx: Context, ground: Ground, reading: str) -> Surface:
     zone = setback_zone(ctx, reading)
     lane = ctx.rules.fire.clear_width_m.value
     bands = union_of_all([clear_band(t.footprint, lane) for t in ctx.high_rise(reading)])
-    others = union_of_all([g for owner, g in ground.solids if owner != "bays"])
+    others = union_of_all([g for owner, g in ground.solids if owner != BAYS])
     tree = shapely.STRtree(list(d.bays))
     problems: dict[str, int] = {}
     valid = 0

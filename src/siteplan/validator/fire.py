@@ -14,13 +14,13 @@ from __future__ import annotations
 
 from shapely.geometry import Polygon
 from shapely.geometry.base import BaseGeometry
+from shapely.ops import unary_union
 
 from siteplan.contracts.candidate import RoadKind
 from siteplan.contracts.common import Status
 from siteplan.contracts.resolved_rules import FIRE_TURNING_RADIUS, STILT_IN_RULE_HEIGHT
 from siteplan.contracts.validation import Check, Discrepancy, Family
-from siteplan.provenance import Provenance
-from siteplan.validator.context import Context
+from siteplan.validator.context import Context, is_known
 from siteplan.validator.ground import Ground
 from siteplan.validator.measure import TOL_M, TowerGeometry
 from siteplan.validator.readings import (
@@ -54,7 +54,7 @@ def reached(ctx: Context) -> BaseGeometry:
     start = ctx.drawn.gate_land.buffer(0.5)
     if start.is_empty:
         return Polygon()
-    passable = opening(ctx.drawn.motorable, lane - 0.02)
+    passable = opening(ctx.drawn.motorable, lane)
     return union_of_all([p for p in getattr(passable, "geoms", [passable])
                          if not p.is_empty and p.intersects(start)])
 
@@ -90,11 +90,13 @@ def _tower_cell(ctx: Context, ground: Ground, t: TowerGeometry, a: Assignment) -
     stuck = [s for s in turns if ground.blocked_area(s, t.name) > NOISE_SQM]
     problems = []
     if ground.blocked_area(band, t.name) > NOISE_SQM:
-        problems.append(f"something stands within {lane:g} m of it")
+        problems.append(f"something stands within {lane:g} m of it ("
+                        f"{ground.blocked_by(band, t.name)})")
     if band.difference(motorable).area > NOISE_SQM:
         problems.append(f"part of the {lane:g} m round it is not a road or fire lane")
     if stuck:
-        problems.append(f"{len(stuck)} of {len(turns)} corner turns blocked")
+        problems.append(f"{len(stuck)} of {len(turns)} corner turns blocked ("
+                        f"{ground.blocked_by(unary_union(stuck), t.name)})")
     measured = ("; ".join(problems) if problems else
                 f"{lane:g} m clear on every side; all {len(turns)} corner turns fit")
     return Cell(verdict(not problems), measured, required,
@@ -218,15 +220,11 @@ def obstruction_check(ctx: Context) -> Check:
         ctx.rules.fire.clear_width_m.clause)
 
 
-def _known(sourced) -> bool:
-    return sourced.value is not None and sourced.status is not Provenance.UNVERIFIED
-
-
 def street_check(ctx: Context) -> Check:
     fire = ctx.rules.fire
     required = f"joins a street at least {fire.street_join_m.value:g} m wide at one end"
     joins = ctx.site.access.joins_12m_street
-    if not _known(joins):
+    if not is_known(joins):
         return plain(Family.FIRE, "Fire access: the street joins a 12 m street",
                      Status.UNVERIFIED, "not known: a survey does not show where the road leads",
                      required, fire.street_join_m.clause, "The architect's to say.")
@@ -247,7 +245,7 @@ def dead_end_check(ctx: Context) -> Check:
                      f"tallest {tallest:g} m, within {limit:g} m", required, clause,
                      f"A dead end is allowed up to {limit:g} m.")
     dead = ctx.site.access.dead_end
-    if not _known(dead):
+    if not is_known(dead):
         return plain(Family.DEAD_END, rule, Status.UNVERIFIED,
                      f"tallest {tallest:g} m; the road's end is not known", required, clause)
     return plain(Family.DEAD_END, rule, verdict(not dead.value),
@@ -264,7 +262,7 @@ def loading_check(ctx: Context) -> Check:
         "The paving, and any cellar roof under a road or fire lane, must be designed for it.")
 
 
-def fire_checks(ctx: Context) -> list[Check]:
+def fire_checks(ctx: Context, ground: Ground) -> list[Check]:
     """Fire access for every high-rise under any reading of the stilt; none when there is none."""
     if not ctx.high_rise_anywhere():
         return [plain(Family.FIRE, "Fire access", Status.INFO, "no high-rise block",
@@ -272,7 +270,6 @@ def fire_checks(ctx: Context) -> list[Check]:
     out = [street_check(ctx), dead_end_check(ctx)]
     if not ctx.drawn.has_circulation:
         return [*out, _no_layout(ctx), loading_check(ctx)]
-    ground = Ground(ctx)
     out += tower_checks(ctx, ground)
     out += [loop_turns_check(ctx, ground), reach_check(ctx), entrance_check(ctx, ground),
             obstruction_check(ctx), loading_check(ctx)]
