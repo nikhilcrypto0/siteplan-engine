@@ -5,8 +5,8 @@ in one to three random ways (towers moved, turned, mirrored, re-floored or sent 
 roads, bays, the club house and the cellars dropped, shapes that cross themselves, a prototype
 that crosses itself, an open reading the validator has never heard of, a net plot that crosses
 itself) and the report must come back, survive JSON, and never be the geometry library giving up.
-Seeded, so a failure repeats. The same loop was run for 16,000 mutations, also on the generator's
-real Suchitra options, when the validator was built."""
+Seeded, so a failure repeats. The same loop was run for more than 15,000 mutations, also on the
+generator's real Suchitra options, when the validator was built."""
 
 import contextlib
 import random
