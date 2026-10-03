@@ -40,13 +40,7 @@ from siteplan.validator.shapes import (
     width_along_edge,
 )
 from siteplan.validator.turning import road_bends, round_block, turning_for
-from siteplan.validator.zones import (
-    COMPASS_DEG,
-    FRONT_SECTOR_DEG,
-    angle_between,
-    bearings_near,
-    compass_name,
-)
+from siteplan.validator.zones import bearings_near, compass_name, faces
 
 NON_HIGH_RISE_NOTE = ("Below the high-rise threshold the fire rules of rule 15(a)(i) apply and "
                       "are not modelled yet.")
@@ -177,14 +171,17 @@ def reach_check(ctx: Context) -> Check:
                       clause=ctx.rules.fire.clear_width_m.clause)
 
 
-def _road_bearings(ctx: Context) -> list[float]:
-    """The bearings of the sides the street runs on, as far as the site model knows: the access
-    side the architect gave, else the sides of the roads the survey measured. Empty when none
-    is known."""
+def _street_sides(ctx: Context) -> tuple[list[str], list[str]]:
+    """The sides the street runs on, as far as the site model knows: the access road's side (the
+    architect's) and the sides of the other roads the survey measured. With no access side given
+    every measured road counts as the street; with none known, empty."""
     side = ctx.site.access.side
+    measured = sorted({str(r.side.value if hasattr(r.side, "value") else r.side)
+                       for r in ctx.site.roads if r.side is not None})
     if is_known(side):
-        return [float(COMPASS_DEG[side.value])]
-    return [float(COMPASS_DEG[r.side]) for r in ctx.site.roads if r.side is not None]
+        declared = str(side.value)
+        return [declared], [m for m in measured if m != declared]
+    return measured, []
 
 
 def _gate_problems(ctx: Context) -> tuple[list[str], list[str]]:
@@ -192,24 +189,29 @@ def _gate_problems(ctx: Context) -> tuple[list[str], list[str]]:
     a gate that fails is not a way in, whatever else is drawn."""
     fire = ctx.rules.fire
     least, most = fire.entrance_width_m.value, ctx.rules.circulation.approach_m.value[1]
-    bearings = _road_bearings(ctx)
+    street, others = _street_sides(ctx)
     problems, doubts = [], []
     for n, gate in enumerate(ctx.drawn.gates, 1):
         label = f"gate {n}" if len(ctx.drawn.gates) > 1 else "the gate"
         if gate.shape.distance(ctx.net.boundary) > GATE_ON_BOUNDARY_M:
             problems.append(f"{label} is not on the plot's boundary")
             continue
-        width = width_along_edge(gate.shape, ctx.net)
+        width = width_along_edge(gate.shape, ctx.net, GATE_ON_BOUNDARY_M)
         if width + TOL_M < least:
             problems.append(f"{label} is {width:.2f} m wide")
         elif width > most + TOL_M:
             doubts.append(f"{label} is {width:.1f} m wide, more than the {most:g} m of the widest "
                           "main approach road rule 8(m) allows")
         facing = bearings_near(ctx.net, gate.shape, GATE_ON_BOUNDARY_M)
-        if bearings and facing and not any(
-                angle_between(f, b) <= FRONT_SECTOR_DEG + 1e-6 for f in facing for b in bearings):
-            problems.append(f"{label} is on the {compass_name(facing[0])} side; the road runs on "
-                            + ", ".join(sorted({compass_name(b) for b in bearings})))
+        if not (street and facing) or any(faces(f, side) for f in facing for side in street):
+            continue
+        name = compass_name(facing[0])
+        if any(faces(f, side) for f in facing for side in others):
+            doubts.append(f"{label} is on the {name} side, on a road the survey measures that is "
+                          "not the access road: whether it may be an entrance is not settled")
+        else:
+            problems.append(f"{label} is on the {name} side; the road runs on "
+                            + ", ".join(sorted(street)))
     return problems, doubts
 
 
@@ -225,7 +227,7 @@ def entrance_check(ctx: Context, ground: Ground) -> Check:
     problems, doubts = _gate_problems(ctx)
     if ground.solid_area(ctx.entrance_land) > NOISE_SQM:
         problems.append("something is built over it")
-    widths = [width_along_edge(g.shape, ctx.net) for g in ctx.entrances]
+    widths = [width_along_edge(g.shape, ctx.net, GATE_ON_BOUNDARY_M) for g in ctx.entrances]
     status = Status.FAIL if problems else Status.UNVERIFIED if doubts else Status.PASS
     shown = "; ".join(problems + doubts) if problems or doubts else (
         f"{max(widths):.2f} m wide; nothing built over it")
@@ -238,7 +240,7 @@ def gate_discrepancies(ctx: Context) -> list[Discrepancy]:
     """A gate that measures narrower than the width it declares flatters the layout."""
     out = []
     for i, gate in enumerate(ctx.drawn.gates, 1):
-        measured = width_along_edge(gate.shape, ctx.net)
+        measured = width_along_edge(gate.shape, ctx.net, GATE_ON_BOUNDARY_M)
         if measured + GATE_SLACK_M < gate.declared_width_m:
             out.append(Discrepancy(
                 item=f"gate width {i}", source="generator", theirs=f"{gate.declared_width_m:g} m",

@@ -8,6 +8,7 @@ the rules. The generator's own claims about them (its partition, its metrics) ar
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import cached_property
 
 from shapely.geometry import Polygon
 from shapely.geometry.base import BaseGeometry
@@ -100,16 +101,16 @@ class Drawn:
                     or self.amenities or self.cellar_drawn or not self.club.is_empty
                     or not self.fire_hardstanding.is_empty or not self.green_strip.is_empty)
 
-    @property
+    @cached_property
     def road_land(self) -> BaseGeometry:
         return union_of_all([r.shape for r in self.roads])
 
-    @property
+    @cached_property
     def motorable(self) -> BaseGeometry:
         """Ground a fire tender may drive on: every road and the clear hardstanding."""
         return union_of_all([self.road_land, self.fire_hardstanding])
 
-    @property
+    @cached_property
     def gate_land_all(self) -> BaseGeometry:
         """Every gate as drawn, wherever it stands (for the extent of the drawing only)."""
         return union_of_all([g.shape for g in self.gates])

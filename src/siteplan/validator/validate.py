@@ -117,7 +117,7 @@ def validate(site: CanonicalSiteModel, rules: ResolvedRules, brief: DesignBrief,
              ) -> ValidationReport:
     """Judge one candidate. Every candidate the contract admits gets a report; one that cannot
     be measured gets a report that is not a pass."""
-    bad = refusals.non_finite(candidate.model_dump())
+    bad = refusals.non_finite_in(candidate)
     if bad:
         return refusals.unmeasurable(site, rules, brief, candidate, envelope,
                                      refusals.numbers_check(bad))

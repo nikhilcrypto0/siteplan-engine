@@ -16,6 +16,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from itertools import combinations
 
+import shapely
 from shapely.geometry import Polygon
 from shapely.geometry.base import BaseGeometry
 
@@ -129,11 +130,17 @@ def _conflicts(claims: list[Claim]) -> list[Overlap]:
     names = {u: ", ".join(c.ref for c in claims if c.use is u) for u in PRIORITY}
     out = []
     for use in ONE_AT_A_TIME:
-        for a, b in combinations([c for c in claims if c.use is use], 2):
-            area = a.ground.intersection(b.ground).area
-            if area > CONFLICT_SQM:
-                out.append(Overlap(f"{use.value} {a.ref} and {use.value} {b.ref} overlap by "
-                                   f"{area:,.2f} m²", area))
+        same = [c for c in claims if c.use is use]
+        tree = shapely.STRtree([c.ground for c in same])  # only neighbours can overlap
+        for i, a in enumerate(same):
+            for j in sorted(tree.query(a.ground)):
+                if j <= i:
+                    continue
+                b = same[j]
+                area = a.ground.intersection(b.ground).area
+                if area > CONFLICT_SQM:
+                    out.append(Overlap(f"{use.value} {a.ref} and {use.value} {b.ref} overlap by "
+                                       f"{area:,.2f} m²", area))
     for a, b in combinations([u for u in PRIORITY if u is not U.BUFFER_LAND], 2):
         if frozenset((a, b)) in MAY_SHARE or by_use[a].is_empty or by_use[b].is_empty:
             continue

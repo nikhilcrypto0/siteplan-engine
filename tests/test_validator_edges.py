@@ -134,7 +134,8 @@ def test_a_shape_that_crosses_itself_is_mended_to_the_ground_of_both_lobes():
     bowtie = Polygon([(0, 0), (10, 10), (10, 0), (0, 10)])
     mended_shape, flaw = mended(bowtie)
     assert mended_shape.area == pytest.approx(50.0) and "Self-intersection" in flaw
-    assert mended(box(0, 0, 1, 1)) == (box(0, 0, 1, 1), "")
+    sound, nothing = mended(box(0, 0, 1, 1))
+    assert sound.equals(box(0, 0, 1, 1)) and nothing == ""
 
 
 def test_the_rectangle_round_a_polygon_is_the_smallest_not_the_largest():

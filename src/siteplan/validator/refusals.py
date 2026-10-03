@@ -24,6 +24,7 @@ from siteplan.validator.readings import plain
 from siteplan.validator.shapes import union_of_all
 
 SHOWN = 5  # how many offending numbers a report names before it says there are more
+MEASURED_PARTS = ("towers", "prototypes_used", "circulation", "program")
 MAX_COUNT = 10**15  # a whole number larger than this is not a count of anything on a site
 EXTENT_FACTOR = 20  # drawn ground reaching this many plot-widths away is not drawn to scale
 EXTENT_FLOOR_M = 2000.0  # ...and never counts as far away within this
@@ -44,6 +45,14 @@ def non_finite(value, path: str = "") -> list[str]:
     if isinstance(value, list | tuple):
         return [bad for i, v in enumerate(value) for bad in non_finite(v, f"{path}[{i}]")]
     return []
+
+
+def non_finite_in(candidate: CandidateLayout) -> list[str]:
+    """The numbers of a candidate that are measured (its towers, prototypes, roads and what it
+    draws) which are not numbers. Its seed, scores and claims are not measured and may be
+    anything: a 64-bit seed is not an absurd count."""
+    dump = candidate.model_dump()
+    return [bad for part in MEASURED_PARTS for bad in non_finite(dump[part], part)]
 
 
 def numbers_check(bad: list[str]) -> Check:

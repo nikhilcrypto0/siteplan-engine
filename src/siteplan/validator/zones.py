@@ -22,6 +22,11 @@ from siteplan.validator.shapes import mitred, union_of_all
 
 COMPASS_DEG = {"N": 0, "NE": 45, "E": 90, "SE": 135, "S": 180, "SW": 225, "W": 270, "NW": 315}
 FRONT_SECTOR_DEG = 45  # a boundary edge faces a side when its outward normal is within this
+# A side is a label, the nearest of eight compass points to where the road really lies, so a
+# diagonal label (SW) may stand for a road facing the south or the west edge squarely: those are
+# exactly 45 degrees off it, a knife-edge that a plot turned a hair would fall off. A diagonal
+# label reaches half a compass step further.
+DIAGONAL_SLOP_DEG = 22.5
 # Rule 13(c)(vii) lets a ramp use a side or rear setback "after leaving minimum 7m of setback for
 # movement of fire-fighting vehicles". The 7 m is in the clause's text only; ResolvedRules carries
 # the sentence (parking.ramp_in_setbacks), not the number.
@@ -107,13 +112,18 @@ def bearings_near(net: Polygon, shape: BaseGeometry, within_m: float) -> list[fl
     return [bearing for e, bearing in edges if shape.distance(e) <= nearest + within_m]
 
 
+def faces(bearing_deg: float, side: str) -> bool:
+    """Whether a boundary edge facing `bearing_deg` faces the side a road is labelled with."""
+    centre = COMPASS_DEG[side]
+    reach = FRONT_SECTOR_DEG + (DIAGONAL_SLOP_DEG if centre % 90 else 0.0) + 1e-6
+    return angle_between(bearing_deg, centre) <= reach
+
+
 def front_edges(net, side: Side) -> list[LineString]:
     """The stretches of the plot's boundary that face the side the access road runs along, within
     45 degrees either way, so a diagonal side (north-east) takes in both the sides it lies
     between: a ramp barred from the front is barred from either."""
-    centre = COMPASS_DEG[side]
-    return [edge for edge, bearing in boundary_edges(net)
-            if angle_between(bearing, centre) <= FRONT_SECTOR_DEG + 1e-6]
+    return [edge for edge, bearing in boundary_edges(net) if faces(bearing, side)]
 
 
 def front_zone(ctx: Context, depth_m: float) -> BaseGeometry | None:

@@ -74,10 +74,7 @@ def test_a_report_names_a_few_offending_numbers_and_says_how_many_more():
         for i, tower in enumerate(candidate.towers):
             tower.x = float("nan")
             tower.y = float("inf") if i else tower.y
-        candidate.metrics.saleable_sqft = float("-inf")
-        candidate.metrics.mix_error = float("nan")
-        candidate.metrics.open_space_sqm = float("nan")
-        candidate.metrics.built_up_sqft = float("nan")
+            tower.rotation_deg = float("-inf")
     report = fixture("rectangle").edited(spoil).report()
     assert "more" in report.legal[0].finding.measured
     assert report.legal[0].finding.measured.count(";") == SHOWN - 1
