@@ -25,6 +25,10 @@ def _bay_of_no_width(rules):
     rules.parking.measurement.bay_m = (0.0, 5.0)
 
 
+def _bay_a_hair_wide(rules):
+    rules.parking.measurement.bay_m = (1e-9, 5.0)
+
+
 def _aisle_backwards(rules):
     rules.parking.measurement.aisle_m = -10.0
 
@@ -35,7 +39,8 @@ def _no_row_for_large_sites(rules):
 
 @pytest.mark.parametrize("spoil, named", [
     (_zero_share, "open_space.share"), (_flat_ramp, "parking.ramp_gradient"),
-    (_bay_of_no_width, "parking.measurement"), (_aisle_backwards, "parking.measurement"),
+    (_bay_of_no_width, "parking.measurement"), (_bay_a_hair_wide, "parking.measurement"),
+    (_aisle_backwards, "parking.measurement"),
     (_no_row_for_large_sites, "cellar_setback_by_site_sqm")])
 def test_a_rule_value_nothing_can_be_measured_with_is_named_and_never_a_pass(spoil, named):
     report = fixture("rectangle").with_rules(spoil).report()
