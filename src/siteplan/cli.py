@@ -1,5 +1,5 @@
-"""Command line: survey, check, area-statement, layout, rules, inventory, constraints, floors,
-cases, assist."""
+"""Command line: survey, check, area-statement, layout, envelope, rules, inventory, constraints,
+floors, cases, assist."""
 
 from __future__ import annotations
 
@@ -281,6 +281,34 @@ def _cmd_schema(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_envelope(args: argparse.Namespace) -> int:
+    """The legal envelope: what the law asks of the site and the land it leaves, before any tower
+    or road. Stops, naming what to give, when the net plot cannot be placed."""
+    from siteplan.contracts.common import Status
+    from siteplan.legal.debug_drawing import notes, write_debug_dxf, write_debug_svg
+    from siteplan.legal.envelope import envelope
+    from siteplan.legal.resolve import resolve
+    from siteplan.legal.site import readings_of, site_from_project
+
+    project = _load_project(args.project)
+    site = site_from_project(project, args.survey)
+    selections, when_open = readings_of(project)
+    resolved = resolve(site, selections=selections, when_open=when_open)
+    found = envelope(site, resolved)
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "rules.json").write_text(resolved.model_dump_json(indent=1) + "\n")
+    (out / "envelope.json").write_text(found.model_dump_json(indent=1) + "\n")
+    write_debug_dxf(site, resolved, found, out / "envelope.dxf")
+    write_debug_svg(site, resolved, found, out / "envelope.svg")
+    print("\n".join(notes(site, resolved, found)))
+    open_ = [f"{f.rule}: {f.measured}" for f in found.facts
+             if f.status in (Status.UNVERIFIED, Status.NOT_CHECKED, Status.FAIL)]
+    print("\nStill open or not checked:\n" + "\n".join(f"  - {item}" for item in open_))
+    print(f"\nWrote rules.json, envelope.json, envelope.dxf and envelope.svg to {out}/")
+    return 0
+
+
 def _cmd_floors(args: argparse.Namespace) -> int:
     from siteplan.max_floors import describe, max_floors
     from siteplan.roads import roads_near
@@ -555,6 +583,15 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--dead-end", choices=("yes", "no"),
                    help="Does the access road end at the plot? Above 30 m it must not")
     p.set_defaults(run=_cmd_floors)
+
+    p = sub.add_parser("envelope", help="The legal envelope of a site: the rules resolved for it "
+                       "and the land they leave per height band, with widths and rule layers. "
+                       "No towers, no roads.")
+    p.add_argument("project")
+    p.add_argument("--survey", help="The survey that draws the plot and any water body (PDF or "
+                   "DXF); needed when the project states no net_plot_m")
+    p.add_argument("--out", default="out/envelope")
+    p.set_defaults(run=_cmd_envelope)
 
     p = sub.add_parser("cases", help="Check the rules against real schemes (sanctioned plans).")
     p.add_argument("folder", nargs="?", default="fixtures/cases", help="Folder of *.case.json")
