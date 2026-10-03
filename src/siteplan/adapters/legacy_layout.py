@@ -23,7 +23,7 @@ from siteplan.contracts.accounting import (
     PhysicalUse,
 )
 from siteplan.contracts.candidate import CandidateLayout, RoadKind
-from siteplan.contracts.common import Basis, Provenance, Shape, SourceKind, shapes_from
+from siteplan.contracts.common import Basis, Provenance, Shape, SourceKind, Surface, shapes_from
 from siteplan.contracts.prototype import PrototypeFamily
 from siteplan.contracts.resolved_rules import (
     CIRCULATION_IN_SETBACK,
@@ -32,6 +32,7 @@ from siteplan.contracts.resolved_rules import (
 )
 from siteplan.layout import LayoutOption, mix_error
 from siteplan.runner import LAYOUT_CAVEAT
+from siteplan.site_amenities import AmenityItem, AmenityLibrary
 from siteplan.units import sqm_to_sqft
 
 ROAD_KINDS = {"main approach": RoadKind.APPROACH, "loop": RoadKind.LOOP,
@@ -39,7 +40,11 @@ ROAD_KINDS = {"main approach": RoadKind.APPROACH, "loop": RoadKind.LOOP,
               "perimeter": RoadKind.PERIMETER_LANE, "driveway": RoadKind.DRIVEWAY}
 LEGACY_ROAD_NAMES = {kind: name for name, kind in ROAD_KINDS.items()}
 SLIVER_SQM = 0.01  # pieces smaller than this are drawing noise, not ground
-BUILT_AMENITY_WORDS = ("CABIN", "ROOM", "SUBSTATION")
+# The ground a facility stands on, by the surface its library states. A surface nobody stated is
+# never read off the facility's name: its ground is entered as an amenity and tagged as unstated.
+GROUND_BY_SURFACE = {Surface.BUILT: PhysicalUse.OTHER_BUILT, Surface.HARD: PhysicalUse.HARD_AMENITY,
+                     Surface.SOFT: PhysicalUse.SOFT_OPEN_SPACE}
+SURFACE_UNSTATED = "SURFACE_UNSTATED"
 # Where the generator's shapes overlap, the earlier use keeps the ground.
 PARTITION_ORDER = (PhysicalUse.TOWER, PhysicalUse.CLUB_HOUSE, PhysicalUse.OTHER_BUILT,
                    PhysicalUse.RAMP, PhysicalUse.ROAD, PhysicalUse.SURFACE_PARKING,
@@ -51,8 +56,11 @@ UNALLOCATED_REASON = "ground the prototype generator left without a use"
 def candidate_from_option(option: LayoutOption, plot: Polygon, *, candidate_id: str,
                           site_ref: str, rules_ref: str, brief_ref: str,
                           readings: dict[str, str], access_side: str | None = None,
-                          keep_out: Polygon | None = None, library_note: str = ""
-                          ) -> CandidateLayout:
+                          keep_out: Polygon | None = None, library_note: str = "",
+                          amenities: AmenityLibrary | None = None) -> CandidateLayout:
+    """`amenities` is the library the option's facilities were placed from: each placed facility
+    takes its use and surface from the item of its name, when the library states them."""
+    stated = _stated(amenities)
     prototypes, towers = [], []
     for tower in option.towers:
         prototype, placed = _tower(tower, option.floors, f"{candidate_id}-{tower.name}",
@@ -78,7 +86,9 @@ def candidate_from_option(option: LayoutOption, plot: Polygon, *, candidate_id: 
             "green_strip": shapes_from(option.green_strip),
             "club_house": {"shape": Shape.from_shapely(option.club_house),
                            "floors": option.club_house_floors} if option.club_house else None,
-            "amenities": [{"name": a.name, "shape": Shape.from_shapely(a.shape)}
+            "amenities": [{"name": a.name, "shape": Shape.from_shapely(a.shape),
+                           "use": stated[a.name].use if a.name in stated else None,
+                           "surface": stated[a.name].surface if a.name in stated else None}
                           for a in option.amenities],
             "amenities_missed": list(option.amenities_missed),
             "ramps": [Shape.from_shapely(r) for r in option.ramps],
@@ -86,7 +96,7 @@ def candidate_from_option(option: LayoutOption, plot: Polygon, *, candidate_id: 
                         "outline": shapes_from(option.parking.cellar_outline),
                         "setback_m": option.parking.cellar_setback_m} if option.parking else None,
             "bays": [Shape.from_shapely(b) for b in option.parking_bays]},
-        partition=partition(option, plot, keep_out),
+        partition=partition(option, plot, keep_out, amenities),
         rule_layers=rule_layers(option, plot, keep_out),
         metrics={key: summary[key] for key in (
             "total_flats", "flats_by_type", "saleable_sqft", "tower_floor_sqft",
@@ -156,8 +166,22 @@ def _polygons(geometry) -> list[Polygon]:
     return [p for part in getattr(geometry, "geoms", ()) for p in _polygons(part)]
 
 
-def partition(option: LayoutOption, plot: Polygon, keep_out: Polygon | None = None) -> dict:
-    """The net plot, every square metre once, by what the generator put on it."""
+def _stated(amenities: AmenityLibrary | None) -> dict[str, AmenityItem]:
+    return {item.name: item for item in amenities.items} if amenities else {}
+
+
+def partition(option: LayoutOption, plot: Polygon, keep_out: Polygon | None = None,
+              amenities: AmenityLibrary | None = None) -> dict:
+    """The net plot, every square metre once, by what the generator put on it. A facility's
+    ground follows the surface its library states (GROUND_BY_SURFACE)."""
+    stated = _stated(amenities)
+
+    def surface(name: str) -> Surface | None:
+        return stated[name].surface if name in stated else None
+
+    def on(amenity, ground) -> bool:
+        return amenity.shape.intersection(ground).area > 0.5 * amenity.shape.area
+
     groups: dict[PhysicalUse, list[tuple[str | None, Polygon, list[str]]]] = {
         use: [] for use in PARTITION_ORDER}
     for tower in option.towers:
@@ -175,17 +199,20 @@ def partition(option: LayoutOption, plot: Polygon, keep_out: Polygon | None = No
         groups[PhysicalUse.FIRE_HARDSTANDING].append(("fire lanes", option.fire_lanes,
                                                       ["FIRE_ACCESS"]))
     open_space = unary_union(list(option.open_space)) if option.open_space else None
+    # A facility on the tot-lot whose surface is soft, or not stated, is the tot-lot's ground,
+    # tagged below; one stated as hard or built is its own ground, and the tot-lot loses it.
+    of_the_pocket = [a for a in option.amenities if open_space is not None
+                     and on(a, open_space) and surface(a.name) in (None, Surface.SOFT)]
+    kept = {id(a) for a in of_the_pocket}
     for amenity in option.amenities:
-        inside = open_space is not None and amenity.shape.intersection(open_space).area > (
-            0.5 * amenity.shape.area)
-        if inside:
-            continue  # a play area on the tot-lot: the tot-lot's ground, tagged below
-        built = any(word in amenity.name.upper() for word in BUILT_AMENITY_WORDS)
-        use = PhysicalUse.OTHER_BUILT if built else PhysicalUse.HARD_AMENITY
-        groups[use].append((amenity.name, amenity.shape, []))
+        if id(amenity) in kept:
+            continue
+        kind = surface(amenity.name)
+        tags = {None: [SURFACE_UNSTATED], Surface.SOFT: [f"AMENITY:{amenity.name}"]}.get(kind, [])
+        groups[GROUND_BY_SURFACE.get(kind, PhysicalUse.HARD_AMENITY)].append(
+            (amenity.name, amenity.shape, tags))
     for i, pocket in enumerate(option.open_space, 1):
-        tags = [f"AMENITY:{a.name}" for a in option.amenities
-                if a.shape.intersection(pocket).area > 0.5 * a.shape.area]
+        tags = [f"AMENITY:{a.name}" for a in of_the_pocket if on(a, pocket)]
         groups[PhysicalUse.SOFT_OPEN_SPACE].append((f"tot-lot {i}", pocket, tags))
     if option.green_strip is not None:
         groups[PhysicalUse.GREEN_STRIP].append(("green strip", option.green_strip, []))
@@ -230,8 +257,8 @@ def rule_layers(option: LayoutOption, plot: Polygon, keep_out: Polygon | None = 
                         {"use": PhysicalUse.FIRE_HARDSTANDING, **conditional},
                         {"use": PhysicalUse.RAMP, "permit": Permit.CONDITIONAL,
                          "condition": f"{rules.RAMP_CLAUSE}: never in the front setback or "
-                         "building line; in a side or rear setback only leaving 7 m for fire "
-                         "vehicles"}]})
+                         "building line; in a side or rear setback only leaving "
+                         f"{rules.RAMP_FIRE_CLEARANCE_M:g} m for fire vehicles"}]})
     if option.fire_lanes is not None:
         layers.append({
             "id": "fire-clear-bands", "kind": LayerKind.FIRE_CLEAR_BAND,

@@ -1,6 +1,170 @@
 {
- "schema_version": "1.0",
+ "schema_version": "1.1",
  "layers": [
+  {
+   "id": "setback 21 m",
+   "kind": "SETBACK",
+   "shapes": [
+    {
+     "outer": [
+      [
+       0.0,
+       160.0
+      ],
+      [
+       24.0,
+       160.0
+      ],
+      [
+       24.0,
+       100.0
+      ],
+      [
+       150.0,
+       100.0
+      ],
+      [
+       150.0,
+       0.0
+      ],
+      [
+       0.0,
+       0.0
+      ]
+     ],
+     "holes": [
+      [
+       [
+        143.0,
+        7.0
+       ],
+       [
+        143.0,
+        93.0
+       ],
+       [
+        24.0,
+        93.0
+       ],
+       [
+        23.313880017693076,
+        93.03370691329462
+       ],
+       [
+        22.6343677458871,
+        93.13450303717738
+       ],
+       [
+        21.968007259218762,
+        93.30141764987454
+       ],
+       [
+        21.321215973444367,
+        93.53284327242099
+       ],
+       [
+        20.700222842218015,
+        93.82655114956151
+       ],
+       [
+        20.111008368862784,
+        94.17971271388218
+       ],
+       [
+        19.559247010854477,
+        94.58892682646085
+       ],
+       [
+        19.050252531694166,
+        95.05025253169417
+       ],
+       [
+        18.588926826460842,
+        95.55924701085448
+       ],
+       [
+        18.179712713882182,
+        96.11100836886278
+       ],
+       [
+        17.826551149561514,
+        96.70022284221801
+       ],
+       [
+        17.53284327242099,
+        97.32121597344437
+       ],
+       [
+        17.301417649874537,
+        97.96800725921877
+       ],
+       [
+        17.13450303717739,
+        98.6343677458871
+       ],
+       [
+        17.033706913294623,
+        99.31388001769308
+       ],
+       [
+        17.0,
+        100.0
+       ],
+       [
+        17.0,
+        153.0
+       ],
+       [
+        7.0,
+        153.0
+       ],
+       [
+        7.0,
+        7.0
+       ]
+      ]
+     ]
+    }
+   ],
+   "clause": "G.O.168 rule 7(a)(x), Table IV as substituted by G.O.Ms.No.50 of 2019; G.O.168 rule 7(a)(iii) (setbacks of a high-rise on the net plot left after road widening); rule 5(f)(ii) for Table III",
+   "basis": "LEGAL_RULE",
+   "status": "VERIFIED",
+   "interpretation_ref": null,
+   "applies_to": "21 m",
+   "permits": [
+    {
+     "use": "TOWER",
+     "permit": "FORBIDDEN",
+     "condition": null,
+     "interpretation_ref": null
+    },
+    {
+     "use": "SURFACE_PARKING",
+     "permit": "FORBIDDEN",
+     "condition": null,
+     "interpretation_ref": null
+    },
+    {
+     "use": "ROAD",
+     "permit": "CONDITIONAL",
+     "condition": "only under the reading that circulation may run inside the setback; not settled by the text",
+     "interpretation_ref": "circulation_in_setback"
+    },
+    {
+     "use": "FIRE_HARDSTANDING",
+     "permit": "CONDITIONAL",
+     "condition": "only under the reading that circulation may run inside the setback; not settled by the text",
+     "interpretation_ref": "circulation_in_setback"
+    },
+    {
+     "use": "RAMP",
+     "permit": "CONDITIONAL",
+     "condition": "side or rear setback only, leaving 7 m (13(c)(vii))",
+     "interpretation_ref": null
+    }
+   ],
+   "area_sqm": 4133.422719009188
+  },
   {
    "id": "setback 21-24 m",
    "kind": "SETBACK",

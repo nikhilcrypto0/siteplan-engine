@@ -130,6 +130,21 @@
       "title": "CoreZone",
       "type": "object"
     },
+    "FacilityUse": {
+      "description": "What a facility is for. The first three are the uses rule 7(a)(vii) names for organised\nopen space ('greenery, tot lot or soft landscaping etc.').",
+      "enum": [
+        "GREENERY",
+        "TOT_LOT",
+        "SOFT_LANDSCAPE",
+        "SPORT_COURT",
+        "POOL",
+        "PAVED_DECK",
+        "BUILT_SERVICE",
+        "OTHER"
+      ],
+      "title": "FacilityUse",
+      "type": "string"
+    },
     "Finding": {
       "properties": {
         "clause": {
@@ -446,8 +461,8 @@
           "type": "number"
         },
         "schema_version": {
-          "const": "1.0",
-          "default": "1.0",
+          "const": "1.1",
+          "default": "1.1",
           "title": "Schema Version",
           "type": "string"
         },
@@ -582,6 +597,7 @@
     },
     "PlacedAmenity": {
       "additionalProperties": false,
+      "description": "A facility as placed. Its use and surface are what the generator says it placed (from the\nfirm's library, never from the name); None when nobody stated them. A validator holds them\nagainst the brief's request of the same name and derives what counts as open space itself.",
       "properties": {
         "name": {
           "title": "Name",
@@ -593,6 +609,28 @@
         },
         "shape": {
           "$ref": "#/$defs/Shape"
+        },
+        "surface": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Surface"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "use": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FacilityUse"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "required": [
@@ -852,8 +890,8 @@
           "type": "array"
         },
         "schema_version": {
-          "const": "1.0",
-          "default": "1.0",
+          "const": "1.1",
+          "default": "1.1",
           "title": "Schema Version",
           "type": "string"
         }
@@ -863,7 +901,7 @@
     },
     "Shape": {
       "additionalProperties": false,
-      "description": "A polygon: its outer ring and any holes, metres, survey frame, not closed (the first\npoint is not repeated).",
+      "description": "A polygon: its outer ring and any holes, metres, survey frame, not closed (the first\npoint is not repeated). Every ring has at least three points and only finite coordinates.",
       "properties": {
         "holes": {
           "default": [],
@@ -1040,6 +1078,16 @@
       "title": "Stretch",
       "type": "object"
     },
+    "Surface": {
+      "description": "What a facility's ground is made of. Stated by whoever specifies the facility (the firm's\namenity library); never read off its name.",
+      "enum": [
+        "SOFT",
+        "HARD",
+        "BUILT"
+      ],
+      "title": "Surface",
+      "type": "string"
+    },
     "TowerPrototype": {
       "additionalProperties": false,
       "properties": {
@@ -1103,8 +1151,8 @@
           "$ref": "#/$defs/PerFloor"
         },
         "schema_version": {
-          "const": "1.0",
-          "default": "1.0",
+          "const": "1.1",
+          "default": "1.1",
           "title": "Schema Version",
           "type": "string"
         },
@@ -1268,8 +1316,8 @@
       "type": "string"
     },
     "schema_version": {
-      "const": "1.0",
-      "default": "1.0",
+      "const": "1.1",
+      "default": "1.1",
       "title": "Schema Version",
       "type": "string"
     },
