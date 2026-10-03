@@ -18,7 +18,7 @@ from shapely.geometry.polygon import orient
 from siteplan.contracts.common import Side
 from siteplan.validator.context import Context
 from siteplan.validator.measure import required_gap
-from siteplan.validator.shapes import union_of_all
+from siteplan.validator.shapes import mitred, union_of_all
 
 COMPASS_DEG = {"N": 0, "NE": 45, "E": 90, "SE": 135, "S": 180, "SW": 225, "W": 270, "NW": 315}
 FRONT_SECTOR_DEG = 45  # a boundary edge faces a side when its outward normal is within this
@@ -68,7 +68,7 @@ def green_strip_zone(ctx: Context, reading: str) -> BaseGeometry | None:
     if depth is None or depth < green.where_setback_from_m.value:
         return None
     width = green.width_m.value
-    return ctx.net.difference(ctx.net.buffer(-width, join_style="mitre"))
+    return ctx.net.difference(mitred(ctx.net, -width))
 
 
 def front_edges(net, side: Side) -> list[LineString]:

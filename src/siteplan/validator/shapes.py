@@ -45,6 +45,17 @@ def mended(geometry: BaseGeometry) -> tuple[BaseGeometry, str]:
     return union_of_all(polygons_of(make_valid(geometry))), explain_validity(geometry)
 
 
+def mitred(shape: BaseGeometry, distance_m: float) -> BaseGeometry:
+    """The shape grown by a distance (shrunk, if negative) with square corners. The geometry
+    library's mitre buffer can hand back parts lying inside one another ('nested shells'), which
+    break the next set operation; such parts are merged into the one ground they cover."""
+    with np.errstate(divide="ignore", invalid="ignore"):  # GEOS notes a collapsed shape
+        grown = shape.buffer(distance_m, join_style="mitre")
+    if grown.is_valid:
+        return grown
+    return union_of_all([p if p.is_valid else p.buffer(0) for p in polygons_of(grown)])
+
+
 def opening(shape: BaseGeometry, width_m: float) -> BaseGeometry:
     """The shape without any part narrower than `width_m`: shrunk by half the width and grown
     back. Square (mitre) corners, so a corner that is wide enough on both sides is kept.
@@ -52,8 +63,7 @@ def opening(shape: BaseGeometry, width_m: float) -> BaseGeometry:
     leaves a hairline that the geometry library drops or swells, so the shrink stops half a
     centimetre short on each side."""
     half = width_m / 2 - OPENING_SLACK_M
-    with np.errstate(divide="ignore", invalid="ignore"):  # GEOS notes a collapsed shape
-        return shape.buffer(-half, join_style="mitre").buffer(half, join_style="mitre")
+    return mitred(mitred(shape, -half), half)
 
 
 def narrow_part(shape: BaseGeometry, width_m: float) -> BaseGeometry:
@@ -95,8 +105,7 @@ def width_of(shape: BaseGeometry, ceiling_m: float) -> float:
 
 def healed(shape: BaseGeometry, gap_m: float = 0.05) -> BaseGeometry:
     """The shape with hairline cracks closed: pieces drawn to meet can miss by a hair."""
-    with np.errstate(divide="ignore", invalid="ignore"):
-        return shape.buffer(gap_m, join_style="mitre").buffer(-gap_m, join_style="mitre")
+    return mitred(mitred(shape, gap_m), -gap_m)
 
 
 def oriented_box(polygon: Polygon) -> tuple[float, float, float]:

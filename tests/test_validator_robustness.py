@@ -202,3 +202,30 @@ def test_a_number_that_is_not_a_number_fails_the_candidate_and_names_where(bad):
     assert report.verdict.legal is LegalVerdict.FAIL
     assert [c.finding.status for c in report.program] == [Z.UNVERIFIED]
     assert ValidationReport.model_validate_json(report.model_dump_json()) == report
+
+
+def _give_up(error):
+    def raise_it(*args, **kwargs):
+        raise error
+    return raise_it
+
+
+def test_a_geometry_error_the_library_cannot_get_past_is_an_unverified_report_not_a_crash(
+        monkeypatch):
+    from shapely.errors import GEOSException
+
+    monkeypatch.setattr("siteplan.validator.open_space.qualifying", _give_up(GEOSException(
+        "TopologyException: found non-noded intersection (made up)")))
+    report = fixture("rectangle").report()
+    assert [c.finding.status for c in report.legal] == [Z.UNVERIFIED]
+    assert report.legal[0].finding.rule == "Shapes the geometry library can measure"
+    assert "non-noded intersection" in report.legal[0].finding.measured
+    assert report.verdict.legal is LegalVerdict.UNVERIFIED
+    assert ValidationReport.model_validate_json(report.model_dump_json()) == report
+
+
+def test_a_mistake_of_the_validators_own_is_not_hidden_as_a_geometry_error(monkeypatch):
+    monkeypatch.setattr("siteplan.validator.open_space.qualifying",
+                        _give_up(ValueError("a bug")))
+    with pytest.raises(ValueError, match="a bug"):
+        fixture("rectangle").report()
