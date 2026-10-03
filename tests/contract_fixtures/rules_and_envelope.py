@@ -16,6 +16,7 @@ from siteplan import parking, rules
 from siteplan.contracts.accounting import DeductionKind, LayerKind, Permit, PhysicalUse
 from siteplan.contracts.common import (
     Basis,
+    FacilityUse,
     Finding,
     Provenance,
     Shape,
@@ -30,13 +31,23 @@ from siteplan.contracts.resolved_rules import (
     APPROACH_WIDTH,
     CIRCULATION_IN_SETBACK,
     FIRE_TURNING_RADIUS,
+    HEIGHT_TOL_M,
     MIXED_HEIGHT_SPACING,
     OPEN_SPACE_BASIS,
+    OPEN_SPACE_OTHER_USES,
     STILT_IN_RULE_HEIGHT,
+    TOT_LOT_SURFACE,
     VISITOR_PARKING,
+    Applicability,
+    Band,
     BandKind,
+    Eligibility,
+    EligibilityGround,
     HeightMeasure,
+    HighRiseEligibility,
+    LimitBound,
     ResolvedRules,
+    SiteFact,
     TableVColumn,
     WhenOpen,
 )
@@ -49,7 +60,11 @@ ENGINE = {"basis": Basis.ENGINE_DESIGN_ASSUMPTION, "status": Provenance.ASSUMED_
 WIDTHS_REPORTED_M = (10.0, 15.0, 20.0, 25.0, 30.0)
 REGION_SPLIT_M = 30.0  # land narrower than this is reported as a region of its own
 NON_HIGH_RISE_NOTE = "Table III (rule 5) is not encoded yet: A2 reads it from the order"
-ACRE_SQM = 4046.8564224
+NON_HIGH_RISE_CLAUSE = "G.O.168 rule 5, Table III"
+AIRPORT_CLAUSE = "G.O.168 rule 3(d) (airport and Air Force height limits)"
+PROHIBITED_NOTE = ("No building of the high-rise height or more may stand here. What may be built "
+                   "below that height is Table III's (rule 5), which is not encoded yet: nothing "
+                   "below it is validated until it is.")
 
 
 def interpretations() -> list[dict]:
@@ -69,7 +84,9 @@ def interpretations() -> list[dict]:
              "gross_before_surrender": "the gross site area, before any land is surrendered",
              "gross_after_surrender": "the gross site area less the land surrendered",
              "net_after_surrender": "the net site area after every ownership deduction"},
-         "sources": ["rule 8(g)", "rule 5(vi)"], "settles": "a sanctioned plan's area statement"},
+         "sources": [f"{rules.OPEN_SPACE_CLAUSE}: 'at least 10% of total site area'",
+                     "G.O.168 rule 8(g): 'Minimum of 10% of site area'"],
+         "settles": "a sanctioned plan's area statement"},
         {"id": CIRCULATION_IN_SETBACK, "selected": ALL,
          "question": "May internal roads and fire lanes run inside the mandatory setback?",
          "alternatives": {"allowed": "roads and fire lanes may run inside the setback",
@@ -104,7 +121,112 @@ def interpretations() -> list[dict]:
                           "up_to_3_percent_or_cap": "up to 3% or 50,000 sft, whichever is "
                                                     "lower (the 2016 wording)"},
          "sources": [rules.AMENITY_CLAUSE], "settles": "the authority's reading of the 2016 text"},
+        {"id": TOT_LOT_SURFACE, "selected": ALL,
+         "question": "Must a tot-lot stand on soft ground to count as organised open space?",
+         "alternatives": {"any_surface": "a tot-lot counts whatever its surface: the rule names "
+                                         "the tot-lot and does not say what it is laid on",
+                          "soft_only": "a tot-lot counts only on soft ground"},
+         "sources": [f"{rules.OPEN_SPACE_CLAUSE}: 'greenery, tot lot or soft landscaping, etc.'"],
+         "settles": "a sanctioned plan whose counted tot-lot is paved, or the authority's "
+                    "reading"},
+        {"id": OPEN_SPACE_OTHER_USES, "selected": ALL,
+         "question": "Does the rule's 'etc.' take in open recreation other than the uses it "
+                     "names?",
+         "alternatives": {"same_kind_only": "only greenery, a tot-lot and soft landscaping "
+                                            "count",
+                          "any_open_recreation": "any recreation open to the sky counts too (a "
+                                                 "court, a pool, a paved deck)"},
+         "sources": [f"{rules.OPEN_SPACE_CLAUSE}: 'greenery, tot lot or soft landscaping, etc.'"],
+         "settles": "the organised open space a sanctioned plan's area statement counts"},
     ]
+
+
+def height_bands() -> list[dict]:
+    """Every height in exactly one band. Below the high-rise height Table III governs, which is
+    not encoded; a building of exactly that height is a high-rise (rule 2(f)) and takes the
+    Table IV row that reaches it; above it the rows are Table IV's own."""
+    start = rules.HIGH_RISE_THRESHOLD_M
+    at_start = rules.band_for_height(start)
+    return [
+        {"above_m": 0.0, "up_to_m": start, "up_to_inclusive": False,
+         "kind": BandKind.NON_HIGH_RISE, "modelled": False, "clause": NON_HIGH_RISE_CLAUSE,
+         "status": Provenance.UNVERIFIED},
+        {"above_m": start, "up_to_m": start, "above_inclusive": True, "kind": BandKind.HIGH_RISE,
+         "min_road_m": at_start.min_road_m, "setback_m": at_start.min_open_space_m,
+         "gap_m": at_start.min_open_space_m, "clause": rules.TABLE_IV_CLAUSE},
+        *({"above_m": b.above_m, "up_to_m": b.up_to_m, "kind": BandKind.HIGH_RISE,
+           "min_road_m": b.min_road_m, "setback_m": b.min_open_space_m,
+           "gap_m": b.min_open_space_m, "clause": rules.TABLE_IV_CLAUSE}
+          for b in rules.TABLE_IV if b.above_m >= start)]
+
+
+def height_limits(site: CanonicalSiteModel) -> list[dict]:
+    """The limits on a height here: the road's (Table IV column 3), the dead-end rule's and the
+    airport's. Each says whether it has a number, whether it applies, and how far the inputs
+    behind the number are confirmed."""
+    road = site.access_road()
+    row = road.legal_row_m if road is not None else None
+    by_road = {"id": "table_iv_road", "measure": HeightMeasure.RULE_HEIGHT,
+               "clause": rules.TABLE_IV_CLAUSE}
+    if row is None:
+        by_road |= {"bound": LimitBound.NOT_EVALUATED, "status": Provenance.UNVERIFIED,
+                    "reason": "the access road's legal width is not given"}
+    else:
+        top = rules.max_height_for_road(row.value)
+        by_road["status"] = weakest(Provenance.VERIFIED, row.status)
+        if top is None:
+            by_road |= {"bound": LimitBound.NOT_EVALUATED,
+                        "reason": f"the {row.value:.2f} m road serves no high-rise; what it "
+                                  "allows below that height is Table III's, not encoded yet"}
+        elif math.isinf(top):
+            by_road |= {"bound": LimitBound.UNBOUNDED,
+                        "reason": f"the {row.value:.2f} m road meets every row of Table IV: "
+                                  "the road sets no height limit"}
+        else:
+            by_road |= {"bound": LimitBound.BOUNDED, "max_m": top,
+                        "reason": f"the {row.value:.2f} m road serves buildings up to {top:g} m"}
+    ends = site.access.dead_end
+    dead_end = {
+        "id": "dead_end", "measure": HeightMeasure.PHYSICAL_HEIGHT, "bound": LimitBound.BOUNDED,
+        "max_m": rules.DEAD_END_MAX_HEIGHT_M, "clause": rules.DEAD_END_CLAUSE,
+        "condition": {"fact": SiteFact.ROAD_ENDS_AT_PLOT, "holds_when": True,
+                      "text": "the access road ends at the plot"},
+        "applicability": {True: Applicability.APPLIES, False: Applicability.DOES_NOT_APPLY,
+                          None: Applicability.UNKNOWN}[ends.value],
+        # the number is the code's own; whether the road ends here is the applicability
+        "status": Provenance.VERIFIED if ends.value is None
+        else weakest(Provenance.VERIFIED, ends.status),
+        "reason": "no dead-end road for a residential building above "
+                  f"{rules.DEAD_END_MAX_HEIGHT_M:g} m"}
+    airport = {"id": "airport", "measure": HeightMeasure.AMSL,
+               "bound": LimitBound.NOT_EVALUATED, "status": Provenance.UNVERIFIED,
+               "clause": AIRPORT_CLAUSE,
+               "reason": "airport and Air Force height limits are not evaluated"
+               + ("" if site.coordinates else ": the site has no coordinates")}
+    return [by_road, dead_end, airport]
+
+
+def high_rise(site: CanonicalSiteModel) -> dict:
+    """Whether the site may take a high-rise at all: its road and its plot size. A site that may
+    not is PROHIBITED, which says nothing about what may be built below the high-rise height."""
+    road = site.access_road()
+    row = road.legal_row_m if road is not None else None
+    need = rules.band_for_height(rules.HIGH_RISE_THRESHOLD_M).min_road_m
+    net = site.ownership.net_sqm
+    grounds = [
+        EligibilityGround(
+            id="road_width", met=None if row is None else row.value >= need,
+            measured="not given" if row is None else f"{row.value:.2f} m",
+            required=f"at least {need:g} m", clause=rules.TABLE_IV_CLAUSE,
+            status=Provenance.UNVERIFIED if row is None else row.status),
+        EligibilityGround(
+            id="plot_size", met=net.value >= rules.MIN_HIGH_RISE_PLOT_SQM,
+            measured=f"{net.value:,.1f} m²",
+            required=f"at least {rules.MIN_HIGH_RISE_PLOT_SQM:,.0f} m²",
+            clause=rules.MIN_HIGH_RISE_PLOT_CLAUSE, status=net.status)]
+    eligibility = HighRiseEligibility.of_grounds(grounds)
+    return {"eligibility": eligibility, "grounds": grounds,
+            "note": PROHIBITED_NOTE if eligibility is Eligibility.PROHIBITED else ""}
 
 
 def resolved_rules(site: CanonicalSiteModel) -> ResolvedRules:
@@ -112,42 +234,10 @@ def resolved_rules(site: CanonicalSiteModel) -> ResolvedRules:
     gross, net = own.gross_sqm.value, own.net_sqm.value
     surrendered = sum(d.area_sqm.value for d in own.deductions
                       if d.kind is DeductionKind.SURRENDER)
-    road = site.access_road()
-    road_m = road.legal_row_m.value if road and road.legal_row_m else None
-    road_status = road.legal_row_m.status if road and road.legal_row_m else Provenance.UNVERIFIED
     columns = rules.parking_columns(site.jurisdiction.authority.value,
                                     site.jurisdiction.inside_cure.value)
     column = (TableVColumn.OPEN if len(columns) > 1 else TableVColumn.GHMC_OR_CURE
               if columns == {rules.PARKING_PERCENT_GHMC} else TableVColumn.ELSEWHERE)
-    limits = []
-    if road_m is not None:
-        top = rules.max_height_for_road(road_m)
-        limits.append({"measure": HeightMeasure.RULE_HEIGHT, "max_m": top,
-                       "reason": f"the {road_m:.2f} m road serves buildings up to {top:g} m"
-                       if top else "the road sets no height limit",
-                       "clause": rules.TABLE_IV_CLAUSE,
-                       "status": weakest(Provenance.VERIFIED, road_status)})
-    dead_end = site.access.dead_end
-    limits.append({"measure": HeightMeasure.PHYSICAL_HEIGHT, "max_m": rules.DEAD_END_MAX_HEIGHT_M,
-                   "reason": "no dead-end road for a residential building above 30 m",
-                   "clause": rules.DEAD_END_CLAUSE,
-                   "status": Provenance.UNVERIFIED if dead_end.value is None
-                   else Provenance.VERIFIED,
-                   "applies_if": f"the access road ends at the plot (site: {dead_end.value})"})
-    limits.append({"measure": HeightMeasure.AMSL, "max_m": None,
-                   "reason": "no site coordinates: airport and Air Force limits not evaluated",
-                   "clause": "G.O.168 rule 3(d)", "status": Provenance.UNVERIFIED})
-    if net < rules.MIN_HIGH_RISE_PLOT_SQM:
-        limits.append({"measure": HeightMeasure.RULE_HEIGHT, "max_m": rules.HIGH_RISE_THRESHOLD_M,
-                       "reason": "the plot is too small for a high-rise",
-                       "clause": rules.MIN_HIGH_RISE_PLOT_CLAUSE, "status": Provenance.VERIFIED})
-    bands = [{"above_m": 0.0, "up_to_m": rules.HIGH_RISE_THRESHOLD_M,
-              "kind": BandKind.NON_HIGH_RISE, "modelled": False,
-              "clause": "G.O.168 rule 5, Table III", "status": Provenance.UNVERIFIED}]
-    bands += [{"above_m": b.above_m, "up_to_m": b.up_to_m, "kind": BandKind.HIGH_RISE,
-               "min_road_m": b.min_road_m, "setback_m": b.min_open_space_m,
-               "gap_m": b.min_open_space_m, "clause": rules.TABLE_IV_CLAUSE}
-              for b in rules.TABLE_IV if b.above_m >= rules.HIGH_RISE_THRESHOLD_M]
     share = rules.OPEN_SPACE_MIN_FRACTION
     gds = rules.is_group_development(gross)
     return ResolvedRules(
@@ -162,9 +252,7 @@ def resolved_rules(site: CanonicalSiteModel) -> ResolvedRules:
         category={"group_development": {"value": gds, "clause": rules.GROUP_DEVELOPMENT_CLAUSE,
                                         **LAW},
                   "amenities_from_units": {"value": rules.AMENITY_MIN_UNITS,
-                                           "clause": rules.AMENITY_CLAUSE, **LAW},
-                  "above_5_acres": {"value": gross > 5 * ACRE_SQM,
-                                    "clause": "G.O.168 rule 8(o), p.16", **LAW}},
+                                           "clause": rules.AMENITY_CLAUSE, **LAW}},
         jurisdiction={"table_v_column": column, "when_open": WhenOpen.STOP},
         height={"measures": {
                     HeightMeasure.RULE_HEIGHT: "the height Table IV and the high-rise class are "
@@ -173,11 +261,12 @@ def resolved_rules(site: CanonicalSiteModel) -> ResolvedRules:
                     HeightMeasure.AMSL: "height above mean sea level"},
                 "high_rise_from_m": {"value": rules.HIGH_RISE_THRESHOLD_M, "unit": "m",
                                      "clause": rules.HIGH_RISE_CLAUSE, **LAW},
+                "high_rise": high_rise(site),
                 "tdr_band_m": {"value": rules.TDR_BAND_M, "unit": "m",
                                "clause": rules.TDR_BAND_CLAUSE, **LAW},
                 "tdr_plot_sqm": {"value": rules.TDR_PLOT_RANGE_SQM, "unit": "m²",
                                  "clause": rules.TDR_BAND_CLAUSE, **LAW},
-                "bands": bands, "limits": limits},
+                "bands": height_bands(), "limits": height_limits(site)},
         setbacks={"measured_on": {"value": "net plot", "clause": rules.SETBACK_ON_NET_PLOT_CLAUSE,
                                   **LAW},
                   "front": {"value": "Table IV", "clause": rules.FRONT_SETBACK_CLAUSE, **LAW},
@@ -195,12 +284,18 @@ def resolved_rules(site: CanonicalSiteModel) -> ResolvedRules:
                                     "clause": rules.OPEN_SPACE_CLAUSE, **LAW},
                     "min_pocket_sqm": {"value": rules.OPEN_SPACE_MIN_POCKET_SQM, "unit": "m²",
                                        "clause": rules.OPEN_SPACE_CLAUSE, **LAW},
-                    "over_and_above_setbacks": {"value": True, "clause": "G.O.168 rule 5(vi)",
+                    "over_and_above_setbacks": {"value": True, "clause": rules.OPEN_SPACE_CLAUSE,
                                                 **LAW},
                     "block_gaps_excluded": {"value": True, "clause": rules.BLOCK_SPACING_CLAUSE,
                                             **LAW},
-                    "buffer_may_count": {"value": True, "clause": "G.O.168 rule 3(a)(iii)(3)",
-                                         **LAW}},
+                    "buffer_may_count": {"value": True, "clause": rules.WATER_BUFFER_CLAUSE,
+                                         **LAW},
+                    "qualifying_uses": {
+                        "value": [FacilityUse.GREENERY, FacilityUse.TOT_LOT,
+                                  FacilityUse.SOFT_LANDSCAPE],
+                        "clause": rules.OPEN_SPACE_CLAUSE,
+                        "note": "the uses the rule names: 'greenery, tot lot or soft "
+                                "landscaping, etc.'", **LAW}},
         green_strip={"width_m": {"value": rules.PERIPHERAL_GREEN_STRIP_M, "unit": "m",
                                  "clause": rules.PERIPHERAL_GREEN_STRIP_CLAUSE, **LAW},
                      "where_setback_from_m": {"value": rules.PERIPHERAL_GREEN_STRIP_FROM_SETBACK_M,
@@ -209,6 +304,10 @@ def resolved_rules(site: CanonicalSiteModel) -> ResolvedRules:
                                               **LAW}},
         circulation=_circulation(gds),
         fire=_fire(),
+        electrical={"ht_clearance_m": {"value": rules.ELECTRICAL_HT_CLEARANCE_M, "unit": "m",
+                                       "clause": rules.ELECTRICAL_CLAUSE, **LAW},
+                    "lt_clearance_m": {"value": rules.ELECTRICAL_LT_CLEARANCE_M, "unit": "m",
+                                       "clause": rules.ELECTRICAL_CLAUSE, **LAW}},
         parking=_parking(column, site),
         amenities={"share_of_built_up": {"value": rules.AMENITY_MIN_BUILT_UP_FRACTION,
                                          "clause": rules.AMENITY_CLAUSE,
@@ -219,13 +318,8 @@ def resolved_rules(site: CanonicalSiteModel) -> ResolvedRules:
                    "from_units": {"value": rules.AMENITY_MIN_UNITS, "clause": rules.AMENITY_CLAUSE,
                                   **LAW},
                    "separate_block": {"value": "not part of a residential block, unless there is "
-                                               "one block", "clause": rules.AMENITY_CLAUSE, **LAW},
-                   "large_project_share_of_site": {"value": 0.05, "clause": "G.O.168 rule 8(o), "
-                                                   "p.16", "note": "read from the 2012 text on "
-                                                   "2026-10-02; not yet a rules.py constant",
-                                                   **LAW},
-                   "large_project_from_acres": {"value": 5.0, "unit": "acre",
-                                                "clause": "G.O.168 rule 8(o), p.16", **LAW}},
+                                               "one block", "clause": rules.AMENITY_CLAUSE,
+                                      **LAW}},
         water={"buffer_m_by_class": {"value": dict(rules.WATER_BUFFER_M), "unit": "m",
                                      "clause": rules.WATER_BUFFER_CLAUSE, **LAW}},
         interpretations=interpretations())
@@ -293,8 +387,10 @@ def _parking(column: TableVColumn, site: CanonicalSiteModel) -> dict:
             "ramp_gradient": {"value": rules.RAMP_MAX_GRADIENT, "clause": rules.RAMP_CLAUSE,
                               **LAW},
             "ramp_in_setbacks": {"value": "never in the front setback or building line; side "
-                                          "or rear only leaving 7 m for fire vehicles",
+                                          "or rear only leaving the fire clearance",
                                  "clause": rules.RAMP_CLAUSE, **LAW},
+            "ramp_fire_clearance_m": {"value": rules.RAMP_FIRE_CLEARANCE_M, "unit": "m",
+                                      "clause": rules.RAMP_CLAUSE, **LAW},
             "utilities_max_fraction": {"value": rules.CELLAR_UTILITIES_MAX_FRACTION,
                                        "clause": rules.CELLAR_UTILITIES_CLAUSE, **LAW},
             "measurement": {"bay_m": (parking.BAY_WIDTH_M, parking.BAY_DEPTH_M),
@@ -316,25 +412,25 @@ def envelope(site: CanonicalSiteModel, resolved: ResolvedRules) -> BuildableEnve
                                "shapes": shapes_from(zone), "clause": rules.WATER_BUFFER_CLAUSE,
                                "source_ref": water.id})
     excluded = unary_union(buffers) if buffers else None
-    limit = next((lim.max_m for lim in resolved.height.limits
-                  if lim.measure == HeightMeasure.RULE_HEIGHT and lim.max_m), None)
     bands, layers = [], []
     for band in resolved.height.bands:
         if not band.modelled:
             bands.append({"above_m": band.above_m, "up_to_m": band.up_to_m, "kind": band.kind,
                           "modelled": False, "note": NON_HIGH_RISE_NOTE})
             continue
-        if limit is not None and band.above_m >= limit:
+        if not _offered(resolved, band):
             continue
         inset = net.buffer(-band.setback_m)
         buildable = inset.difference(excluded) if excluded is not None else inset
-        key = f"{band.above_m:g}-{band.up_to_m:g} m"
+        key = (f"{band.above_m:g} m" if band.up_to_m == band.above_m
+               else f"{band.above_m:g}-{band.up_to_m:g} m")
         bands.append({"above_m": band.above_m, "up_to_m": band.up_to_m, "kind": band.kind,
                       "setback_m": band.setback_m, "setback_envelope": shapes_from(inset),
                       "buildable": shapes_from(buildable), "area_sqm": buildable.area,
                       "green_strip_applies": band.setback_m
                       >= resolved.green_strip.where_setback_from_m.value})
-        layers.append(_setback_layer(key, net.difference(inset)))
+        layers.append(_setback_layer(key, net.difference(inset),
+                                     resolved.parking.ramp_fire_clearance_m.value))
     for zone in buffers:
         layers.append({"id": f"water-buffer-{len(layers)}", "kind": LayerKind.WATER_BUFFER,
                        "shapes": shapes_from(zone), "clause": rules.WATER_BUFFER_CLAUSE,
@@ -365,12 +461,36 @@ def envelope(site: CanonicalSiteModel, resolved: ResolvedRules) -> BuildableEnve
         rule_layers={"layers": layers},
         facts=[Finding("Group Development Scheme", Status.INFO, f"{'yes' if gds else 'no'}",
                        "4,000 m² and over", rules.GROUP_DEVELOPMENT_CLAUSE),
-               Finding("Rule-height limit", Status.INFO,
-                       f"{limit:g} m" if limit else "none from the road", "Table IV by road",
-                       rules.TABLE_IV_CLAUSE)])
+               Finding("High-rise eligibility", Status.INFO,
+                       resolved.height.high_rise.eligibility.value,
+                       "; ".join(f"{g.id}: {g.measured}, {g.required}"
+                                 for g in resolved.height.high_rise.grounds),
+                       rules.MIN_HIGH_RISE_PLOT_CLAUSE, resolved.height.high_rise.note),
+               _road_limit_fact(resolved)])
 
 
-def _setback_layer(key: str, zone) -> dict:
+def _offered(resolved: ResolvedRules, band: Band) -> bool:
+    """Whether the envelope draws a band: not a high-rise band where a high-rise is prohibited,
+    and not one whose lowest height is already beyond a limit that applies or may apply."""
+    height = resolved.height
+    if (band.kind is BandKind.HIGH_RISE
+            and height.high_rise.eligibility is Eligibility.PROHIBITED):
+        return False
+    lowest = band.above_m if band.above_inclusive else band.above_m + 2 * HEIGHT_TOL_M
+    return not any(limit.beyond(lowest) for limit in height.limits
+                   if limit.measure is HeightMeasure.RULE_HEIGHT)
+
+
+def _road_limit_fact(resolved: ResolvedRules) -> Finding:
+    limit = next(lim for lim in resolved.height.limits if lim.id == "table_iv_road")
+    measured = {LimitBound.BOUNDED: f"{limit.max_m:g} m" if limit.max_m else "",
+                LimitBound.UNBOUNDED: "none from the road",
+                LimitBound.NOT_EVALUATED: "not evaluated"}[limit.bound]
+    return Finding("Rule-height limit", Status.INFO, measured, "Table IV by road",
+                   rules.TABLE_IV_CLAUSE, limit.reason)
+
+
+def _setback_layer(key: str, zone, ramp_clear_m: float) -> dict:
     """A band's setback zone. Roads and fire lanes in it are CONDITIONAL on the open reading
     circulation_in_setback, never simply allowed."""
     conditional = {"permit": Permit.CONDITIONAL, "interpretation_ref": CIRCULATION_IN_SETBACK,
@@ -384,7 +504,8 @@ def _setback_layer(key: str, zone) -> dict:
                         {"use": PhysicalUse.ROAD, **conditional},
                         {"use": PhysicalUse.FIRE_HARDSTANDING, **conditional},
                         {"use": PhysicalUse.RAMP, "permit": Permit.CONDITIONAL,
-                         "condition": "side or rear setback only, leaving 7 m (13(c)(vii))"}],
+                         "condition": f"side or rear setback only, leaving {ramp_clear_m:g} m "
+                                      "(13(c)(vii))"}],
             **LAW}
 
 
