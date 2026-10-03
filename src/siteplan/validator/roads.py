@@ -1,0 +1,358 @@
+"""Rule 8(m) and 8(l): the internal roads of a group development scheme, and the setback.
+
+Roads are measured from their drawn shapes, never from the width they declare: a road drawn 8.9 m
+wide is 8.9 m wide whatever its label says, and a bay, a facility or a block standing on it takes
+that ground from it. A driveway (rule 13(c)(viii), 4.5 m) is never counted as an internal road.
+Every road, gate and fire lane that runs inside the mandatory setback is evaluated under both
+readings of whether circulation may use it.
+"""
+
+from __future__ import annotations
+
+from shapely.geometry.base import BaseGeometry
+
+from siteplan import rules as law
+from siteplan.contracts.candidate import RoadKind
+from siteplan.contracts.common import Status
+from siteplan.contracts.resolved_rules import (
+    APPROACH_WIDTH,
+    CIRCULATION_IN_SETBACK,
+    STILT_IN_RULE_HEIGHT,
+)
+from siteplan.contracts.validation import Check, Family
+from siteplan.validator.context import Context
+from siteplan.validator.drawn import DrawnRoad
+from siteplan.validator.ground import Ground
+from siteplan.validator.measure import TOL_M
+from siteplan.validator.readings import (
+    ALLOWED,
+    AUTHORITY_CHOICE,
+    MINIMUM_APPROACH,
+    NOT_ALLOWED,
+    Assignment,
+    Cell,
+    check_from,
+    plain,
+    run,
+    unknown_reading,
+    verdict,
+)
+from siteplan.validator.shapes import (
+    NOISE_SQM,
+    end_caps,
+    healed,
+    inscribed_radius,
+    opening,
+    polygons_of,
+    sides_of,
+    union_of_all,
+    width_in,
+)
+from siteplan.validator.zones import deepest_setback_m, setback_zone
+
+WIDTH_SLACK_M = 0.02  # a road drawn this close to its width is that width
+TOUCH_M = 0.5  # a block or a road this close to a road opens onto it
+END_M = 1.0  # how much of a road's length counts as its end
+ROAD_KINDS = (RoadKind.APPROACH, RoadKind.LOOP, RoadKind.INTERNAL, RoadKind.CUL_DE_SAC)
+RULE_8M_KINDS = (RoadKind.APPROACH, RoadKind.LOOP, RoadKind.INTERNAL)
+
+
+def _clause(ctx: Context) -> str:
+    return ctx.rules.circulation.internal_road_m.clause
+
+
+def _usable(road: DrawnRoad, ground: Ground) -> BaseGeometry:
+    """The road's drawn ground less anything built, parked or laid out on it."""
+    return road.shape.difference(ground.solid_land)
+
+
+def _ground_of(ctx: Context, ground: Ground, *kinds: RoadKind) -> BaseGeometry:
+    return union_of_all([_usable(r, ground) for r in ctx.drawn.roads_of(*kinds)])
+
+
+def _plural(n: int, word: str) -> str:
+    return f"{n} {word}{'' if n == 1 else 's'}"
+
+
+# --- Main approach, loop and internal roads --------------------------------------------------
+
+
+def _approach_checks(ctx: Context, ground: Ground, network: BaseGeometry) -> list[Check]:
+    low, high = ctx.rules.circulation.approach_m.value
+    roads = ctx.drawn.roads_of(RoadKind.APPROACH)
+    out = []
+    for road in roads:
+        usable = _usable(road, ground)
+        measured = width_in(network, usable, high)
+        width = min(measured, road.declared_width_m)
+
+        def cell(a: Assignment, width=width, measured=measured, road=road) -> Cell:
+            reading = a[APPROACH_WIDTH]
+            shown = (f"{measured:.2f} m wide, from the entrance to the loop road"
+                     + ("" if abs(measured - road.declared_width_m) <= WIDTH_SLACK_M * 5
+                        else f" (declared {road.declared_width_m:g} m)"))
+            required = f">= {low:g} m (the order gives {low:g} to {high:g} m)"
+            if width + TOL_M < low - WIDTH_SLACK_M:
+                return Cell(Status.FAIL, shown, required)
+            if reading == MINIMUM_APPROACH:
+                return Cell(Status.PASS, shown, required,
+                            f"Drawn at the least the order allows; it gives no test for when a "
+                            f"main approach road must be wider, so the authority may ask up to "
+                            f"{high:g} m.")
+            if reading == AUTHORITY_CHOICE:
+                status = Status.PASS if width >= high - WIDTH_SLACK_M else Status.UNVERIFIED
+                return Cell(status, shown, required, f"The authority may ask for up to "
+                            f"{high:g} m; only that width settles it.")
+            return unknown_reading(APPROACH_WIDTH, reading)
+
+        suffix = f" ({road.id})" if len(roads) > 1 else ""
+        out.append(check_from(
+            run(ctx.rules, [APPROACH_WIDTH], cell), family=Family.ROADS,
+            rule=f"Internal roads: main approach{suffix}", subject=road.id,
+            clause=ctx.rules.circulation.approach_m.clause))
+    return out
+
+
+def _network_check(ctx: Context, ground: Ground, network: BaseGeometry) -> Check | None:
+    nine = ctx.rules.circulation.internal_road_m.value
+    loops, inner = ctx.drawn.roads_of(RoadKind.LOOP), ctx.drawn.roads_of(RoadKind.INTERNAL)
+    if not (loops or inner):
+        return None
+    tested = _ground_of(ctx, ground, *RULE_8M_KINDS)
+    wide = opening(network, nine - WIDTH_SLACK_M).intersection(tested)
+    thin = tested.area > 0 and wide.area < tested.area * 0.98
+    declared = [r for r in ctx.drawn.roads_of(*RULE_8M_KINDS)
+                if r.declared_width_m + TOL_M < nine - WIDTH_SLACK_M]
+    measured = width_in(network, tested, nine)
+    what = (f"a loop road and {_plural(len(inner), 'internal road')}" if loops
+            else _plural(len(inner), "internal road"))
+    problems = []
+    if thin:
+        problems.append(f"narrower than {nine:g} m in places ({measured:.2f} m)")
+    if declared:
+        problems.append("declared narrower: " + ", ".join(r.id for r in declared))
+    return plain(
+        Family.ROADS, "Internal roads: loop and other roads", verdict(not problems),
+        f"{what}, " + ("; ".join(problems) if problems else f"all at least {nine:g} m"),
+        f">= {nine:g} m", _clause(ctx),
+        "A driveway (rule 13(c)(viii), 4.5 m) is not counted as an internal road.")
+
+
+def _perimeter_checks(ctx: Context, ground: Ground) -> list[Check]:
+    """A perimeter lane inside the setback (a test assumption) is held to the fire lane, and is
+    never taken to satisfy rule 8(m)'s 9 m loop road."""
+    ring = ctx.drawn.roads_of(RoadKind.PERIMETER_LANE)
+    if not ring:
+        return []
+    lane = ctx.rules.fire.clear_width_m.value
+    usable = union_of_all([_usable(r, ground) for r in ring])
+    width = width_in(usable, usable, lane)
+    thin = width + TOL_M < lane - WIDTH_SLACK_M
+    out = [plain(
+        Family.ROADS, "Fire lane: perimeter lane inside the setback", verdict(not thin),
+        f"narrower than {lane:g} m in places ({width:.2f} m)" if thin else
+        f"{width:.2f} m inside the setback band, at least {lane:g} m everywhere",
+        f">= {lane:g} m motorable", ctx.rules.fire.clear_width_m.clause,
+        "ASSUMED_FOR_TEST: the profile lets circulation run inside the setback. As a fire lane "
+        "only; it is not counted as a rule 8(m) road.")]
+    if not ctx.drawn.roads_of(RoadKind.LOOP):
+        out.append(plain(
+            Family.ROADS, "Internal roads: 9 m loop road (rule 8(m))", Status.UNVERIFIED,
+            "no 9 m loop road drawn; the perimeter lane inside the setback is not counted as "
+            "one", f">= {ctx.rules.circulation.internal_road_m.value:g} m for looped roads",
+            _clause(ctx), "Whether a perimeter driveway narrower than 9 m inside the setback may "
+            "serve as the group development's loop is not settled; the architect or a sanctioned "
+            "plan says."))
+    return out
+
+
+# --- Dead ends and cul-de-sacs ---------------------------------------------------------------
+
+
+def _joins_at_both_ends(piece: BaseGeometry, others: BaseGeometry) -> bool:
+    """Whether each end of a road meets another road (an end is the first END_M of its length)."""
+    parts = polygons_of(piece)
+    if not parts:
+        return False
+    ends = end_caps(max(parts, key=lambda p: p.area), END_M)
+    near = others.buffer(TOUCH_M)
+    return len(ends) == 2 and all(e.intersects(near) for e in ends)
+
+
+def _dead_end_check(ctx: Context, ground: Ground) -> Check:
+    circ = ctx.rules.circulation
+    low, high = circ.cul_de_sac_length_m.value
+    required = (f"through roads; a cul-de-sac only {low:g}-{high:g} m long, "
+                f"{circ.cul_de_sac_width_m.value:g} m wide, with a "
+                f"{circ.cul_de_sac_head_radius_m.value:g} m radius head")
+    base = _ground_of(ctx, ground, RoadKind.LOOP, RoadKind.APPROACH)
+    lane = _ground_of(ctx, ground, RoadKind.PERIMETER_LANE)
+    internal = ctx.drawn.roads_of(RoadKind.INTERNAL)
+
+    def dead(roads: list[DrawnRoad], extra: BaseGeometry) -> list[DrawnRoad]:
+        return [r for r in roads if not _joins_at_both_ends(
+            _usable(r, ground), union_of_all([base, extra, *(
+                _usable(o, ground) for o in roads if o is not r)]))]
+
+    rule = "Internal roads: dead ends"
+    stuck = dead(internal, union_of_all([]))
+    if not stuck:
+        return plain(Family.ROADS, rule, Status.PASS,
+                     "every internal road joins the loop at both ends", required, _clause(ctx))
+    if not dead(internal, lane):
+        return plain(
+            Family.ROADS, rule, Status.UNVERIFIED,
+            f"{_plural(len(stuck), 'road')} end on the perimeter lane only", required,
+            _clause(ctx), "They are through roads only if the perimeter lane counts as an 8(m) "
+            "road, which is not established (ASSUMED_FOR_TEST circulation in the setback).")
+    return plain(Family.ROADS, rule, Status.FAIL,
+                 f"{_plural(len(stuck), 'road')} ending without a turning head ("
+                 + ", ".join(r.id for r in stuck) + ")", required, _clause(ctx),
+                 "A road that is not a cul-de-sac of the form rule 8(m) allows must join "
+                 "another road at both ends.")
+
+
+def _cul_de_sac_checks(ctx: Context, ground: Ground) -> list[Check]:
+    circ = ctx.rules.circulation
+    low, high = circ.cul_de_sac_length_m.value
+    wide, radius = circ.cul_de_sac_width_m.value, circ.cul_de_sac_head_radius_m.value
+    network = _ground_of(ctx, ground, *RULE_8M_KINDS)
+    out = []
+    for road in ctx.drawn.roads_of(RoadKind.CUL_DE_SAC):
+        usable = _usable(road, ground)
+        parts = polygons_of(usable)
+        length = sides_of(max(parts, key=lambda p: p.area))[0] if parts else 0.0
+        width = min(width_in(usable, usable, wide), road.declared_width_m)
+        head = inscribed_radius(usable)
+        problems = []
+        if width + TOL_M < wide - WIDTH_SLACK_M:
+            problems.append(f"{width:.2f} m wide")
+        if not low - TOL_M <= length <= high + TOL_M:
+            problems.append(f"{length:.0f} m long")
+        if head + TOL_M < radius - 0.05:
+            problems.append(f"head radius {head:.1f} m")
+        if usable.distance(network) > TOUCH_M:
+            problems.append("not joined to the road network")
+        out.append(plain(
+            Family.ROADS, f"Internal roads: cul-de-sac {road.id}", verdict(not problems),
+            "; ".join(problems) if problems else
+            f"{width:.2f} m wide, {length:.0f} m long, head radius {head:.1f} m",
+            f"{wide:g} m wide, {low:g}-{high:g} m long, a {radius:g} m radius head",
+            _clause(ctx), subject=road.id))
+    return out
+
+
+# --- Blocks above 12 m open onto a road ------------------------------------------------------
+
+
+def _served_check(ctx: Context, ground: Ground) -> Check:
+    circ = ctx.rules.circulation
+    limit = circ.pathway_max_block_height_m.value
+    tall = [t for t in ctx.towers if t.physical_height_m > limit]
+    roads = _ground_of(ctx, ground, *ROAD_KINDS)
+    lane = _ground_of(ctx, ground, RoadKind.PERIMETER_LANE)
+    required = f"every block above {limit:g} m on an internal road, not a pathway"
+    clause = circ.pathway_max_block_height_m.clause
+    off = [t for t in tall if roads.is_empty or t.footprint.distance(roads) > TOUCH_M]
+    cut_off = [t.name for t in off if lane.is_empty or t.footprint.distance(lane) > TOUCH_M]
+    lane_only = [t.name for t in off if t.name not in cut_off]
+    rule = "Internal roads: every block served"
+    if cut_off:
+        return plain(Family.ROADS, rule, Status.FAIL, f"not on a road: {', '.join(cut_off)}",
+                     required, clause)
+    if lane_only:
+        return plain(Family.ROADS, rule, Status.UNVERIFIED,
+                     f"on the perimeter lane only: {', '.join(lane_only)}", required, clause,
+                     "The perimeter lane is not established as an 8(m) road.")
+    return plain(Family.ROADS, rule, Status.PASS, f"all {len(tall)} blocks", required, clause)
+
+
+# --- Driveways -------------------------------------------------------------------------------
+
+
+def driveway_check(ctx: Context, ground: Ground) -> Check | None:
+    drives = ctx.drawn.roads_of(RoadKind.DRIVEWAY)
+    if not drives:
+        return None
+    circ = ctx.rules.circulation
+    least = circ.driveway_min_m.value
+    widths = {d.id: min(width_in(_usable(d, ground), _usable(d, ground), least),
+                        d.declared_width_m) for d in drives}
+    thin = [i for i, w in widths.items() if w + TOL_M < least - WIDTH_SLACK_M]
+    return plain(
+        Family.ROADS, "Driveways", verdict(not thin),
+        (f"narrower than {least:g} m: " + ", ".join(thin)) if thin else
+        f"{_plural(len(drives), 'driveway')}, at least {least:g} m",
+        f">= {least:g} m where one is drawn", circ.driveway_min_m.clause,
+        "No driveway is counted towards the internal-road requirement.")
+
+
+# --- Roads and fire lanes inside the setback -------------------------------------------------
+
+
+def setback_circulation_check(ctx: Context) -> Check | None:
+    """Roads and fire lanes inside the mandatory setback, under both readings of whether
+    circulation may use it. The entrance road crossing the setback to the gate is not counted:
+    it cannot reach the gate any other way."""
+    d = ctx.drawn
+    if not d.has_circulation:
+        return None
+    by_kind = {k: union_of_all([r.shape for r in d.roads_of(k)]) for k in RoadKind}
+    rest = union_of_all([by_kind[k] for k in RoadKind if k is not RoadKind.APPROACH]
+                        + [d.fire_hardstanding])
+
+    def cell(a: Assignment) -> Cell:
+        reading, circulation = a[STILT_IN_RULE_HEIGHT], a[CIRCULATION_IN_SETBACK]
+        zone = setback_zone(ctx, reading)
+        required = "circulation outside the mandatory setback" if circulation == NOT_ALLOWED \
+            else "no limit: roads and fire lanes may run in the setback"
+        if circulation not in (ALLOWED, NOT_ALLOWED):
+            return unknown_reading(CIRCULATION_IN_SETBACK, circulation)
+        if zone is None:
+            return Cell(Status.NOT_CHECKED, "no setback known under this reading", required,
+                        "Table III is not modelled yet.")
+        crossing = d.gate_land.buffer(deepest_setback_m(ctx, reading) + 1.0)
+        approach = by_kind[RoadKind.APPROACH].difference(crossing)
+        area = union_of_all([rest, approach]).intersection(zone).area
+        measured = f"{area:,.0f} m² of road and fire lane inside the setback"
+        if circulation == ALLOWED:
+            return Cell(Status.PASS, measured, required)
+        return Cell(verdict(area <= NOISE_SQM), measured, required)
+
+    return check_from(
+        run(ctx.rules, [STILT_IN_RULE_HEIGHT, CIRCULATION_IN_SETBACK], cell),
+        family=Family.ROADS, rule="Circulation inside the setback",
+        clause=law.SETBACK_ON_NET_PLOT_CLAUSE,
+        note="Not settled law: rule 13(c)(vii) lets ramps use side and rear setbacks leaving 7 m "
+        "for fire vehicles, which implies circulation there without saying so.")
+
+
+# --- All of it -------------------------------------------------------------------------------
+
+
+def road_checks(ctx: Context, ground: Ground) -> list[Check]:
+    circ = ctx.rules.circulation
+    out: list[Check] = []
+    if not circ.applies.value:
+        area = ctx.site.ownership.gross_sqm.value
+        out.append(plain(
+            Family.ROADS, "Internal roads (rule 8)", Status.INFO,
+            f"site {area:,.0f} m²: not a Group Development Scheme",
+            f"rule 8 applies from {law.GROUP_DEVELOPMENT_MIN_SITE_SQM:,.0f} m²",
+            ctx.rules.category.group_development.clause,
+            "Rule 8(m)'s internal roads and 8(l)'s pathways do not apply below 4,000 m²."))
+    elif not ctx.drawn.roads:
+        out.append(plain(Family.ROADS, "Internal roads", Status.UNVERIFIED,
+                         "no road layout drawn", "rule 8(m) widths", _clause(ctx),
+                         "Without roads drawn nothing here can be passed."))
+    else:
+        network = healed(_ground_of(ctx, ground, *RULE_8M_KINDS, RoadKind.PERIMETER_LANE))
+        out += _approach_checks(ctx, ground, network)
+        network_check = _network_check(ctx, ground, network)
+        out += [network_check] if network_check else []
+        out += _perimeter_checks(ctx, ground)
+        out += _cul_de_sac_checks(ctx, ground)
+        out += [_dead_end_check(ctx, ground), _served_check(ctx, ground)]
+    drive = driveway_check(ctx, ground)
+    out += [drive] if drive else []
+    return out
