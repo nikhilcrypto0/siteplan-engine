@@ -26,7 +26,9 @@ pinned and explained in a characterization test:
 - **A bad shape gets a report, not a crash** (`test_validator_robustness.py`): a polygon that
   crosses itself anywhere in a candidate is mended to be measured and named in a blocking
   cross-check; a net plot that crosses itself or encloses nothing is refused like a missing one;
-  a candidate holding nan or infinity fails as unmeasurable.
+  a candidate holding nan or infinity fails as unmeasurable; an error the geometry library cannot
+  get past is an UNVERIFIED report carrying its message (the validator's own mistakes still
+  raise).
 - **Stricter by design**: a result that holds under only some readings of an open question is
   UNVERIFIED naming the reading (the checker knows only the reading it planned for); an input
   nobody confirmed (a road width read off a drawing) settles nothing; a block at exactly 21 m,
