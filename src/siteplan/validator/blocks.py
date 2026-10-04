@@ -1,9 +1,16 @@
-"""The towers against Table IV: height class, plot size, road width, setbacks, gaps.
+"""The towers against their height bands: height class, plot size, road width, setbacks, gaps.
+
+From the high-rise height a block is on Table IV. Below it a block is on the band the rules give
+it (Table III, rule 5) wherever they model that band, judged the same way on the band's own
+figures; a band they do not model is NOT_CHECKED, never PASS, and one they mark UNVERIFIED settles
+nothing either way. A prohibited high-rise (eligibility) fails only blocks of the high-rise height
+or more and permits nothing lower.
 
 Every check is run once per reading of whether the stilt counts toward the rule height (and, for
-a gap, per reading of which block's gap governs between blocks of different heights). A tower
-that is legal only if the stilt does not count is UNVERIFIED and says so; one that is legal
-under every reading is PASS; one that fails under every reading is FAIL.
+a gap, per reading of which block's gap governs between blocks of different heights; two blocks
+below the high-rise height have no such reading, rule 5(xiii) decides). A tower that is legal
+only if the stilt does not count is UNVERIFIED and says so; one that is legal under every reading
+is PASS; one that fails under every reading is FAIL.
 """
 
 from __future__ import annotations
@@ -76,9 +83,13 @@ def _tables(ctx: Context, towers, keep=lambda cls: True) -> str:
     """The clauses of the tables the given towers' bands are in, under every reading of the stilt
     (the Table IV clause where a band names none), each once. `keep` leaves out the bands a check
     does not judge."""
-    found = [c.table or _table_clause(ctx.rules) for r in ctx.stilt_readings
-             for t in towers if (c := (_classes(ctx, r) or {}).get(t.name)) is not None
-             and keep(c)]
+    found = []
+    for reading in ctx.stilt_readings:
+        classes = _classes(ctx, reading) or {}
+        for t in towers:
+            cls = classes.get(t.name)
+            if cls is not None and keep(cls):
+                found.append(cls.table or _table_clause(ctx.rules))
     return "; ".join(dict.fromkeys(found))
 
 
@@ -387,8 +398,8 @@ def setback_checks(ctx: Context) -> list[Check]:
     for t in ctx.towers:
         gap = setback_of(ctx.net, t.footprint)
         outside = not ctx.net.contains(t.footprint)
-        high = any(c.high_rise for classes in ctx.classes.values()
-                   if (c := classes.get(t.name)) is not None)
+        high = any(classes[t.name].high_rise for classes in ctx.classes.values()
+                   if t.name in classes)
         front = [ctx.rules.setbacks.front.clause] if high else []  # a high-rise's is Table IV's
         clause = "; ".join(dict.fromkeys(
             [_tables(ctx, [t]) or _table_clause(ctx.rules), *front,
