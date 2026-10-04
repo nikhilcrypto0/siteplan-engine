@@ -342,10 +342,12 @@ REGISTRY: tuple[Constraint, ...] = (
         f"{rules.FIRE_TENDER_MIN_WIDTH_M:g} m on all sides; {rules.FIRE_TURNING_RADIUS_M:g} m "
         f"turning radius; entrance {rules.GATE_MIN_WIDTH_M:g} m wide and "
         f"{rules.ENTRANCE_CLEAR_HEIGHT_M:g} m clear; the street joins one of "
-        f"{rules.FIRE_STREET_JOIN_M:g} m; no dead end above {rules.DEAD_END_MAX_HEIGHT_M:g} m",
+        f"{rules.FIRE_STREET_JOIN_M:g} m; no dead end above {rules.DEAD_END_MAX_HEIGHT_M:g} m; "
+        f"a {rules.FIRE_TENDER_LOAD_T:g} t surface (never checked)",
         Basis.LEGAL_RULE, f"{rules.FIRE_ACCESS_CLAUSE}; {rules.GATE_CLAUSE}; "
         f"{rules.FIRE_STREET_CLAUSE}; {rules.DEAD_END_CLAUSE}",
-        ("rules.FIRE_TENDER_MIN_WIDTH_M", "rules.FIRE_TURNING_RADIUS_M", "rules.GATE_MIN_WIDTH_M",
+        ("rules.FIRE_TENDER_MIN_WIDTH_M", "rules.FIRE_TENDER_LOAD_T", "rules.FIRE_TURNING_RADIUS_M",
+         "rules.GATE_MIN_WIDTH_M",
          "rules.ENTRANCE_CLEAR_HEIGHT_M", "rules.FIRE_STREET_JOIN_M", "rules.DEAD_END_MAX_HEIGHT_M",
          "access.LANE_M", "access.R_OUT", "access_checks.LANE_M"),
         note="NBC 2016 Part 3 4.6, brought in by rule 15(b)(iv); read from the page images. The "
@@ -735,6 +737,17 @@ REGISTRY: tuple[Constraint, ...] = (
          "rules.TDR_EXTRA_FLOORS_ABOVE_PLOT_SQM"),
         note="Shown by the floors calculator beside its answer, never in a layout: an option the "
              "owner buys. The 40, 60 and 80 ft roads are taken as Table IV's 12, 18 and 24 m.",
+    ),
+    Constraint(
+        "Not used by generation", "In a project of more than this many acres, common amenities "
+                                  "take this share of the site area.",
+        f"{rules.LARGE_PROJECT_FROM_ACRES:g} acres; "
+        f"{_pct(rules.LARGE_PROJECT_AMENITY_SHARE_OF_SITE)}",
+        Basis.LEGAL_RULE, rules.LARGE_PROJECT_AMENITY_CLAUSE,
+        ("rules.LARGE_PROJECT_FROM_ACRES", "rules.LARGE_PROJECT_AMENITY_SHARE_OF_SITE"),
+        note="Written for row and cluster housing (rules 9(o) and 10(i)); rule 8, group "
+             "development, has no such clause, so it is not applied to the apartment schemes "
+             "planned here. Carried in ResolvedRules as an open reading, never as a requirement.",
     ),
     Constraint(
         "Not used by generation", "The share of built-up area handed over by affidavit before "
