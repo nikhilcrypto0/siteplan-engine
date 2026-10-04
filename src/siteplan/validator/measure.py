@@ -23,12 +23,12 @@ from siteplan.validator.shapes import polygon_of, snapped
 
 TOL_M = 1e-6  # a length this close to the rule's is the rule's
 
-# Rule 5(xiii), read on page 11 of fixtures/rules/go168-2012.pdf (the 2012 text): between two
+# Rule 5(f)(xiii), read on page 11 of fixtures/rules/go168-2012.pdf (the 2012 text): between two
 # blocks below the high-rise height the order itself says whose figure it is, so the open reading
 # of mixed-height spacing (a Table IV question, rule 7(a)(xii)) does not reach them.
-LOW_GAP_RULE = ("G.O.168 rule 5(xiii), p.11: \"The space between 2 blocks shall not be less than "
-                "the side setback of the tallest block as mentioned in Table - III\"")
-LOW_GAP_CLAUSE = ("G.O.168 rule 5(xiii) (the space between 2 blocks: the tallest block's side "
+LOW_GAP_RULE = ("G.O.168 rule 5(f)(xiii), p.11: \"The space between 2 blocks shall not be less "
+                "than the side setback of the tallest block as mentioned in Table - III\"")
+LOW_GAP_CLAUSE = ("G.O.168 rule 5(f)(xiii) (the space between 2 blocks: the tallest block's side "
                   "setback)")
 
 HIGH_RISE_FRONT_NOTE = ("The front of a high-rise keeps the Table IV figure too, measured on the "
@@ -261,7 +261,7 @@ def gap_sources(a: HeightClass, b: HeightClass, spacing: str) -> tuple[HeightCla
     whose band is read on the greater height (the height above the stilt for a band of Table III,
     the rule height for Table IV's). each_own: each block keeps its own gap on its own half of the
     space between them, so both. Blocks of the same height need the same gap either way. Two
-    blocks below the high-rise height are not an open question: rule 5(xiii) gives the tallest
+    blocks below the high-rise height are not an open question: rule 5(f)(xiii) gives the tallest
     block's side setback (LOW_GAP_RULE), whatever the reading."""
     taller = a if a.band_height_m >= b.band_height_m else b
     if not (a.high_rise or b.high_rise) or spacing == TALLER_GOVERNS:

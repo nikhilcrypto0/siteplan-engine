@@ -4,11 +4,10 @@ real Table III; none of it is a value of the order, and none may stand in for on
 
 The contract fixtures ship the band below 21 m as not modelled (stream A1). `with_bands_below`
 replaces it with bands that are, in the shape the contract gives a band (`Band`): the heights it
-covers, whether it is modelled, its road, its all-round setback and its gap between blocks.
+covers (read on the height above the stilt, as Table III's are), whether it is modelled, its road,
+its setback and front setback, its gap between blocks, its permission and its planting strip.
 
-A low block here normally has no stilt (`flat`), so every reading of the stilt gives it one rule
-height and a test says nothing about which band the stilt puts it in: that open question is
-pinned alone, in tests/test_validator_low_interim.py.
+A low block here usually has no stilt (`flat`), so every reading of the stilt gives it one height.
 """
 
 from __future__ import annotations
