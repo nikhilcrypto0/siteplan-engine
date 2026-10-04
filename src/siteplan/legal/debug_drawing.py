@@ -83,7 +83,8 @@ def build_drawing(site: CanonicalSiteModel, rules: ResolvedRules,
     d.polygons.append(("NET-SITE", net))
     for item in env.exclusions:
         d.polygons += [("EXCLUSIONS", shape) for shape in item.shapes]
-    for number, band in enumerate(b for b in env.bands if b.modelled):
+    for number, band in enumerate(b for b in env.bands
+                                  if b.modelled and b.setback_m is not None):
         key = _layer_key(band.above_m, band.up_to_m)
         d.layers[f"SETBACK-{key}"] = Style(SETBACK_ACI[number % len(SETBACK_ACI)],
                                            SETBACK_HEX[number % len(SETBACK_HEX)], dash="8 3")
@@ -169,8 +170,15 @@ def notes(site: CanonicalSiteModel, rules: ResolvedRules, env: BuildableEnvelope
     lines += ["", "BANDS (setback, buildable land):"]
     for band in env.bands:
         key = band_key(band.above_m, band.up_to_m)
-        lines.append(f"  {key}: not modelled" if not band.modelled else
-                     f"  {key}: {band.setback_m:g} m, {band.area_sqm:,.0f} m2")
+        if not band.modelled:
+            lines.append(f"  {key}: not modelled")
+        elif band.setback_m is None:
+            lines.append(f"  {key}: {band.permission.value.lower()}")
+        else:
+            front = ("" if band.front_setback_m is None
+                     else f", front {band.front_setback_m:g} m")
+            lines.append(f"  {key}: {band.setback_m:g} m{front}, {band.area_sqm:,.0f} m2, "
+                         f"{band.permission.value.lower()}")
     open_readings = [f"{i.id} = {i.selected}" for i in rules.interpretations
                      if i.selected == "ALL"]
     if open_readings:

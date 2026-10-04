@@ -248,6 +248,8 @@ def _served_check(ctx: Context, ground: Ground) -> Check | None:
         return None  # read as allowing a pathway to any block: nothing to hold them to
     limit = circ.pathway_max_block_height_m.value
     tall = [t for t in ctx.towers if t.physical_height_m > limit]
+    if not tall:
+        return None  # every block is low enough for a pathway: `_pathway_check` says what holds
     roads = _ground_of(ctx, ground, *ROAD_KINDS)
     lane = _ground_of(ctx, ground, RoadKind.PERIMETER_LANE)
     required = f"every block above {limit:g} m on an internal road, not a pathway"
@@ -258,14 +260,79 @@ def _served_check(ctx: Context, ground: Ground) -> Check | None:
     rule = "Internal roads: every block served"
     basis = basis_note(circ.block_over_12m_on_road)
     if cut_off:
-        return plain(Family.ROADS, rule, Status.FAIL, f"not on a road: {', '.join(cut_off)}",
-                     required, clause, basis)
+        paths = ctx.drawn.pathway_land
+        by_path = [t.name for t in off if t.name in cut_off and not paths.is_empty
+                   and t.footprint.distance(paths) <= TOUCH_M]
+        said = (f"; a pathway reaches {', '.join(by_path)}, and rule 8(l) allows one only for "
+                f"blocks up to {limit:g} m" if by_path else "")
+        return plain(Family.ROADS, rule, Status.FAIL,
+                     f"not on a road: {', '.join(cut_off)}{said}", required, clause, basis)
     if lane_only:
         return plain(Family.ROADS, rule, Status.UNVERIFIED,
                      f"on the perimeter lane only: {', '.join(lane_only)}", required, clause,
                      " ".join(("The perimeter lane is not established as an 8(m) road.", basis)))
     return plain(Family.ROADS, rule, Status.PASS, f"all {len(tall)} blocks", required, clause,
                  basis)
+
+
+def _pathway_check(ctx: Context, ground: Ground) -> Check | None:
+    """Rule 8(l): a block up to 12 m high may take its access through a pathway branching out of an
+    internal or loop road instead of standing on one; a pathway is for such blocks only (a taller
+    block opens onto a road, `_served_check`), so every block is in exactly one of the two checks.
+    A drawn pathway must branch out of a road and be as wide as the rules say. Where they do not
+    say yet (`pathway_width_m` is None) a pathway is UNVERIFIED, never passed on a width nobody
+    gave. A block up to 12 m on no road and reached by no pathway has no way in: FAIL."""
+    circ = ctx.rules.circulation
+    if not circ.block_over_12m_on_road.value:
+        return None  # read as allowing a pathway to any block: nothing to hold them to
+    limit = circ.pathway_max_block_height_m.value
+    short = [t for t in ctx.towers if not t.physical_height_m > limit]
+    paths = ctx.drawn.roads_of(RoadKind.PATHWAY)
+    if not short and not paths:
+        return None
+    wide = circ.pathway_width_m
+    roads = _ground_of(ctx, ground, *ROAD_KINDS)
+    lane = _ground_of(ctx, ground, RoadKind.PERIMETER_LANE)
+    problems, doubts, serving = [], [], {}
+    for path in paths:
+        usable = _usable(path, ground)
+        joined = not roads.is_empty and usable.distance(roads) <= TOUCH_M
+        width = min(width_of(usable, wide.value), path.declared_width_m) if wide else None
+        if not joined:
+            problems.append(f"{path.id} does not branch out of an internal or loop road")
+        if wide is not None and width + TOL_M < wide.value:
+            problems.append(f"{path.id} is {width:.2f} m wide")
+        if joined and (wide is None or width + TOL_M >= wide.value):
+            serving[path.id] = usable
+    if wide is None and paths:
+        doubts.append("the rules give no pathway width yet, so a pathway's width is not held")
+    by_path = 0
+    for t in short:
+        if not roads.is_empty and t.footprint.distance(roads) <= TOUCH_M:
+            continue
+        reaching = [i for i, g in serving.items() if t.footprint.distance(g) <= TOUCH_M]
+        if reaching:
+            by_path += 1
+        elif any(t.footprint.distance(_usable(p, ground)) <= TOUCH_M for p in paths):
+            problems.append(f"{t.name}'s pathway does not meet rule 8(l)")
+        elif not lane.is_empty and t.footprint.distance(lane) <= TOUCH_M:
+            doubts.append(f"{t.name} is on the perimeter lane only, which is not established "
+                          "as an 8(m) road")
+        else:
+            problems.append(f"{t.name} is reached by no road or pathway")
+    rule = f"Internal roads: blocks up to {limit:g} m (pathways)"
+    width_text = (f"at least {wide.value:g} m wide " if wide else "")
+    required = (f"every block up to {limit:g} m on an internal road, or reached by a pathway "
+                f"{width_text}branching out of one")
+    clause = "; ".join(dict.fromkeys(
+        [circ.pathway_max_block_height_m.clause, *([wide.clause] if wide else [])]))
+    basis = basis_note(circ.block_over_12m_on_road)
+    status = Status.FAIL if problems else Status.UNVERIFIED if doubts else Status.PASS
+    if status is Status.PASS:
+        shown = (f"all {len(short)} on an internal road" if not by_path else
+                 f"all {len(short)} served, {by_path} by a pathway")
+        return plain(Family.ROADS, rule, status, shown, required, clause, basis)
+    return plain(Family.ROADS, rule, status, "; ".join(problems + doubts), required, clause, basis)
 
 
 # --- Driveways -------------------------------------------------------------------------------
@@ -353,7 +420,7 @@ def width_discrepancies(ctx: Context, ground: Ground) -> list[Discrepancy]:
     """A road that measures narrower than the width it declares: the declaration flatters the
     layout, so it blocks a pass."""
     network = healed(_ground_of(ctx, ground, *ROAD_KINDS, RoadKind.PERIMETER_LANE,
-                                RoadKind.DRIVEWAY))
+                                RoadKind.DRIVEWAY, RoadKind.PATHWAY))
     out = []
     for road in ctx.drawn.roads:
         usable = _usable(road, ground)
@@ -406,10 +473,11 @@ def road_checks(ctx: Context, ground: Ground) -> list[Check]:
         out += [network_check] if network_check else []
         out += _perimeter_checks(ctx, ground)
         out += _cul_de_sac_checks(ctx, ground)
-        served = _served_check(ctx, ground)
+        served, pathways = _served_check(ctx, ground), _pathway_check(ctx, ground)
         joined = entrance_connection_check(ctx, ground)
         out += [dead_end_check(ctx, ground)] + ([joined] if joined else [])
         out += [served] if served else []
+        out += [pathways] if pathways else []
     drive = driveway_check(ctx, ground, circ.applies.value or by_the_site)
     out += [drive] if drive else []
     return out

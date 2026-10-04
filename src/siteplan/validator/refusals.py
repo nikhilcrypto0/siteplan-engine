@@ -94,7 +94,7 @@ def too_large(ctx: Context) -> Check | None:
     drawn, net = ctx.drawn, ctx.net
     grounds = [t.footprint for t in ctx.towers] + [
         drawn.club, drawn.fire_hardstanding, drawn.green_strip, drawn.cellar_outline,
-        drawn.road_land, drawn.gate_land_all, *drawn.bays, *drawn.ramps, *drawn.open_space,
+        drawn.paved_land, drawn.gate_land_all, *drawn.bays, *drawn.ramps, *drawn.open_space,
         *(a.shape for a in drawn.amenities)]
     box = union_of_all([g for g in grounds if not g.is_empty])
     if box.is_empty:

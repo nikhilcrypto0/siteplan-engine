@@ -19,7 +19,7 @@ from siteplan.provenance import Provenance
 from siteplan.validator import drawn as drawing
 from siteplan.validator import site_geometry
 from siteplan.validator.drawn import Drawn, Gate
-from siteplan.validator.measure import HeightClass, TowerGeometry, classify, tower_geometries
+from siteplan.validator.measure import HeightClass, TowerGeometry, classify_block, tower_geometries
 from siteplan.validator.shapes import union_of_all
 from siteplan.validator.site_geometry import SiteGeometry
 
@@ -69,6 +69,24 @@ class Context:
         names = {t.name for r in self.stilt_readings for t in self.high_rise(r)}
         return [t for t in self.towers if t.name in names]
 
+    def low_rise(self, reading: str) -> list[TowerGeometry]:
+        """The towers below the high-rise height under a reading of the stilt: Table III's, not
+        Table IV's. Whether a band is modelled is a separate question (`HeightClass.state`)."""
+        by_name = self.classes.get(reading, {})
+        return [t for t in self.towers if t.name in by_name and not by_name[t.name].high_rise]
+
+    def low_rise_anywhere(self) -> list[TowerGeometry]:
+        names = {t.name for r in self.stilt_readings for t in self.low_rise(r)}
+        return [t for t in self.towers if t.name in names]
+
+    def low_rise_judged(self) -> list[TowerGeometry]:
+        """The towers below the high-rise height, under some reading, in a band the rules model:
+        the ones this validator judges on Table III, and so the ones whose other Table III rules
+        must not go quietly unsaid."""
+        names = {t.name for r in self.stilt_readings for t in self.low_rise(r)
+                 if self.classes[r][t.name].settled}
+        return [t for t in self.towers if t.name in names]
+
 
 def build(site: CanonicalSiteModel, rules: ResolvedRules, brief: DesignBrief,
           candidate: CandidateLayout) -> Context | None:
@@ -79,10 +97,10 @@ def build(site: CanonicalSiteModel, rules: ResolvedRules, brief: DesignBrief,
     towers = tower_geometries(candidate, brief)
     classes: dict[str, dict[str, HeightClass]] = {}
     for reading in rules.readings(STILT_IN_RULE_HEIGHT):
-        heights = {t.name: t.rule_height_m(reading) for t in towers}
-        if None in heights.values():
+        made = {t.name: classify_block(rules, t, reading) for t in towers}
+        if None in made.values():
             continue  # a reading this validator cannot evaluate: its checks say so
-        classes[reading] = {name: classify(rules, h) for name, h in heights.items()}
+        classes[reading] = made
     drawn = drawing.read(candidate, brief)
     entrances = tuple(g for g in drawn.gates
                       if g.shape.distance(land.net.boundary) <= GATE_ON_BOUNDARY_M)

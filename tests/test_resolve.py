@@ -201,16 +201,23 @@ def test_a_drawing_value_road_settles_no_height_and_still_holds_heights_back():
 
 
 def test_a_road_under_the_first_row_prohibits_a_high_rise_and_permits_nothing_lower():
+    """PLOT is a group development scheme, which rule 8(b) asks 12 m of road for at every height:
+    on 11.9 m no band below 21 m is permitted either, which is what the Table III bands say."""
     rules = resolve(make_site(PLOT, road_m=11.9))
     limit, = _limits(rules, HeightMeasure.RULE_HEIGHT)
-    assert limit.bound is LimitBound.NOT_EVALUATED and limit.max_m is None
-    assert "Table III" in limit.reason and limit.evaluate(15.0) is Status.UNVERIFIED
+    assert (limit.bound, limit.max_m, limit.inclusive) == (LimitBound.BOUNDED, 21.0, False)
+    assert "Table III" in limit.reason and limit.status is Provenance.USER_CONFIRMED
+    assert limit.evaluate(15.0) is Status.PASS and limit.evaluate(21.0) is Status.FAIL
     high_rise = rules.height.high_rise
     assert high_rise.eligibility is Eligibility.PROHIBITED
     assert [g.id for g in high_rise.grounds if g.met is False] == ["road_width"]
     assert "permits nothing below it" in high_rise.note
-    assert not [lim for lim in rules.height.limits if lim.max_m == 21.0]  # no "under 21 m" pass
-    assert rules.height.band_for(15.0).modelled is False
+    low = [b for b in rules.height.bands if b.kind is BandKind.NON_HIGH_RISE]
+    assert low and {b.permission for b in low} == {Eligibility.PROHIBITED}  # the 12 m is not met
+    assert rules.height.permissible_non_high_rise(include_unverified=True) is None
+    assert {rules.height.band_permission(b) for b in rules.height.bands} == {
+        Eligibility.PROHIBITED}
+    assert rules.height.band_for(15.0).modelled is True
 
 
 def test_a_road_that_meets_every_row_sets_no_limit_and_says_so():
@@ -293,10 +300,12 @@ def test_a_site_just_short_by_road_widening_is_unverified_not_failed():
 def test_every_height_has_one_band_and_exactly_21_m_is_a_high_rise():
     rules = resolve(make_site(PLOT))
     assert rules.height.high_rise_from_m.value == 21.0
-    below, at, *high = rules.height.bands
-    assert (below.kind, below.above_m, below.up_to_m, below.modelled) == (
-        BandKind.NON_HIGH_RISE, 0.0, 21.0, False)
-    assert below.up_to_inclusive is False
+    bands = rules.height.bands
+    low, at, high = bands[:4], bands[4], bands[5:]
+    assert [b.kind for b in low] == [BandKind.NON_HIGH_RISE] * 4  # Table III's lines, then open
+    assert all(b.modelled for b in low)
+    assert (low[-1].above_m, low[-1].up_to_m) == (18.0, 21.0)
+    assert low[-1].above_inclusive is True and low[-1].up_to_inclusive is False
     assert (at.kind, at.above_m, at.up_to_m, at.min_road_m, at.setback_m, at.gap_m) == (
         BandKind.HIGH_RISE, 21.0, 21.0, 12.0, 7.0, 7.0)
     assert all(b.kind is BandKind.HIGH_RISE and b.modelled for b in high)
@@ -427,10 +436,13 @@ def test_the_orders_are_listed_with_how_each_was_read_and_the_unread_ones_named(
     orders = {o.id: o.read for o in resolve(make_site(PLOT)).orders}
     assert orders["G.O.Ms.No.168 of 2012"] is OrderRead.TEXT
     assert orders["G.O.Ms.No.7 of 2016"] is OrderRead.TEXT
-    for scanned in ("G.O.Ms.No.50 of 2019", "G.O.Ms.No.65 of 2019", "G.O.Ms.No.95 of 2026"):
+    for scanned in ("G.O.Ms.No.50 of 2019", "G.O.Ms.No.65 of 2019", "G.O.Ms.No.95 of 2026",
+                    "G.O.Ms.No.264 of 2019", "G.O.Ms.No.14 of 2022", "G.O.Ms.No.103 of 2021"):
         assert orders[scanned] is OrderRead.SCAN
+    assert orders["G.O.Ms.No.49 of 2023"] is OrderRead.TEXT
     unread = {name for name, read in orders.items() if read is OrderRead.UNREAD}
-    assert {"G.O.Ms.No.245 of 2012", "G.O.Ms.No.103 of 2021", "G.O.Ms.No.16 of 2026"} <= unread
+    # G.O.245 of 2012 may have changed rule 5: Table III stands on the order as first issued
+    assert {"G.O.Ms.No.245 of 2012", "G.O.Ms.No.16 of 2026", "TS-bPASS G.O.201"} <= unread
 
 
 def test_the_45_t_loading_is_carried_unverified_and_the_water_widths_are_the_rules():
@@ -463,7 +475,8 @@ def test_the_real_producer_agrees_with_the_p0_fixtures_on_what_consumers_read(na
         assert (mine.selected, set(mine.alternatives)) == (fixture.selected,
                                                            set(fixture.alternatives)), reading
     keys = ("above_m", "up_to_m", "above_inclusive", "up_to_inclusive", "kind", "modelled",
-            "min_road_m", "setback_m", "gap_m")
+            "min_road_m", "setback_m", "gap_m", "measure", "front_setback_m", "permission",
+            "green_strip_m", "green_strip_sides")
     assert [b.model_dump(include=set(keys)) for b in ours.height.bands] == [
         b.model_dump(include=set(keys)) for b in theirs.height.bands]
     assert ours.open_space.requirement_sqm_by_reading == pytest.approx(

@@ -118,7 +118,12 @@ def test_the_setback_zone_is_the_plots_own_edge_as_deep_as_the_deepest_setback()
     zone = zones.setback_zone(ctx, "counted")
     assert zone.area == pytest.approx(net.area - box(9, 9, 141, 91).area)
     assert zones.setback_zone(ctx, "no such reading") is None
-    assert zones.setback_zone(_ctx("small_plot")[0], "counted") is None  # Table III: unmodelled
+    # The small plot's 15 m block is Table III's (A2: row 11, 6 m), with the 3 m Building Line on
+    # its 12 m road in front (the south side).
+    small = _ctx("small_plot")[0]
+    assert zones.deepest_setback_m(small, "counted") == 6.0
+    assert zones.setback_zone(small, "counted").area == pytest.approx(
+        small.net.area - box(6, 3, 54, 44).area)
 
 
 @pytest.mark.parametrize("side, edge", [("S", (0, 0, 150, 0)), ("N", (0, 100, 150, 100)),
