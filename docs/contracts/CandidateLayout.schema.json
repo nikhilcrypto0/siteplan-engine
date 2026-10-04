@@ -461,8 +461,8 @@
           "type": "number"
         },
         "schema_version": {
-          "const": "1.1",
-          "default": "1.1",
+          "const": "1.2",
+          "default": "1.2",
           "title": "Schema Version",
           "type": "string"
         },
@@ -756,7 +756,8 @@
         "INTERNAL",
         "CUL_DE_SAC",
         "DRIVEWAY",
-        "PERIMETER_LANE"
+        "PERIMETER_LANE",
+        "PATHWAY"
       ],
       "title": "RoadKind",
       "type": "string"
@@ -890,8 +891,8 @@
           "type": "array"
         },
         "schema_version": {
-          "const": "1.1",
-          "default": "1.1",
+          "const": "1.2",
+          "default": "1.2",
           "title": "Schema Version",
           "type": "string"
         }
@@ -1151,8 +1152,8 @@
           "$ref": "#/$defs/PerFloor"
         },
         "schema_version": {
-          "const": "1.1",
-          "default": "1.1",
+          "const": "1.2",
+          "default": "1.2",
           "title": "Schema Version",
           "type": "string"
         },
@@ -1316,8 +1317,8 @@
       "type": "string"
     },
     "schema_version": {
-      "const": "1.1",
-      "default": "1.1",
+      "const": "1.2",
+      "default": "1.2",
       "title": "Schema Version",
       "type": "string"
     },
