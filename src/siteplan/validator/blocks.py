@@ -1,9 +1,16 @@
-"""The towers against Table IV: height class, plot size, road width, setbacks, gaps.
+"""The towers against their height bands: height class, plot size, road width, setbacks, gaps.
+
+From the high-rise height a block is on Table IV. Below it a block is on the band the rules give
+it (Table III, rule 5) wherever they model that band, judged the same way on the band's own
+figures; a band they do not model is NOT_CHECKED, never PASS, and one they mark UNVERIFIED settles
+nothing either way. A prohibited high-rise (eligibility) fails only blocks of the high-rise height
+or more and permits nothing lower.
 
 Every check is run once per reading of whether the stilt counts toward the rule height (and, for
-a gap, per reading of which block's gap governs between blocks of different heights). A tower
-that is legal only if the stilt does not count is UNVERIFIED and says so; one that is legal
-under every reading is PASS; one that fails under every reading is FAIL.
+a gap, per reading of which block's gap governs between blocks of different heights; two blocks
+below the high-rise height have no such reading, rule 5(f)(xiii) decides). A tower that is legal
+only if the stilt does not count is UNVERIFIED and says so; one that is legal under every reading
+is PASS; one that fails under every reading is FAIL.
 """
 
 from __future__ import annotations
@@ -28,14 +35,17 @@ from siteplan.contracts.validation import Check, Family, PairMeasure, TowerMeasu
 from siteplan.provenance import Provenance
 from siteplan.validator.context import Context, is_known
 from siteplan.validator.measure import (
+    LOW_GAP_CLAUSE,
+    LOW_GAP_RULE,
     TOL_M,
+    UNCONFIRMED_NOTE,
     HeightClass,
     TowerGeometry,
+    gap_sources,
     required_gap,
     setback_of,
 )
 from siteplan.validator.readings import (
-    EACH_OWN,
     Assignment,
     Cell,
     check_from,
@@ -44,10 +54,18 @@ from siteplan.validator.readings import (
     unknown_reading,
     verdict,
 )
+from siteplan.validator.setbacks import plot_line_distances, setback_cell
 
 UNVERIFIED_DRAWING = "UNVERIFIED_DRAWING_VALUE"  # a road's width as drawn, never confirmed
 TABLE_III_NOTE = ("Below the high-rise threshold Table III (rule 5) applies and is not modelled "
                   "yet: the validator does not judge it.")
+
+
+def _below_note(ctx: Context) -> str:
+    """Said where a check about high-rise buildings meets a block that is not one."""
+    return (f"A block below {ctx.rules.height.high_rise_from_m.value:g} m is not a high-rise, so "
+            "this rule does not apply to it. Its own band (Table III, rule 5) is judged by its "
+            "setback, gap and road checks, where the rules model it.")
 
 
 def _table_clause(rules: ResolvedRules) -> str:
@@ -59,12 +77,36 @@ def _classes(ctx: Context, reading: str) -> dict[str, HeightClass] | None:
     return ctx.classes.get(reading)
 
 
+def _tables(ctx: Context, towers, keep=lambda cls: True) -> str:
+    """The clauses of the tables the given towers' bands are in, under every reading of the stilt
+    (the Table IV clause where a band names none), each once. `keep` leaves out the bands a check
+    does not judge."""
+    found = []
+    for reading in ctx.stilt_readings:
+        classes = _classes(ctx, reading) or {}
+        for t in towers:
+            cls = classes.get(t.name)
+            if cls is not None and keep(cls):
+                found.append(cls.table or _table_clause(ctx.rules))
+    return "; ".join(dict.fromkeys(found))
+
+
 def _stopped(cls: HeightClass, what: str) -> Cell | None:
-    """A cell for a height the table does not cover (Table III, or beyond the bands), which is
-    NOT_CHECKED; None when there is a row to hold the block to."""
-    if cls.state == "unmodelled":
-        return Cell(Status.NOT_CHECKED, f"{cls.height_m:.2f} m: {cls.label}", what, TABLE_III_NOTE)
-    return None
+    """A cell for a height the rules give no figure for: a band they do not model (Table III, or
+    beyond the bands), or one they model and give none (a stretch the site may not take), which
+    is NOT_CHECKED; None when there is a row to hold the block to. `what` is the figure the row
+    would give, named in the band's own table."""
+    if cls.state != "unmodelled":
+        return None
+    asked = (f"the {what} its band asks ({cls.table})" if cls.table
+             else f"the {what} its height asks")
+    band = cls.band
+    if band is not None and band.modelled:
+        why = (f": {band.permission_note}" if band.permission is not Eligibility.ALLOWED else "")
+        note = f"The band gives no {what} to hold the block to{why}."
+    else:
+        note = TABLE_III_NOTE
+    return Cell(Status.NOT_CHECKED, f"{cls.height_text}: {cls.label}", asked, note)
 
 
 # --- Height class, plot size, road width ----------------------------------------------------
@@ -77,7 +119,7 @@ def height_class_checks(ctx: Context) -> list[Check]:
         for reading in ctx.stilt_readings:
             cls = (_classes(ctx, reading) or {}).get(t.name)
             if cls is not None:
-                parts.append(f"{cls.height_m:.2f} m, {cls.label}, if the stilt is {reading}")
+                parts.append(f"{cls.height_text}, {cls.label}, if the stilt is {reading}")
         out.append(plain(
             Family.HEIGHT, f"Height class: {t.name}", Status.INFO,
             f"{t.physical_height_m:.2f} m physical (stilt included); rule height "
@@ -98,7 +140,7 @@ def plot_size_check(ctx: Context) -> Check | None:
         required = f">= {need:,.0f} m²"
         if not ctx.high_rise(a[STILT_IN_RULE_HEIGHT]):
             return Cell(Status.NOT_CHECKED, f"{area:,.0f} m²; no high-rise under this reading",
-                        required, TABLE_III_NOTE)
+                        required, _below_note(ctx))
         return Cell(verdict(area + TOL_M >= need), f"{area:,.0f} m² (the net plot)", required)
 
     return check_from(run(ctx.rules, [STILT_IN_RULE_HEIGHT], cell), family=Family.HEIGHT,
@@ -126,12 +168,23 @@ def road_width(site: CanonicalSiteModel) -> tuple[float | None, str, bool]:
     return None, "the legal width is not known", False
 
 
+def _road_held(cls: HeightClass) -> bool:
+    """Whether a block below the high-rise height can be held to a road width: its band is
+    modelled and states one (0 where it asks none). A band that states none is not guessed at."""
+    return cls.settled and cls.min_road_m is not None
+
+
 def road_width_check(ctx: Context) -> Check | None:
-    if not ctx.high_rise_anywhere():
+    """The road the blocks' bands ask of the access road: Table IV column 3 for a high-rise, the
+    band's own row below the high-rise height, wherever the rules model the band and state a road
+    width. A block below it in a band the rules do not model, or that gives no road width, is
+    named and not judged; with nothing left to judge the cell is NOT_CHECKED."""
+    if not ctx.towers:
         return None
     width, how, settled = road_width(ctx.site)
     road = ctx.site.access_road()
-    tallest = max(ctx.high_rise_anywhere(), key=lambda t: t.physical_height_m)
+    tallest = max(ctx.high_rise_anywhere() or ctx.towers, key=lambda t: t.physical_height_m)
+    below = ctx.rules.height.high_rise_from_m.value
     basis = []
     if road is not None and road.row_status:
         basis.append(f"Width status: {road.row_status}.")
@@ -151,27 +204,36 @@ def road_width_check(ctx: Context) -> Check | None:
         if classes is None:
             return unknown_reading(STILT_IN_RULE_HEIGHT, reading)
         high = [classes[t.name] for t in ctx.high_rise(reading)]
-        if not high:
-            return Cell(Status.NOT_CHECKED, "no high-rise under this reading",
-                        "Table IV column 3", TABLE_III_NOTE)
         for cls in high:
-            stopped = _stopped(cls, "Table IV column 3")
+            stopped = _stopped(cls, "road width")
             if stopped is not None:
                 return stopped
-        need = max(c.min_road_m or 0.0 for c in high)
+        low = {t.name: classes[t.name] for t in ctx.low_rise(reading)}
+        held = [*high, *(c for c in low.values() if _road_held(c))]
+        left = [n for n, c in low.items() if not _road_held(c)]
+        extra = ([f"{', '.join(left)} (below {below:g} m) not judged here: the rules do not "
+                  "model the band or give it a road width."] if left else [])
+        if not held:
+            return Cell(Status.NOT_CHECKED, f"{', '.join(left)}: below {below:g} m, no road "
+                        "width in the rules", "the road width its band asks", TABLE_III_NOTE)
+        need = max(c.min_road_m or 0.0 for c in held)
         required = f">= {need:g} m"
         if width is None:
-            return Cell(Status.UNVERIFIED, f"unknown ({how})", required)
+            return Cell(Status.UNVERIFIED, f"unknown ({how})", required, " ".join(extra))
         if not settled:
             return Cell(Status.UNVERIFIED, f"{width:.2f} m ({how}), not confirmed", required,
-                        " ".join([*basis, "The width is a drawing's, never confirmed."]))
-        if width + TOL_M >= need:
-            return Cell(Status.PASS, f"{width:.2f} m ({how})", required, " ".join(basis))
-        return Cell(Status.FAIL, f"{width:.2f} m ({how})", required, " ".join(basis))
+                        " ".join([*basis, "The width is a drawing's, never confirmed.", *extra]))
+        if not all(c.confirmed for c in held):
+            return Cell(Status.UNVERIFIED, f"{width:.2f} m ({how})", required,
+                        " ".join([*basis, UNCONFIRMED_NOTE, *extra]))
+        return Cell(verdict(width + TOL_M >= need), f"{width:.2f} m ({how})", required,
+                    " ".join([*basis, *extra]))
 
+    judged = _tables(ctx, ctx.towers, keep=lambda c: c.high_rise or _road_held(c))
     return check_from(run(ctx.rules, [STILT_IN_RULE_HEIGHT], cell), family=Family.HEIGHT,
                       rule=f"Abutting road width (for {tallest.name})",
-                      clause=_table_clause(ctx.rules), subject=tallest.name)
+                      clause=judged or _tables(ctx, ctx.towers) or _table_clause(ctx.rules),
+                      subject=tallest.name)
 
 
 def height_limit_checks(ctx: Context) -> list[Check]:
@@ -301,8 +363,9 @@ ELIGIBILITY_STATUS = {Eligibility.ALLOWED: Status.PASS, Eligibility.PROHIBITED: 
 
 def eligibility_check(ctx: Context) -> Check | None:
     """Whether the site may take a high-rise at all, as the rules resolve it, held against the
-    blocks of the high-rise height or more. A prohibition fails such a block; it permits nothing
-    lower, and a lower block is Table III's, which this validator does not judge."""
+    blocks of the high-rise height or more, and only those: a prohibition fails such a block and
+    says nothing of a lower one, which neither passes nor fails on it. A lower block is judged by
+    its own band (Table III) where the rules model it, and not judged where they do not."""
     if not ctx.high_rise_anywhere():
         return None
     high_rise = ctx.rules.height.high_rise
@@ -317,7 +380,7 @@ def eligibility_check(ctx: Context) -> Check | None:
         high = ctx.high_rise(reading)
         if not high:
             return Cell(Status.NOT_CHECKED, "no high-rise under this reading", required,
-                        TABLE_III_NOTE)
+                        _below_note(ctx))
         measured = (f"{high_rise.eligibility.value}: "
                     + "; ".join(f"{g.id} {g.measured}" for g in named or high_rise.grounds))
         return Cell(ELIGIBILITY_STATUS[high_rise.eligibility], measured, required,
@@ -332,30 +395,29 @@ def eligibility_check(ctx: Context) -> Check | None:
 
 
 def setback_checks(ctx: Context) -> list[Check]:
-    clause = "; ".join((_table_clause(ctx.rules), ctx.rules.setbacks.front.clause,
-                        ctx.rules.setbacks.measured_on.clause))
+    """Each block's setback from the net plot line, on the band its height falls in under each
+    reading of the stilt: Table IV for a high-rise, Table III's own row below it. Where the band
+    gives a front figure it is held on the stretches facing the access road (setbacks.py). A band
+    the rules do not model is NOT_CHECKED, one they mark UNVERIFIED settles nothing either way."""
     out = []
     for t in ctx.towers:
-        gap = setback_of(ctx.net, t.footprint)
-        outside = not ctx.net.contains(t.footprint)
+        d = plot_line_distances(ctx, t.footprint)
+        high = any(classes[t.name].high_rise for classes in ctx.classes.values()
+                   if t.name in classes)
+        front = [ctx.rules.setbacks.front.clause] if high else []  # a high-rise's is Table IV's
+        clause = "; ".join(dict.fromkeys(
+            [_tables(ctx, [t]) or _table_clause(ctx.rules), *front,
+             ctx.rules.setbacks.measured_on.clause]))
 
-        def cell(a: Assignment, t=t, gap=gap, outside=outside) -> Cell:
+        def cell(a: Assignment, t=t, d=d) -> Cell:
             reading = a[STILT_IN_RULE_HEIGHT]
             cls = (_classes(ctx, reading) or {}).get(t.name)
             if cls is None:
                 return unknown_reading(STILT_IN_RULE_HEIGHT, reading)
-            stopped = _stopped(cls, "Table IV setback")
+            stopped = _stopped(cls, "setback")
             if stopped is not None:
-                return Cell(stopped.status, f"{gap:.2f} m", stopped.required, stopped.note)
-            need = cls.setback_m
-            if outside:  # no row of any table is met by a block that is not on the plot
-                return Cell(Status.FAIL, f"{gap:.2f} m: not wholly inside the net plot",
-                            f">= {need:.2f} m to the net plot line")
-            ok = gap + TOL_M >= need
-            return Cell(Status.PASS if ok else Status.FAIL, f"{gap:.2f} m",
-                        f">= {need:.2f} m to the net plot line",
-                        "The front of a high-rise keeps the Table IV figure too, measured on the "
-                        "net plot.")
+                return Cell(stopped.status, f"{d.nearest_m:.2f} m", stopped.required, stopped.note)
+            return setback_cell(ctx, t.footprint, d, cls)
 
         out.append(check_from(run(ctx.rules, [STILT_IN_RULE_HEIGHT], cell), family=Family.SETBACK,
                               rule=f"All-round setback: {t.name}", clause=clause, subject=t.name))
@@ -365,19 +427,42 @@ def setback_checks(ctx: Context) -> list[Check]:
 # --- Gaps between blocks -------------------------------------------------------------------
 
 
-def _gap_cell(ca: HeightClass, cb: HeightClass, ha: float, hb: float, spacing: str,
-              gap: float) -> Cell:
-    need, why = required_gap(ca, cb, ha, hb, spacing)
+def _gap_asked(ca: HeightClass, cb: HeightClass) -> str:
+    tables = "; ".join(dict.fromkeys(c.table for c in (ca, cb) if c.table))
+    return f"the gap their bands ask ({tables})" if tables else "the gap their heights ask"
+
+
+def gap_cell(ca: HeightClass, cb: HeightClass, spacing: str, gap: float) -> Cell:
+    """The gap between two blocks on the figures `gap_sources` names. Two blocks below the
+    high-rise height are held to the tallest block's side setback in terms (rule 5(f)(xiii)), which
+    the cell quotes; every other pair is judged under the reading of mixed-height spacing."""
+    need, why = required_gap(ca, cb, spacing)
     shown = f"{gap:.2f} m"
     if why == "unmodelled":
-        return Cell(Status.NOT_CHECKED, shown, "Table IV gap", TABLE_III_NOTE)
+        return Cell(Status.NOT_CHECKED, shown, _gap_asked(ca, cb), TABLE_III_NOTE)
     if why == "unknown":
         return unknown_reading(MIXED_HEIGHT_SPACING, spacing)
-    suffix = (" (the mean of the two blocks' gaps, each keeping its own half)"
-              if spacing == EACH_OWN else "")
-    ok = gap + TOL_M >= need
-    return Cell(Status.PASS if ok else Status.FAIL, shown, f">= {need:.2f} m{suffix}",
-                "This gap does not count towards the tot-lot.")
+    sources = gap_sources(ca, cb, spacing)
+    low_low = not (ca.high_rise or cb.high_rise)
+    suffix = (" (the tallest block's side setback)" if low_low else
+              " (the mean of the two blocks' gaps, each keeping its own half)"
+              if len(sources) == 2 else "")
+    note = " ".join(([f"{LOW_GAP_RULE}."] if low_low else [])
+                    + ["This gap does not count towards the tot-lot."])
+    required = f">= {need:.2f} m{suffix}"
+    if not all(c.confirmed for c in sources):
+        return Cell(Status.UNVERIFIED, shown, required, f"{note} {UNCONFIRMED_NOTE}")
+    return Cell(verdict(gap + TOL_M >= need), shown, required, note)
+
+
+def gap_clause(ctx: Context, pairs: list[tuple[HeightClass, HeightClass]]) -> str:
+    """The spacing clause, and for each pair of bands below the high-rise height the band's table
+    and, where both blocks are below it, rule 5(f)(xiii) too."""
+    parts = [ctx.rules.spacing.clause]
+    for ca, cb in pairs:
+        parts += [c.table for c in (ca, cb) if not c.high_rise and c.table]
+        parts += [] if ca.high_rise or cb.high_rise else [LOW_GAP_CLAUSE]
+    return "; ".join(dict.fromkeys(parts))
 
 
 def pair_gap(a: TowerGeometry, b: TowerGeometry) -> float:
@@ -394,13 +479,14 @@ def spacing_checks(ctx: Context) -> list[Check]:
             classes = _classes(ctx, reading)
             if classes is None:
                 return unknown_reading(STILT_IN_RULE_HEIGHT, reading)
-            return _gap_cell(classes[a.name], classes[b.name], a.rule_height_m(reading),
-                             b.rule_height_m(reading), spacing, gap)
+            return gap_cell(classes[a.name], classes[b.name], spacing, gap)
 
         out.append(check_from(
             run(ctx.rules, [STILT_IN_RULE_HEIGHT, MIXED_HEIGHT_SPACING], cell),
             family=Family.SPACING, rule=f"Gap between blocks: {a.name} / {b.name}",
-            clause=ctx.rules.spacing.clause, subject=f"{a.name}/{b.name}"))
+            clause=gap_clause(ctx, [(classes[a.name], classes[b.name])
+                                    for classes in ctx.classes.values()]),
+            subject=f"{a.name}/{b.name}"))
     return out
 
 
@@ -416,8 +502,8 @@ def tower_measures(ctx: Context) -> list[TowerMeasure]:
             if cls is None:
                 continue
             heights[reading], labels[reading] = cls.height_m, cls.label
-            if cls.setback_m is not None:
-                needs[reading] = cls.setback_m
+            if cls.setback_m is not None:  # the larger of a band's front and other-sides figures
+                needs[reading] = max(cls.setback_m, cls.front_m)
         out.append(TowerMeasure(
             name=t.name, physical_height_m=t.physical_height_m,
             rule_height_m_by_reading=heights, band_by_reading=labels,
@@ -434,9 +520,7 @@ def pair_measures(ctx: Context) -> list[PairMeasure]:
             if classes is None:
                 continue
             for spacing in ctx.rules.readings(MIXED_HEIGHT_SPACING):
-                need, _ = required_gap(classes[a.name], classes[b.name],
-                                       a.rule_height_m(reading), b.rule_height_m(reading),
-                                       spacing)
+                need, _ = required_gap(classes[a.name], classes[b.name], spacing)
                 if need is not None:
                     needs.append(need)
         out.append(PairMeasure(a=a.name, b=b.name, gap_m=pair_gap(a, b),

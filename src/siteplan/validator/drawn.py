@@ -118,7 +118,17 @@ class Drawn:
 
     @cached_property
     def road_land(self) -> BaseGeometry:
-        return union_of_all([r.shape for r in self.roads])
+        """Every road, a pathway (rule 8(l)) not among them: it branches out of one."""
+        return union_of_all([r.shape for r in self.roads if r.kind is not RoadKind.PATHWAY])
+
+    @cached_property
+    def pathway_land(self) -> BaseGeometry:
+        return union_of_all([r.shape for r in self.roads if r.kind is RoadKind.PATHWAY])
+
+    @cached_property
+    def paved_land(self) -> BaseGeometry:
+        """The ground a road or a pathway takes: neither is open space nor a place for a bay."""
+        return union_of_all([self.road_land, self.pathway_land])
 
     @cached_property
     def motorable(self) -> BaseGeometry:
