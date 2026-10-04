@@ -11,6 +11,9 @@ tower was dropped are kept.
 
 `quick=True` checks the club house and the ramp by area only, for ranking hundreds of
 placements; the few worth drawing are then laid exactly.
+
+LEGACY, not for production generation by a language model: kept only for regression comparison.
+Production generation is `siteplan.service` (the full search lays the ground from the blocks).
 """
 
 from __future__ import annotations

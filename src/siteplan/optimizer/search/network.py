@@ -31,12 +31,14 @@ from shapely.geometry import LineString, Point, Polygon, box
 from shapely.geometry.base import BaseGeometry
 from shapely.ops import unary_union
 
+from siteplan import rules as law
 from siteplan.geometry import opening
 from siteplan.optimizer.search.columns import Standing
 from siteplan.optimizer.search.frame import Frame
 from siteplan.optimizer.search.land import EMPTY, Land, Plot, grow, polygons
 
-MIN_STREET_LENGTH_M = 9.0  # a street shorter than its own width is no street
+# A street shorter than its own width (rule 8(m)'s 9 m, read from rules.py) is no street.
+MIN_STREET_LENGTH_M = law.INTERNAL_ROAD_M
 STREET_REACH_M = 100_000.0  # far enough that a street meets the hull's edge at both ends
 FILL_SLIVER_SQM = 0.05
 RING_CLIP_SQM = 0.5  # drawing noise: ground this small off a shape is nothing
@@ -48,7 +50,8 @@ ENTRANCES_TRIED = 12  # of the positions that reach the ring, the shortest this 
 APPROACH_OUTSIDE_SQM = 0.02  # the approach lies wholly on the plot: a road that is cut is not 9 m
 APPROACH_LONGEST_M = 150.0
 GATE_STEP_M = 3.0
-GATE_DEPTH_M = 2.0  # the mouth of the entrance: as deep as the planted strip
+# The mouth of the entrance: as deep as the planted strip (rule 7(a)(viii)'s 2 m, from rules.py).
+GATE_DEPTH_M = law.PERIPHERAL_GREEN_STRIP_M
 EPS_M = 0.01
 
 

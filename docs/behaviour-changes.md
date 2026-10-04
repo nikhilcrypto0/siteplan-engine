@@ -4,6 +4,104 @@ A characterization test (tests/manifest.py) pins what the engine produces today.
 only together with a normative replacement test and an entry here: what changed, why, the
 evidence, and the test that now holds the behaviour. Newest first.
 
+## 2026-10-04: the production service (siteplan.service)
+
+No characterization test changed, and contracts stay at 1.2. Nothing the legacy path produces
+changed. What is new, each held by a normative test (tests/test_service.py on made-up land,
+tests/test_service_client.py on the two real sites, skipped on a clean clone):
+
+- **`siteplan.service` is the production surface.** `Service(workspace, out, approver, mode)` is
+  built by the host; the workspace is the only folder read (anything else is refused with one
+  message, the reason logged), the Approver is asked of the person, and the mode is BLIND
+  (blind.py's refusals) or DEBUG (allowed, every output says DEBUG RUN). Nine operations, each one
+  frozen request model in (unknown fields refused) and one response model out: `start_project`
+  (read-only: what the survey settles and the questions; answers go through `siteplan start`),
+  `open_project`, `resolve_rules`, `inspect_envelope`, `list_prototypes`, `propose_layouts`,
+  `validate_candidate`, `compare_candidates`, `export_candidate`. The firm's standards come from
+  the workspace file only; the readings and the conservative test mode are as the project file
+  states them. `test_no_operation_or_request_has_a_parameter_for_what_a_caller_may_not_set`,
+  `test_a_request_refuses_every_field_a_caller_may_not_set`,
+  `test_a_number_the_brief_never_writes_is_refused_before_anyone_is_asked`,
+  `test_only_the_workspace_is_read`,
+  `test_a_blind_service_refuses_the_firms_finished_plan_and_a_debug_one_says_so`.
+- **The full search and the independent validator, never LEGACY and never optional.**
+  `propose_layouts` asks the architect to approve the site facts (the access road's legal width
+  and the land given up, each with its status), the readings and the brief, then runs `optimize`
+  with `FullSearchStrategy` alone and no validator argument, and judges every alternative again
+  with `siteplan.validator.validate` itself before storing it under `out/<run_id>/` with the
+  digests of the site model, rules, brief and envelope.
+  `test_the_service_runs_the_full_search_and_never_the_legacy_generator`,
+  `test_the_service_imports_no_legacy_generator_or_checker`,
+  `test_every_stored_candidate_has_a_report_the_service_made_itself`,
+  `test_nothing_runs_or_is_written_without_the_architects_approval`.
+- **Export judges again and never trusts a stored report.** It parses the stored contracts, holds
+  every reference against the files and the recorded digests, and validates afresh; a legal FAIL,
+  a blocking discrepancy, a report that could not measure the candidate or a broken reference is
+  refused, and UNVERIFIED is exported only when the request names exactly its UNVERIFIED items and
+  the architect approves them. Every output then lists them (a SOLVER-NOTES layer in the DXF, a
+  SHEET-NOTES note on the A1 sheet, lines under the SVG, a section of the report); the program
+  verdict never blocks or grants anything.
+  `test_a_candidate_moved_into_the_setback_is_judged_again_and_refused`,
+  `test_a_stored_report_turned_into_a_pass_is_not_trusted`,
+  `test_a_contract_changed_after_the_run_breaks_its_digest_and_cannot_export`,
+  `test_a_report_that_could_not_measure_the_candidate_is_never_exported`,
+  `test_unverified_needs_exactly_its_items_and_the_architects_approval`,
+  `test_every_output_lists_the_unresolved_items`, `test_every_output_of_a_debug_run_says_debug_run`.
+- **The drawings are the candidate's own geometry.** The DXF uses layout_export's BuildNow layer
+  names and road labels (imported, not copied); the A1 sheet uses sheet.py's scale, dimensions,
+  north arrow, scale bar, border, statement column and title block. Those helpers now take plain
+  geometry: `sheet._dimension` takes the footprints and `sheet._border` the rendered area
+  statement (it also returns where the statement column and the title block are). The legacy sheet
+  is unchanged: written before and after for two options of tests/test_sheet.py's layout under one
+  hash seed, the files agree line for line apart from the save timestamps, the random GUIDs and
+  ezdxf's version stamp (the order of the DXF CLASSES section follows Python's string hashing, so
+  it differs between any two runs that do not fix the seed). tests/test_sheet.py is unchanged.
+- **LEGACY marks, docstrings only**: layout, `heights.search_heights`, towers' placement, grounds,
+  access's road generators, `runner.run_search`/`run_layout`, checks, access_checks,
+  parking_checks, optimizer/legacy.py, and in mcp_server.py's module docstring `propose_layouts`
+  and `check_rules` (the tools' own docstrings are what Hermes's model reads, so they are left as
+  they were).
+
+Not settled here: no runtime dependency draws a PDF (reportlab is a test dependency, PyMuPDF is
+AGPL), so the export says so and the sheet is a DXF to plot; the Approver is a protocol no person
+channel is wired to yet; a project file does not name its survey, so the requests that build the
+site name it beside the project (`survey_file`).
+
+## 2026-10-04: the number audit covers the new stages
+
+No value, layout or verdict changed, and no characterization test changed. `constraints.py`
+classified the prototype's modules only: `tests/test_constraints.py` scanned fifteen named modules,
+so the numbers of `legal/`, `optimizer/`, `validator/`, `prototypes/`, `adapters/` and `contracts/`
+went unclassified. Now, held by `tests/test_constraints.py` (normative):
+
+- **Every module under `src/siteplan` is audited or exempt with its reason** (`AUDITED_PACKAGES`,
+  `AUDITED_MODULES`, `EXEMPT`). A module in an audited package, `service/` included before it
+  exists, is audited without being named; a new module anywhere else fails until it is audited
+  or exempted. Class-level constants, ranges of numbers and the defaults of every model in an
+  audited module (but 0, 1 or -1 on a record) are scanned too; eleven named numbers that are no
+  domain number (an ordering, a unit, a bearing, a message length) are set aside by name
+  (`NOT_DOMAIN`).
+- **154 more numbers are classified**, in 17 new entries and 13 extended ones: 151
+  ENGINE_DESIGN_ASSUMPTION (tolerances and slacks, search bounds, the full search's roads and
+  reserve, the prototype families, the validator's cross-checks and refusals, the contracts'
+  tolerances, the flat importer's figures), 2 FIRM_STANDARD (the area statement's and the
+  assistant's copies of the workspace defaults) and 1 UNRESOLVED_INTERPRETATION
+  (`quantities.QUARTER_TURN`, the square corner the 6.88 m fire band is derived for). No symbol
+  changed basis. `siteplan constraints` and the acceptance report's section 3 list the new
+  entries; the note on the road-widening shortfall now says the resolved rules call a near miss
+  UNVERIFIED.
+- **Three legal figures copied outside `rules.py` now read it**, the same numbers:
+  `optimizer/floors.py` `CEILING_M` (Table IV's 120 m), `optimizer/search/network.py`
+  `GATE_DEPTH_M` (rule 7(a)(viii)'s 2 m strip) and `MIN_STREET_LENGTH_M` (rule 8(m)'s 9 m road).
+- **Inline literals that can change a result are named constants**, the same values:
+  `fit.TRIM_WIDE_SHARE` (0.98), `build.ON_POCKET_SHARE` (0.5), `strategy.EVALUATE_SHARE` (0.35),
+  `LAY_OUT_SHARE` (0.75) and `PITCH_GAP_M` (10 m) and `search.layout.CLUB_FLOORS` (2) in the full
+  search; `fire.GATE_TOUCH_M` (0.5 m), `roads.HEAD_SLACK_M` (0.05 m), `roads.HEAD_CUT_M` (0.1 m),
+  `open_space.AGREEMENT_SHARE` (0.005), `shapes.HEAL_M` and `shapes.CENTRE_TOLERANCE_M` (0.05 m)
+  in the validator; `legacy_layout.ON_GROUND_SHARE` (0.5) in the adapter.
+- **Copies of one number are held to one value** (`COPIES`): an entry that lists the
+  validator's or the full search's own copy prints one of them, so the test fails if they part.
+
 ## 2026-10-04: C3, blocks below 21 m in the full search
 
 No characterization test changed, and contracts stay at 1.2. LEGACY keeps to the high-rise counts it

@@ -192,8 +192,8 @@ arm, a plot crossed by a nala, a plot under 4,000 m²) hold an instance of every
 | Prototypes | TowerPrototype | towers, library, flat_import | B |
 | Optimizer | CandidateLayout | layout, `heights.search_heights`, `grounds.lay`/`firm_up`, `towers.place`, the road generators in access | C (today's generator becomes one legacy strategy) |
 | Validator | ValidationReport | the logic of checks, access_checks, parking_checks; cases; `acceptance.compare` | D |
-| LLM strategy | tool API only | assistant, llm, guards, mcp_server | later |
-| CAD and report | DXF, sheet, SVG, report | layout_export, sheet, dxf_export, result_page, acceptance, area_statement | integration |
+| LLM strategy | tool API only: `siteplan.service` (requests, responses, approval, export gate) | `service/` on intake, blind, guards, adapters, legal, prototypes, the full search and the validator; assistant, llm and mcp_server's `propose_layouts`/`check_rules` stay as the legacy path | integration (the service, 2026-10-04); connecting a model later |
+| CAD and report | DXF, sheet, SVG, report | layout_export, sheet, dxf_export, result_page, acceptance, area_statement; from the contracts: `service/render.py` and `service/report.py` (sheet.py's helpers on plain geometry) | integration |
 
 ## 4. Ownership
 
