@@ -37,7 +37,6 @@ def real_run(request, tmp_path_factory):
     from client_baseline import run
 
     from siteplan.adapters import Readings, brief, candidate_from_option, site_model
-    from siteplan.contracts.design_brief import AmenityRequest
     from siteplan.intake import load_defaults
     from siteplan.project import Project
     from siteplan.runner import read_survey
@@ -48,18 +47,18 @@ def real_run(request, tmp_path_factory):
     site = site_model(project, site_id="dhulapally", boundary=read_survey(SURVEY).boundary,
                       draft=generated.draft)
     defaults = load_defaults(WORKSPACE)
-    design = brief(project, defaults)
-    # The brief says what surface each facility has, as the adapters should from the firm's list.
-    facilities = AmenityLibrary.model_validate_json((WORKSPACE / defaults.amenities).read_text())
-    design.program.amenities = [
-        AmenityRequest(name=i.name, surface="SOFT" if i.counts_as_open_space else "HARD")
-        for i in facilities.items]
+    # The brief states each facility's use and surface, as a firm's library does: the firm's own
+    # file does not yet, so the same items as the repo's researched list states them (its own
+    # statements, assumed for the test, never read off a name).
+    stated = AmenityLibrary.model_validate_json(
+        (Path(__file__).parent.parent / "examples" / "amenities.hyderabad.json").read_text())
+    design = brief(project, defaults, amenities=stated)
     rules = resolved_rules(site)
     readings = Readings.of(project.layout)
     refs = {"site_ref": digest(site), "rules_ref": digest(rules), "brief_ref": digest(design)}
     candidates = [candidate_from_option(
         option, generated.plot, candidate_id=f"real-{n}", readings=readings.selections,
-        access_side=project.site.access_side, **refs)
+        access_side=project.site.access_side, amenities=stated, **refs)
         for n, option in enumerate(generated.found.options, 1)]
     return request.param, site, rules, design, candidates
 

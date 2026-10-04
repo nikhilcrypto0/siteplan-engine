@@ -4,6 +4,53 @@ A characterization test (tests/manifest.py) pins what the engine produces today.
 only together with a normative replacement test and an entry here: what changed, why, the
 evidence, and the test that now holds the behaviour. Newest first.
 
+## 2026-10-03: D (the validator) on contracts 1.1
+
+One characterization test changed, with its normative replacement:
+
+- **A block of exactly 21 m is judged on Table IV's first row (7 m, a 12 m road).** Under 1.0
+  the bands had no row for exactly 21 m, so the validator held such a block to the row above and
+  called a shortfall UNVERIFIED (the "seam"). 1.1 gives that height a band of its own, and the
+  validator now reads the band the contract gives (`HeightRules.band_for`), as the optimizer
+  does. `test_a_block_at_exactly_the_high_rise_threshold_is_held_to_its_own_row`
+  (characterization: Tower 5 of the made-up case, 7 m round it, now PASS as today's checker
+  says); normative: `test_a_block_exactly_at_the_threshold_is_a_high_rise_on_table_ivs_first_row`,
+  `test_a_road_short_of_the_21_m_row_fails_a_block_of_exactly_21_m`,
+  `test_a_gap_short_of_the_21_m_row_fails_two_blocks_of_exactly_21_m`,
+  `test_a_club_house_too_close_to_a_block_exactly_21_m_high_fails`.
+
+What else now behaves differently, each held by a normative test:
+
+- **Every height limit is judged by `HeightLimit.evaluate`.** A conditional limit met anyway
+  passes; one that does not apply is listed as INFO; a limit on unconfirmed inputs settles
+  nothing. `test_a_limit_is_judged_as_the_contract_judges_it`.
+- **High-rise eligibility is checked.** A block of 21 m or more where the rules prohibit a
+  high-rise FAILs; an unsettled eligibility is UNVERIFIED; nothing below 21 m passes.
+  `test_a_high_rise_where_the_site_may_take_none_fails_and_nothing_lower_passes`.
+- **Organised open space counts a facility's ground from its stated use and surface and the
+  rule, under every reading of the two open questions.** A built facility on the tot-lot takes
+  its ground out (FAIL where that leaves too little); a paved court or a paved tot-lot is
+  UNVERIFIED (the rule's "etc." and a tot-lot's surface are open); a facility whose use or surface
+  the brief does not state is never counted on the strength of its name; a facility that
+  qualifies off the drawn pockets counts too, under the same location tests. The test suite on
+  the real drawings now gives the brief the use and surface the repo's researched amenity list
+  states (`examples/amenities.hyderabad.json`), as the firm's own file does not state them.
+  tests/test_validator_amenities.py.
+- **The open-space width test is clipped to the ground it is given.** It had counted ground
+  past corners the pockets cut (13.38 m² on one Dhulapally option).
+  `test_the_width_test_never_counts_ground_outside_the_pocket_it_is_given`.
+- **A placed facility that states another use or surface than the brief is a blocking
+  discrepancy.** `test_a_placed_facility_that_says_another_use_than_the_brief_blocks_a_pass`.
+- **Design targets are reported beside the verdict** (legal minimum, target, provided); a missed
+  target is a program finding, never a legal one.
+  `test_a_missed_design_target_is_a_program_finding_and_never_moves_the_legal_verdict`.
+- **A marked electricity line is said, UNVERIFIED** (rule 3(c)(i)).
+  `test_a_marked_electricity_line_is_said_never_passed`.
+- **The five-acre amenity check is gone** (rule 9(o)/10(i), row and cluster housing).
+  `test_no_five_acre_amenity_share_is_held_against_a_group_scheme`.
+- **A ramp's fire clearance is read from the rules** (`parking.ramp_fire_clearance_m`), not a
+  constant in the validator.
+
 ## 2026-10-03: contracts 1.1
 
 No characterization test changed on the integration branch. What now behaves differently, each

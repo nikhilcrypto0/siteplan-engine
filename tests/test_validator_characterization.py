@@ -72,15 +72,16 @@ def test_the_validator_fails_a_made_up_firm_drawing_where_the_checker_does():
     assert {c.finding.rule for c in report.legal if c.finding.status is Status.FAIL} == expected
 
 
-def test_a_block_at_exactly_the_high_rise_threshold_is_not_passed_without_its_table_row():
-    """Stilt + 6 at 3 m is exactly 21 m. The resolved bands have no Table IV row for exactly 21
-    m, so it is held to the row above (the stricter): 7 m round it does not meet 8 m, and the
-    validator says UNVERIFIED where the checker, which reads the row below, says PASS."""
+def test_a_block_at_exactly_the_high_rise_threshold_is_held_to_its_own_row():
+    """Stilt + 6 at 3 m is exactly 21 m, a high-rise on Table IV's first row: 7 m round it meets
+    it, as today's checker says. (Before contracts 1.1 the bands had no row for exactly 21 m and
+    the validator said UNVERIFIED here: docs/behaviour-changes.md, 2026-10-03. The normative
+    test is test_a_block_exactly_at_the_threshold_is_a_high_rise_on_table_ivs_first_row.)"""
     report = inputs_of(made_up_case()).report()
-    assert status(report, "All-round setback: Tower 5") is Status.UNVERIFIED
+    assert status(report, "All-round setback: Tower 5") is Status.PASS
     held = status(inputs_of(made_up_case(setback_of_stilt_6_block=8.5)).report(),
                   "All-round setback: Tower 5")
-    assert held is Status.PASS  # meets the stricter row, so it meets either
+    assert held is Status.PASS
 
 
 def test_with_the_stilt_left_open_the_firms_8_m_is_unverified_not_a_fail():

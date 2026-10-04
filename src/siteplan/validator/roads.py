@@ -338,6 +338,17 @@ def setback_circulation_check(ctx: Context) -> Check | None:
 # --- Declared against drawn ------------------------------------------------------------------
 
 
+def narrowest_road(ctx: Context, ground: Ground) -> tuple[str, float] | None:
+    """The loop, internal or approach road that measures narrowest, and its width (no wider than
+    it declares); None when there is none."""
+    nine = ctx.rules.circulation.internal_road_m.value
+    network = healed(_ground_of(ctx, ground, *RULE_8M_KINDS, RoadKind.PERIMETER_LANE))
+    widths = [(r.id, min(width_in(network, _usable(r, ground),
+                                  max(nine, r.declared_width_m) + 1.0), r.declared_width_m))
+              for r in ctx.drawn.roads_of(*RULE_8M_KINDS)]
+    return min(widths, key=lambda w: w[1], default=None)
+
+
 def width_discrepancies(ctx: Context, ground: Ground) -> list[Discrepancy]:
     """A road that measures narrower than the width it declares: the declaration flatters the
     layout, so it blocks a pass."""

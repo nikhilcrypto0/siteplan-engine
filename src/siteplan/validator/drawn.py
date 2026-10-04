@@ -14,7 +14,7 @@ from shapely.geometry import Polygon
 from shapely.geometry.base import BaseGeometry
 
 from siteplan.contracts.candidate import CandidateLayout, RoadKind
-from siteplan.contracts.common import Shape
+from siteplan.contracts.common import FacilityUse, Shape, Surface
 from siteplan.contracts.design_brief import AmenitySetting, DesignBrief
 from siteplan.validator.shapes import NOISE_SQM, polygon_of, polygons_of, union_of_all
 
@@ -46,22 +46,37 @@ class DrawnRoad:
 
 @dataclass(frozen=True)
 class DrawnAmenity:
+    """A facility as drawn, with the use and surface the brief's request of the same name states
+    (the firm's library, never the facility's name); None where the brief does not say. What the
+    candidate says of them is only cross-checked (`placed_use`, `placed_surface`)."""
+
     name: str
     shape: BaseGeometry
     setting: AmenitySetting
-    surface: str | None  # SOFT or HARD, from the brief's request of the same name; None if unsaid
+    use: FacilityUse | None
+    surface: Surface | None
+    placed_use: FacilityUse | None = None
+    placed_surface: Surface | None = None
 
     @property
     def hard(self) -> bool:
         """Paved or built: a pool, a court, a cabin. Whether it qualifies as open space is the
-        law's; the brief says what surface it has."""
-        return self.surface == "HARD"
+        law's (OpenSpaceRules.qualifies); the brief says what surface it has."""
+        return self.surface in (Surface.HARD, Surface.BUILT)
 
     @property
     def unknown(self) -> bool:
         """The brief does not say what surface it has (it was not asked for, or the request does
         not say), so nothing here may call it greenery or a building on the strength of its name."""
         return self.surface is None
+
+    @property
+    def mismatch(self) -> list[str]:
+        """Where the candidate says another use or surface than the brief states."""
+        return [f"{what} {placed} where the brief states {stated}"
+                for what, stated, placed in (("use", self.use, self.placed_use),
+                                             ("surface", self.surface, self.placed_surface))
+                if stated is not None and placed is not None and stated != placed]
 
     def inside(self, club: BaseGeometry) -> bool:
         """An amenity placed in the club house, and lying in it."""
@@ -127,7 +142,11 @@ def read(candidate: CandidateLayout, brief: DesignBrief) -> Drawn:
     program, circulation = candidate.program, candidate.circulation
     cellars = program.cellars
     flaws: list[str] = []
-    surfaces = {r.name.strip().lower(): r.surface for r in brief.program.amenities}
+    asked = {r.name.strip().lower(): r for r in brief.program.amenities}
+
+    def stated(name: str):
+        request = asked.get(name.strip().lower())
+        return (request.use, request.surface) if request else (None, None)
 
     def one(shape: Shape, label: str) -> BaseGeometry:
         return union_of_all(taken([shape], label, flaws))
@@ -144,7 +163,7 @@ def read(candidate: CandidateLayout, brief: DesignBrief) -> Drawn:
         club=one(program.club_house.shape, "the club house") if program.club_house else Polygon(),
         club_floors=program.club_house.floors if program.club_house else 0,
         amenities=tuple(DrawnAmenity(a.name, one(a.shape, f"amenity {a.name}"), a.setting,
-                                     surfaces.get(a.name.strip().lower()))
+                                     *stated(a.name), a.use, a.surface)
                         for a in program.amenities),
         ramps=pieces(program.ramps, "a ramp"),
         bays=pieces(program.bays, "a parking bay"),

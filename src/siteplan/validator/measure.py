@@ -103,18 +103,16 @@ def tower_geometries(candidate: CandidateLayout, brief: DesignBrief) -> tuple[To
 
 @dataclass(frozen=True)
 class HeightClass:
-    """Where a rule height falls in the resolved bands.
-
-    A building is high-rise from `high_rise_from_m` up. Exactly at that height the resolved bands
-    have no Table IV row for it (the row below ends there and the row above starts there): a
-    seam. The row above is then an upper bound, since Table IV only grows with height: a block
-    that meets it meets whichever row applies, and one that does not is UNVERIFIED, never a FAIL.
+    """Where a rule height falls in the resolved bands: the one band the rules give it
+    (`HeightRules.band_for`, the same lookup the optimizer makes). A building is high-rise from
+    `high_rise_from_m` up; a block of exactly that height has its own band (Table IV's first
+    row). A band the rules do not model (Table III, below it) leaves the height unjudged.
     """
 
     height_m: float
     high_rise: bool
-    band: Band | None  # the band whose values apply (for a seam, the row above); None if none
-    state: str  # 'ok', 'seam', or 'unmodelled' (Table III, or beyond the bands)
+    band: Band | None  # the band whose values apply; None above the last band
+    state: str  # 'ok', or 'unmodelled' (Table III, or beyond the bands)
 
     @property
     def settled(self) -> bool:
@@ -122,16 +120,16 @@ class HeightClass:
 
     @property
     def label(self) -> str:
-        if self.state == "seam":
-            return f"exactly {self.height_m:g} m, the high-rise threshold"
         if self.band is None:
             return "beyond the bands in the rules"
         kind = "" if self.band.kind is BandKind.HIGH_RISE else "non-high-rise "
+        if self.band.above_m == self.band.up_to_m:
+            return f"{kind}exactly {self.band.above_m:g} m"
         return f"{kind}{self.band.above_m:g}-{self.band.up_to_m:g} m"
 
     @property
     def _usable(self) -> Band | None:
-        return self.band if self.state in ("ok", "seam") else None
+        return self.band if self.state == "ok" else None
 
     @property
     def setback_m(self) -> float | None:
@@ -150,17 +148,9 @@ class HeightClass:
 
 
 def classify(rules: ResolvedRules, height_m: float) -> HeightClass:
-    bands = rules.height.bands
     high_rise = height_m >= rules.height.high_rise_from_m.value - TOL_M
-    band = next((b for b in bands if b.above_m + TOL_M < height_m <= b.up_to_m + TOL_M), None)
-    if band is None:
-        return HeightClass(height_m, high_rise, None, "unmodelled")
-    if high_rise and band.kind is not BandKind.HIGH_RISE:
-        above = [b for b in bands if b.kind is BandKind.HIGH_RISE and b.modelled
-                 and b.setback_m is not None and b.above_m + TOL_M >= height_m]
-        upper = min(above, key=lambda b: b.above_m, default=None)
-        return HeightClass(height_m, high_rise, upper, "seam" if upper else "unmodelled")
-    if not band.modelled or band.setback_m is None:
+    band = rules.height.band_for(height_m)
+    if band is None or not band.modelled or band.setback_m is None:
         return HeightClass(height_m, high_rise, band, "unmodelled")
     return HeightClass(height_m, high_rise, band, "ok")
 
@@ -175,10 +165,9 @@ def setback_of(net: Polygon, footprint: Polygon) -> float:
 
 def required_gap(a: HeightClass, b: HeightClass, a_height_m: float, b_height_m: float,
                  spacing: str) -> tuple[float | None, str]:
-    """The gap two blocks need under a reading of mixed-height spacing, and how settled it is:
-    'ok'; 'seam' (the number is an upper bound, from the row above a threshold height); or None
-    and why there is none: 'unmodelled' (a block's own gap is not in the rules) or 'unknown' (a
-    reading this validator cannot evaluate).
+    """The gap two blocks need under a reading of mixed-height spacing: 'ok', or None and why
+    there is none: 'unmodelled' (a block's own gap is not in the rules) or 'unknown' (a reading
+    this validator cannot evaluate).
 
     taller_governs: the taller block's Table IV gap, whatever the shorter block is. each_own:
     each block keeps its own gap on its own half of the space between them, so the mean of the
@@ -187,9 +176,9 @@ def required_gap(a: HeightClass, b: HeightClass, a_height_m: float, b_height_m: 
         taller = a if a_height_m >= b_height_m else b
         if taller.gap_m is None:
             return None, "unmodelled"
-        return taller.gap_m, "ok" if taller.settled else "seam"
+        return taller.gap_m, "ok"
     if spacing == EACH_OWN:
         if a.gap_m is None or b.gap_m is None:
             return None, "unmodelled"
-        return (a.gap_m + b.gap_m) / 2, "ok" if a.settled and b.settled else "seam"
+        return (a.gap_m + b.gap_m) / 2, "ok"
     return None, "unknown"

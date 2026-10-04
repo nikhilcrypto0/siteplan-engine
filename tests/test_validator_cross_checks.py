@@ -202,18 +202,24 @@ def test_an_envelope_stricter_than_the_law_is_recorded_without_blocking():
 def test_an_envelope_with_more_buildable_land_than_there_is_blocks():
     inputs = fixture("rectangle")
     envelope = inputs.envelope.model_copy(deep=True)
-    envelope.bands[1].buildable = shapes(NET.buffer(-3.0))
+    _band(envelope, 21.0, 24.0).buildable = shapes(NET.buffer(-3.0))
     d = _discrepancy(replace(inputs, envelope=envelope).report(envelope=True),
                      "envelope buildable land, band 21-24 m")
     assert d.blocks_pass and d.source == "envelope"
+
+
+def _band(envelope, above_m: float, up_to_m: float):
+    """An envelope band by its two edges (1.1: a block of exactly 21 m has a band of its own)."""
+    return next(b for b in envelope.bands if (b.above_m, b.up_to_m) == (above_m, up_to_m))
 
 
 def test_an_envelope_band_that_states_no_setback_is_still_held_to_its_buildable_land():
     """Found by review: a band with no setback and the whole plot as buildable raised nothing."""
     inputs = fixture("rectangle")
     envelope = inputs.envelope.model_copy(deep=True)
-    envelope.bands[1].setback_m = None
-    envelope.bands[1].buildable = shapes(NET)
+    band = _band(envelope, 21.0, 24.0)
+    band.setback_m = None
+    band.buildable = shapes(NET)
     d = _discrepancy(replace(inputs, envelope=envelope).report(envelope=True),
                      "envelope buildable land, band 21-24 m")
     assert d.blocks_pass and d.source == "envelope"

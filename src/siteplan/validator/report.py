@@ -19,13 +19,14 @@ from siteplan.contracts.validation import (
     Check,
     Discrepancy,
     Recomputed,
+    TargetCheck,
     ValidationReport,
     Verdict,
     legal_verdict,
     program_verdict,
 )
 
-VALIDATOR_VERSION = "siteplan.validator 1.0: independent recomputation from the site model"
+VALIDATOR_VERSION = "siteplan.validator 1.1: independent recomputation from the site model"
 
 
 def reasons(legal: list[Check], program: list[Check], cross_checks: list[Discrepancy]) -> list[str]:
@@ -49,11 +50,13 @@ def assemble(site: CanonicalSiteModel, rules: ResolvedRules, brief: DesignBrief,
              candidate: CandidateLayout, envelope: BuildableEnvelope | None, *,
              recomputed: Recomputed, legal: list[Check], program: list[Check],
              partition: PartitionLedger | None, partition_problems: list[str],
-             rule_layers: RuleLayers | None, cross_checks: list[Discrepancy]) -> ValidationReport:
+             rule_layers: RuleLayers | None, cross_checks: list[Discrepancy],
+             design_targets: list[TargetCheck] | None = None) -> ValidationReport:
     return ValidationReport(
         candidate_ref=digest(candidate), site_ref=digest(site), rules_ref=digest(rules),
         brief_ref=digest(brief), envelope_ref=digest(envelope) if envelope is not None else None,
         validator_version=VALIDATOR_VERSION, recomputed=recomputed, legal=legal, program=program,
+        design_targets=design_targets or [],
         accounting=Accounting(partition=partition, partition_problems=partition_problems,
                               rule_layers=rule_layers),
         cross_checks=cross_checks, not_checked=not_checked(legal),

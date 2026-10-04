@@ -27,10 +27,6 @@ FRONT_SECTOR_DEG = 45  # a boundary edge faces a side when its outward normal is
 # exactly 45 degrees off it, a knife-edge that a plot turned a hair would fall off. A diagonal
 # label reaches half a compass step further.
 DIAGONAL_SLOP_DEG = 22.5
-# Rule 13(c)(vii) lets a ramp use a side or rear setback "after leaving minimum 7m of setback for
-# movement of fire-fighting vehicles". The 7 m is in the clause's text only; ResolvedRules carries
-# the sentence (parking.ramp_in_setbacks), not the number.
-RAMP_FIRE_LEAVE_M = 7.0
 
 
 def deepest_setback_m(ctx: Context, reading: str) -> float | None:
@@ -146,8 +142,10 @@ def ramp_zones(ctx: Context, reading: str) -> tuple[BaseGeometry, BaseGeometry]:
     if depth is None:
         return Polygon(), Polygon()
     zone = ctx.net.difference(ctx.net.buffer(-depth))
-    keep_clear = zone if depth <= RAMP_FIRE_LEAVE_M else zone.intersection(
-        ctx.net.buffer(-(depth - RAMP_FIRE_LEAVE_M)))
+    # Rule 13(c)(vii): a ramp in a side or rear setback leaves this much for fire vehicles.
+    leave = ctx.rules.parking.ramp_fire_clearance_m.value
+    keep_clear = zone if depth <= leave else zone.intersection(
+        ctx.net.buffer(-(depth - leave)))
     front = front_zone(ctx, depth)
     if front is None:
         return keep_clear, zone.difference(keep_clear)

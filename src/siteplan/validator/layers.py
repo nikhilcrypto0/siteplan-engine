@@ -31,7 +31,7 @@ from siteplan.contracts.resolved_rules import (
 )
 from siteplan.validator.context import Context
 from siteplan.validator.fire import clear_band, reached
-from siteplan.validator.open_space import qualifying
+from siteplan.validator.open_space import certain_ground
 from siteplan.validator.parking import cellar_setback_m
 from siteplan.validator.shapes import union_of_all
 from siteplan.validator.turning import round_block, turning_for
@@ -168,7 +168,7 @@ def _other_layers(ctx: Context) -> list[RuleLayer]:
                       ctx.rules.green_strip.width_m.clause, strip)
     out += _per_stilt(ctx, "qualifying open space", LayerKind.QUALIFYING_OPEN_SPACE,
                       ctx.rules.open_space.share.clause,
-                      lambda r: union_of_all(list(qualifying(ctx, r, spacing).pockets)),
+                      lambda r: union_of_all(list(certain_ground(ctx, r, spacing).pockets)),
                       reading=OPEN_SPACE_BASIS)
     return out
 

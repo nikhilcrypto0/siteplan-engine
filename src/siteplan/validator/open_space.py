@@ -5,6 +5,14 @@ Open space counts when it lies inside the net plot, over and above the setbacks 
 gaps between blocks, is not a road, a lane, a bay or a building, is not the fire tender's clear
 ground, and forms a pocket at least 3 m wide and 50 m². Water-buffer land counts only where the
 rules say it may. The generator's own open-space figure is compared with this, never used.
+
+Which facilities' ground counts is the law's (OpenSpaceRules.qualifies), from the use and
+surface the brief states for each, never from its name, under every reading of the two open
+questions the rule's words leave (whether a tot-lot must be soft, what its "etc." takes in): the
+ground of a facility that does not qualify is taken out, the ground of one that does counts
+(wherever it stands, subject to the same tests), and a facility whose use or surface nobody
+stated is counted neither way: it leaves the verdict UNVERIFIED unless the answer is the same
+whether it counts or not.
 """
 
 from __future__ import annotations
@@ -18,7 +26,10 @@ from siteplan.contracts.common import Status
 from siteplan.contracts.resolved_rules import (
     MIXED_HEIGHT_SPACING,
     OPEN_SPACE_BASIS,
+    OPEN_SPACE_OTHER_USES,
     STILT_IN_RULE_HEIGHT,
+    TOT_LOT_SURFACE,
+    Qualification,
 )
 from siteplan.contracts.validation import Check, Family
 from siteplan.validator.context import Context
@@ -46,10 +57,34 @@ class Qualifying:
     declared_sqm: float
     removed: dict[str, float]  # why ground was taken out, and how much
     setback_known: bool
+    added_sqm: float = 0.0  # facilities' ground counted beside the drawn open space
 
     @property
     def area_sqm(self) -> float:
         return sum(p.area for p in self.pockets)
+
+
+@dataclass(frozen=True)
+class FacilityKinds:
+    """The facilities (by their index in the drawing) whose ground does not count, does count,
+    and cannot be told, under one reading of each open question of the rule's words."""
+
+    out: frozenset[int]
+    counts: frozenset[int]
+    unknown: frozenset[int]
+
+
+def facility_kinds(ctx: Context, tot_lot: str, other: str) -> FacilityKinds:
+    rules = ctx.rules.open_space
+    found: dict[Qualification, set[int]] = {q: set() for q in Qualification}
+    for i, a in enumerate(ctx.drawn.amenities):
+        if a.inside(ctx.drawn.club):
+            continue  # in the club house: the club house's ground
+        found[rules.qualifies(a.use, a.surface, tot_lot_surface=tot_lot,
+                              other_uses=other)].add(i)
+    return FacilityKinds(frozenset(found[Qualification.DOES_NOT_QUALIFY]),
+                         frozenset(found[Qualification.QUALIFIES]),
+                         frozenset(found[Qualification.UNKNOWN]))
 
 
 def _take_out(remaining: BaseGeometry, zone: BaseGeometry | None, why: str,
@@ -62,13 +97,15 @@ def _take_out(remaining: BaseGeometry, zone: BaseGeometry | None, why: str,
     return remaining.difference(zone)
 
 
-def qualifying(ctx: Context, reading: str, spacing: str, unknown_counts: bool = False
-               ) -> Qualifying:
+def qualifying(ctx: Context, reading: str, spacing: str, take_out: frozenset[int] = frozenset(),
+               add: frozenset[int] = frozenset()) -> Qualifying:
     """The ground that counts as organized open space under a reading of the stilt and of the
-    spacing. A paved or built amenity stood on it takes it out; one whose surface the brief does
-    not say is taken out unless `unknown_counts` says it is greenery."""
+    spacing: the open space drawn and the ground of the facilities in `add`, less the ground of
+    the facilities in `take_out` (by index in the drawing)."""
     d, rules = ctx.drawn, ctx.rules.open_space
-    declared = healed(union_of_all(list(d.open_space)), CRACK_M)
+    drawn = healed(union_of_all(list(d.open_space)), CRACK_M)
+    added = union_of_all([d.amenities[i].shape for i in add])
+    declared = union_of_all([drawn, added]) if add else drawn
     removed: dict[str, float] = {}
     if declared.difference(ctx.net).area > 0:
         removed["outside the net plot"] = declared.difference(ctx.net).area
@@ -85,18 +122,31 @@ def qualifying(ctx: Context, reading: str, spacing: str, unknown_counts: bool = 
     remaining = _take_out(remaining, bands, "in a fire lane's clear ground", removed)
     other_uses = union_of_all([
         *(t.footprint for t in ctx.towers), d.club, d.road_land, d.fire_hardstanding,
-        *d.bays, *d.ramps, *(a.shape for a in d.amenities
-                             if a.hard or (a.unknown and not unknown_counts))])
+        *d.bays, *d.ramps])
     remaining = _take_out(remaining, other_uses, "under a building, road, lane, bay or ramp",
                           removed)
+    facilities = union_of_all([d.amenities[i].shape for i in take_out])
+    remaining = _take_out(remaining, facilities,
+                          "under a facility whose use or surface does not count", removed)
     width, least = rules.min_width_m.value, rules.min_pocket_sqm.value
     wide = opening(remaining, width) if not remaining.is_empty else remaining
     pockets = tuple(p for p in polygons_of(wide) if p.area + TOL_M >= least)
     narrow = remaining.area - sum(p.area for p in pockets)
     if narrow > 1e-3:
         removed[f"narrower than {width:g} m or a pocket under {least:g} m²"] = narrow
-    return Qualifying(pockets, declared.area, removed,
-                      setback_known=zone is not None or not rules.over_and_above_setbacks.value)
+    return Qualifying(pockets, drawn.area, removed,
+                      setback_known=zone is not None or not rules.over_and_above_setbacks.value,
+                      added_sqm=declared.area - drawn.area)
+
+
+def certain_ground(ctx: Context, reading: str, spacing: str) -> Qualifying:
+    """The ground that counts under every reading of the rule's words, a facility whose use or
+    surface nobody stated not counted: the qualifying open-space layer."""
+    every = [facility_kinds(ctx, t, o) for t in ctx.rules.readings(TOT_LOT_SURFACE)
+             for o in ctx.rules.readings(OPEN_SPACE_OTHER_USES)]
+    take_out = frozenset().union(*(k.out | k.unknown for k in every))
+    add = frozenset.intersection(*(k.counts for k in every))
+    return qualifying(ctx, reading, spacing, take_out, add)
 
 
 def expected_requirement(ctx: Context, basis: str) -> float | None:
@@ -131,12 +181,23 @@ def open_space_checks(ctx: Context) -> tuple[list[Check], dict[str, float]]:
     rules = ctx.rules.open_space
     share = rules.share.value
     requirements = rules.requirement_sqm_by_reading
-    declared = union_of_all(list(ctx.drawn.open_space))
-    unsure = [a.name for a in ctx.drawn.amenities
-              if a.unknown and a.shape.intersection(declared).area > NOISE_SQM]
-    counted = (False, True) if unsure else (False,)
-    ground = {(r, s, u): qualifying(ctx, r, s, u) for r in ctx.stilt_readings
-              for s in ctx.rules.readings(MIXED_HEIGHT_SPACING) for u in counted}
+    uses = {(t, o): facility_kinds(ctx, t, o) for t in ctx.rules.readings(TOT_LOT_SURFACE)
+            for o in ctx.rules.readings(OPEN_SPACE_OTHER_USES)}
+    first = next(iter(uses))
+    # The two readings of the rule's words are evaluated only where they change which ground
+    # counts; with no facility on the ground they say nothing.
+    use_ids = [TOT_LOT_SURFACE, OPEN_SPACE_OTHER_USES] if len(set(uses.values())) > 1 else []
+    names = [a.name for a in ctx.drawn.amenities]
+    cache: dict[tuple, Qualifying] = {}
+
+    def ground(reading: str, spacing: str, kinds: FacilityKinds, unknown_counts: bool
+               ) -> Qualifying:
+        take_out = kinds.out if unknown_counts else kinds.out | kinds.unknown
+        add = kinds.counts | kinds.unknown if unknown_counts else kinds.counts
+        key = (reading, spacing, take_out, add)
+        if key not in cache:
+            cache[key] = qualifying(ctx, reading, spacing, take_out, add)
+        return cache[key]
 
     def cell(a: Assignment) -> Cell:
         basis = a[OPEN_SPACE_BASIS]
@@ -146,9 +207,11 @@ def open_space_checks(ctx: Context) -> tuple[list[Check], dict[str, float]]:
                         f">= {share:.0%} of the {basis} area = {asked:,.1f} m²",
                         "Only the buildings are drawn: the ground between them is not known.")
         reading, spacing = a[STILT_IN_RULE_HEIGHT], a[MIXED_HEIGHT_SPACING]
-        q = ground[(reading, spacing, False)]
+        kinds = uses[(a.get(TOT_LOT_SURFACE, first[0]), a.get(OPEN_SPACE_OTHER_USES, first[1]))]
+        q = ground(reading, spacing, kinds, False)
         pct = 100 * q.area_sqm / (asked / share) if asked else 0.0
-        measured = f"{q.area_sqm:,.1f} m² counts of {q.declared_sqm:,.1f} m² drawn"
+        measured = f"{q.area_sqm:,.1f} m² counts of {q.declared_sqm:,.1f} m² drawn" + (
+            f" and {q.added_sqm:,.1f} m² of facilities" if q.added_sqm > NOISE_SQM else "")
         note = ("; ".join(f"{gone:,.1f} m² {why}" for why, gone in q.removed.items())
                 if q.removed else "")
         required = (f">= {share:.0%} of the {basis} area = {asked:,.1f} m² (this is {pct:.2f}% "
@@ -157,24 +220,26 @@ def open_space_checks(ctx: Context) -> tuple[list[Check], dict[str, float]]:
             return Cell(Status.UNVERIFIED, measured, required,
                         "The setback is not known under this reading, so which ground is over "
                         "and above it cannot be told.")
-        if q.area_sqm + TOL_M < asked and unsure and (
-                ground[(reading, spacing, True)].area_sqm + TOL_M >= asked):
+        if q.area_sqm + TOL_M < asked and kinds.unknown and (
+                ground(reading, spacing, kinds, True).area_sqm + TOL_M >= asked):
+            unsure = ", ".join(names[i] for i in sorted(kinds.unknown))
             return Cell(Status.UNVERIFIED, measured, required,
-                        f"Counts only if {', '.join(unsure)} is greenery: the brief does not say "
-                        "what surface it has.")
+                        f"Counts only if {unsure} is open space of a kind the rule names: the "
+                        "brief does not state its use and surface.")
         return Cell(verdict(q.area_sqm + TOL_M >= asked), measured, required,
                     f"Taken out: {note}." if note else "")
 
     main = check_from(
-        run(ctx.rules, [STILT_IN_RULE_HEIGHT, MIXED_HEIGHT_SPACING, OPEN_SPACE_BASIS], cell),
+        run(ctx.rules, [STILT_IN_RULE_HEIGHT, MIXED_HEIGHT_SPACING, OPEN_SPACE_BASIS, *use_ids],
+            cell),
         family=Family.OPEN_SPACE, rule="Organized open space (tot-lot)",
         clause=rules.share.clause,
         note="The denominator of the 10% is not settled: it is evaluated under every reading.")
     agreement = _requirement_agreement(ctx)
     quantities = {"open_space_declared_sqm": sum(p.area for p in ctx.drawn.open_space)}
     for reading in ctx.stilt_readings:
-        counts = min(ground[(reading, s, counted[-1])].area_sqm
-                     for s in ctx.rules.readings(MIXED_HEIGHT_SPACING))
+        counts = min(ground(reading, s, kinds, bool(kinds.unknown)).area_sqm
+                     for s in ctx.rules.readings(MIXED_HEIGHT_SPACING) for kinds in uses.values())
         quantities[f"open_space_counting_sqm[{STILT_IN_RULE_HEIGHT}={reading}]"] = counts
     for basis, asked in requirements.items():
         quantities[f"open_space_required_sqm[{OPEN_SPACE_BASIS}={basis}]"] = asked
