@@ -1,10 +1,10 @@
 """The numbers the search reads from the rules and the brief, in one place.
 
-Every figure is the law's (ResolvedRules) or the firm's (DesignBrief); the search invents none. Where
-the rules leave a question open, the figure is the one that holds under every reading, which is the
-largest of the requirements and the strictest of the distances. A design margin raises a target above
-the legal minimum and is never taken for law: `margins` is what the search aims at, `legal` what the
-validator holds the layout to.
+Every figure is the law's (ResolvedRules) or the firm's (DesignBrief); the search invents none.
+Where the rules leave a question open, the figure is the one that holds under every reading, which
+is the largest of the requirements and the strictest of the distances. A design margin raises a
+target above the legal minimum and is never taken for law: `margins` is what the search aims at,
+`legal` what the validator holds the layout to.
 """
 
 from __future__ import annotations

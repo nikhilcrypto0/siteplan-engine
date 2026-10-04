@@ -4,8 +4,8 @@ It searches what the legacy generator fixes: the prototype and the floor count o
 direction the blocks run and where the columns start across the plot, the tallest block it allows
 (which sets the setback zone for the whole plot), and the profile of readings it builds for. The
 circulation is drawn from the blocks (network.py), never before them, and the open space, the club
-house, the ramp and the facilities take the ground the blocks and roads leave (ground.py), at one end
-of the plot kept for them when there is none to spare.
+house, the ramp and the facilities take the ground the blocks and roads leave (ground.py), at one
+end of the plot kept for them when there is none to spare.
 
 The search is staged so a run stays within the brief's time budget:
 
@@ -219,7 +219,7 @@ class FullSearchStrategy:
                ) -> list[Judged]:
         site, rules, brief = context.site, context.rules, context.brief
         drawn = []
-        for number, (profile, config, (ev, result)) in enumerate(laid, 1):
+        for number, (profile, _, (_, result)) in enumerate(laid, 1):
             candidate = build_candidate(
                 result, site=site, rules=rules, brief=brief, plot=run.plot, q=run.q,
                 profile=profile, envelope=run.envelope,
@@ -264,9 +264,11 @@ class FullSearchStrategy:
                        for p in selection.picks][:self.limits.per_profile_proposed]
         robust = [j for j in found if j.rests.holds_under_every_reading]
         if robust and not any(j.rests.holds_under_every_reading for j in chosen):
-            chosen.append(max(robust, key=lambda j: (j.scores.yield_score, j.candidate.candidate_id)))
+            chosen.append(max(robust, key=lambda j: (j.scores.yield_score,
+                                                     j.candidate.candidate_id)))
         unique = {j.candidate.candidate_id: j for j in chosen}
-        return sorted(unique.values(), key=lambda j: (-j.scores.yield_score, j.candidate.candidate_id))
+        return sorted(unique.values(),
+                      key=lambda j: (-j.scores.yield_score, j.candidate.candidate_id))
 
 
 def _guarded(step, run: Run, argument, failed=None):
