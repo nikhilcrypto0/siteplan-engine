@@ -4,6 +4,68 @@ A characterization test (tests/manifest.py) pins what the engine produces today.
 only together with a normative replacement test and an entry here: what changed, why, the
 evidence, and the test that now holds the behaviour. Newest first.
 
+## 2026-10-04: one reading of a compass side; the rule inventory scans every module
+
+No rule value changed and no characterization test changed. On the two real sites nothing moved:
+Dhulapally's access side is W and Suchitra's is not known, and every row `tests/search_compare.py`
+prints, LEGACY's and the full search's, is the same before and after. Held by normative tests:
+
+- **One reading of a compass side, `geometry.faces`.** The envelope's frontage (legal/frontage.py:
+  the access zones a gate may open in, the no-ramp front zone, the frontage strip), the full
+  search's setbacks (optimizer/search/land.py) and the validator's front (validator/zones.py) now
+  read a side one way, the validator's: a stretch faces a side when its outward normal is within
+  45 degrees of the side's bearing, a diagonal label (SW) 22.5 degrees more, the limit included.
+  The envelope read a strict 45 degrees for every label, so a diagonal label on a plot set square
+  to the compass faced no stretch at all (no access zone, so the full search had nowhere to put a
+  gate), on a plot turned off the compass it took one of the two stretches the validator holds to
+  the front, and a stretch exactly 45 degrees off a cardinal label was the validator's front and
+  not the envelope's. Only those cases change: the envelope's access zones, no-ramp front zone
+  and frontage strip now run along every stretch the validator holds to the front, and the search
+  may open its gate on any of them. The constants live once (`geometry.FACING_DEG`,
+  `geometry.DIAGONAL_SLOP_DEG`); the copies in legal.frontage, optimizer.search.land and
+  validator.zones are gone, and `angle_between` moved from validator.zones to geometry. The search
+  keeps its own doubt band (`FACING_DOUBT_DEG`): a stretch that would change sides if turned a
+  degree keeps the larger setback. tests/test_compass_side.py, for N, NE, E, SE, S, SW, W and NW
+  on a plot set square and on plots turned 10 and 45 degrees:
+  `test_the_envelopes_frontage_is_the_validators_front`,
+  `test_the_envelopes_access_zones_run_along_the_validators_front`,
+  `test_the_search_holds_the_validators_front_to_the_building_line`,
+  `test_a_diagonal_label_on_a_square_set_plot_takes_both_sides_it_lies_between` and
+  `test_a_stretch_within_a_degree_of_the_limit_keeps_the_larger_setback_in_the_search`. Run
+  against the code before, the envelope's three fail in exactly those 28 cases and the search's
+  two pass: its setbacks already read a side this way.
+- **The legacy readings stay as they were.** The legacy entrance (`access._faces`) and the
+  road-widening strip (`geometry.strip_along_side`, which places the net plot that the legacy
+  runner and the site model both start from) keep a strict 45 degrees for every label: calling
+  `faces` would widen both for a diagonal label and move the regression results and the net plot.
+- **The inventory's scans cover every module.** `test_inventory.py` looked for a rule marked not
+  applied in the top-level modules only, so `legal/`, `optimizer/`, `validator/`, `service/` and
+  any new package escaped it. Now every module under src/siteplan is scanned unless it is exempt
+  with its reason (rules.py, inventory.py, constraints.py), one added later in any package
+  included; every module that imports rules.py is scanned; and every value or clause of rules.py
+  that any module names has an entry.
+  `test_a_rule_marked_not_applied_is_used_nowhere_but_where_it_is_carried`,
+  `test_every_module_is_scanned_or_exempt_with_a_reason`,
+  `test_a_module_added_in_any_package_is_scanned_without_being_named`,
+  `test_the_scan_sees_every_way_of_importing_the_rules`,
+  `test_no_module_that_names_a_rule_escapes_the_inventory`.
+- **What the wider scan found, now said in the inventory as the code does it.** An entry may say
+  that a rule it marks not applied is still carried as data (`Entry.carried_in`; `siteplan
+  inventory` prints "not applied; carried in resolved rules"), and the scan allows the rule's
+  names there and nowhere else. The road-widening shortfall of rule 7(a)(iii) was listed as never
+  applied, but the resolver applies it: a site that surrenders land and falls short of 2,000 m²
+  by no more than 10% of it keeps its plot-size ground unmet but UNVERIFIED, so its high-rise
+  eligibility is UNVERIFIED rather than PROHIBITED (unless the road prohibits it); it is now
+  INTERPRETED and applied in the resolved rules, and the entry says the validator's own
+  plot-size check, the legacy checker, the height search and the floors calculator still hold
+  such a site to 2,000 m². Carried and reported, never applied: the electricity-line distances of
+  rule 3(c)(i) (ResolvedRules.electrical, which the validator reports UNVERIFIED wherever the
+  survey marks a line), the parking-floor clause of rule 7(xvi) (a source of the open stilt
+  reading) and the non-high-rise road-widening and TDR setback concessions
+  (ResolvedRules.setbacks.concessions, with a note that the engine does not apply them). The
+  tally is 24 as written, 14 interpreted, 3 assumed, 26 not modelled (13 interpreted and 27 not
+  modelled before).
+
 ## 2026-10-04: the production service (siteplan.service)
 
 No characterization test changed, and contracts stay at 1.2. Nothing the legacy path produces
