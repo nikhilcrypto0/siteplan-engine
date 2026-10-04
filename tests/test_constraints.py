@@ -65,6 +65,7 @@ EXEMPT = {
     "legal/debug_drawing": "rendering only: the envelope's debug drawing",
     "prototypes/__main__": "command-line plumbing for the prototype kit",
     "prototypes/draw": "rendering only: prototypes as DXF blocks",
+    "service/render": "rendering only: a candidate as DXF, sheet notes and SVG",
 }
 # Named numbers in audited modules that are no domain number: an ordering, a unit, a bearing, a
 # message's length. A new number belongs in constraints.py unless it is plainly one of these.
@@ -80,6 +81,17 @@ NOT_DOMAIN = {
     "validator.refusals.LIBRARY_MESSAGE_CHARS": "how much of a library's error a report keeps",
     "assistant.MAX_UNCLEAR": "how many unclear points of a brief the reply lists",
     "assistant.EXPLAIN_MAX_TOKENS": "the model's token allowance for an explanation",
+    # The service's requests: bounds on what a caller may send, never a figure of a layout.
+    "service.models.MAX_NAME_CHARS": "the longest file name a request may carry",
+    "service.models.MAX_BRIEF_CHARS": "the longest brief a request may carry, as the MCP caps it",
+    "service.models.MAX_ITEM_CHARS": "the longest acknowledged UNVERIFIED item",
+    "service.models.MAX_ITEMS": "how many UNVERIFIED items one export may acknowledge",
+    "service.models.MAX_COMPARED": "how many candidates one comparison takes",
+    "service.models.MAX_MIX_CATEGORIES": "how many flat categories a unit mix may name",
+    "service.models.MAX_FLOORS_ABOVE_STILT": "a sanity bound on a requested count, far above "
+                                             "the search's ceiling: the rules decide the height",
+    "service.models.RUN_ID_CHARS": "the length of a run's id",
+    "service.models.MAX_TEXT_CHARS": "how much text read off a drawing a reply returns",
 }
 # The request, standards and config models: each numeric default stands in for a choice, so
 # every one is classified, a 0 or a 1 included.
