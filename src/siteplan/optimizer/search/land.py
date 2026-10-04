@@ -14,21 +14,31 @@ the ring road that has to run round them. It is worked out for the configuration
 the plot, because the ring follows the blocks that are placed.
 
 Everything is in the survey's frame. A mitre join is used throughout: it is the validator's
-convention for the setback and the strip, and it is the stricter at a reflex corner.
+convention for the setback and the strip, and it is the stricter at a reflex corner. The one
+exception is a block's own land where its band holds the front apart (`setback_land`): that is
+measured as the validator measures a block, by its distance from each stretch of the plot line.
 """
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 
-from shapely.geometry import LineString, Polygon
+from shapely.geometry import LineString, MultiLineString, Polygon
 from shapely.geometry.base import BaseGeometry
+from shapely.geometry.polygon import orient
 from shapely.ops import unary_union
 
 from siteplan.contracts import BuildableEnvelope, CanonicalSiteModel
-from siteplan.geometry import opening, straight_runs
+from siteplan.geometry import COMPASS_DEG, opening, straight_runs
 
 EMPTY = Polygon()
+# A stretch of the plot line faces the access road within 45 degrees of it, a diagonal label half
+# a compass step more (the validator's reading, zones.faces); a stretch this near either limit
+# keeps the larger setback, so a hair of drawing never puts the smaller one on the wrong side.
+FACING_DEG = 45.0
+DIAGONAL_SLOP_DEG = 22.5
+FACING_DOUBT_DEG = 1.0
 
 
 def erode(geometry: BaseGeometry, distance_m: float) -> BaseGeometry:
@@ -102,6 +112,57 @@ def make_land(plot: Plot, *, zone_depth_m: float, strip_width_m: float, ring_wid
     roadable = net.difference(unary_union([g for g in taken if not g.is_empty])) \
         if any(not g.is_empty for g in taken) else net
     return Land(zone, strip, roadable, erode(roadable, ring_width_m), interior)
+
+
+def setback_land(plot: Plot, front_m: float, side_m: float) -> BaseGeometry:
+    """The ground a block keeping these setbacks stands on: at least `side_m` from every stretch
+    of the plot line and at least `front_m` from the stretches facing the access road (Table III's
+    Building Line), each measured as the distance from that stretch, which is how the validator
+    holds a block to them. Where the access side is not known, or no stretch faces it, the larger
+    figure is kept all round: never more lenient."""
+    if abs(front_m - side_m) < 1e-9 or plot.access_side is None:
+        return plot.net.difference(_within(plot.net.boundary, max(front_m, side_m)))
+    by_figure: dict[float, list[LineString]] = {}
+    for edge, bearing in _edges(plot.net):
+        by_figure.setdefault(_figure(bearing, plot.access_side, front_m, side_m), []).append(edge)
+    if front_m not in by_figure:  # nothing faces the road: the front cannot be placed
+        return plot.net.difference(_within(plot.net.boundary, max(front_m, side_m)))
+    zone = unary_union([_within(MultiLineString(edges), figure)
+                        for figure, edges in by_figure.items()])
+    return plot.net.difference(zone)
+
+
+def _within(lines: BaseGeometry, distance_m: float) -> BaseGeometry:
+    return lines.buffer(distance_m) if distance_m > 0 else EMPTY
+
+
+def _edges(net: Polygon) -> list[tuple[LineString, float]]:
+    """Every stretch of the plot line with the bearing its outward normal faces (0 north, 90
+    east)."""
+    out = []
+    oriented = orient(net, 1.0)
+    for ring in [oriented.exterior, *oriented.interiors]:
+        coords = list(ring.coords)
+        for a, b in zip(coords, coords[1:], strict=False):
+            dx, dy = b[0] - a[0], b[1] - a[1]
+            length = math.hypot(dx, dy)
+            if length > 1e-6:
+                out.append((LineString([a, b]), math.degrees(math.atan2(dy, -dx)) % 360))
+    return out
+
+
+def _figure(bearing_deg: float, side: str, front_m: float, side_m: float) -> float:
+    """The setback a stretch facing this bearing keeps: the front figure where it plainly faces
+    the access side, the side figure where it plainly does not, the larger where it is a hair
+    from the line between the two."""
+    centre = COMPASS_DEG[side]
+    reach = FACING_DEG + (DIAGONAL_SLOP_DEG if centre % 90 else 0.0)
+    off = abs((bearing_deg - centre + 180) % 360 - 180)
+    if off < reach - FACING_DOUBT_DEG:
+        return front_m
+    if off > reach + FACING_DOUBT_DEG:
+        return side_m
+    return max(front_m, side_m)
 
 
 def reserve_end(interior_turned: BaseGeometry, side: str, target_sqm: float, min_width_m: float

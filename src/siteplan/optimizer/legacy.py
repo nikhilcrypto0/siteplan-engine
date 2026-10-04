@@ -95,7 +95,8 @@ class LegacyStrategy:
         stilt = self.readings[STILT_IN_RULE_HEIGHT]
         floors = None
         if brief.height_intent.mode is not HeightMode.FIXED:
-            open_counts = feasible_floors(rules, brief, None, stilt)
+            open_counts = [option for option in feasible_floors(rules, brief, None, stilt)
+                           if not option.below_high_rise]  # it lays out high-rise blocks only
             if not open_counts:
                 return LegacyRun(Proposal(NAME, notes=(_no_count(rules, brief, stilt),)),
                                  None, None)
@@ -170,6 +171,7 @@ def _cannot_run(site: CanonicalSiteModel, intent: HeightIntent) -> str | None:
 
 def _no_count(rules: ResolvedRules, brief, stilt: str) -> str:
     first = next((check.reason for option in assess_floors(rules, brief, None, stilt)
+                  if not option.below_high_rise
                   for check in option.checks if check.holds_back), None)
     return (f"the law leaves no high-rise floor count open under the '{stilt}' reading of the "
             f"stilt, within the brief's height intent{': ' + first if first else ''}")
