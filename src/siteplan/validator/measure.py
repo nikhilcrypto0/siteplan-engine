@@ -31,6 +31,8 @@ LOW_GAP_RULE = ("G.O.168 rule 5(xiii), p.11: \"The space between 2 blocks shall 
 LOW_GAP_CLAUSE = ("G.O.168 rule 5(xiii) (the space between 2 blocks: the tallest block's side "
                   "setback)")
 
+HIGH_RISE_FRONT_NOTE = ("The front of a high-rise keeps the Table IV figure too, measured on the "
+                        "net plot.")
 # INTERIM (contracts 1.2): a band carries one setback, all round. Table III gives the Building Line
 # at the front apart from the setback on the other sides, which ResolvedRules cannot say yet.
 ALL_ROUND_NOTE = ("Held to the band's all-round figure, measured on the net plot. Table III's "
@@ -146,6 +148,15 @@ class HeightClass:
         """The clause of the band's own table: Table IV above the high-rise height, Table III
         (rule 5) below it; empty beyond the bands."""
         return self.band.clause if self.band is not None else ""
+
+    @property
+    def setback_note(self) -> str:
+        """What a check of this band's setback says about the front.
+
+        INTERIM (contracts 1.2): a band carries one setback, all round, so the front of a block
+        below the high-rise height is not judged apart from its other sides. This note and
+        `setback_m` are the one place that changes when a band carries the Building Line."""
+        return HIGH_RISE_FRONT_NOTE if self.high_rise else ALL_ROUND_NOTE
 
     @property
     def label(self) -> str:

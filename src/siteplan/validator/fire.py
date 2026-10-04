@@ -342,7 +342,8 @@ def low_block_check(ctx: Context) -> Check | None:
     fire, threshold = ctx.rules.fire, ctx.rules.height.high_rise_from_m.value
     names = []
     for t in below:
-        readings = [r for r in ctx.stilt_readings if t in ctx.low_rise(r)]
+        readings = [r for r in ctx.stilt_readings
+                    if t.name in {x.name for x in ctx.low_rise(r)}]
         names.append(t.name if len(readings) == len(ctx.stilt_readings)
                      else f"{t.name} (only if the stilt is {', '.join(readings)})")
     return plain(

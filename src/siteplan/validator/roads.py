@@ -249,7 +249,7 @@ def _served_check(ctx: Context, ground: Ground) -> Check | None:
     limit = circ.pathway_max_block_height_m.value
     tall = [t for t in ctx.towers if t.physical_height_m > limit]
     if not tall:
-        return None  # every block is up to 12 m: `_pathway_check` says what holds for them
+        return None  # every block is low enough for a pathway: `_pathway_check` says what holds
     roads = _ground_of(ctx, ground, *ROAD_KINDS)
     lane = _ground_of(ctx, ground, RoadKind.PERIMETER_LANE)
     required = f"every block above {limit:g} m on an internal road, not a pathway"

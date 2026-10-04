@@ -2,9 +2,9 @@
 lets ResolvedRules and the candidate say more. Each test names the one place in the validator that
 changes and what the test becomes once it does.
 
-  1. The front is not judged apart from the other sides  (validator/measure.py ALL_ROUND_NOTE, the
-     setback figure `HeightClass.setback_m`, used by blocks.setback_checks and the club house).
-     Needs `Band.front_setback_m`.
+  1. The front is not judged apart from the other sides  (validator/measure.py
+     `HeightClass.setback_m` and `setback_note`, read by blocks.setback_checks and the club
+     house). Needs `Band.front_setback_m`.
   2. A block up to 12 m on no road is UNVERIFIED  (validator/roads.py `_pathway_check`). Needs
      `RoadKind.PATHWAY` and `CirculationRules.pathway_width_m`.
   3. A low block's band is picked on the reading's own height  (validator/context.py `build`).

@@ -22,7 +22,6 @@ from siteplan.units import sqft_to_sqm
 from siteplan.validator.blocks import gap_cell, gap_clause
 from siteplan.validator.context import Context
 from siteplan.validator.measure import (
-    ALL_ROUND_NOTE,
     TOL_M,
     UNCONFIRMED_NOTE,
     HeightClass,
@@ -140,9 +139,9 @@ def club_setback_check(ctx: Context) -> Check | None:
     if not cls.high_rise:
         if not cls.confirmed:
             return plain(Family.SETBACK, rule, Status.UNVERIFIED, f"{gap:.2f} m", required,
-                         f"{cls.table}; {clause}", f"{ALL_ROUND_NOTE} {UNCONFIRMED_NOTE}")
+                         f"{cls.table}; {clause}", f"{cls.setback_note} {UNCONFIRMED_NOTE}")
         return plain(Family.SETBACK, rule, verdict(gap + TOL_M >= cls.setback_m),
-                     f"{gap:.2f} m", required, f"{cls.table}; {clause}", ALL_ROUND_NOTE)
+                     f"{gap:.2f} m", required, f"{cls.table}; {clause}", cls.setback_note)
     status = verdict(gap + TOL_M >= cls.setback_m)
     return plain(Family.SETBACK, rule, Status.UNVERIFIED if status is Status.PASS else status,
                  f"{gap:.2f} m", required, clause, TALL_CLUB_NOTE if status is Status.PASS else "")
