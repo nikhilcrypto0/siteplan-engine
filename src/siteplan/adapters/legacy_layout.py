@@ -40,6 +40,7 @@ ROAD_KINDS = {"main approach": RoadKind.APPROACH, "loop": RoadKind.LOOP,
               "pathway": RoadKind.PATHWAY}
 LEGACY_ROAD_NAMES = {kind: name for name, kind in ROAD_KINDS.items()}
 SLIVER_SQM = 0.01  # pieces smaller than this are drawing noise, not ground
+ON_GROUND_SHARE = 0.5  # a facility more than this much on a piece of ground stands on it
 # The ground a facility stands on, by the surface its library states. A surface nobody stated is
 # never read off the facility's name: its ground is entered as an amenity and tagged as unstated.
 GROUND_BY_SURFACE = {Surface.BUILT: PhysicalUse.OTHER_BUILT, Surface.HARD: PhysicalUse.HARD_AMENITY,
@@ -131,7 +132,7 @@ def partition(option: LayoutOption, plot: Polygon, keep_out: Polygon | None = No
         return stated[name].surface if name in stated else None
 
     def on(amenity, ground) -> bool:
-        return amenity.shape.intersection(ground).area > 0.5 * amenity.shape.area
+        return amenity.shape.intersection(ground).area > ON_GROUND_SHARE * amenity.shape.area
 
     groups: dict[PhysicalUse, list[tuple[str | None, Polygon, list[str]]]] = {
         use: [] for use in PARTITION_ORDER}
