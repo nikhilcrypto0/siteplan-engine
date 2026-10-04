@@ -2,6 +2,10 @@
 
 Each finding says what was measured, what the rule requires and which clause says so.
 When an input is missing the finding says so (UNVERIFIED) rather than guessing.
+
+LEGACY, not for judging production layouts: the prototype's checker, kept for regression
+comparison (the characterization tests, `siteplan check`, the cases). Production layouts are
+judged by the independent validator (`siteplan.validator`) through `siteplan.service`.
 """
 
 from __future__ import annotations

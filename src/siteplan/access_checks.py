@@ -6,6 +6,10 @@ Part 3 4.6, through rule 15(b)(iv)): 6 m of clear, motorable ground on every sid
 high-rise, room for the 9 m turn at every corner and every bend of the loop, a way in from the
 entrance to all of it, nothing parked or built in it. What the drawing cannot show, where the
 street leads, is UNVERIFIED until the architect says.
+
+LEGACY, not for judging production layouts: part of the prototype's checker, kept for
+regression comparison. Production layouts are judged by `siteplan.validator` through
+`siteplan.service`.
 """
 
 from __future__ import annotations
