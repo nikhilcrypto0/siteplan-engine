@@ -11,7 +11,7 @@ the plot, and the 45 t loading, which is a paving specification.
 
 A block below the high-rise height is not held to any of this. Rule 15(a)(i) holds it to the
 National Building Code's requirements other than heights and setbacks, which the resolved rules
-carry no figure for: `low_block_check` says so, as NOT_CHECKED, and judges nothing numeric.
+give no figure for: `low_block_check` says so, as NOT_CHECKED, and judges nothing numeric.
 """
 
 from __future__ import annotations
@@ -48,8 +48,8 @@ from siteplan.validator.zones import bearings_near, compass_name, faces
 
 # Rule 15(a)(i), read on page 20 of fixtures/rules/go168-2012.pdf (the 2012 text). Rule 15(b)(iv)
 # brings NBC's fire protection requirements to a high-rise alone; a building below that height is
-# held to the Code's requirements other than heights and setbacks, for which ResolvedRules carries
-# no figure.
+# held to the Code's requirements other than heights and setbacks, and the rule gives no figure
+# for what those ask of a fire vehicle's access.
 LOW_FIRE_RULE = ("G.O.168 rule 15(a)(i), p.20: \"The building requirements and standards other "
                  "than heights and setbacks specified in the National Building Code - 2005 shall "
                  "be complied with.\"")
@@ -80,8 +80,8 @@ def _below_note(ctx: Context) -> str:
     """Said where a high-rise fire check meets a block that is not one under a reading."""
     return (f"Below {ctx.rules.height.high_rise_from_m.value:g} m the high-rise fire lanes do not "
             f"apply (they are rule 15(b)(iv)'s, for high-rise buildings). {LOW_FIRE_RULE} The "
-            "resolved rules carry no value for what that asks of a fire vehicle's access, so "
-            "nothing numeric is judged here.")
+            "rule gives no figure for what that asks of a fire vehicle's access, so nothing "
+            "numeric is judged here.")
 
 
 def _no_layout(ctx: Context) -> Check:
@@ -329,13 +329,10 @@ def loading_check(ctx: Context) -> Check:
 def low_block_check(ctx: Context) -> Check | None:
     """What a block below the high-rise height is held to, said for each block that is below it
     under any reading of the stilt: not the high-rise lanes, but rule 15(a)(i)'s National Building
-    Code requirements other than heights and setbacks. The resolved rules carry no figure for
-    what those ask of fire access, so nothing numeric is judged: NOT_CHECKED, listed beside the
-    verdict, never PASS. Where the block stands is judged by its band, and how it is reached by
-    rule 8(l).
-
-    INTERIM (contracts 1.2): this is the one place that changes when ResolvedRules carries a
-    figure for a low block's fire access."""
+    Code requirements other than heights and setbacks. The rule gives no figure for what those ask
+    of fire access, so nothing numeric is judged: NOT_CHECKED, listed beside the verdict, never
+    PASS. Where the block stands is judged by its band, and how it is reached by rule 8(l). Were a
+    figure ever carried, this is the one check that would change."""
     below = ctx.low_rise_anywhere()
     if not below:
         return None
@@ -354,9 +351,9 @@ def low_block_check(ctx: Context) -> Check | None:
         "entrance)",
         "the National Building Code's requirements and standards other than heights and "
         "setbacks", LOW_FIRE_CLAUSE,
-        f"{LOW_FIRE_RULE} The resolved rules carry no value for what that asks of a fire "
-        "vehicle's access, so nothing numeric is judged here. Where the block stands is judged "
-        "by its band's setback and gap, and how it is reached by rule 8(l).")
+        f"{LOW_FIRE_RULE} The rule gives no figure for what that asks of a fire vehicle's "
+        "access, so nothing numeric is judged here. Where the block stands is judged by its "
+        "band's setback and gap, and how it is reached by rule 8(l).")
 
 
 def fire_checks(ctx: Context, ground: Ground) -> list[Check]:
