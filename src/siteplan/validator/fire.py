@@ -8,6 +8,10 @@ radii in the rules; the generator's fire lanes are only ground the candidate say
 
 What a drawing cannot show stays UNVERIFIED: where the street leads, whether the road ends at
 the plot, and the 45 t loading, which is a paving specification.
+
+A block below the high-rise height is not held to any of this. Rule 15(a)(i) holds it to the
+National Building Code's requirements other than heights and setbacks, which the resolved rules
+carry no figure for: `low_block_check` says so, as NOT_CHECKED, and judges nothing numeric.
 """
 
 from __future__ import annotations
