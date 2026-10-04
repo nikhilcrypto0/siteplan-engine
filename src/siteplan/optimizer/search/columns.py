@@ -32,7 +32,8 @@ GAP_SLACK_M = 0.0  # a gap is exactly the figure asked; the grid only ever round
 
 
 def ground_key(cls: FloorClass) -> float:
-    """What a floor count asks of the ground: its setback. Counts that ask the same share stretches."""
+    """What a floor count asks of the ground: its setback. Counts that ask the same share
+    stretches."""
     return cls.setback_m
 
 

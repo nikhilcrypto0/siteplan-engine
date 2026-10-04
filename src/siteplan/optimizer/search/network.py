@@ -25,13 +25,14 @@ from __future__ import annotations
 import math
 from collections.abc import Sequence
 from dataclasses import dataclass
+from functools import partial
 
 from shapely.geometry import LineString, Point, Polygon, box
 from shapely.geometry.base import BaseGeometry
 from shapely.ops import unary_union
 
-from siteplan.optimizer.search.columns import Standing
 from siteplan.geometry import opening
+from siteplan.optimizer.search.columns import Standing
 from siteplan.optimizer.search.frame import Frame
 from siteplan.optimizer.search.land import EMPTY, Land, Plot, grow, polygons
 
@@ -159,16 +160,20 @@ def fit_cluster(standing: Sequence[Standing], frame: Frame, street_m: float, lan
             return current, street_pieces(current, frame, street_m, cluster.hull), cluster, ""
         if len(current) == 1:
             break
-
-        def off_without(i: int) -> tuple[float, float]:
-            rest = current[:i] + current[i + 1:]
-            kept = [frame.to_survey(box(s.x0, s.y0, s.x1, s.y1)) for s in rest]
-            hull = _hull_of([*kept, *street_pieces(rest, frame, street_m)])
-            return (_violation(hull, land, ring_width_m), value[id(current[i])])
-
-        drop = min(range(len(current)), key=off_without)
+        cost = partial(_cost_of_dropping, current, frame, street_m, land, ring_width_m, value)
+        drop = min(range(len(current)), key=cost)
         current = current[:drop] + current[drop + 1:]
     return [], [], None, why
+
+
+def _cost_of_dropping(current: Sequence[Standing], frame: Frame, street_m: float, land: Land,
+                      ring_width_m: float, value: dict[int, float], i: int
+                      ) -> tuple[float, float]:
+    """What is still off the ground with block `i` gone, and then what the block was worth."""
+    rest = [*current[:i], *current[i + 1:]]
+    kept = [frame.to_survey(box(s.x0, s.y0, s.x1, s.y1)) for s in rest]
+    hull = _hull_of([*kept, *street_pieces(rest, frame, street_m)])
+    return (_violation(hull, land, ring_width_m), value[id(current[i])])
 
 
 @dataclass(frozen=True)

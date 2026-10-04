@@ -32,8 +32,8 @@ from siteplan.contracts.common import Basis, Provenance, Shape, Surface, shapes_
 from siteplan.contracts.resolved_rules import STILT_IN_RULE_HEIGHT
 from siteplan.optimizer.objective import mix_error
 from siteplan.optimizer.search.columns import Standing
-from siteplan.optimizer.search.frame import Frame
 from siteplan.optimizer.search.fit import pockets_in
+from siteplan.optimizer.search.frame import Frame
 from siteplan.optimizer.search.ground import PlacedFacility, Zones, gap_zones
 from siteplan.optimizer.search.land import EMPTY, Land, Plot, erode, grow, polygons
 from siteplan.optimizer.search.network import Entrance
@@ -57,7 +57,8 @@ ENGINE = {"basis": Basis.ENGINE_DESIGN_ASSUMPTION, "status": Provenance.ASSUMED_
 
 @dataclass(frozen=True)
 class Placement:
-    """A block as the contract places it: where its prototype's origin stands and how it is turned."""
+    """A block as the contract places it: where its prototype's origin stands and how it is
+    turned."""
 
     standing: Standing
     name: str
@@ -156,7 +157,8 @@ def build_candidate(laid: Laid, *, site: CanonicalSiteModel, rules: ResolvedRule
     roads = _roads(laid, q)
     gate = {"shape": Shape.from_shapely(laid.entrance.gate), "side": laid.entrance.side,
             "width_m": laid.entrance.width_m,
-            "note": "the entrance on the access side with the shortest approach clear of the blocks"}
+            "note": "the entrance on the access side with the shortest approach clear of the "
+                    "blocks"}
     program = {
         "open_space": [Shape.from_shapely(p) for p in laid.pockets],
         "green_strip": shapes_from(laid.strip),
@@ -198,7 +200,8 @@ def _roads(laid: Laid, q: Quantities) -> list[dict]:
     roads += [{"id": f"street-{i}", "kind": "INTERNAL", "shapes": shapes_from(s),
                "declared_width_m": q.road_m, "tags": ["FIRE_ACCESS"]}
               for i, s in enumerate(laid.streets, 1)]
-    roads.append({"id": "approach", "kind": "APPROACH", "shapes": shapes_from(laid.entrance.approach),
+    roads.append({"id": "approach", "kind": "APPROACH",
+                  "shapes": shapes_from(laid.entrance.approach),
                   "declared_width_m": laid.entrance.width_m, "tags": ["FIRE_ACCESS"]})
     return [r for r in roads if r["shapes"]]
 
@@ -222,8 +225,8 @@ def _claims(laid: Laid, plot: Plot, q: Quantities
         claims[PhysicalUse.FIRE_HARDSTANDING].append(("fire lanes", laid.lanes, fire))
     pockets = unary_union(laid.pockets) if laid.pockets else EMPTY
     on_pockets = [f for f in laid.facilities
-                  if not pockets.is_empty and f.shape.intersection(pockets).area > 0.5 * f.shape.area
-                  and f.request.surface is Surface.SOFT]
+                  if not pockets.is_empty and f.request.surface is Surface.SOFT
+                  and f.shape.intersection(pockets).area > 0.5 * f.shape.area]
     for f in laid.facilities:
         if f in on_pockets:
             continue

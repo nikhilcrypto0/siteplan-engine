@@ -1,10 +1,11 @@
-"""The full search as a strategy: what it proposes, and what it says of what it proposes (stream C2).
+"""The full search as a strategy: what it proposes, and what it says of what it proposes (C2).
 
 Everything runs on made-up land (search_support.py) through the real independent validator. The
-acceptance criteria of docs/ARCHITECTURE.md section 6, "C2 Full search", each have a test here or in
-test_search_columns.py and test_search_network.py: mixed heights (a part of the site that suits only a
-lower band; a block lowered to let another stand; the legal maximum never meaning every block at it),
-circulation generated with the blocks, nothing the validator fails offered, the margins aimed at
+acceptance criteria of docs/ARCHITECTURE.md section 6, "C2 Full search", each have a test here or
+in test_search_columns.py and test_search_network.py: mixed heights (a part of the site that suits
+only a lower band; a block lowered to let another stand; the legal maximum never meaning every
+block at it), circulation generated with the blocks, nothing the validator fails offered, the
+margins aimed at
 when set and reported when missed, both readings of circulation inside the setback, every option
 stating its UNVERIFIED items and the readings they rest on, and alternatives that hold under every
 reading beside the ones that rest on a reading.
@@ -13,7 +14,15 @@ reading beside the ones that rest on a reading.
 import re
 
 from optimizer_support import Clock
-from search_support import FAST, Made, made_up, margin, proposal_on_the_rectangle, rectangle, strategy
+from search_support import (
+    FAST,
+    Made,
+    made_up,
+    margin,
+    proposal_on_the_rectangle,
+    rectangle,
+    strategy,
+)
 from shapely.geometry import LineString, Polygon, box
 from shapely.ops import unary_union
 

@@ -51,8 +51,9 @@ def fit_rectangle(room: BaseGeometry, width_m: float, depth_m: float, turns_deg:
                 continue
             cx, cy = x0[fits] + width_m / 2, y0[fits] + depth_m / 2
             radians = math.radians(turn)
-            ux = origin.x + (cx - origin.x) * math.cos(radians) - (cy - origin.y) * math.sin(radians)
-            uy = origin.y + (cx - origin.x) * math.sin(radians) + (cy - origin.y) * math.cos(radians)
+            dx, dy = cx - origin.x, cy - origin.y
+            ux = origin.x + dx * math.cos(radians) - dy * math.sin(radians)
+            uy = origin.y + dx * math.sin(radians) + dy * math.cos(radians)
             scores = np.hypot(ux - anchor.x, uy - anchor.y) if anchor is not None else np.zeros(
                 len(ux))
             pick = int(np.argmin(scores))
@@ -73,7 +74,11 @@ def pockets_in(room: BaseGeometry, min_width_m: float, min_sqm: float) -> list[P
     width is taken a hair over, so a piece never measures a hair under."""
     if room.is_empty:
         return []
-    usable = opening(room, min_width_m + 2 * EPS_M).intersection(room)
+    # GEOS raises a floating-point flag on a mitre round a sliver of ground (a corner with no
+    # width); numpy turns that into a warning although the piece it returns is sound, and the
+    # validator measures every pocket again, so the flag is left unreported here.
+    with np.errstate(divide="ignore", invalid="ignore"):
+        usable = opening(room, min_width_m + 2 * EPS_M).intersection(room)
     return [p for p in polygons(usable) if p.area >= min_sqm + EPS_M]
 
 

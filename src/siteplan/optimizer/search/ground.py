@@ -2,15 +2,15 @@
 
 Open space, the club house, the cellar ramp and the facilities are each placed in ground that the
 rule layers permit it, in the order an architect would give it out: the club house, which is a
-building of its own and keeps a Table IV gap from every block; the ramp, which has its top on a road;
-then the open space, in the biggest pieces of what is left. Ground that none of them may use is
-named: the setback zone (nothing but circulation, under the reading that allows it, and the planted
-strip), the clear ground round every block (6 m of lane and the room to turn at each corner), the
-ground between two blocks closer than the gap to both, the roads and the water buffer.
+building of its own and keeps a Table IV gap from every block; the ramp, which has its top on a
+road; then the open space, in the biggest pieces of what is left. Ground that none of them may use
+is named: the setback zone (nothing but circulation, under the reading that allows it, and the
+planted strip), the clear ground round every block (6 m of lane and the room to turn at each
+corner), the ground between two blocks closer than the gap to both, the roads and the water buffer.
 
-Everything is measured the way the validator measures it, so a layout built here meets the rule it is
-built for: the open space is counted only beyond the setback zone, the gaps and the clear ground, in
-pieces 3 m wide and 50 m² at least.
+Everything is measured the way the validator measures it, so a layout built here meets the rule it
+is built for: the open space is counted only beyond the setback zone, the gaps and the clear
+ground, in pieces 3 m wide and 50 m² at least.
 """
 
 from __future__ import annotations
@@ -24,8 +24,8 @@ from shapely.geometry.base import BaseGeometry
 from shapely.ops import unary_union
 
 from siteplan.contracts import ResolvedRules
-from siteplan.contracts.design_brief import AmenityRequest, AmenitySetting
 from siteplan.contracts.common import Surface
+from siteplan.contracts.design_brief import AmenityRequest, AmenitySetting
 from siteplan.optimizer.search.fit import choose_pockets, fit_rectangle
 from siteplan.optimizer.search.land import EMPTY, Land, Plot, grow, polygons
 from siteplan.optimizer.search.quantities import Quantities

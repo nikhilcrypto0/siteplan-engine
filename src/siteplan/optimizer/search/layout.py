@@ -2,12 +2,12 @@
 
 A configuration is a profile (the readings it is built for), a direction for the blocks, where the
 columns start across the plot, the tallest floor count it allows and, when the plot has no room to
-spare, the end of the plot kept for the open space. `evaluate` is the cheap half: it places the blocks
-in columns (columns.py) on the ground their heights allow and says what they add. `lay_out` is the
-exact half: it draws the streets and the ring road from the blocks that stand, finds the entrance,
-and gives the club house, the ramp, the open space and the facilities their ground, the cellars
-their levels. A configuration whose ground cannot give one of them what the rules ask is not laid:
-it returns why, and nothing is built over the shortfall.
+spare, the end of the plot kept for the open space. `evaluate` is the cheap half: it places the
+blocks in columns (columns.py) on the ground their heights allow and says what they add. `lay_out`
+is the exact half: it draws the streets and the ring road from the blocks that stand, finds the
+entrance, and gives the club house, the ramp, the open space and the facilities their ground, the
+cellars their levels. A configuration whose ground cannot give one of them what the rules ask is
+not laid: it returns why, and nothing is built over the shortfall.
 """
 
 from __future__ import annotations
@@ -46,7 +46,6 @@ from siteplan.optimizer.search.land import (
     grow,
     make_land,
     plot_of,
-    polygons,
     reserve_end,
 )
 from siteplan.optimizer.search.parking_plan import plan_parking, ramp_length_m
@@ -166,7 +165,8 @@ def evaluate(run: Run, config: Config) -> Evaluation | Failure:
             return Failure("the plot has no end with room for the open space")
         kept_clear = frame.to_survey(region)
     land = make_land(plot, zone_depth_m=zone_depth, strip_width_m=strip_width,
-                     ring_width_m=q.road_m, roads_may_use_setback=config.profile.roads_may_use_setback,
+                     ring_width_m=q.road_m,
+                     roads_may_use_setback=config.profile.roads_may_use_setback,
                      kept_clear=kept_clear)
     if land.cluster_land.is_empty:
         return Failure("the ring road leaves no ground for a block")
@@ -215,7 +215,7 @@ def _columns(run: Run, config: Config, frame: Frame, land: Land, choices: list[C
     return best
 
 
-# --- The exact half: the roads, the club house, the ramp, the open space ---------------------------
+# --- The exact half: the roads, the club house, the ramp, the open space -------------------------
 
 
 def lay_out(run: Run, ev: Evaluation) -> tuple[Laid | None, str]:
@@ -226,7 +226,8 @@ def lay_out(run: Run, ev: Evaluation) -> tuple[Laid | None, str]:
     gaps = [p.standing.choice.cls.gap_m for p in placements]
     blocks = unary_union(footprints)
     blocked = unary_union([blocks, ev.kept_clear]) if ev.kept_clear is not None else blocks
-    entrance, why = network.find_entrance(plot, cluster, blocked, q.approach_m, land_strip(land, q))
+    entrance, why = network.find_entrance(plot, cluster, blocked, q.approach_m,
+                                          land_strip(land, q))
     if entrance is None:
         return None, why
     roads = unary_union([cluster.ring, *streets, entrance.approach])
@@ -241,7 +242,8 @@ def lay_out(run: Run, ev: Evaluation) -> tuple[Laid | None, str]:
     off = turns.difference(plot.net).area + turns.intersection(
         unary_union([land.strip, plot.excluded])).area
     if off > network.RING_CLIP_SQM:
-        return None, f"a turn of the ring road lies off the plot, on the strip or in the water ({off:,.0f} m²)"
+        return None, (f"a turn of the ring road lies off the plot, on the strip or in the water "
+                      f"({off:,.0f} m²)")
     zones = ground.zones_of(footprints, gaps, roads, lanes, q.reach_m, turns)
     open_land = ground.open_ground(plot, land, zones)
     buildable = ground.buildable_ground(plot, open_land)
@@ -249,9 +251,10 @@ def lay_out(run: Run, ev: Evaluation) -> tuple[Laid | None, str]:
     tower_sqm = sum(p.footprint.area * p.standing.choice.cls.floors for p in placements)
     units = sum(p.standing.choice.prototype.per_floor.flats * p.standing.choice.cls.floors
                 for p in placements)
-    turns = [frame.angle_deg]
+    angles = [frame.angle_deg]
     anchor = entrance.gate.centroid
-    club, club_floors, why = _club(run, buildable, zones, placements, tower_sqm, units, turns, anchor)
+    club, club_floors, why = _club(run, buildable, zones, placements, tower_sqm, units, angles,
+                                   anchor)
     if why:
         return None, why
     club_sqm = club.area * club_floors if club is not None else 0.0
@@ -277,11 +280,11 @@ def lay_out(run: Run, ev: Evaluation) -> tuple[Laid | None, str]:
     pocket_room = open_land.difference(unary_union(keep_off)) if keep_off else open_land
     pockets, total = ground.choose_open_space(pocket_room, q, frame.angle_deg)
     if total + 1e-6 < q.open_space_sqm:
-        return None, (f"open space: {total:,.0f} m² of pockets 3 m wide, {q.open_space_sqm:,.0f} m² "
-                      "needed")
+        return None, (f"open space: {total:,.0f} m² of pockets 3 m wide, "
+                      f"{q.open_space_sqm:,.0f} m² needed")
     room = buildable.difference(unary_union(keep_off)) if keep_off else buildable
     facilities, missed = ground.place_facilities(brief.program.amenities, rules, pockets, room,
-                                                 club, turns, club.centroid if club else anchor)
+                                                 club, angles, club.centroid if club else anchor)
     strip = land.strip.difference(unary_union([entrance.gate, entrance.approach.buffer(0.01)])) \
         if not land.strip.is_empty else EMPTY
     laid = Laid(

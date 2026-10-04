@@ -2,10 +2,10 @@
 
 NBC asks a 6 m lane and a turning radius of 9 m and does not say where the 9 m is measured, so the
 rules keep two readings: the lane's outer edge turns on 9 m (its inner edge on 3 m), or its
-centreline does (inner edge 6 m, outer edge 12 m). A lane going round a block's corner keeps its inner
-edge on the corner and sweeps an annular sector about a centre on the corner's bisector. A lane at a
-convex bend of a road's outer wall keeps its outer edge on both walls; at a reflex bend the lane goes
-round the step as it would round a block.
+centreline does (inner edge 6 m, outer edge 12 m). A lane going round a block's corner keeps its
+inner edge on the corner and sweeps an annular sector about a centre on the corner's bisector. A
+lane at a convex bend of a road's outer wall keeps its outer edge on both walls; at a reflex bend
+the lane goes round the step as it would round a block.
 
 The sector is ground that must stay clear: nothing built, parked or laid out on it, and it must lie
 on the plot. The ring road's bends are worked out here so that nothing is placed on them; the
