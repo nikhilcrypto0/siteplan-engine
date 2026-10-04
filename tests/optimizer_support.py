@@ -214,3 +214,19 @@ class Scripted:
             candidate_ref=digest(candidate), site_ref=digest(site), rules_ref=digest(rules),
             brief_ref=digest(brief), validator_version="scripted test validator", legal=legal,
             verdict={"legal": legal_verdict(legal, []), "program": ProgramVerdict.MET})
+
+
+class Claims:
+    """A test validator whose verdict is the candidate's own claims (FAIL when a claim fails),
+    for tests of the optimizer's mechanics on made-up blocks. The optimizer's real validator
+    (siteplan.validator) judges such blocks, with no roads or open space, as the illegal layouts
+    they are, so it cannot stand in for a verdict the test needs to set."""
+
+    def validate(self, site, rules, brief, candidate, envelope=None) -> ValidationReport:
+        legal = [Check(family=Family.OTHER, finding=claim) for claim in candidate.generator_claims]
+        legal = legal or [Check(family=Family.OTHER, finding=Finding(
+            "No claim", Status.PASS, "none", "none", "made-up test validator"))]
+        return ValidationReport(
+            candidate_ref=digest(candidate), site_ref=digest(site), rules_ref=digest(rules),
+            brief_ref=digest(brief), validator_version="claims test validator", legal=legal,
+            verdict={"legal": legal_verdict(legal, []), "program": ProgramVerdict.MET})

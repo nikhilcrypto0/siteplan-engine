@@ -21,6 +21,7 @@ from collections import Counter
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
+from siteplan import validator as independent
 from siteplan.contracts import (
     BuildableEnvelope,
     CandidateLayout,
@@ -33,7 +34,6 @@ from siteplan.contracts import (
 from siteplan.contracts.design_brief import ParetoPoint, UnitsMode
 from siteplan.optimizer.guard import Rejection, guard, inputs_of, why_refused
 from siteplan.optimizer.interfaces import Budget, SearchContext, Strategy, Validator
-from siteplan.optimizer.interim import InterimValidator
 from siteplan.optimizer.objective import measure
 from siteplan.optimizer.pareto import Scored, select
 
@@ -63,7 +63,10 @@ def optimize(site: CanonicalSiteModel, rules: ResolvedRules, brief: DesignBrief,
              envelope: BuildableEnvelope | None = None,
              prototypes: Sequence[TowerPrototype] = (), seed: int = 0,
              clock: Callable[[], float] = time.monotonic) -> OptimizerResult:
-    validator = validator or InterimValidator()
+    # Stream D's independent validator (siteplan.validator.validate) unless one is given: it
+    # judges every candidate from the site, the rules and the brief, never from the generator's
+    # own claims.
+    validator = validator or independent
     budget = Budget(brief.objectives.search_budget_s, clock)
     context = SearchContext(site, rules, brief, envelope, tuple(prototypes), seed, budget)
     notes: list[str] = []
