@@ -390,7 +390,8 @@ INVENTORY: tuple[Entry, ...] = (
         f"{rules.FIRE_TENDER_MIN_WIDTH_M:g} m on all sides; a {rules.FIRE_TURNING_RADIUS_M:g} m "
         "turn at every corner and every bend; 45 t",
         rules.FIRE_ACCESS_CLAUSE, Reading.INTERPRETED, _BOTH,
-        ("FIRE_TENDER_MIN_WIDTH_M", "FIRE_TURNING_RADIUS_M", "FIRE_ACCESS_CLAUSE"),
+        ("FIRE_TENDER_MIN_WIDTH_M", "FIRE_TENDER_LOAD_T", "FIRE_TURNING_RADIUS_M",
+         "FIRE_ACCESS_CLAUSE"),
         choice="Every high-rise keeps 6.88 m of clear, motorable ground on every side, a road or "
                "a fire lane, which is what a 6 m lane needs to turn round a square corner on our "
                "reading of the 9 m; the order gives the 9 m and the 6 m, never the 6.88 m. The "
@@ -431,6 +432,23 @@ INVENTORY: tuple[Entry, ...] = (
                "drawing.",
         settles="The visitors' parking on a sanctioned plan: marked in the stilt or only in "
                 "the open.",
+    ),
+    Entry(
+        "Parking", "Visitors' parking may be accommodated in the mandatory side and rear "
+                   "setbacks.",
+        "where such a setback is more than 6 m, the green strip left out; never the front "
+        "setback, never where setback was transferred", rules.VISITOR_PARKING_CLAUSE,
+        Reading.NOT_MODELLED,
+        choice="Read on 2026-10-03 on p.19 of the 2012 text: rule 13(c)(xii) lets visitors' "
+               "parking use the mandatory setbacks other than the front one where they are more "
+               "than 6 m wide, the green strip excluded. The engine never uses it: every bay "
+               "stays out of every setback, which is also what NBC 4.6(c) asks of a high-rise "
+               "('The compulsory open spaces around the building shall not be used for "
+               "parking'). ResolvedRules carries it as the open reading "
+               "visitor_parking_in_setback, so a layout that used the allowance is judged "
+               "against both.",
+        settles="A sanctioned high-rise plan with visitors' bays in a side or rear setback, or "
+                "the fire department's reading.",
     ),
     Entry(
         "Parking", "Cellar ramps.",
@@ -519,6 +537,18 @@ INVENTORY: tuple[Entry, ...] = (
                "block above the cap UNVERIFIED.",
         settles="The amenities area on a sanctioned plan of 100 units or more, against its "
                 "built-up area.",
+    ),
+    Entry(
+        "Amenities", "In a very large project, common amenities take a share of the site area.",
+        f"{rules.LARGE_PROJECT_AMENITY_SHARE_OF_SITE:.0%} of the site area, in projects of more "
+        f"than {rules.LARGE_PROJECT_FROM_ACRES:g} acres",
+        rules.LARGE_PROJECT_AMENITY_CLAUSE, Reading.NOT_MODELLED,
+        uses=("LARGE_PROJECT_FROM_ACRES", "LARGE_PROJECT_AMENITY_SHARE_OF_SITE",
+              "LARGE_PROJECT_AMENITY_CLAUSE"),
+        choice="Read on 2026-10-03 on p.16 of the 2012 text, where it stands under row housing "
+               "(rule 9(o)) and cluster housing (rule 10(i)). Rule 8, group development, has no "
+               "such clause, so it is not applied to a group scheme, whose amenities are rule "
+               "15(a)(x)'s. Carried in ResolvedRules as an open reading.",
     ),
     # Handover, fees and options
     Entry(
