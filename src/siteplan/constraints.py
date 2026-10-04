@@ -35,6 +35,7 @@ from siteplan import (
     access_checks,
     checks,
     flat_import,
+    geometry,
     grounds,
     intake,
     layout,
@@ -224,22 +225,24 @@ REGISTRY: tuple[Constraint, ...] = (
         "Setbacks", "Which stretches of the plot line face the access road, where a block's band "
                     "keeps its Building Line apart from its side setback (the full search and "
                     "the validator), and where the envelope lets a gate open.",
-        f"a stretch whose outward side is within {search_land.FACING_DEG:g} degrees of the access "
-        f"side ({search_land.FACING_DEG + search_land.DIAGONAL_SLOP_DEG:g} for a diagonal label "
-        f"such as SW); within {search_land.FACING_DOUBT_DEG:g} degree of either limit the larger "
-        f"of the two setbacks is kept; the envelope's frontage takes "
-        f"{frontage.FACING_TOLERANCE_DEG:g} degrees for every label",
+        f"a stretch whose outward side is within {geometry.FACING_DEG:g} degrees of the access "
+        f"side ({geometry.FACING_DEG + geometry.DIAGONAL_SLOP_DEG:g} for a diagonal label such "
+        f"as SW), the limit included; in the full search, within "
+        f"{search_land.FACING_DOUBT_DEG:g} degree of either limit the larger of the two "
+        "setbacks is kept",
         Basis.ENGINE_DESIGN_ASSUMPTION,
-        "none (optimizer.search.land.setback_land, validator.zones.faces, legal.frontage)",
-        ("optimizer.search.land.FACING_DEG", "optimizer.search.land.DIAGONAL_SLOP_DEG",
-         "optimizer.search.land.FACING_DOUBT_DEG", "validator.zones.FRONT_SECTOR_DEG",
-         "validator.zones.DIAGONAL_SLOP_DEG", "legal.frontage.FACING_TOLERANCE_DEG"),
-        note="The validator's reading of a frontage (a diagonal label stands for either side it "
-             "lies between), which it keeps in its own copy; where the access side is not known "
-             "the larger figure is kept all round. The envelope's frontage (legal.frontage: the "
-             "access zones a gate may open in, the front zone and the frontage strip) has no "
-             "diagonal reach, like the legacy entrance (access._faces), so for a diagonal label "
-             "it takes in fewer stretches than the validator does.",
+        "none (geometry.faces, read by legal.frontage, optimizer.search.land.setback_land and "
+        "validator.zones)",
+        ("geometry.FACING_DEG", "geometry.DIAGONAL_SLOP_DEG",
+         "optimizer.search.land.FACING_DOUBT_DEG"),
+        note="One reading, in one place: the envelope's frontage (the access zones a gate may "
+             "open in, the front zone and the frontage strip), the full search's setbacks and "
+             "the validator's front all take it, so a diagonal label stands for either side it "
+             "lies between everywhere; where the access side is not known the larger figure is "
+             "kept all round. The legacy entrance (access._faces) and the road-widening strip "
+             "(geometry.strip_along_side, which places the net plot itself) keep a strict 45 "
+             "degrees for every label, so neither the regression results nor the net plot "
+             "move.",
         settles="The architect's word on which edge is the frontage, or a sanctioned plan.",
     ),
     Constraint(

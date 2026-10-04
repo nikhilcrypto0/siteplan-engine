@@ -2,7 +2,9 @@
 
 The values are read from `rules.py`, so changing a constant there changes this list. How each
 rule was read is written beside it by hand, and `tests/test_inventory.py` fails when a clause in
-`rules.py` has no entry here, or an entry says a module applies a rule that module never uses.
+`rules.py` has no entry here, when an entry says a module applies a rule that module never uses,
+or when any module, in any package, names a rule its entry says is not applied, outside the
+places the entry says carry it as data.
 
 This is the list the firm reviews. INTERPRETED and ASSUMED entries are where our reading could
 be wrong, and each names the evidence that would settle it: usually a sanctioned plan.
@@ -45,6 +47,9 @@ class Entry:
     uses: tuple[str, ...] = ()  # the names in rules.py this entry reports on
     choice: str = ""
     settles: str = ""
+    # Where a rule that is not applied is still carried as data and reported (a value in
+    # ResolvedRules, a clause cited as a source), with nothing decided by it.
+    carried_in: tuple[Where, ...] = ()
 
 
 def _road_widths() -> str:
@@ -80,6 +85,8 @@ def _table_iii_heights() -> str:
 _BOTH = (Where.CHECKER, Where.LAYOUT)
 _TDR_LOW, _TDR_HIGH = rules.TDR_BAND_M
 _TDR_SMALL, _TDR_LARGE = rules.TDR_PLOT_RANGE_SQM
+# The smallest net plot the resolver leaves UNVERIFIED rather than short (rule 7(a)(iii)).
+_NEAR_MISS_SQM = rules.MIN_HIGH_RISE_PLOT_SQM * (1 - rules.ROAD_WIDENING_SHORTFALL_ALLOWANCE)
 
 INVENTORY: tuple[Entry, ...] = (
     # Height
@@ -108,10 +115,13 @@ INVENTORY: tuple[Entry, ...] = (
         "Height", "Parking floors above the ground floor are left out of the height that picks "
                   "the Table IV row.",
         "left out of the height", rules.PARKING_FLOOR_HEIGHT_CLAUSE, Reading.NOT_MODELLED,
-        uses=("PARKING_FLOOR_HEIGHT_CLAUSE",),
+        uses=("PARKING_FLOOR_HEIGHT_CLAUSE",), carried_in=(Where.RESOLVER,),
         choice="Podium and upper-floor parking are unsupported: the layout parks in the stilt, "
                "on the surface and in cellars only, so it never has a parking floor to leave "
-               "out. Needed once a scheme parks on a podium or upper floors.",
+               "out. Needed once a scheme parks on a podium or upper floors. The resolved rules "
+               "cite the clause as one source of the open stilt reading (stilt_in_rule_height), "
+               "with nothing decided by it: it leaves out parking floors above the ground floor, "
+               "and a stilt is at ground level.",
     ),
     Entry(
         "Height", "A building below high-rise stands at most as tall as its plot size lets it, "
@@ -322,10 +332,20 @@ INVENTORY: tuple[Entry, ...] = (
         "Plot", "A high-rise site left short of the minimum by road widening may be short by "
                 "up to this much.",
         f"{rules.ROAD_WIDENING_SHORTFALL_ALLOWANCE:.0%}", rules.ROAD_WIDENING_SHORTFALL_CLAUSE,
-        Reading.NOT_MODELLED,
-        uses=("ROAD_WIDENING_SHORTFALL_ALLOWANCE", "ROAD_WIDENING_SHORTFALL_CLAUSE"),
-        choice="Defined in rules.py but never applied, so such a site fails. The text does not "
-               "say 10% of what.",
+        Reading.INTERPRETED, (Where.RESOLVER,),
+        ("ROAD_WIDENING_SHORTFALL_ALLOWANCE", "ROAD_WIDENING_SHORTFALL_CLAUSE"),
+        choice=f"The text does not say {rules.ROAD_WIDENING_SHORTFALL_ALLOWANCE:.0%} of what; "
+               f"the resolver takes it of the {rules.MIN_HIGH_RISE_PLOT_SQM:,.0f} m² minimum and "
+               "never grants it. A site that surrenders land for road widening and falls short "
+               f"of the minimum by no more than that (a net plot of {_NEAR_MISS_SQM:,.0f} m² or "
+               "more) keeps its plot-size ground unmet but UNVERIFIED, citing the clause, so the "
+               "plot alone never prohibits a high-rise there: the high-rise eligibility is "
+               "UNVERIFIED unless the road prohibits it. Otherwise the ground is simply unmet. "
+               "The validator's own plot-size check, the legacy checker, the height search and "
+               "the floors calculator do not use the allowance: they hold the net plot to the "
+               "minimum, so such a site still fails there.",
+        settles="A sanctioned high-rise on a site left under the minimum by road widening: how "
+                "far short it was, and of what the share was taken.",
     ),
     Entry(
         "Plot", "Setbacks are measured from the plot line left after the road-widening strip, "
@@ -359,11 +379,15 @@ INVENTORY: tuple[Entry, ...] = (
         f"{rules.ELECTRICAL_LT_CLEARANCE_M:g} m from a low-tension line",
         rules.ELECTRICAL_CLAUSE, Reading.NOT_MODELLED,
         uses=("ELECTRICAL_HT_CLEARANCE_M", "ELECTRICAL_LT_CLEARANCE_M", "ELECTRICAL_CLAUSE"),
-        choice="The prototype's layout and checker do not model it. The value is carried in "
-               "ResolvedRules for the legal envelope and the validator, which can hold a "
-               "building to it only where the survey draws the line; a line that is only "
-               "marked is reported UNVERIFIED. Rule 3(c)(ii), the green belt and 10 m roads "
-               "under a tower line, is not modelled at all.",
+        carried_in=(Where.RESOLVER,),
+        choice="Carried as data and reported, never applied. The prototype's layout and checker "
+               "do not model it. The resolved rules carry both distances "
+               "(ResolvedRules.electrical), and the validator reports them UNVERIFIED wherever "
+               "the survey marks a line: the site model holds a marked line without its "
+               "geometry or height, so no distance is measured, passed or failed. Where a survey "
+               "feature gives a corridor, the envelope keeps that corridor clear as drawn, "
+               "citing rule 3(c), without these distances. Rule 3(c)(ii), the green belt and "
+               "10 m roads under a tower line, is not modelled at all.",
     ),
     Entry(
         "Plot", "A plot of 750 m² and above earmarks a corner for public utilities such as a "
@@ -493,11 +517,15 @@ INVENTORY: tuple[Entry, ...] = (
         uses=("ROAD_WIDENING_NON_HIGH_RISE_BUILDING_LINE_M",
               "ROAD_WIDENING_NON_HIGH_RISE_SIDE_REAR_M", "ROAD_WIDENING_NON_HIGH_RISE_CLAUSE",
               "TDR_NON_HIGH_RISE_SETBACK_CLAUSE"),
+        carried_in=(Where.RESOLVER,),
         choice="G.O.Ms.No.7 of 2016, Amendment 16 (p.5), is the owner's choice of one reward "
                "among TDR, extra floors and these concessions; G.O.Ms.No.95 of 2026, rule "
                "17(d)(ix), lets a non-high-rise building relax its setbacks through TDR down to "
                "the same minimums. Never applied: a surrendering site's blocks keep Table III in "
-               "full, stricter than the law.",
+               "full, stricter than the law. The resolved rules carry it as data, a concession "
+               "citing both clauses with a note that the engine does not apply it "
+               "(ResolvedRules.setbacks.concessions, written to `siteplan envelope`'s "
+               "rules.json); nothing reads it.",
     ),
     Entry(
         "Setbacks", "An owner who surrenders land for road widening may take setback concessions "
@@ -873,6 +901,8 @@ def render_text(entries: tuple[Entry, ...] = INVENTORY) -> str:
         lines += ["", topic.upper()]
         for e in group:
             where = ", ".join(w.value for w in e.applied_in) or "not applied"
+            if e.carried_in:
+                where += "; carried in " + ", ".join(w.value for w in e.carried_in)
             lines.append(f"  [{e.reading.value}] {e.rule}")
             lines.append(f"      value:   {e.value}")
             lines.append(f"      clause:  {e.clause}  ({where})")

@@ -72,7 +72,6 @@ EXEMPT = {
 NOT_DOMAIN = {
     "contracts.resolved_rules.ELIGIBILITY_RANK": "the order of the Eligibility labels",
     "geometry.COMPASS_DEG": "the bearing each compass label names",
-    "validator.zones.COMPASS_DEG": "the bearing each compass label names",
     "flat_import.MM_M": "a unit: room sizes are written in millimetres",
     "flat_import.SQM_SQFT": "a unit: square feet in a square metre",
     "prototypes.compose.COORD_DIGITS": "the decimals a composed prototype is saved to",
@@ -117,9 +116,6 @@ COPIES = (
     ("towers.TOUCH_M", "access_checks.TOUCH_M", "optimizer.search.layout.TOUCH_M",
      "optimizer.search.network.TOUCH_M", "validator.network.TOUCH_M",
      "validator.parking.RAMP_TOUCH_M", "validator.fire.GATE_TOUCH_M"),
-    ("optimizer.search.land.FACING_DEG", "validator.zones.FRONT_SECTOR_DEG",
-     "legal.frontage.FACING_TOLERANCE_DEG"),
-    ("optimizer.search.land.DIAGONAL_SLOP_DEG", "validator.zones.DIAGONAL_SLOP_DEG"),
     ("optimizer.search.parking_plan.OFFSETS_ALONG", "validator.cars.OFFSETS_ALONG"),
     ("optimizer.search.parking_plan.OFFSETS_ACROSS", "validator.cars.OFFSETS_ACROSS"),
     ("parking_checks.AREA_SLACK_SQM", "validator.parking.AREA_SLACK_SQM"),

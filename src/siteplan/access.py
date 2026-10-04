@@ -201,6 +201,8 @@ def _chord(runs) -> Run:
     return Run(LineString([a, b]), math.degrees(math.atan2(b[1] - a[1], b[0] - a[0])) % 180)
 
 
+# The legacy entrance keeps a strict 45 degrees for every label, not geometry.faces (the reading
+# the envelope, the search and the validator take), so the regression results do not move.
 def _faces(plot: Polygon, run, side: str) -> bool:
     return abs((facing_deg(plot, run) - COMPASS_DEG[side] + 180) % 360 - 180) < 45
 
