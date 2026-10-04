@@ -16,9 +16,7 @@ from validator_helpers import (
     fixture,
     move_tower,
     select,
-    set_floors,
     status,
-    tower,
 )
 from validator_low_helpers import (
     LOW_A,
@@ -29,6 +27,7 @@ from validator_low_helpers import (
     all_low,
     changed_rules,
     flat,
+    flat_block,
     floors_of,
     low_band,
     spacing_open,
@@ -63,16 +62,6 @@ def _prohibited(inputs):
         next(g for g in high_rise.grounds if g.id == "road_width").met = False
         high_rise.eligibility = type(high_rise).of_grounds(high_rise.grounds)
     return inputs.with_rules(edit)
-
-
-def _flat_block(name, floors, floor_height_m):
-    """A block with no stilt and floors of its own height."""
-    def edit(candidate):
-        tower(candidate, name).has_stilt = False
-        set_floors(candidate, name, floors)
-        candidate.prototype(tower(candidate, name).prototype_id).heights.floor_to_floor_m = \
-            floor_height_m
-    return edit
 
 
 def _t2_to_the_west(metres):
@@ -328,9 +317,11 @@ def test_a_prohibition_fails_a_block_of_exactly_the_high_rise_height_and_not_one
     inputs = _prohibited(with_low_bands(fixture("rectangle")))
     assert inputs.rules.height.high_rise.eligibility is Eligibility.PROHIBITED
     names = [t.name for t in inputs.candidate.towers]
-    exactly = inputs.edited(lambda c: [_flat_block(n, 7, 3.0)(c) for n in names])
+    exactly, under = inputs, inputs
+    for n in names:
+        exactly = flat_block(exactly, n, 7, 3.0)
+        under = flat_block(under, n, 5, 4.18)
     assert status(exactly.report(), "High-rise eligibility") is Z.FAIL
-    under = inputs.edited(lambda c: [_flat_block(n, 5, 4.18)(c) for n in names])
     report = under.report()
     assert "High-rise eligibility" not in {x.finding.rule for x in report.legal}
     assert check(report, "Height class: T1").finding.measured.startswith("20.90 m physical")

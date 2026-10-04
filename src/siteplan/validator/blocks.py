@@ -92,15 +92,21 @@ def _tables(ctx: Context, towers, keep=lambda cls: True) -> str:
 
 
 def _stopped(cls: HeightClass, what: str) -> Cell | None:
-    """A cell for a height the rules do not model (Table III, or beyond the bands), which is
-    NOT_CHECKED; None when there is a row to hold the block to. `what` is the figure the row would
-    give, named in the band's own table."""
-    if cls.state == "unmodelled":
-        asked = (f"the {what} its band asks ({cls.table})" if cls.table
-                 else f"the {what} its height asks")
-        return Cell(Status.NOT_CHECKED, f"{cls.height_text}: {cls.label}", asked,
-                    TABLE_III_NOTE)
-    return None
+    """A cell for a height the rules give no figure for: a band they do not model (Table III, or
+    beyond the bands), or one they model and give none (a stretch the site may not take), which
+    is NOT_CHECKED; None when there is a row to hold the block to. `what` is the figure the row
+    would give, named in the band's own table."""
+    if cls.state != "unmodelled":
+        return None
+    asked = (f"the {what} its band asks ({cls.table})" if cls.table
+             else f"the {what} its height asks")
+    band = cls.band
+    if band is not None and band.modelled:
+        why = (f": {band.permission_note}" if band.permission is not Eligibility.ALLOWED else "")
+        note = f"The band gives no {what} to hold the block to{why}."
+    else:
+        note = TABLE_III_NOTE
+    return Cell(Status.NOT_CHECKED, f"{cls.height_text}: {cls.label}", asked, note)
 
 
 # --- Height class, plot size, road width ----------------------------------------------------

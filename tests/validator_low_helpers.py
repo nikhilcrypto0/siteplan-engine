@@ -87,6 +87,17 @@ def flat(inputs: Inputs, **floors: int) -> Inputs:
     return inputs.edited(edit)
 
 
+def flat_block(inputs: Inputs, name: str, floors: int, floor_height_m: float) -> Inputs:
+    """One tower with no stilt and floors of its own height (so its height need not be a
+    multiple of 3 m: 5 floors of 3.8 m are 19 m)."""
+    def edit(candidate: CandidateLayout) -> None:
+        tower(candidate, name).has_stilt = False
+        set_floors(candidate, name, floors)
+        candidate.prototype(tower(candidate, name).prototype_id).heights.floor_to_floor_m = (
+            floor_height_m)
+    return inputs.edited(edit)
+
+
 def all_low(inputs: Inputs, floors: int = 5) -> Inputs:
     """Every tower below the high-rise height, flat (15 m, band B, by default)."""
     return flat(inputs, **{t.name: floors for t in inputs.candidate.towers})
