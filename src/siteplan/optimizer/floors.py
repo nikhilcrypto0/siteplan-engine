@@ -15,9 +15,11 @@ What a limit says of a height is the contract's, never worked out again here: th
 optimizer and the validator read every limit the same way. A limit that applies holds a height
 back whether or not its inputs are confirmed (it is UNVERIFIED, not FAIL, when they are not);
 one whose condition is unsettled (the dead end nobody has answered) lets the height through,
-labelled UNVERIFIED. The band of a height is `HeightRules.band_for`. Where a high-rise is
-prohibited no count of the high-rise height or more is offered, and that permits nothing lower:
-below it the band is Table III's, not modelled, so no count there is offered or passed.
+labelled UNVERIFIED. The band of a block is `HeightRules.band_for_block`: for a high-rise count
+the band of its rule height, for a count below 21 m Table III's row on the height above the
+stilt (rule 5(c)), which C3 will need. Where a high-rise is prohibited no count of the high-rise
+height or more is offered, and that permits nothing lower: below it the band is Table III's, not
+modelled, so no count there is offered or passed.
 """
 
 from __future__ import annotations
@@ -209,8 +211,9 @@ def assess_floor_count(rules: ResolvedRules, brief: DesignBrief, prototype: Towe
     physical = stilt + floors * floor
     rule_height = physical if reading == STILT_COUNTED else floors * floor
     checks = tuple(_check(limit, rule_height, physical) for limit in rules.height.limits)
-    return FloorOption(floors, reading, stilt, floor, rule_height, physical,
-                       rules.height.band_for(rule_height), checks,
+    band = rules.height.band_for_block(floors * floor, stilt,
+                                       stilt_counted=reading == STILT_COUNTED)
+    return FloorOption(floors, reading, stilt, floor, rule_height, physical, band, checks,
                        _high_rise(rules, rule_height))
 
 
