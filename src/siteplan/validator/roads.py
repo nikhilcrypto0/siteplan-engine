@@ -268,6 +268,38 @@ def _served_check(ctx: Context, ground: Ground) -> Check | None:
                  basis)
 
 
+def _pathway_check(ctx: Context, ground: Ground) -> Check | None:
+    """Rule 8(l): a block up to 12 m high may take its access through a 6 m pathway branching out
+    of an internal road instead of standing on one. Said for the blocks that high which stand on
+    no road. It is the complement of `_served_check`: every block is in exactly one of the two.
+
+    INTERIM (contracts 1.2): the candidate cannot draw a pathway (it has no road kind for one) and
+    the rules carry no pathway width, so a block up to 12 m high that stands on no road is
+    UNVERIFIED ("a pathway is not drawn"), never PASS or FAIL. This is the one place that changes
+    when it can."""
+    circ = ctx.rules.circulation
+    if not circ.block_over_12m_on_road.value:
+        return None  # read as allowing a pathway to any block: nothing to hold them to
+    limit = circ.pathway_max_block_height_m.value
+    short = [t for t in ctx.towers if not t.physical_height_m > limit]
+    if not short:
+        return None
+    roads = _ground_of(ctx, ground, *ROAD_KINDS)
+    off = [t.name for t in short if roads.is_empty or t.footprint.distance(roads) > TOUCH_M]
+    rule = f"Internal roads: blocks up to {limit:g} m (pathways)"
+    required = (f"every block up to {limit:g} m on an internal road, or reached by a pathway "
+                "branching out of one")
+    clause = circ.pathway_max_block_height_m.clause
+    basis = basis_note(circ.block_over_12m_on_road)
+    if not off:
+        return plain(Family.ROADS, rule, Status.PASS, f"all {len(short)} on an internal road",
+                     required, clause, basis)
+    return plain(Family.ROADS, rule, Status.UNVERIFIED,
+                 f"on no road: {', '.join(off)}; a pathway is not drawn", required, clause,
+                 " ".join(("The layout cannot show a pathway, so whether one branches out of an "
+                           "internal road to the block is not known.", basis)))
+
+
 # --- Driveways -------------------------------------------------------------------------------
 
 
@@ -406,10 +438,11 @@ def road_checks(ctx: Context, ground: Ground) -> list[Check]:
         out += [network_check] if network_check else []
         out += _perimeter_checks(ctx, ground)
         out += _cul_de_sac_checks(ctx, ground)
-        served = _served_check(ctx, ground)
+        served, pathways = _served_check(ctx, ground), _pathway_check(ctx, ground)
         joined = entrance_connection_check(ctx, ground)
         out += [dead_end_check(ctx, ground)] + ([joined] if joined else [])
         out += [served] if served else []
+        out += [pathways] if pathways else []
     drive = driveway_check(ctx, ground, circ.applies.value or by_the_site)
     out += [drive] if drive else []
     return out
