@@ -1,7 +1,8 @@
 """The firm's standards in the production service (service/standards.py): the approved project
-file's, else the workspace's, else the engine's default; recorded in the DesignBrief as
-FIRM_STANDARD with where each came from; given to the search and to the validator; never a
-caller's to set.
+file's, else the workspace's, else the engine's default; recorded in the DesignBrief with where
+each came from, as the firm's (FIRM_STANDARD) when the project or the workspace set it and as the
+engine's own (ENGINE_DEFAULT, ENGINE_DESIGN_ASSUMPTION) when neither did; given to the search and
+to the validator; never a caller's to set.
 
 Made-up land (test_service.make_workspace). The architect's project, made through the intake flow
 while the workspace set no standard, then states the firm's longest block (45 m) and the
@@ -24,6 +25,7 @@ from shapely.geometry import Polygon
 from test_service import BRIEF, INTENT, VALID, Approver, make_workspace
 
 import siteplan.validator
+from siteplan.basis import Basis
 from siteplan.contracts import CandidateLayout, DesignBrief, ValidationReport, digest
 from siteplan.contracts.common import Provenance, SourceKind
 from siteplan.intake import WORKSPACE_FILE, load_defaults
@@ -131,6 +133,13 @@ def run(tmp_path_factory) -> Run:
     return Run(ws, service, approver, proposed, optimized, judged, stored)
 
 
+def _kind(origin: str) -> tuple[SourceKind, Basis]:
+    """What a value's origin makes it: the firm's when the project or the workspace set it, the
+    engine's own when the engine filled it in."""
+    return ((SourceKind.ENGINE_DEFAULT, Basis.ENGINE_DESIGN_ASSUMPTION) if origin == THE_ENGINES
+            else (SourceKind.FIRM_STANDARD, Basis.FIRM_STANDARD))
+
+
 def _held(brief: DesignBrief, path: tuple[str, ...]):
     found = brief
     for name in path:
@@ -145,8 +154,21 @@ def test_each_standard_is_the_projects_else_the_workspaces_else_the_engines(run)
         assert held is not None, key
         assert held.value == (pytest.approx(value) if isinstance(value, float) else value), key
         assert held.status is status, (key, held.status)
-        assert held.source_kind is SourceKind.FIRM_STANDARD, key  # a firm standard, never law
+        assert held.source_kind is _kind(origin)[0], key  # the firm's or the engine's, never law
         assert held.source.startswith(origin), (key, held.source)
+
+
+def test_an_engine_fallback_is_never_labelled_the_firms(run):
+    """Strict provenance: a value the project file or the workspace set is the firm's; one the
+    engine filled in is the engine's design assumption, whatever its status says."""
+    assert {origin for *_, origin in EXPECTED.values()} == {IN_THE_PROJECT, IN_THE_WORKSPACE,
+                                                           THE_ENGINES}  # all three are met
+    for key, (path, _, _, origin) in EXPECTED.items():
+        kind = _held(run.stored, path).source_kind
+        if origin == THE_ENGINES:
+            assert kind is SourceKind.ENGINE_DEFAULT and kind is not SourceKind.FIRM_STANDARD, key
+        else:
+            assert kind is SourceKind.FIRM_STANDARD, key
 
 
 def test_the_search_and_the_validator_are_given_those_standards(run):
@@ -181,22 +203,24 @@ def test_no_tower_is_longer_than_the_firms_longest_block(run):
 def test_the_architect_is_shown_each_standard_and_where_it_came_from(run):
     _, lines = run.approver.asked[0]
     shown = "\n".join(lines)
-    assert f"Firm standard max_tower_length_m: 45 [USER_CONFIRMED], from {IN_THE_PROJECT}" in shown
-    assert f"Firm standard cellar_floor_height_m: 3.2 [USER_CONFIRMED], from {IN_THE_WORKSPACE}" \
-        in shown
-    assert f"Firm standard max_cellars: 3 [ASSUMED_FOR_TEST], from {THE_ENGINES}" in shown
+    assert (f"Standard max_tower_length_m: 45 [USER_CONFIRMED, FIRM_STANDARD], from "
+            f"{IN_THE_PROJECT}") in shown
+    assert (f"Standard cellar_floor_height_m: 3.2 [USER_CONFIRMED, FIRM_STANDARD], from "
+            f"{IN_THE_WORKSPACE}") in shown
+    assert (f"Standard max_cellars: 3 [ASSUMED_FOR_TEST, ENGINE_DESIGN_ASSUMPTION], from "
+            f"{THE_ENGINES}") in shown
     assert "Prototype two-core-large-12 left out" in shown
 
 
 def test_open_project_and_list_prototypes_say_the_same(run):
     opened = run.service.open_project(OpenProject(project_file=PROJECT, survey_file=SURVEY))
-    facts = {f.name.removeprefix("firm standard: "): f for f in opened.firm_standards}
+    facts = {f.name.removeprefix("standard: "): f for f in opened.firm_standards}
     assert set(facts) == set(standards.KEYS)
     for key, (_, value, status, origin) in EXPECTED.items():
         fact = facts[key]
         shown = value * 100 if key == "cellar_utilities_pct" else value  # a share in the brief
         assert fact.value == pytest.approx(shown), key
-        assert (fact.status, fact.source_kind) == (status, SourceKind.FIRM_STANDARD), key
+        assert (fact.status, fact.source_kind, fact.basis) == (status, *_kind(origin)), key
         assert fact.source.startswith(origin), key
     kit = run.service.list_prototypes(ListPrototypes(project_file=PROJECT))
     assert {p.id for p in kit.prototypes} == {"single-core-small-4", "single-core-6"}
@@ -210,7 +234,7 @@ def test_the_legacy_path_and_the_service_agree_on_a_project_made_through_intake(
     defaults = load_defaults(ws)  # where `siteplan layout` finds the libraries
     opened = Service(ws, tmp_path / "out", Approver()).open_project(OpenProject(
         project_file=PROJECT, survey_file=SURVEY))
-    service = {f.name.removeprefix("firm standard: "): f.value for f in opened.firm_standards}
+    service = {f.name.removeprefix("standard: "): f.value for f in opened.firm_standards}
     assert {key: service[key] for key in standards.LAYOUT} == {
         key: getattr(legacy, key) for key in standards.LAYOUT}
     assert (service["flat_library"], service["amenities"]) == (defaults.flat_library,
