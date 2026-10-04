@@ -1,22 +1,196 @@
 {
  "schema_version": "1.2",
  "site_ref": "4a06f936f6a9cd4c",
- "rules_ref": "0e520d7b110656bf",
+ "rules_ref": "5129172609a9197e",
  "exclusions": [],
  "bands": [
   {
    "above_m": 0.0,
+   "up_to_m": 7.0,
+   "kind": "NON_HIGH_RISE",
+   "modelled": true,
+   "setback_m": 5.0,
+   "front_setback_m": 4.0,
+   "permission": "ALLOWED",
+   "setback_envelope": [
+    {
+     "outer": [
+      [
+       145.0,
+       5.0
+      ],
+      [
+       5.0,
+       5.0
+      ],
+      [
+       5.0,
+       95.0
+      ],
+      [
+       145.0,
+       95.0
+      ]
+     ],
+     "holes": []
+    }
+   ],
+   "buildable": [
+    {
+     "outer": [
+      [
+       145.0,
+       5.0
+      ],
+      [
+       5.0,
+       5.0
+      ],
+      [
+       5.0,
+       95.0
+      ],
+      [
+       145.0,
+       95.0
+      ]
+     ],
+     "holes": []
+    }
+   ],
+   "area_sqm": 12600.0,
+   "green_strip_applies": true,
+   "note": ""
+  },
+  {
+   "above_m": 7.0,
+   "up_to_m": 15.0,
+   "kind": "NON_HIGH_RISE",
+   "modelled": true,
+   "setback_m": 6.0,
+   "front_setback_m": 4.0,
+   "permission": "ALLOWED",
+   "setback_envelope": [
+    {
+     "outer": [
+      [
+       144.0,
+       6.0
+      ],
+      [
+       6.0,
+       6.0
+      ],
+      [
+       6.0,
+       94.0
+      ],
+      [
+       144.0,
+       94.0
+      ]
+     ],
+     "holes": []
+    }
+   ],
+   "buildable": [
+    {
+     "outer": [
+      [
+       144.0,
+       6.0
+      ],
+      [
+       6.0,
+       6.0
+      ],
+      [
+       6.0,
+       94.0
+      ],
+      [
+       144.0,
+       94.0
+      ]
+     ],
+     "holes": []
+    }
+   ],
+   "area_sqm": 12144.0,
+   "green_strip_applies": true,
+   "note": ""
+  },
+  {
+   "above_m": 15.0,
+   "up_to_m": 18.0,
+   "kind": "NON_HIGH_RISE",
+   "modelled": true,
+   "setback_m": 7.0,
+   "front_setback_m": 4.0,
+   "permission": "ALLOWED",
+   "setback_envelope": [
+    {
+     "outer": [
+      [
+       143.0,
+       7.0
+      ],
+      [
+       7.0,
+       7.0
+      ],
+      [
+       7.0,
+       93.0
+      ],
+      [
+       143.0,
+       93.0
+      ]
+     ],
+     "holes": []
+    }
+   ],
+   "buildable": [
+    {
+     "outer": [
+      [
+       143.0,
+       7.0
+      ],
+      [
+       7.0,
+       7.0
+      ],
+      [
+       7.0,
+       93.0
+      ],
+      [
+       143.0,
+       93.0
+      ]
+     ],
+     "holes": []
+    }
+   ],
+   "area_sqm": 11696.0,
+   "green_strip_applies": true,
+   "note": ""
+  },
+  {
+   "above_m": 18.0,
    "up_to_m": 21.0,
    "kind": "NON_HIGH_RISE",
-   "modelled": false,
+   "modelled": true,
    "setback_m": null,
    "front_setback_m": null,
-   "permission": "ALLOWED",
+   "permission": "UNVERIFIED",
    "setback_envelope": [],
    "buildable": [],
    "area_sqm": 0.0,
    "green_strip_applies": null,
-   "note": "Table III (rule 5) is not encoded yet: A2 reads it from the order"
+   "note": "no order read gives a setback between the last line of Table III and a high-rise"
   },
   {
    "above_m": 21.0,
@@ -390,6 +564,258 @@
  "rule_layers": {
   "schema_version": "1.2",
   "layers": [
+   {
+    "id": "setback 0-7 m",
+    "kind": "SETBACK",
+    "shapes": [
+     {
+      "outer": [
+       [
+        0.0,
+        0.0
+       ],
+       [
+        0.0,
+        100.0
+       ],
+       [
+        150.0,
+        100.0
+       ],
+       [
+        150.0,
+        0.0
+       ]
+      ],
+      "holes": [
+       [
+        [
+         145.0,
+         95.0
+        ],
+        [
+         5.0,
+         95.0
+        ],
+        [
+         5.0,
+         5.0
+        ],
+        [
+         145.0,
+         5.0
+        ]
+       ]
+      ]
+     }
+    ],
+    "clause": "G.O.168 rule 7(a)(x), Table IV as substituted by G.O.Ms.No.50 of 2019; G.O.168 rule 7(a)(iii) (setbacks of a high-rise on the net plot left after road widening); rule 5(f)(ii) for Table III",
+    "basis": "LEGAL_RULE",
+    "status": "VERIFIED",
+    "interpretation_ref": null,
+    "applies_to": "0-7 m",
+    "permits": [
+     {
+      "use": "TOWER",
+      "permit": "FORBIDDEN",
+      "condition": null,
+      "interpretation_ref": null
+     },
+     {
+      "use": "SURFACE_PARKING",
+      "permit": "FORBIDDEN",
+      "condition": null,
+      "interpretation_ref": null
+     },
+     {
+      "use": "ROAD",
+      "permit": "CONDITIONAL",
+      "condition": "only under the reading that circulation may run inside the setback; not settled by the text",
+      "interpretation_ref": "circulation_in_setback"
+     },
+     {
+      "use": "FIRE_HARDSTANDING",
+      "permit": "CONDITIONAL",
+      "condition": "only under the reading that circulation may run inside the setback; not settled by the text",
+      "interpretation_ref": "circulation_in_setback"
+     },
+     {
+      "use": "RAMP",
+      "permit": "CONDITIONAL",
+      "condition": "side or rear setback only, leaving 7 m (13(c)(vii))",
+      "interpretation_ref": null
+     }
+    ],
+    "area_sqm": 2400.0
+   },
+   {
+    "id": "setback 7-15 m",
+    "kind": "SETBACK",
+    "shapes": [
+     {
+      "outer": [
+       [
+        0.0,
+        0.0
+       ],
+       [
+        0.0,
+        100.0
+       ],
+       [
+        150.0,
+        100.0
+       ],
+       [
+        150.0,
+        0.0
+       ]
+      ],
+      "holes": [
+       [
+        [
+         144.0,
+         94.0
+        ],
+        [
+         6.0,
+         94.0
+        ],
+        [
+         6.0,
+         6.0
+        ],
+        [
+         144.0,
+         6.0
+        ]
+       ]
+      ]
+     }
+    ],
+    "clause": "G.O.168 rule 7(a)(x), Table IV as substituted by G.O.Ms.No.50 of 2019; G.O.168 rule 7(a)(iii) (setbacks of a high-rise on the net plot left after road widening); rule 5(f)(ii) for Table III",
+    "basis": "LEGAL_RULE",
+    "status": "VERIFIED",
+    "interpretation_ref": null,
+    "applies_to": "7-15 m",
+    "permits": [
+     {
+      "use": "TOWER",
+      "permit": "FORBIDDEN",
+      "condition": null,
+      "interpretation_ref": null
+     },
+     {
+      "use": "SURFACE_PARKING",
+      "permit": "FORBIDDEN",
+      "condition": null,
+      "interpretation_ref": null
+     },
+     {
+      "use": "ROAD",
+      "permit": "CONDITIONAL",
+      "condition": "only under the reading that circulation may run inside the setback; not settled by the text",
+      "interpretation_ref": "circulation_in_setback"
+     },
+     {
+      "use": "FIRE_HARDSTANDING",
+      "permit": "CONDITIONAL",
+      "condition": "only under the reading that circulation may run inside the setback; not settled by the text",
+      "interpretation_ref": "circulation_in_setback"
+     },
+     {
+      "use": "RAMP",
+      "permit": "CONDITIONAL",
+      "condition": "side or rear setback only, leaving 7 m (13(c)(vii))",
+      "interpretation_ref": null
+     }
+    ],
+    "area_sqm": 2856.0
+   },
+   {
+    "id": "setback 15-18 m",
+    "kind": "SETBACK",
+    "shapes": [
+     {
+      "outer": [
+       [
+        0.0,
+        0.0
+       ],
+       [
+        0.0,
+        100.0
+       ],
+       [
+        150.0,
+        100.0
+       ],
+       [
+        150.0,
+        0.0
+       ]
+      ],
+      "holes": [
+       [
+        [
+         143.0,
+         93.0
+        ],
+        [
+         7.0,
+         93.0
+        ],
+        [
+         7.0,
+         7.0
+        ],
+        [
+         143.0,
+         7.0
+        ]
+       ]
+      ]
+     }
+    ],
+    "clause": "G.O.168 rule 7(a)(x), Table IV as substituted by G.O.Ms.No.50 of 2019; G.O.168 rule 7(a)(iii) (setbacks of a high-rise on the net plot left after road widening); rule 5(f)(ii) for Table III",
+    "basis": "LEGAL_RULE",
+    "status": "VERIFIED",
+    "interpretation_ref": null,
+    "applies_to": "15-18 m",
+    "permits": [
+     {
+      "use": "TOWER",
+      "permit": "FORBIDDEN",
+      "condition": null,
+      "interpretation_ref": null
+     },
+     {
+      "use": "SURFACE_PARKING",
+      "permit": "FORBIDDEN",
+      "condition": null,
+      "interpretation_ref": null
+     },
+     {
+      "use": "ROAD",
+      "permit": "CONDITIONAL",
+      "condition": "only under the reading that circulation may run inside the setback; not settled by the text",
+      "interpretation_ref": "circulation_in_setback"
+     },
+     {
+      "use": "FIRE_HARDSTANDING",
+      "permit": "CONDITIONAL",
+      "condition": "only under the reading that circulation may run inside the setback; not settled by the text",
+      "interpretation_ref": "circulation_in_setback"
+     },
+     {
+      "use": "RAMP",
+      "permit": "CONDITIONAL",
+      "condition": "side or rear setback only, leaving 7 m (13(c)(vii))",
+      "interpretation_ref": null
+     }
+    ],
+    "area_sqm": 3304.0
+   },
    {
     "id": "setback 21 m",
     "kind": "SETBACK",

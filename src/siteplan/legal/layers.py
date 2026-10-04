@@ -19,7 +19,12 @@ from siteplan.contracts.accounting import (
     RuleLayers,
 )
 from siteplan.contracts.common import Basis, Provenance, shapes_from
-from siteplan.contracts.resolved_rules import CIRCULATION_IN_SETBACK, ResolvedRules
+from siteplan.contracts.resolved_rules import (
+    CIRCULATION_IN_SETBACK,
+    Band,
+    BandKind,
+    ResolvedRules,
+)
 from siteplan.legal.bands import BandLand
 from siteplan.legal.frontage import front_runs
 from siteplan.legal.readings import ROAD_IN_WATER_BUFFER, VISITOR_PARKING_IN_SETBACK
@@ -80,7 +85,6 @@ def rule_layers(rules: ResolvedRules, net: Polygon, lands: list[BandLand], water
     the plot; `side` is the side the access road runs along, or None when it is not known.
     """
     layers: list[dict] = []
-    strip_m = rules.green_strip.width_m.value
     for land in lands:
         band, key = land.band, land.key
         zone = net.difference(land.inset)
@@ -88,20 +92,38 @@ def rule_layers(rules: ResolvedRules, net: Polygon, lands: list[BandLand], water
             f"setback {key}", LayerKind.SETBACK, zone,
             f"{band.clause}; {rules.setbacks.measured_on.clause}", _setback_permits(rules),
             applies_to=key, reading=CIRCULATION_IN_SETBACK, status=band.status))
-        if band.setback_m >= rules.green_strip.where_setback_from_m.value:
-            strip = net.difference(net.buffer(-strip_m, join_style="mitre"))
+        if band.green_strip_m:
+            strip = _strip_zone(net, band.green_strip_m, band.green_strip_sides, side)
             layers.append(_layer(
                 f"green strip {key}", LayerKind.GREEN_STRIP_ZONE, strip,
-                rules.green_strip.width_m.clause,
+                _strip_clause(rules, band),
                 [_permit(PhysicalUse.GREEN_STRIP, Permit.ALLOWED),
                  _permit(PhysicalUse.TOWER, Permit.FORBIDDEN),
                  _permit(PhysicalUse.SURFACE_PARKING, Permit.FORBIDDEN),
                  _permit(PhysicalUse.ROAD, Permit.CONDITIONAL,
                          condition="only where the entrance crosses it")],
                 applies_to=key))
-        layers.append(_ramp_layer(rules, net, zone, key, band.setback_m, side))
+        layers.append(_ramp_layer(rules, net, zone, key, band.front_m, side))
     layers += [_water_layer(rules, water_id, zone) for water_id, zone in water]
     return RuleLayers(layers=layers)
+
+
+def _strip_zone(net: Polygon, width_m: float, sides: str, side: str | None):
+    """The planting strip: the outer ring of the net plot, or only along the frontage facing the
+    access side (rule 5(f): a plot of 300 m² or less keeps the strip on the frontage alone)."""
+    runs = front_runs(net, side)
+    if sides == "ALL" or not runs:
+        return net.difference(net.buffer(-width_m, join_style="mitre"))
+    return unary_union([run.buffer(width_m, cap_style="flat") for run in runs]).intersection(net)
+
+
+def _strip_clause(rules: ResolvedRules, band: Band) -> str:
+    """The clause that asks the strip: rule 5(f)'s for a block below 21 m, rule 7(a)(viii)'s for a
+    high-rise."""
+    strips = rules.green_strip
+    if band.kind is BandKind.NON_HIGH_RISE and strips.frontage_m is not None:
+        return strips.frontage_m.clause
+    return strips.width_m.clause
 
 
 def _ramp_layer(rules: ResolvedRules, net: Polygon, zone, key: str, setback_m: float,

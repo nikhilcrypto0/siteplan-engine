@@ -59,12 +59,11 @@ LAW = {"basis": Basis.LEGAL_RULE, "status": Provenance.VERIFIED}
 ENGINE = {"basis": Basis.ENGINE_DESIGN_ASSUMPTION, "status": Provenance.ASSUMED_FOR_TEST}
 WIDTHS_REPORTED_M = (10.0, 15.0, 20.0, 25.0, 30.0)
 REGION_SPLIT_M = 30.0  # land narrower than this is reported as a region of its own
-NON_HIGH_RISE_NOTE = "Table III (rule 5) is not encoded yet: A2 reads it from the order"
-NON_HIGH_RISE_CLAUSE = "G.O.168 rule 5, Table III"
 AIRPORT_CLAUSE = "G.O.168 rule 3(d) (airport and Air Force height limits)"
-PROHIBITED_NOTE = ("No building of the high-rise height or more may stand here. What may be built "
-                   "below that height is Table III's (rule 5), which is not encoded yet: nothing "
-                   "below it is validated until it is.")
+PROHIBITED_NOTE = ("No building of the high-rise height or more may stand here. That permits "
+                   "nothing below it: what may be built below it is the non-high-rise bands' "
+                   "(Table III: the permissible height, its setbacks, the road it asks and the "
+                   "spacing), each band with its own permission.")
 
 
 def interpretations() -> list[dict]:
@@ -141,23 +140,57 @@ def interpretations() -> list[dict]:
     ]
 
 
-def height_bands() -> list[dict]:
-    """Every height in exactly one band. Below the high-rise height Table III governs, which is
-    not encoded; a building of exactly that height is a high-rise (rule 2(f)) and takes the
-    Table IV row that reaches it; above it the rows are Table IV's own."""
+def height_bands(site: CanonicalSiteModel) -> list[dict]:
+    """Every height in exactly one band. Below the high-rise height the lines of the plot's Table
+    III row (read on the height above the stilt) and what the row leaves open; a building of
+    exactly the high-rise height takes the Table IV row that reaches it; above it the rows are
+    Table IV's own, ALLOWED here: the site's high-rise eligibility comes in through
+    HeightRules.band_permission. Written for a site whose access road is given and confirmed,
+    which every made-up site is, and short of the real resolver's care for the rest."""
     start = rules.HIGH_RISE_THRESHOLD_M
     at_start = rules.band_for_height(start)
-    return [
-        {"above_m": 0.0, "up_to_m": start, "up_to_inclusive": False,
-         "kind": BandKind.NON_HIGH_RISE, "modelled": False, "clause": NON_HIGH_RISE_CLAUSE,
-         "status": Provenance.UNVERIFIED},
-        {"above_m": start, "up_to_m": start, "above_inclusive": True, "kind": BandKind.HIGH_RISE,
-         "min_road_m": at_start.min_road_m, "setback_m": at_start.min_open_space_m,
-         "gap_m": at_start.min_open_space_m, "clause": rules.TABLE_IV_CLAUSE},
-        *({"above_m": b.above_m, "up_to_m": b.up_to_m, "kind": BandKind.HIGH_RISE,
-           "min_road_m": b.min_road_m, "setback_m": b.min_open_space_m,
-           "gap_m": b.min_open_space_m, "clause": rules.TABLE_IV_CLAUSE}
-          for b in rules.TABLE_IV if b.above_m >= start)]
+    own = site.ownership
+    plot, gds = own.net_sqm.value, rules.is_group_development(own.gross_sqm.value)
+    given = site.access_road().legal_row_m if site.access_road() is not None else None
+    reckoned = None if given is None else rules.reckoned_road_width_m(given.value)
+    below, above, above_inclusive = [], 0.0, False
+    for line in rules.table_iii_lines(plot):
+        need = 12.0 if gds or line.below else 9.0
+        side = line.side_m or 0.0
+        met = None if reckoned is None else reckoned >= need
+        below.append({
+            "above_m": above, "up_to_m": line.up_to_m, "above_inclusive": above_inclusive,
+            "up_to_inclusive": not line.below, "kind": BandKind.NON_HIGH_RISE,
+            "measure": HeightMeasure.HEIGHT_ABOVE_STILT, "min_road_m": need, "setback_m": side,
+            "gap_m": side, "front_setback_m": None if reckoned is None else line.front_m[
+                sum(reckoned > edge for edge in rules.TABLE_III_ROAD_UP_TO_M)],
+            "permission": (Eligibility.UNVERIFIED if met is None else Eligibility.ALLOWED if met
+                           else Eligibility.PROHIBITED),
+            "permission_note": f"{need:g} m of road is asked",
+            "green_strip_m": rules.NON_HIGH_RISE_FRONTAGE_STRIP_M,
+            "green_strip_sides": "ALL" if plot > rules.NON_HIGH_RISE_PERIPHERY_STRIP_ABOVE_SQM
+            else "FRONTAGE",
+            "clause": f"{rules.TABLE_III_CLAUSE}; row {line.row}, up to {line.up_to_m:g} m"})
+        above, above_inclusive = line.up_to_m, line.below
+    below.append({
+        "above_m": above, "up_to_m": start, "above_inclusive": above_inclusive,
+        "up_to_inclusive": False, "kind": BandKind.NON_HIGH_RISE,
+        "measure": HeightMeasure.HEIGHT_ABOVE_STILT, "permission": Eligibility.UNVERIFIED,
+        "permission_note": "no order read gives a setback between the last line of Table III "
+                           "and a high-rise", "clause": rules.TDR_BAND_CLAUSE,
+        "status": Provenance.UNVERIFIED})
+
+    def high(edges: dict, row) -> dict:
+        strip = ({"green_strip_m": rules.PERIPHERAL_GREEN_STRIP_M}
+                 if row.min_open_space_m >= rules.PERIPHERAL_GREEN_STRIP_FROM_SETBACK_M else {})
+        return {**edges, "kind": BandKind.HIGH_RISE, "min_road_m": row.min_road_m,
+                "setback_m": row.min_open_space_m, "gap_m": row.min_open_space_m,
+                "clause": rules.TABLE_IV_CLAUSE, **strip}
+
+    return [*below,
+            high({"above_m": start, "up_to_m": start, "above_inclusive": True}, at_start),
+            *(high({"above_m": b.above_m, "up_to_m": b.up_to_m}, b)
+              for b in rules.TABLE_IV if b.above_m >= start)]
 
 
 def height_limits(site: CanonicalSiteModel) -> list[dict]:
@@ -175,9 +208,11 @@ def height_limits(site: CanonicalSiteModel) -> list[dict]:
         top = rules.max_height_for_road(row.value)
         by_road["status"] = weakest(Provenance.VERIFIED, row.status)
         if top is None:
-            by_road |= {"bound": LimitBound.NOT_EVALUATED,
-                        "reason": f"the {row.value:.2f} m road serves no high-rise; what it "
-                                  "allows below that height is Table III's, not encoded yet"}
+            by_road |= {"bound": LimitBound.BOUNDED, "max_m": rules.HIGH_RISE_THRESHOLD_M,
+                        "inclusive": False,
+                        "reason": f"the {row.value:.2f} m road serves no building of "
+                                  f"{rules.HIGH_RISE_THRESHOLD_M:g} m or more; what it allows "
+                                  "below that is the non-high-rise bands' (Table III)"}
         elif math.isinf(top):
             by_road |= {"bound": LimitBound.UNBOUNDED,
                         "reason": f"the {row.value:.2f} m road meets every row of Table IV: "
@@ -258,7 +293,8 @@ def resolved_rules(site: CanonicalSiteModel) -> ResolvedRules:
                     HeightMeasure.RULE_HEIGHT: "the height Table IV and the high-rise class are "
                     "read on; whether it includes the stilt is stilt_in_rule_height",
                     HeightMeasure.PHYSICAL_HEIGHT: "ground to the top, stilt included",
-                    HeightMeasure.AMSL: "height above mean sea level"},
+                    HeightMeasure.AMSL: "height above mean sea level",
+                    HeightMeasure.HEIGHT_ABOVE_STILT: "the stilt left out: what Table III reads"},
                 "high_rise_from_m": {"value": rules.HIGH_RISE_THRESHOLD_M, "unit": "m",
                                      "clause": rules.HIGH_RISE_CLAUSE, **LAW},
                 "high_rise": high_rise(site),
@@ -266,7 +302,8 @@ def resolved_rules(site: CanonicalSiteModel) -> ResolvedRules:
                                "clause": rules.TDR_BAND_CLAUSE, **LAW},
                 "tdr_plot_sqm": {"value": rules.TDR_PLOT_RANGE_SQM, "unit": "m²",
                                  "clause": rules.TDR_BAND_CLAUSE, **LAW},
-                "bands": height_bands(), "limits": height_limits(site)},
+                "bands": height_bands(site),
+                "limits": height_limits(site)},
         setbacks={"measured_on": {"value": "net plot", "clause": rules.SETBACK_ON_NET_PLOT_CLAUSE,
                                   **LAW},
                   "front": {"value": "Table IV", "clause": rules.FRONT_SETBACK_CLAUSE, **LAW},
@@ -301,7 +338,14 @@ def resolved_rules(site: CanonicalSiteModel) -> ResolvedRules:
                      "where_setback_from_m": {"value": rules.PERIPHERAL_GREEN_STRIP_FROM_SETBACK_M,
                                               "unit": "m",
                                               "clause": rules.PERIPHERAL_GREEN_STRIP_CLAUSE,
-                                              **LAW}},
+                                              **LAW},
+                     "frontage_m": {"value": rules.NON_HIGH_RISE_FRONTAGE_STRIP_M, "unit": "m",
+                                    "clause": rules.NON_HIGH_RISE_GREEN_STRIP_CLAUSE, **LAW},
+                     "periphery_m": {"value": rules.NON_HIGH_RISE_PERIPHERY_STRIP_M, "unit": "m",
+                                     "clause": rules.NON_HIGH_RISE_GREEN_STRIP_CLAUSE, **LAW},
+                     "periphery_above_sqm": {
+                         "value": rules.NON_HIGH_RISE_PERIPHERY_STRIP_ABOVE_SQM, "unit": "m²",
+                         "clause": rules.NON_HIGH_RISE_GREEN_STRIP_CLAUSE, **LAW}},
         circulation=_circulation(gds),
         fire=_fire(),
         electrical={"ht_clearance_m": {"value": rules.ELECTRICAL_HT_CLEARANCE_M, "unit": "m",
@@ -336,6 +380,8 @@ def _circulation(gds: bool) -> dict:
                                          **road},
             "pathway_max_block_height_m": {"value": rules.PATHWAY_MAX_BLOCK_HEIGHT_M,
                                            "unit": "m", "clause": rules.PATHWAY_CLAUSE, **LAW},
+            "pathway_width_m": {"value": rules.PATHWAY_WIDTH_M, "unit": "m",
+                                "clause": rules.PATHWAY_CLAUSE, **LAW},
             "driveway_min_m": {"value": rules.DRIVEWAY_MIN_WIDTH_M, "unit": "m",
                                "clause": rules.DRIVEWAY_CLAUSE, **LAW},
             "driveway_is_road": {"value": False, "clause": rules.INTERNAL_ROAD_CLAUSE, **LAW},
@@ -414,21 +460,27 @@ def envelope(site: CanonicalSiteModel, resolved: ResolvedRules) -> BuildableEnve
     excluded = unary_union(buffers) if buffers else None
     bands, layers = [], []
     for band in resolved.height.bands:
-        if not band.modelled:
-            bands.append({"above_m": band.above_m, "up_to_m": band.up_to_m, "kind": band.kind,
-                          "modelled": False, "note": NON_HIGH_RISE_NOTE})
+        permission = resolved.height.band_permission(band)
+        common = {"above_m": band.above_m, "up_to_m": band.up_to_m, "kind": band.kind,
+                  "front_setback_m": band.front_setback_m, "permission": permission}
+        if band.setback_m is None:  # a height nothing permits or that is open: no land to cut
+            bands.append({**common, "modelled": True, "note": band.permission_note})
+            continue
+        if permission is Eligibility.PROHIBITED and band.kind is BandKind.NON_HIGH_RISE:
+            bands.append({**common, "setback_m": band.setback_m,
+                          "note": f"prohibited: {band.permission_note}"})
             continue
         if not _offered(resolved, band):
             continue
-        inset = net.buffer(-band.setback_m)
+        inset = net.buffer(-max(band.setback_m, band.front_setback_m or 0.0))
         buildable = inset.difference(excluded) if excluded is not None else inset
         key = (f"{band.above_m:g} m" if band.up_to_m == band.above_m
                else f"{band.above_m:g}-{band.up_to_m:g} m")
-        bands.append({"above_m": band.above_m, "up_to_m": band.up_to_m, "kind": band.kind,
-                      "setback_m": band.setback_m, "setback_envelope": shapes_from(inset),
+        bands.append({**common, "setback_m": band.setback_m, "setback_envelope": shapes_from(inset),
                       "buildable": shapes_from(buildable), "area_sqm": buildable.area,
-                      "green_strip_applies": band.setback_m
-                      >= resolved.green_strip.where_setback_from_m.value})
+                      "green_strip_applies": band.green_strip_m is not None,
+                      "note": ("" if permission is Eligibility.ALLOWED or not band.permission_note
+                               else f"{permission.value.lower()}: {band.permission_note}")})
         layers.append(_setback_layer(key, net.difference(inset),
                                      resolved.parking.ramp_fire_clearance_m.value))
     for zone in buffers:

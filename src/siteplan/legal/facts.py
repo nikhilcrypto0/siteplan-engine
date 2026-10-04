@@ -9,6 +9,8 @@ from siteplan.contracts.common import Finding, Provenance, SourceKind, Status
 from siteplan.contracts.envelope import Obligation
 from siteplan.contracts.resolved_rules import (
     Applicability,
+    Band,
+    BandKind,
     Eligibility,
     HeightLimit,
     HeightMeasure,
@@ -23,7 +25,8 @@ from siteplan.rules import PARKING_CLAUSE
 
 LIMIT_NAMES = {HeightMeasure.RULE_HEIGHT: "Rule-height limit",
                HeightMeasure.PHYSICAL_HEIGHT: "Physical-height limit",
-               HeightMeasure.AMSL: "Height above sea level"}
+               HeightMeasure.AMSL: "Height above sea level",
+               HeightMeasure.HEIGHT_ABOVE_STILT: "Height above the stilt"}
 
 
 def facts(site: CanonicalSiteModel, rules: ResolvedRules, cap: float | None,
@@ -33,7 +36,7 @@ def facts(site: CanonicalSiteModel, rules: ResolvedRules, cap: float | None,
     out = [Finding("Group Development Scheme", Status.INFO, "yes" if group.value else "no",
                    "residential development on a campus or site of the size the clause names",
                    group.clause, f"how far the site's area is trusted: {group.status}"),
-           _eligibility(rules)]
+           _eligibility(rules), _non_high_rise(rules)]
     out += [_limit(limit) for limit in rules.height.limits]
     out += _street_join(site, rules)
     out += _net_plot(site)
@@ -58,6 +61,31 @@ def _eligibility(rules: ResolvedRules) -> Finding:
     return Finding("High-rise eligibility", ELIGIBILITY_STATUS[high_rise.eligibility],
                    high_rise.eligibility.value, f"a building of {above.value:g} m or more",
                    above.clause, "; ".join(n for n in (grounds, high_rise.note) if n))
+
+
+def _non_high_rise(rules: ResolvedRules) -> Finding:
+    """The permissible height below the high-rise height: the tallest band Table III permits
+    here, on the height above the stilt, and the one that might be if what is open were settled
+    (the actual permissible non-high-rise height of this site)."""
+    heights = rules.height
+    allowed = heights.permissible_non_high_rise()
+    possible = heights.permissible_non_high_rise(include_unverified=True)
+    clause = next((b.clause for b in heights.bands if b.kind is BandKind.NON_HIGH_RISE), "")
+    if possible is None:
+        return Finding("Non-high-rise height", Status.FAIL, "none permitted",
+                       "a band below the high-rise height with a setback", clause,
+                       "no stretch below the high-rise height is permitted or open")
+
+    def top(band: Band) -> str:
+        return f"{band.up_to_m:g} m" + ("" if band.up_to_inclusive else " (below it)")
+
+    settled = allowed is not None and (allowed.up_to_m, allowed.up_to_inclusive) == (
+        possible.up_to_m, possible.up_to_inclusive)
+    return Finding("Non-high-rise height", Status.INFO if settled else Status.UNVERIFIED,
+                   top(allowed) if allowed else "not settled",
+                   "the tallest height Table III permits, the stilt left out", possible.clause,
+                   "" if settled else f"up to {top(possible)} if what is open is settled: "
+                   f"{possible.permission_note}")
 
 
 def _limit(limit: HeightLimit) -> Finding:

@@ -2,9 +2,9 @@
  "schema_version": "1.2",
  "candidate_id": "nala_plot-1",
  "site_ref": "0578e5ca84b81bb1",
- "rules_ref": "0409023b0ee86f79",
+ "rules_ref": "24ab56e8dfab5900",
  "brief_ref": "a9a931c836ffcd5d",
- "envelope_ref": "75f8440a709f8a3e",
+ "envelope_ref": "27d9a4fc0aa73087",
  "strategy": "Option A: Maximum yield",
  "seed": null,
  "interpretation_basis": {
