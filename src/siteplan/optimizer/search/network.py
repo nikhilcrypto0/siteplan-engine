@@ -95,6 +95,8 @@ class Cluster:
 
     hull: Polygon  # the convex hull of the blocks and the streets
     ring: BaseGeometry  # the road round the hull, on the roadable ground
+    clipped: bool = False  # the ground cut the tip of a corner off the ring: it is still a road
+    # wide, but not as wide as the band that was asked for
 
 
 def _hull_of(pieces: Sequence[BaseGeometry]) -> Polygon:
@@ -128,7 +130,7 @@ def cluster_of(footprints: Sequence[Polygon], streets: Sequence[Polygon], land: 
     whole = unary_union(parts)
     if lost > RING_CLIP_SQM and whole.difference(opening(whole, road_width_m)).area > RING_CLIP_SQM:
         return None, "the ring road is narrower than a road in places, where the ground cuts it"
-    return Cluster(hull, whole), ""
+    return Cluster(hull, whole, lost > RING_CLIP_SQM), ""
 
 
 def _violation(hull: Polygon, land: Land, ring_width_m: float) -> float:

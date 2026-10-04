@@ -137,6 +137,7 @@ class Laid:
     facilities: list[PlacedFacility]
     facilities_missed: list[str]
     ramps: list[Polygon]
+    ring_clipped: bool
     cellars: Cellars | None
     cars: dict[str, int]
     zones: Zones
@@ -188,10 +189,14 @@ def _prototypes_used(placements: Sequence[Placement]) -> list[TowerPrototype]:
 
 
 def _roads(laid: Laid, q: Quantities) -> list[dict]:
+    """Each road declares the width it is drawn at (the rule's, and the firm's margin where the
+    ring is whole): the validator measures the drawing and a declaration wider than the road is a
+    claim it holds against the layout."""
+    ring_declared = q.legal_road_m if laid.ring_clipped else q.road_m
     roads = [{"id": "ring", "kind": "LOOP", "shapes": shapes_from(laid.ring),
-              "declared_width_m": q.legal_road_m, "tags": ["FIRE_ACCESS"]}]
+              "declared_width_m": ring_declared, "tags": ["FIRE_ACCESS"]}]
     roads += [{"id": f"street-{i}", "kind": "INTERNAL", "shapes": shapes_from(s),
-               "declared_width_m": q.legal_road_m, "tags": ["FIRE_ACCESS"]}
+               "declared_width_m": q.road_m, "tags": ["FIRE_ACCESS"]}
               for i, s in enumerate(laid.streets, 1)]
     roads.append({"id": "approach", "kind": "APPROACH", "shapes": shapes_from(laid.entrance.approach),
                   "declared_width_m": laid.entrance.width_m, "tags": ["FIRE_ACCESS"]})

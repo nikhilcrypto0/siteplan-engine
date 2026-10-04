@@ -77,7 +77,7 @@ def caveats(report: ValidationReport) -> list[str]:
                        f"{target.provided:,.2f} {target.unit} provided against a target of "
                        f"{target.target:,.2f} (the legal minimum is {target.legal_minimum:,.2f}); "
                        "a margin is the firm's, never law")
-    return out
+    return list(dict.fromkeys(out))
 
 
 def failed(report: ValidationReport) -> list[str]:
