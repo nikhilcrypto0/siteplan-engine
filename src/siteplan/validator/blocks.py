@@ -421,7 +421,7 @@ def _gap_asked(ca: HeightClass, cb: HeightClass) -> str:
     return f"the gap their bands ask ({tables})" if tables else "the gap their heights ask"
 
 
-def _gap_cell(ca: HeightClass, cb: HeightClass, ha: float, hb: float, spacing: str,
+def gap_cell(ca: HeightClass, cb: HeightClass, ha: float, hb: float, spacing: str,
               gap: float) -> Cell:
     """The gap between two blocks on the figures `gap_sources` names. Two blocks below the
     high-rise height are held to the tallest block's side setback in terms (rule 5(xiii)), which
@@ -445,14 +445,11 @@ def _gap_cell(ca: HeightClass, cb: HeightClass, ha: float, hb: float, spacing: s
     return Cell(verdict(gap + TOL_M >= need), shown, required, note)
 
 
-def _gap_clause(ctx: Context, a: TowerGeometry, b: TowerGeometry) -> str:
-    """The spacing clause, and below the high-rise height the band's table and rule 5(xiii) too."""
+def gap_clause(ctx: Context, pairs: list[tuple[HeightClass, HeightClass]]) -> str:
+    """The spacing clause, and for each pair of bands below the high-rise height the band's table
+    and, where both blocks are below it, rule 5(xiii) too."""
     parts = [ctx.rules.spacing.clause]
-    for reading in ctx.stilt_readings:
-        classes = _classes(ctx, reading)
-        if classes is None:
-            continue
-        ca, cb = classes[a.name], classes[b.name]
+    for ca, cb in pairs:
         parts += [c.table for c in (ca, cb) if not c.high_rise and c.table]
         parts += [] if ca.high_rise or cb.high_rise else [LOW_GAP_CLAUSE]
     return "; ".join(dict.fromkeys(parts))
@@ -472,13 +469,15 @@ def spacing_checks(ctx: Context) -> list[Check]:
             classes = _classes(ctx, reading)
             if classes is None:
                 return unknown_reading(STILT_IN_RULE_HEIGHT, reading)
-            return _gap_cell(classes[a.name], classes[b.name], a.rule_height_m(reading),
+            return gap_cell(classes[a.name], classes[b.name], a.rule_height_m(reading),
                              b.rule_height_m(reading), spacing, gap)
 
         out.append(check_from(
             run(ctx.rules, [STILT_IN_RULE_HEIGHT, MIXED_HEIGHT_SPACING], cell),
             family=Family.SPACING, rule=f"Gap between blocks: {a.name} / {b.name}",
-            clause=_gap_clause(ctx, a, b), subject=f"{a.name}/{b.name}"))
+            clause=gap_clause(ctx, [(classes[a.name], classes[b.name])
+                                    for classes in ctx.classes.values()]),
+            subject=f"{a.name}/{b.name}"))
     return out
 
 

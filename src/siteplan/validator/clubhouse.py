@@ -19,8 +19,16 @@ from siteplan.contracts.resolved_rules import (
 )
 from siteplan.contracts.validation import Check, Family
 from siteplan.units import sqft_to_sqm
+from siteplan.validator.blocks import gap_cell, gap_clause
 from siteplan.validator.context import Context
-from siteplan.validator.measure import TOL_M, HeightClass, classify, setback_of
+from siteplan.validator.measure import (
+    ALL_ROUND_NOTE,
+    TOL_M,
+    UNCONFIRMED_NOTE,
+    HeightClass,
+    classify,
+    setback_of,
+)
 from siteplan.validator.readings import (
     EACH_OWN,
     MINIMUM_SHARE,
@@ -103,17 +111,22 @@ def club_house_check(ctx: Context) -> Check:
 # --- Where the club house stands -----------------------------------------------------------
 
 
+def _club_height_m(ctx: Context) -> float:
+    return ctx.drawn.club_floors * ctx.brief.firm_standards.floor_to_floor_m.value
+
+
 def _club_class(ctx: Context) -> HeightClass | None:
-    """The club house's own Table IV band, from its floors and the firm's floor height."""
-    d = ctx.drawn
-    if d.club.is_empty:
+    """The club house's own band, from its floors and the firm's floor height."""
+    if ctx.drawn.club.is_empty:
         return None
-    return classify(ctx.rules, d.club_floors * ctx.brief.firm_standards.floor_to_floor_m.value)
+    return classify(ctx.rules, _club_height_m(ctx))
 
 
 def club_setback_check(ctx: Context) -> Check | None:
-    """The club house is a building and keeps the setback its height asks. A low-rise club house
-    is under Table III, which is not modelled: said, not left out."""
+    """The club house is a building and keeps the setback its own band asks: Table IV's when it
+    is as tall as a high-rise (where it cannot pass: it is a block like the towers, with its fire
+    access and spacing not modelled), Table III's below that, where the rules model the band. A
+    band they do not model is said, not left out."""
     cls = _club_class(ctx)
     if cls is None:
         return None
@@ -123,21 +136,30 @@ def club_setback_check(ctx: Context) -> Check | None:
                      f"{cls.height_m:g} m high: {cls.label}", "the setback its height asks",
                      clause, TABLE_III_NOTE)
     gap = setback_of(ctx.net, ctx.drawn.club)
+    required = f">= {cls.setback_m:.2f} m to the net plot line"
+    if not cls.high_rise:
+        if not cls.confirmed:
+            return plain(Family.SETBACK, rule, Status.UNVERIFIED, f"{gap:.2f} m", required,
+                         f"{cls.table}; {clause}", f"{ALL_ROUND_NOTE} {UNCONFIRMED_NOTE}")
+        return plain(Family.SETBACK, rule, verdict(gap + TOL_M >= cls.setback_m),
+                     f"{gap:.2f} m", required, f"{cls.table}; {clause}", ALL_ROUND_NOTE)
     status = verdict(gap + TOL_M >= cls.setback_m)
     return plain(Family.SETBACK, rule, Status.UNVERIFIED if status is Status.PASS else status,
-                 f"{gap:.2f} m", f">= {cls.setback_m:.2f} m to the net plot line", clause,
-                 TALL_CLUB_NOTE if status is Status.PASS else "")
+                 f"{gap:.2f} m", required, clause, TALL_CLUB_NOTE if status is Status.PASS else "")
 
 
 def club_gap_checks(ctx: Context) -> list[Check]:
-    """The club house is a block of its own (rule 15(a)(x)), so it keeps a Table IV gap from each
-    tower. A low-rise club house has no gap of its own in the model (Table III), so the tower's
+    """The club house is a block of its own (rule 15(a)(x)), so it keeps a gap from each tower.
+    Below the high-rise height in a band the rules model it is judged like any pair of blocks, on
+    its own band's gap. A club house the rules do not model has no gap of its own, so the tower's
     gap is the one asked where the taller block governs; where each block keeps its own, the
-    tower's half is the least that can be asked and the rest is not known."""
+    tower's half is the least that can be asked and the rest is not known. A club house as tall as
+    a high-rise is not modelled."""
     d, cls = ctx.drawn, _club_class(ctx)
     inside = d.club.intersection(union_of_all([t.footprint for t in ctx.towers])).area
     if cls is None or inside > NOISE_SQM:
         return []
+    below = cls.settled and not cls.high_rise
     out = []
     for tower in ctx.towers:
         gap = float(tower.footprint.distance(d.club))
@@ -147,6 +169,9 @@ def club_gap_checks(ctx: Context) -> list[Check]:
             tower_cls = ctx.classes.get(reading, {}).get(tower.name)
             if tower_cls is None:
                 return unknown_reading(STILT_IN_RULE_HEIGHT, reading)
+            if below:
+                return gap_cell(cls, tower_cls, _club_height_m(ctx), tower.rule_height_m(reading),
+                                spacing, gap)
             shown, need = f"{gap:.2f} m", tower_cls.gap_m
             if need is None or cls.state == "ok" or spacing not in (TALLER_GOVERNS, EACH_OWN):
                 return Cell(Status.NOT_CHECKED, shown, "a Table IV gap",
@@ -163,8 +188,9 @@ def club_gap_checks(ctx: Context) -> list[Check]:
                         "Each block keeps its own gap: the club house's is Table III's, not "
                         "modelled, so only the tower's half is known.")
 
+        pairs = [(cls, classes[tower.name]) for classes in ctx.classes.values()] if below else []
         out.append(check_from(
             run(ctx.rules, [STILT_IN_RULE_HEIGHT, MIXED_HEIGHT_SPACING], cell),
             family=Family.SPACING, rule=f"Club house gap to {tower.name}",
-            clause=ctx.rules.spacing.clause, subject=tower.name))
+            clause=gap_clause(ctx, pairs), subject=tower.name))
     return out
