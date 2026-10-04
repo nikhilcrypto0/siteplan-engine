@@ -61,7 +61,11 @@ def _defaults(master_plan_road: bool) -> list[dict]:
             ALL,
             sources=["G.O.168 rule 2(e): leaves out only the parapet, staircase head room, lift "
                      "room and water tank",
-                     "rule 5(c) excludes the stilt for Table III only",
+                     f"{rules.TABLE_III_STILT_CLAUSE}: Table III's height is read without the "
+                     "stilt, which is the text and not this reading",
+                     "rule 5's heading (p.9) calls the buildings below the class 'below 18m in "
+                     "height inclusive of Stilt / Parking Floor': it leans to counting the stilt "
+                     "for the class",
                      rules.PARKING_FLOOR_HEIGHT_CLAUSE,
                      "the firm's own unsanctioned drawing keeps setbacks as if the stilt were "
                      "not counted (not evidence)"],
@@ -120,8 +124,14 @@ def _defaults(master_plan_road: bool) -> list[dict]:
              "each_own": "each block keeps its own gap"},
             "taller_governs",
             sources=[f"{rules.BLOCK_SPACING_CLAUSE}: 'the open space mentioned in Col. 4' "
-                     "without saying which block sets it"],
-            settles="a sanctioned plan with two blocks of different heights"),
+                     "without saying which block sets it",
+                     f"{rules.GROUP_SCHEME_SPACING_CLAUSE}: for a block below 21 m beside a "
+                     "high-rise, Column 10 of Table III or Column 4 of Table IV 'as the case may "
+                     "be', and not which",
+                     f"{rules.NON_HIGH_RISE_SPACING_CLAUSE}: two blocks below 21 m are not open "
+                     "(the tallest block's side setback), so this reading is for a pair with a "
+                     "high-rise in it"],
+            settles="a sanctioned plan with two blocks of different heights, one a high-rise"),
         _reading(
             VISITOR_PARKING,
             "Where must visitors' parking be?",
