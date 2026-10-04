@@ -3,6 +3,7 @@ each case is a layout a review drew that the first version of the validator coun
 
 from shapely.geometry import Polygon, box
 from validator_helpers import check, fixture, rectangle, select, set_floors, shape, status
+from validator_low_helpers import unmodelled_below
 
 from siteplan.contracts.candidate import Cellars
 from siteplan.contracts.common import Status
@@ -97,9 +98,10 @@ def _low_rise(candidate):
 
 
 def test_where_the_setback_is_not_known_bays_and_ramps_cannot_be_passed():
-    """Below 21 m Table III sets the setback and it is not modelled: a ramp 0.5 m inside the front
-    boundary was 'clear of the setbacks', and the bays were counted wherever they stood."""
-    report = fixture("rectangle").edited(_low_rise).report()
+    """Below 21 m Table III sets the setback; where its band is not modelled a ramp 0.5 m inside
+    the front boundary was 'clear of the setbacks', and the bays were counted wherever they
+    stood."""
+    report = unmodelled_below(fixture("rectangle")).edited(_low_rise).report()
     assert status(report, BAYS) is Z.UNVERIFIED
     assert "setback is not known" in check(report, BAYS).finding.note
     assert status(report, RAMP) is Z.UNVERIFIED

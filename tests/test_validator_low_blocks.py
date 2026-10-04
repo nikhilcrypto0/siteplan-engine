@@ -2,9 +2,10 @@
 setback, the gap between blocks, the road their band asks, and what a prohibited high-rise does
 and does not say of them.
 
-Every band here is MADE UP (tests/validator_low_helpers.py): the validator's logic is tested
-before A2 encodes the real Table III, and no figure below is a value of the order. A band the
-rules do not model stays NOT_CHECKED, never PASS, and a band they mark UNVERIFIED settles nothing.
+Every band here is MADE UP (tests/validator_low_helpers.py): the validator's logic is tested apart
+from the real Table III the fixtures now carry (A2), and no figure below is a value of the order. A
+band the rules do not model (`unmodelled_below`, the fixtures' one band before A2) stays
+NOT_CHECKED, never PASS, and a band they mark UNVERIFIED settles nothing.
 
 A low block here usually has no stilt (`flat`), so every reading of the stilt gives it one height;
 test_table_iii_is_read_on_the_height_above_the_stilt_whatever_the_reading holds the stilt itself.
@@ -31,6 +32,7 @@ from validator_low_helpers import (
     floors_of,
     low_band,
     spacing_open,
+    unmodelled_below,
     with_bands_below,
     with_low_bands,
 )
@@ -73,7 +75,7 @@ def _t2_to_the_west(metres):
 
 
 def test_a_block_in_a_band_the_rules_do_not_model_is_never_passed():
-    report = all_low(fixture("rectangle")).report()  # the fixtures' band below 21 m: not modelled
+    report = unmodelled_below(all_low(fixture("rectangle"))).report()
     for rule in ("All-round setback: T1", "Gap between blocks: T1 / T2",
                  "Abutting road width (for T1)", "Club house: setback", "Club house gap to T1"):
         assert status(report, rule) is Z.NOT_CHECKED, rule
@@ -331,7 +333,7 @@ def test_a_prohibition_permits_nothing_lower_and_a_low_block_is_judged_on_its_ba
     """On a site that may take no high-rise, a block below 21 m neither passes nor fails on the
     prohibition. In a band the rules do not model it is NOT_CHECKED; in one they model, its band
     decides, PASS or FAIL, exactly as on a site that may take a high-rise."""
-    shut = _prohibited(all_low(fixture("rectangle")))
+    shut = _prohibited(unmodelled_below(all_low(fixture("rectangle"))))
     assert status(shut.report(), "All-round setback: T1") is Z.NOT_CHECKED
     modelled = _prohibited(with_low_bands(all_low(fixture("rectangle"))))
     open_site = with_low_bands(all_low(fixture("rectangle")))
@@ -360,7 +362,7 @@ def test_a_prohibition_fails_the_high_rise_in_a_mixed_layout_and_leaves_the_low_
 def test_installing_modelled_bands_below_21_m_moves_no_check_of_a_high_rise_layout(site):
     """The fixtures' towers are all high-rise. Only the club house, which is the one low block
     there, changes: it is judged on its band instead of NOT_CHECKED."""
-    before = fixture(site).report()
+    before = unmodelled_below(fixture(site)).report()
     after = with_low_bands(fixture(site)).report()
     moved = changed_rules(before, after)
     assert set(moved) <= {"Club house: setback", "Club house gap to T1", "Club house gap to T2",
@@ -371,7 +373,7 @@ def test_installing_modelled_bands_below_21_m_moves_no_check_of_a_high_rise_layo
 def test_the_high_rise_blocks_of_a_mixed_layout_are_judged_as_before_the_low_one_is_modelled():
     """T3 is 15 m. Whether its band is modelled changes T3's own checks and nothing about T1 or
     T2's: their setback, fire access and eligibility read the same."""
-    shut = flat(fixture("rectangle"), T3=5)
+    shut = unmodelled_below(flat(fixture("rectangle"), T3=5))
     open_ = with_low_bands(shut)
     for rule in ("All-round setback: T1", "All-round setback: T2", "Fire access: T1",
                  "Fire access: T2", "High-rise eligibility", "Plot size for high-rise",
@@ -381,7 +383,7 @@ def test_the_high_rise_blocks_of_a_mixed_layout_are_judged_as_before_the_low_one
 
 def test_an_unmodelled_low_block_beside_a_high_rise_does_not_hide_the_high_rise_road_verdict():
     """The road check judges the high-rise blocks as before; the block it cannot judge is named."""
-    report = flat(fixture("rectangle"), T3=5).report()  # T3 15 m, band not modelled
+    report = unmodelled_below(flat(fixture("rectangle"), T3=5)).report()  # T3 15 m
     c = check(report, "Abutting road width (for T1)")
     assert c.finding.status is Z.PASS and "T3" in c.finding.note
     assert c.by_reading[STILT_IN_RULE_HEIGHT] == {COUNTED: Z.PASS, NOT_COUNTED: Z.PASS}

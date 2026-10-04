@@ -118,8 +118,16 @@ def test_a_high_rise_band_that_carries_a_strip_is_held_to_it_not_to_the_high_ris
 
 
 def test_a_high_rise_band_that_carries_none_keeps_the_high_rise_strip():
-    """As before: 2 m where the setback reaches 9 m (the 24-27 m band, the stilt counted)."""
-    base = fixture("rectangle").with_rules(lambda r: select(r, STILT_IN_RULE_HEIGHT, COUNTED))
-    c = check(base.report(), STRIP)
+    """As before: 2 m where the setback reaches 9 m (the 24-27 m band, the stilt counted). The
+    contract fixtures' high-rise bands from 9 m carry that strip themselves (A2: 2 m, all
+    sides); without it the check falls back on rule 7(a)(viii), to the same verdict."""
+    def none_carried(rules):
+        for band in rules.height.bands:
+            if band.kind is BandKind.HIGH_RISE:
+                band.green_strip_m = None
+    shipped = fixture("rectangle").with_rules(lambda r: select(r, STILT_IN_RULE_HEIGHT, COUNTED))
+    c = check(shipped.with_rules(none_carried).report(), STRIP)
     assert c.finding.status is Z.PASS
     assert c.finding.required == ">= 2 m on sides with a setback of 9 m or more"
+    carried = check(shipped.report(), STRIP)
+    assert carried.finding.status is Z.PASS and carried.finding.required == ">= 2 m on all sides"

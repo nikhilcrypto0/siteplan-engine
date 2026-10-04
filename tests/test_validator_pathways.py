@@ -72,11 +72,14 @@ def test_a_pathway_that_does_not_branch_out_of_a_road_fails():
 
 
 def test_where_the_rules_give_no_pathway_width_a_pathway_is_unverified():
-    inputs = _with_pathway(_off_the_roads()(with_low_bands(all_low(fixture("rectangle"), 4))))
-    assert inputs.rules.circulation.pathway_width_m is None  # the contract fixtures carry none yet
+    """The contract fixtures carry rule 8(l)'s 6 m (A2); rules that give none leave it open."""
+    shipped = _with_pathway(_off_the_roads()(with_low_bands(all_low(fixture("rectangle"), 4))))
+    assert shipped.rules.circulation.pathway_width_m.value == 6.0
+    inputs = shipped.with_rules(lambda r: setattr(r.circulation, "pathway_width_m", None))
     c = check(inputs.report(), PATHWAYS)
     assert c.finding.status is Z.UNVERIFIED
     assert "the rules give no pathway width yet" in c.finding.measured
+    assert status(shipped.report(), PATHWAYS) is Z.PASS  # the drawn pathway is 6 m wide
 
 
 def test_a_block_up_to_12_m_on_no_road_and_reached_by_no_pathway_has_no_way_in():
