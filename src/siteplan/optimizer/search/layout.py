@@ -287,7 +287,8 @@ def lay_out(run: Run, ev: Evaluation) -> tuple[Laid | None, str]:
     laid = Laid(
         frame=frame, placements=placements, ring=cluster.ring, streets=streets, entrance=entrance,
         lanes=lanes, pockets=pockets, strip=strip, club=club, club_floors=club_floors,
-        facilities=facilities, facilities_missed=missed, ramps=ramps, cellars=plan.cellars,
+        facilities=facilities, facilities_missed=missed, ramps=ramps,
+        ring_clipped=cluster.clipped, cellars=plan.cellars,
         cars=_cars(plan), zones=zones, land=land)
     return laid, ""
 
