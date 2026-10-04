@@ -36,7 +36,8 @@ from siteplan.units import sqm_to_sqft
 
 ROAD_KINDS = {"main approach": RoadKind.APPROACH, "loop": RoadKind.LOOP,
               "internal": RoadKind.INTERNAL, "cul-de-sac": RoadKind.CUL_DE_SAC,
-              "perimeter": RoadKind.PERIMETER_LANE, "driveway": RoadKind.DRIVEWAY}
+              "perimeter": RoadKind.PERIMETER_LANE, "driveway": RoadKind.DRIVEWAY,
+              "pathway": RoadKind.PATHWAY}
 LEGACY_ROAD_NAMES = {kind: name for name, kind in ROAD_KINDS.items()}
 SLIVER_SQM = 0.01  # pieces smaller than this are drawing noise, not ground
 # The ground a facility stands on, by the surface its library states. A surface nobody stated is

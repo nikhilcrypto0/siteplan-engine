@@ -34,7 +34,9 @@ __all__ = ["CONTRACTS_VERSION", "Basis", "Contract", "FacilityUse", "Finding", "
 
 # 1.1 (2026-10-03): height limits with an explicit bound and applicability, high-rise eligibility,
 # inclusive band edges, facility use and surface, design margins, bounds on rule values.
-CONTRACTS_VERSION = "1.1"
+# 1.2 (2026-10-04): Table III (rule 5) can be held: a band's own height measure (the stilt left
+# out, 5(c)), its front setback, its permission and planting strip; rule 8(l)'s pathways.
+CONTRACTS_VERSION = "1.2"
 
 Point = tuple[float, float]
 Ring = list[Point]
@@ -51,7 +53,7 @@ class Part(BaseModel):
 class Contract(Part):
     """A permanent contract between pipeline stages, versioned."""
 
-    schema_version: Literal["1.1"] = CONTRACTS_VERSION
+    schema_version: Literal["1.2"] = CONTRACTS_VERSION
 
 
 class SourceKind(StrEnum):

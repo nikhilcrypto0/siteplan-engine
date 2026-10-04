@@ -38,6 +38,7 @@ class RoadKind(StrEnum):
     CUL_DE_SAC = "CUL_DE_SAC"
     DRIVEWAY = "DRIVEWAY"  # never counted as an internal road
     PERIMETER_LANE = "PERIMETER_LANE"
+    PATHWAY = "PATHWAY"  # rule 8(l): access for a block up to 12 m, branching from the roads
 
 
 class RoadPiece(Part):
