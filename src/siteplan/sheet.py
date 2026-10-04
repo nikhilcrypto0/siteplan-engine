@@ -153,10 +153,10 @@ def write_sheet_dxf(option: LayoutOption, plot: Polygon, request: LayoutRequest,
         flats = sum(tower.flats_per_floor().values())
         label(f"{tower.name} · {flats} FLATS/FLOOR", (centre.x, centre.y), text_h * 0.9)
 
-    _dimension(msp, plot, option, m)
+    _dimension(msp, plot, [tower.footprint for tower in option.towers], m)
     _north_arrow(msp, plot, m)
     _scale_bar(msp, plot, scale, m)
-    _border(msp, plot, option, request, info, scale, m)
+    _border(msp, plot, render(area_statement(option, request)), info, scale, m)
 
     out = Path(path)
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -164,8 +164,9 @@ def write_sheet_dxf(option: LayoutOption, plot: Polygon, request: LayoutRequest,
     return out
 
 
-def _dimension(msp, plot: Polygon, option: LayoutOption, m: float) -> None:
-    """Overall site extents and every tower, so the setbacks can be read off the sheet."""
+def _dimension(msp, plot: Polygon, footprints: list[Polygon], m: float) -> None:
+    """Overall site extents and every tower, so the setbacks can be read off the sheet. Plain
+    geometry, so the service's candidate sheet (siteplan.service.render) uses it too."""
     minx, miny, maxx, maxy = plot.bounds
     style = {
         "dimstyle": "EZDXF",
@@ -178,8 +179,8 @@ def _dimension(msp, plot: Polygon, option: LayoutOption, m: float) -> None:
                        **style).render()
     msp.add_linear_dim(base=(minx - 9 * m, miny), p1=(minx, miny), p2=(minx, maxy),
                        angle=90, **style).render()
-    for tower in option.towers:
-        x0, y0, x1, y1 = tower.footprint.bounds
+    for footprint in footprints:
+        x0, y0, x1, y1 = footprint.bounds
         msp.add_linear_dim(base=(x0, y1 + 3 * m), p1=(x0, y1), p2=(x1, y1), **style).render()
 
 
@@ -215,9 +216,11 @@ def _scale_bar(msp, plot: Polygon, scale: int, m: float) -> None:
         (minx + 4 * step, y - 3 * m), align=ezdxf.enums.TextEntityAlignment.MIDDLE_CENTER)
 
 
-def _border(msp, plot: Polygon, option: LayoutOption, request: LayoutRequest,
-            info: SheetInfo, scale: int, m: float) -> None:
-    """The A1 border, the area statement and the title block, all at sheet scale."""
+def _border(msp, plot: Polygon, statement: str, info: SheetInfo, scale: int,
+            m: float) -> tuple[float, float]:
+    """The A1 border, the area statement (rendered text) and the title block, all at sheet
+    scale. Returns where the statement column starts (its left edge) and the top of the title
+    block, so a caller can set a note between them."""
     width, height = SHEET_MM[0] * m, SHEET_MM[1] * m
     minx, miny, maxx, maxy = plot.bounds
     # Centre the drawing in the space left of the area statement column.
@@ -234,7 +237,6 @@ def _border(msp, plot: Polygon, option: LayoutOption, request: LayoutRequest,
     )
 
     right = left + width - inner
-    statement = render(area_statement(option, request))
     msp.add_mtext(statement.replace("\n", "\\P"), dxfattribs={"layer": "SHEET-TEXT"}).set_location(
         (right - STATEMENT_WIDTH_MM * m, bottom + height - inner - 4 * m)
     ).dxf.char_height = 2.2 * m
@@ -256,3 +258,4 @@ def _border(msp, plot: Polygon, option: LayoutOption, request: LayoutRequest,
     msp.add_text(_fit(info.project, TITLE_CHARS), height=3.6 * m,
                  dxfattribs={"layer": "SHEET-TEXT"}).set_placement(
         (x0 + 2 * m, y0 + block_h - line_h * 0.55), align=ezdxf.enums.TextEntityAlignment.LEFT)
+    return right - STATEMENT_WIDTH_MM * m, y0 + block_h
