@@ -24,6 +24,7 @@ SCAN_STEP_M = 2.0
 EPS_M = 0.01
 TRIM_ABOVE = 1.2  # a pocket this much bigger than what is still needed is cut down
 TRIM_MARGIN = 1.02  # and cut a little over, so rounding never leaves the open space short
+TRIM_WIDE_SHARE = 0.98  # the piece cut keeps this share of itself at the full width, or is dropped
 
 
 def fit_rectangle(room: BaseGeometry, width_m: float, depth_m: float, turns_deg: Sequence[float],
@@ -128,6 +129,6 @@ def _trim(pocket: Polygon, area: float, turn_deg: float, min_width_m: float, min
     piece = max(parts, key=lambda p: p.area)
     if piece.area < area / TRIM_MARGIN or piece.area < min_sqm:
         return None
-    if opening(piece, min_width_m + 2 * EPS_M).area < piece.area * 0.98:
+    if opening(piece, min_width_m + 2 * EPS_M).area < piece.area * TRIM_WIDE_SHARE:
         return None
     return rotate(piece, turn_deg, origin=(0, 0))

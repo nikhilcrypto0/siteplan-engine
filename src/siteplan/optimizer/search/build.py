@@ -44,6 +44,7 @@ from siteplan.units import sqm_to_sqft
 
 SLIVER_SQM = 0.01
 OPEN_SPACE_CLAIM = 0.999  # what is claimed of the open space drawn: never more than counts
+ON_POCKET_SHARE = 0.5  # a soft facility more than this much on a pocket is the pocket's own ground
 STRATEGY_NAME = "FULL"
 GROUND_BY_SURFACE = {Surface.BUILT: PhysicalUse.OTHER_BUILT, Surface.HARD: PhysicalUse.HARD_AMENITY,
                      Surface.SOFT: PhysicalUse.SOFT_OPEN_SPACE}
@@ -235,7 +236,7 @@ def _claims(laid: Laid, plot: Plot, q: Quantities
     pockets = unary_union(laid.pockets) if laid.pockets else EMPTY
     on_pockets = [f for f in laid.facilities
                   if not pockets.is_empty and f.request.surface is Surface.SOFT
-                  and f.shape.intersection(pockets).area > 0.5 * f.shape.area]
+                  and f.shape.intersection(pockets).area > ON_POCKET_SHARE * f.shape.area]
     for f in laid.facilities:
         if f in on_pockets:
             continue
@@ -245,7 +246,7 @@ def _claims(laid: Laid, plot: Plot, q: Quantities
         claims[use].append((f.request.name, f.shape, tags))
     for i, pocket in enumerate(laid.pockets, 1):
         tags = [f"AMENITY:{f.request.name}" for f in on_pockets
-                if f.shape.intersection(pocket).area > 0.5 * f.shape.area]
+                if f.shape.intersection(pocket).area > ON_POCKET_SHARE * f.shape.area]
         claims[PhysicalUse.SOFT_OPEN_SPACE].append((f"open space {i}", pocket, tags))
     if not laid.strip.is_empty:
         claims[PhysicalUse.GREEN_STRIP].append(("green strip", laid.strip, []))

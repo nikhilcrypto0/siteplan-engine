@@ -11,6 +11,12 @@ reply is computed here. Two rules carry over from the assistant:
   ask, a timeout, or any answer other than an approval stops the call with nothing drawn.
 - The model only reaches files inside the workspace, and replies carry computed numbers
   and fixed wording, never text copied out of a drawing.
+
+`propose_layouts` and `check_rules` are LEGACY (the prototype generator and its checker), not for
+production generation by a language model: they stay for the Hermes profile already wired to
+them and for regression comparison. The production surface is `siteplan.service`, on the full
+search and the independent validator. The tools' own docstrings are left as they were, because
+they are the descriptions Hermes's model reads.
 """
 
 from __future__ import annotations

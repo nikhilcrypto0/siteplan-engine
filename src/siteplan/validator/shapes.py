@@ -26,6 +26,8 @@ OPENING_SLACK_M = 0.01  # a part this close to the width asked is that wide: a r
 BEND_RATIO = 1.05  # a strip longer along its middle than its box by this share is bent
 NOISE_SQM = 0.5  # less than this of overlap is drawing noise, not a car, a wall or a lane
 EDGE_REACH_M = 0.5  # a shape this close to a plot's edge stands in it
+HEAL_M = 0.05  # pieces drawn to meet may miss by this much, and still meet
+CENTRE_TOLERANCE_M = 0.05  # how finely the widest circle's centre is found
 
 
 def polygons_of(geometry: BaseGeometry | None) -> list[Polygon]:
@@ -156,7 +158,7 @@ def width_of(shape: BaseGeometry, ceiling_m: float) -> float:
     return width_in(shape, shape, ceiling_m)
 
 
-def healed(shape: BaseGeometry, gap_m: float = 0.05) -> BaseGeometry:
+def healed(shape: BaseGeometry, gap_m: float = HEAL_M) -> BaseGeometry:
     """The shape with hairline cracks closed: pieces drawn to meet can miss by a hair."""
     return mitred(mitred(shape, gap_m), -gap_m)
 
@@ -239,7 +241,7 @@ def inscribed_circle(shape: BaseGeometry) -> tuple[float, Point | None]:
     (0, None) for a shape with no ground."""
     best, centre = 0.0, None
     for polygon in polygons_of(shape):
-        middle = polylabel(polygon, tolerance=0.05)
+        middle = polylabel(polygon, tolerance=CENTRE_TOLERANCE_M)
         radius = polygon.boundary.distance(middle)
         if radius > best:
             best, centre = radius, middle

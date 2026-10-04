@@ -4,6 +4,10 @@ A drawn layout carries its parking plan (parking.ParkingPlan): the stilt, the su
 the cellars, each measured from its own geometry. Without one, as when a project file is checked
 on its own, only the stilt and surface bays are known and a shortfall is UNVERIFIED rather than a
 FAIL, because the rest may be in cellars nobody has drawn.
+
+LEGACY, not for judging production layouts: part of the prototype's checker, kept for
+regression comparison. Production layouts are judged by `siteplan.validator` through
+`siteplan.service`.
 """
 
 from __future__ import annotations

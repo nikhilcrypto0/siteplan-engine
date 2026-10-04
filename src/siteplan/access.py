@@ -18,6 +18,11 @@ checked as the swept sectors themselves, at every tower corner and every bend of
 
 Everything here is geometry the checker measures again from the drawing; nothing is taken on
 trust from the layout that built it.
+
+The road generators here (`loop_road`, `entrance`, `green_strip`, `inner_plot`, `fire_bands`,
+`loop_turns`, and what `grounds.frame` builds with them) are LEGACY, not for production
+generation by a language model: kept only for regression comparison. Production generation is
+`siteplan.service`. The constants (the lane, the radii, the 9 m road) stay shared.
 """
 
 from __future__ import annotations
