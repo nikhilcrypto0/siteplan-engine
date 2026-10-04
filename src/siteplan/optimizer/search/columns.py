@@ -2,8 +2,9 @@
 
 In the turned frame (frame.py) a column is a strip one block deep, running along y. Along it the
 search chooses a sequence of blocks (a prototype at a floor count, each its own height) so that each
-lies wholly on the ground its height allows and each keeps from the next the gap Table IV asks of
-the taller of the two. That is a one-dimensional problem, solved exactly on a grid of `step_m`:
+lies wholly on the ground its height allows and each keeps from the next the gap the pair asks (the
+taller one's, Table IV's or Table III's, and never less than a high-rise's fire lane and turning
+room: fringe.need_m). That is a one-dimensional problem, solved exactly on a grid of `step_m`:
 the best total saleable area over every sequence, so a lower block stands where only a lower
 height fits, a block is lowered when that lets its neighbour stand, and no height is chosen for
 being the legal maximum.
@@ -32,9 +33,10 @@ GAP_SLACK_M = 0.0  # a gap is exactly the figure asked; the grid only ever round
 
 
 def ground_key(cls: FloorClass) -> float:
-    """What a floor count asks of the ground: its setback. Counts that ask the same share
+    """What a floor count asks of the ground: its setback, the larger of its front and side
+    figures (a column stands inside the ring road, beyond either). Counts that ask the same share
     stretches."""
-    return cls.setback_m
+    return cls.zone_m
 
 
 def class_key(cls: FloorClass) -> tuple[int, float, float]:
@@ -83,7 +85,7 @@ def choices_for(prototypes: Sequence[TowerPrototype],
     for prototype in prototypes:
         by_ground: dict[tuple[float, float], FloorClass] = {}
         for cls in classes[prototype.id]:
-            by_ground[(cls.setback_m, cls.gap_m)] = cls  # lowest first: the tallest wins
+            by_ground[(ground_key(cls), cls.gap_m)] = cls  # lowest first: the tallest wins
         for cls in by_ground.values():
             found.append(Choice(prototype, cls, prototype.length_m, prototype.depth_m,
                                 prototype.per_floor.saleable_sqft * cls.floors))

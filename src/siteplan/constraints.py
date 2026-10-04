@@ -43,6 +43,7 @@ from siteplan import (
     towers,
 )
 from siteplan.basis import Basis  # lives in basis.py so the contracts need not import this module
+from siteplan.optimizer.search import land as search_land
 
 
 @dataclass(frozen=True)
@@ -169,6 +170,21 @@ REGISTRY: tuple[Constraint, ...] = (
              "a block below 21 m and a high-rise keep between them is open here too (rule "
              "8(j): Table III column 10 or Table IV column 4, 'as the case may be').",
         settles="A sanctioned plan with two blocks of different heights.",
+    ),
+    Constraint(
+        "Setbacks", "Which stretches of the plot line face the access road, where a block's band "
+                    "keeps its Building Line apart from its side setback (the full search).",
+        f"a stretch whose outward side is within {search_land.FACING_DEG:g} degrees of the access "
+        f"side ({search_land.FACING_DEG + search_land.DIAGONAL_SLOP_DEG:g} for a diagonal label "
+        f"such as SW); within {search_land.FACING_DOUBT_DEG:g} degree of either limit the larger "
+        "of the two setbacks is kept", Basis.ENGINE_DESIGN_ASSUMPTION,
+        "none (optimizer.search.land.setback_land)",
+        ("optimizer.search.land.FACING_DEG", "optimizer.search.land.DIAGONAL_SLOP_DEG",
+         "optimizer.search.land.FACING_DOUBT_DEG"),
+        note="The validator's reading of a frontage (a diagonal label stands for either side it "
+             "lies between); where the access side is not known the larger figure is kept all "
+             "round.",
+        settles="The architect's word on which edge is the frontage, or a sanctioned plan.",
     ),
     Constraint(
         "Height", "The tallest a building below high-rise may be, by plot size (Table III "

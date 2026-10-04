@@ -20,10 +20,11 @@ the band of its rule height, for a count below 21 m Table III's row on the heigh
 stilt (rule 5(c)). Where a high-rise is prohibited no count of the high-rise height or more is
 offered, and that permits nothing lower.
 
-A count below the high-rise height is assessed on its Table III band (A2) but is neither offered
-nor passed: the search lays out low blocks only from C3, and a Table III band carries its own
-permission (`HeightRules.band_permission`), which nothing here reads yet. Until then such a count
-is NOT_CHECKED, whatever its band says.
+A count below the high-rise height stands on its own band's permission
+(`HeightRules.band_permission`), as a high-rise count stands on the site's eligibility: offered
+where the band is ALLOWED, offered and labelled UNVERIFIED where the band's permission is not
+settled, never offered where it is PROHIBITED. A band the rules give no setback for (18-21 m on
+most plots) is never offered either: nothing would hold a block there to anything.
 """
 
 from __future__ import annotations
@@ -56,6 +57,8 @@ CEILING_M = 120.0
 CONDITION = {Applicability.APPLIES: True, Applicability.DOES_NOT_APPLY: False,
              Applicability.UNKNOWN: None}
 HIGH_RISE_CHECK = "High-rise eligibility"
+PERMISSION_STATUS = {Eligibility.ALLOWED: Status.PASS, Eligibility.PROHIBITED: Status.FAIL,
+                     Eligibility.UNVERIFIED: Status.UNVERIFIED}
 
 
 @dataclass(frozen=True)
@@ -94,10 +97,12 @@ class FloorOption:
     band: Band | None
     limits: tuple[LimitCheck, ...]
     high_rise: LimitCheck | None = None  # the site's eligibility, for a high-rise count only
+    permission: LimitCheck | None = None  # its band's permission, for a count below the high-rise
 
     @property
     def checks(self) -> tuple[LimitCheck, ...]:
-        return (*self.limits, *((self.high_rise,) if self.high_rise else ()))
+        return (*self.limits, *((self.high_rise,) if self.high_rise else ()),
+                *((self.permission,) if self.permission else ()))
 
     @property
     def setback_m(self) -> float | None:
@@ -114,7 +119,7 @@ class FloorOption:
 
     @property
     def below_high_rise(self) -> bool:
-        """A count under the high-rise height: Table III's, laid out only from C3."""
+        """A count under the high-rise height: Table III's (rule 5), not Table IV's."""
         return self.high_rise is None
 
     @property
@@ -128,10 +133,18 @@ class FloorOption:
         return not any(check.holds_back for check in self.checks)
 
     @property
+    def stops_the_scan(self) -> bool:
+        """Something that only grows with the height holds this count back (a height limit, the
+        site's high-rise eligibility), so no taller count is offered either. A band below the
+        high-rise height that is not permitted says nothing of a taller one."""
+        return any(check.holds_back for check in (*self.limits, *((self.high_rise,)
+                                                                  if self.high_rise else ())))
+
+    @property
     def status(self) -> Status:
         if self.limits_status is not Status.PASS:
             return self.limits_status
-        return Status.PASS if self.modelled and not self.below_high_rise else Status.NOT_CHECKED
+        return Status.PASS if self.modelled else Status.NOT_CHECKED
 
     @property
     def open_items(self) -> tuple[str, ...]:
@@ -206,6 +219,23 @@ def _high_rise(rules: ResolvedRules, rule_m: float) -> LimitCheck | None:
                       holds_back=high_rise.eligibility is Eligibility.PROHIBITED)
 
 
+def _band_permission(rules: ResolvedRules, band: Band | None, band_height_m: float
+                     ) -> LimitCheck | None:
+    """Whether a count below the high-rise height may stand here: its band's own permission
+    (plot size, road), as the rules give it. None where no band covers the height."""
+    if band is None:
+        return None
+    permission = rules.height.band_permission(band)
+    span = (f"{band.above_m:g} m" if band.above_m == band.up_to_m
+            else f"{band.above_m:g}-{band.up_to_m:g} m")
+    reason = f"the band {span} is {permission.value.lower()} here" + (
+        f": {band.permission_note}" if permission is not Eligibility.ALLOWED
+        and band.permission_note else "")
+    return LimitCheck(band.measure, None, band_height_m, PERMISSION_STATUS[permission], reason,
+                      band.clause, band.status,
+                      holds_back=permission is Eligibility.PROHIBITED)
+
+
 def assess_floor_count(rules: ResolvedRules, brief: DesignBrief, prototype: TowerPrototype | None,
                        reading: str, floors: int, *, has_stilt: bool | None = None
                        ) -> FloorOption:
@@ -220,33 +250,41 @@ def assess_floor_count(rules: ResolvedRules, brief: DesignBrief, prototype: Towe
     physical = stilt + floors * floor
     rule_height = physical if reading == STILT_COUNTED else floors * floor
     checks = tuple(_check(limit, rule_height, physical) for limit in rules.height.limits)
-    band = rules.height.band_for_block(floors * floor, stilt,
+    above_stilt = floors * floor
+    band = rules.height.band_for_block(above_stilt, stilt,
                                        stilt_counted=reading == STILT_COUNTED)
+    high_rise = _high_rise(rules, rule_height)
+    permission = None
+    if high_rise is None:  # below the high-rise height: the band's own permission decides
+        on_stilt = band is not None and band.measure is HeightMeasure.HEIGHT_ABOVE_STILT
+        permission = _band_permission(rules, band, above_stilt if on_stilt else rule_height)
     return FloorOption(floors, reading, stilt, floor, rule_height, physical, band, checks,
-                       _high_rise(rules, rule_height))
+                       high_rise, permission)
 
 
 def assess_floors(rules: ResolvedRules, brief: DesignBrief, prototype: TowerPrototype | None,
                   reading: str) -> list[FloorOption]:
-    """Every floor count from one up to the first one held back (or the ceiling), each with its
-    verdicts. Heights only grow, so a count held back is followed by none that is offered; the
-    first is kept so a report can say what stops the next floor."""
+    """Every floor count from one up to the first one a height limit or the site's high-rise
+    eligibility holds back (or the ceiling), each with its verdicts. Heights only grow, so such a
+    count is followed by none that is offered; the first is kept so a report can say what stops
+    the next floor. A count whose own band below the high-rise height is not permitted is passed
+    over, not stopped at: a taller band may be."""
     options: list[FloorOption] = []
     while True:
         option = assess_floor_count(rules, brief, prototype, reading, len(options) + 1)
         options.append(option)
-        if not option.feasible or option.physical_height_m >= CEILING_M:
+        if option.stops_the_scan or option.physical_height_m >= CEILING_M:
             return options
 
 
 def feasible_floors(rules: ResolvedRules, brief: DesignBrief, prototype: TowerPrototype | None,
                     reading: str) -> list[FloorOption]:
-    """The floor counts a tower may take, lowest first: nothing holds them back, the band's
-    setback and gap are modelled, the count is a high-rise's (below it a block is Table III's,
-    which the search lays out only from C3), and the brief's height intent allows them. It is the
-    whole set, never only the most."""
+    """The floor counts a tower may take, lowest first: nothing holds them back (a count below
+    the high-rise height stands on its band's permission), the band's setback and gap are
+    modelled, and the brief's height intent allows them. It is the whole set, never only the
+    most."""
     return [option for option in assess_floors(rules, brief, prototype, reading)
-            if option.feasible and option.modelled and not option.below_high_rise
+            if option.feasible and option.modelled
             and _wanted(option.floors, brief.height_intent)]
 
 

@@ -7,6 +7,12 @@ circulation is drawn from the blocks (network.py), never before them, and the op
 house, the ramp and the facilities take the ground the blocks and roads leave (ground.py), at one
 end of the plot kept for them when there is none to spare.
 
+Blocks below the high-rise height (C3) stand wherever their Table III band's land allows: in the
+columns, and on the ground the ring road leaves (fringe.py). Every configuration of a profile
+that leaves counts open on both sides of 21 m is searched with such blocks and without, each kind
+on its own quota, and the objective decides between them when they are judged. Each narrow part of
+the plot is tried for such a block, and the notes say what came of it.
+
 The search is staged so a run stays within the brief's time budget:
 
 1. every configuration is *evaluated* cheaply: blocks in columns, the best sequence of prototypes
@@ -27,13 +33,17 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 
 from shapely.errors import GEOSException, TopologicalError
+from shapely.geometry import Polygon
+from shapely.geometry.base import BaseGeometry
 
 from siteplan import validator as independent
 from siteplan.contracts import CandidateLayout, ValidationReport
 from siteplan.optimizer.interfaces import Budget, Proposal, SearchContext, Validator
 from siteplan.optimizer.objective import Scores, measure
 from siteplan.optimizer.pareto import Scored, select
+from siteplan.optimizer.search import fringe
 from siteplan.optimizer.search.build import build_candidate
+from siteplan.optimizer.search.columns import Choice
 from siteplan.optimizer.search.layout import (
     SIDES,
     Config,
@@ -60,8 +70,10 @@ class Limits:
 
     offsets: int = 8  # where the columns start, across one pitch
     heights: int = 3  # the tallest block a configuration allows: this many floor counts, top down
-    laid_per_profile: int = 14  # configurations laid out exactly, for each profile
-    attempts_per_profile: int = 60  # and the most tried to get them
+    # configurations laid out exactly for each profile, and the most tried to get them: for each
+    # kind of configuration, with blocks below 21 m and without
+    laid_per_profile: int = 14
+    attempts_per_profile: int = 60
     judged_per_profile: int = 6  # candidates the validator judges, for each profile
     per_profile_proposed: int = 4  # the most proposed for each profile
 
@@ -83,6 +95,7 @@ class Tally:
     reasons: Counter = field(default_factory=Counter)
     rejected: list[str] = field(default_factory=list)
     exhausted: bool = False
+    low_blocks: list[list[Polygon]] = field(default_factory=list)  # of each layout laid out
 
 
 class _Stage:
@@ -130,7 +143,8 @@ class FullSearchStrategy:
                 break
         chosen = self._choose(found, brief)
         return Proposal(NAME, tuple(j.candidate for j in chosen),
-                        tuple(notes + _notes(run, tally, found, chosen)),
+                        tuple(notes + _notes(run, tally, found, chosen)
+                              + (_region_notes(run, tally, chosen) if run else [])),
                         budget_exhausted=tally.exhausted)
 
     # --- the three stages -------------------------------------------------------------------
@@ -146,25 +160,29 @@ class FullSearchStrategy:
                   tally: Tally, stage: _Stage) -> dict[str, list[Evaluation]]:
         """Every configuration, evaluated, grouped by profile. The order is the seed's, so a
         budget that stops the stage early stops it on a different part of the search for another
-        seed and the same part for the same seed."""
+        seed and the same part for the same seed. The configurations that let blocks below 21 m
+        stand come after the rest, in their own order, so the others are evaluated as they were
+        before such blocks could stand."""
         angles = orientations(run.plot.net)
-        configs = []
+        configs: dict[bool, list[tuple]] = {False: [], True: []}
         for profile in wanted:
             floors = sorted({c.floors for found in run.classes[profile.key].values()
                              for c in found}, reverse=True)[:self.limits.heights]
             for angle in angles:
                 for tallest in floors:
                     for step in range(self.limits.offsets):
-                        configs.append((profile, angle, tallest, step))
-        context.rng("evaluate").shuffle(configs)
+                        for low in _low_blocks(run, profile):
+                            configs[low].append((profile, angle, tallest, step, low))
+        context.rng("evaluate").shuffle(configs[False])
+        context.rng("evaluate-low").shuffle(configs[True])
         queues: dict[str, list[Evaluation]] = {p.key: [] for p in wanted}
-        for profile, angle, tallest, step in configs:
+        for profile, angle, tallest, step, low in [*configs[False], *configs[True]]:
             if stage.expired():
                 tally.exhausted = True
                 break
             pitch = run.depth_m + max(run.q.road_m, 10.0)
             ev = _guarded(evaluate, run, Config(profile, angle, step * pitch / self.limits.offsets,
-                                                tallest, None))
+                                                tallest, None, low_blocks=low))
             tally.evaluated += 1
             if isinstance(ev, Failure):
                 tally.reasons[ev.reason] += 1
@@ -174,34 +192,48 @@ class FullSearchStrategy:
 
     def _lay_out(self, context: SearchContext, run: Run, queues: dict[str, list[Evaluation]],
                  tally: Tally, stage: _Stage) -> list[tuple[Profile, Config, object]]:
+        """The best configurations of each profile, laid out exactly. Those that let blocks below
+        21 m stand have their own quota beside the others', so neither crowds out the other: the
+        objective decides between them when they are judged."""
         laid: list[tuple[Profile, Config, object]] = []
         by_key = {p.key: p for p in run.profiles}
+        limits = self.limits
         for key, evaluations in queues.items():
             heap = [(-ev.value, i, ev) for i, ev in enumerate(evaluations)]
             heapq.heapify(heap)
             counter = len(evaluations)
             seen: set[tuple] = set()
-            made = attempts = 0
-            while heap and made < self.limits.laid_per_profile \
-                    and attempts < self.limits.attempts_per_profile:
+            made, attempts = Counter(), Counter()
+
+            def open_(low: bool, made=made, attempts=attempts) -> bool:
+                return (made[low] < limits.laid_per_profile
+                        and attempts[low] < limits.attempts_per_profile)
+
+            while heap and (open_(False) or open_(True)):
                 if stage.expired():
                     tally.exhausted = True
                     break
                 _, _, ev = heapq.heappop(heap)
                 signature = _signature(ev)
-                if signature in seen:
+                if signature in seen or not open_(ev.config.low_blocks):
                     continue
                 seen.add(signature)
                 result, why = _guarded(lay_out, run, ev, failed=(None, ""))
-                attempts += 1
+                attempts[ev.config.low_blocks] += 1
                 if result is None:
                     tally.reasons[why] += 1
                     if ev.config.reserve is None and why.startswith(ROOM_FAILURES):
+                        # the same with an end kept, and with blocks below 21 m too (whose own
+                        # configuration may have had no room to place one); never the other way
+                        kinds = [low for low in _low_blocks(run, ev.config.profile)
+                                 if low or not ev.config.low_blocks]
                         for side in SIDES:
-                            variant = _guarded(evaluate, run, _reserved(ev.config, side, 1.0))
-                            if not isinstance(variant, Failure):
-                                counter += 1
-                                heapq.heappush(heap, (-variant.value, counter, variant))
+                            for low in kinds:
+                                variant = _guarded(evaluate, run, _reserved(
+                                    ev.config, side, 1.0, low))
+                                if not isinstance(variant, Failure):
+                                    counter += 1
+                                    heapq.heappush(heap, (-variant.value, counter, variant))
                     elif ev.config.reserve and ev.config.reserve_scale == 1.0 \
                             and why.startswith(ROOM_FAILURES):
                         variant = _guarded(evaluate, run, _reserved(
@@ -210,8 +242,10 @@ class FullSearchStrategy:
                             counter += 1
                             heapq.heappush(heap, (-variant.value, counter, variant))
                     continue
-                made += 1
+                made[ev.config.low_blocks] += 1
                 tally.laid += 1
+                tally.low_blocks.append([p.footprint for p in result.placements
+                                         if not p.standing.choice.cls.high_rise])
                 laid.append((by_key[key], ev.config, (ev, result)))
         return laid
 
@@ -290,14 +324,24 @@ def _planning_notes(run: Run) -> list[str]:
     return []
 
 
-def _reserved(config: Config, side: str, scale: float) -> Config:
+def _reserved(config: Config, side: str, scale: float, low_blocks: bool | None = None) -> Config:
     return Config(config.profile, config.angle_deg, config.offset_m, config.max_floors, side,
-                  scale)
+                  scale, config.low_blocks if low_blocks is None else low_blocks)
+
+
+def _low_blocks(run: Run, profile: Profile) -> tuple[bool, ...]:
+    """Whether a configuration lets blocks below the high-rise height stand: both ways where the
+    profile leaves counts open on both sides of it, so the objective decides between layouts with
+    them and without; the one way there is otherwise."""
+    low, high = run.has_low(profile), run.has_high(profile)
+    return (False, True) if low and high else (low,)
 
 
 def _signature(ev: Evaluation) -> tuple:
+    blocks = [*ev.standing, *(f.standing for f in ev.fringe)]
     return (round(ev.config.angle_deg, 2), ev.config.reserve, ev.config.reserve_scale,
-            tuple(sorted((round(s.x0, 1), round(s.y0, 1), s.choice.key) for s in ev.standing)))
+            ev.config.low_blocks,
+            tuple(sorted((round(s.x0, 1), round(s.y0, 1), s.choice.key) for s in blocks)))
 
 
 def _cannot_run(context: SearchContext) -> str | None:
@@ -314,9 +358,9 @@ def _cannot_run(context: SearchContext) -> str | None:
 
 
 def _no_floors() -> str:
-    return ("the law leaves no high-rise floor count open to these prototypes within the brief's "
-            "height intent: nothing is laid out (below the high-rise height Table III applies, and "
-            "it is not encoded yet)")
+    return ("the law leaves no floor count open to these prototypes within the brief's height "
+            "intent, neither a high-rise nor a block below 21 m on a band that may stand here: "
+            "nothing is laid out")
 
 
 def _envelope(site, rules):
@@ -346,6 +390,66 @@ def _notes(run: Run | None, tally: Tally, found: Sequence[Judged], chosen: Seque
     notes.append("every layout leaves the height above sea level and the 45 t loading of the "
                  "paving UNVERIFIED")
     return notes
+
+
+def _region_notes(run: Run, tally: Tally, chosen: Sequence[Judged]) -> list[str]:
+    """Whether each narrow part of the plot (a region of the envelope's width profile beside its
+    main body, no smaller than the smallest block) can take a block below 21 m, and whether the
+    layouts proposed use one there: an arm the ring road cannot reach is the optimizer's
+    question, never dropped unasked."""
+    choices = _low_options(run)
+    smallest = min((c.length_m * c.depth_m for c in choices), default=0.0)
+    regions = [r for r in _narrow_regions(run) if r.area >= smallest]  # a sliver holds none
+    if not regions or not choices:
+        return []
+    below = run.rules.height.high_rise_from_m.value
+    notes = []
+    for tried in fringe.try_regions(run.plot, regions, choices, orientations(run.plot.net), run.q):
+        centre = tried.shape.centroid
+        where = (f"the narrow part of the plot at ({centre.x:,.0f}, {centre.y:,.0f}), "
+                 f"{tried.area_sqm:,.0f} m² and {tried.width_m:.1f} m wide, was tried for a block "
+                 f"below {below:g} m and ")
+        if tried.fits is None:
+            notes.append(f"{where}none fits: a block that low keeps its Table III setbacks there "
+                         f"and is left at most {tried.land_width_m:.1f} m, less than the narrowest "
+                         f"prototype ({tried.narrowest_m:.2f} m deep)")
+            continue
+        used = sum(1 for j in chosen if any(
+            _mostly_in(j.candidate.placed_footprint(t), tried.shape) for t in j.candidate.towers))
+        laid = sum(1 for blocks in tally.low_blocks
+                   if any(_mostly_in(b, tried.shape) for b in blocks))
+        text = (f"{where}one fits ({tried.fits.prototype.id} at {tried.fits.cls.floors} floors): "
+                f"{used} of the {len(chosen)} layouts proposed stand one there")
+        if not used:
+            text += (f"; {laid} of the layouts laid out did, and the objective ranked them lower"
+                     if laid else "; no layout laid out could stand one there with a road or a "
+                     "pathway reaching it and the ground the rest of the layout needs left free")
+        notes.append(text)
+    return notes
+
+
+def _narrow_regions(run: Run) -> list[Polygon]:
+    """The regions of the net plot's width profile beside its largest, the main body."""
+    profile = next((p for p in run.envelope.width_profiles if p.applies_to == "net plot"), None)
+    if profile is None:
+        return []
+    shapes = sorted((r.shape.to_shapely() for r in profile.regions), key=lambda s: -s.area)
+    return shapes[1:]
+
+
+def _low_options(run: Run) -> list[Choice]:
+    """Every block below 21 m the kit makes under any profile searched, once each."""
+    found: dict[tuple[str, int], Choice] = {}
+    for profile in run.profiles:
+        classes = run.classes[profile.key]
+        tallest = max((c.floors for cs in classes.values() for c in cs), default=0)
+        for choice in fringe.options(run.fringe_kit, classes, tallest, run.q):
+            found.setdefault((choice.prototype.id, choice.cls.floors), choice)
+    return list(found.values())
+
+
+def _mostly_in(footprint: BaseGeometry, region: BaseGeometry) -> bool:
+    return footprint.area > 0 and footprint.intersection(region).area > footprint.area / 2
 
 
 __all__ = ["FullSearchStrategy", "Limits", "NAME"]

@@ -53,13 +53,16 @@ def test_a_30_m_limit_gives_nine_floors_when_the_stilt_counts_and_ten_when_it_do
 def test_every_feasible_count_is_returned_not_only_the_most():
     site, rules = rules_with_dead_end(None)
     brief = max_legal(fixture()[2])
-    # Below 21 m a count is Table III's, which the search lays out only from C3, so those counts
-    # are not offered; exactly 21 m (6 floors on the stilt, or 7 without) is a high-rise.
-    assert _counts(feasible_floors(rules, brief, None, STILT_COUNTED)) == [6, 7, 8, 9]
-    assert _counts(feasible_floors(rules, brief, None, STILT_NOT_COUNTED)) == [7, 8, 9, 10]
+    # Below 21 m a count stands on its Table III band (C3); exactly 21 m (6 floors on the stilt,
+    # or 7 without) is a high-rise. Without the stilt 6 floors are 18 m, in the stretch from 18 to
+    # 21 m no order gives a setback for, so that count is never offered.
+    assert _counts(feasible_floors(rules, brief, None, STILT_COUNTED)) == [1, 2, 3, 4, 5, 6, 7,
+                                                                            8, 9]
+    assert _counts(feasible_floors(rules, brief, None, STILT_NOT_COUNTED)) == [1, 2, 3, 4, 5, 7,
+                                                                                8, 9, 10]
     by_reading = floors_by_reading(rules, brief, None)
     assert set(by_reading) == {STILT_COUNTED, STILT_NOT_COUNTED}
-    assert _counts(by_reading[STILT_COUNTED]) == [6, 7, 8, 9]
+    assert _counts(by_reading[STILT_COUNTED]) == [1, 2, 3, 4, 5, 6, 7, 8, 9]
 
 
 def test_the_33_m_physical_height_is_unverified_while_the_dead_end_is_unknown():
@@ -133,20 +136,73 @@ def test_each_option_names_its_band_its_setback_and_its_gap():
     assert other[9].rule_height_m == 27 and other[9].setback_m == 9
 
 
-def test_a_count_below_the_high_rise_height_is_assessed_but_not_offered_yet():
-    """Table III is encoded (A2), so a low count has its band, read on the height above the stilt
-    (rule 5(c)); the search lays out low blocks only from C3, so it is neither offered nor
-    passed."""
+def test_a_count_below_the_high_rise_height_is_offered_on_its_own_bands_permission():
+    """A low count has its Table III band, read on the height above the stilt (rule 5(c)), and
+    stands on that band's permission (`HeightRules.band_permission`), as a high-rise count stands
+    on the site's eligibility: here the band is ALLOWED, so the count is offered."""
     _, rules = rules_with_dead_end(None)
     brief = max_legal(fixture()[2])
     three = assess_floor_count(rules, brief, None, STILT_COUNTED, 3)  # 12 m: Table III
     assert three.feasible and three.modelled and three.below_high_rise
     assert three.band.measure is HeightMeasure.HEIGHT_ABOVE_STILT and three.band.contains(9.0)
     assert three.setback_m == three.band.setback_m is not None
-    assert three.status is Status.UNVERIFIED  # the limits' own verdict; never a PASS
-    assert 3 not in _counts(feasible_floors(rules, brief, None, STILT_COUNTED))
-    assert not any(o.below_high_rise for reading in floors_by_reading(rules, brief, None).values()
-                   for o in reading)
+    assert rules.height.band_permission(three.band) is Eligibility.ALLOWED
+    assert three.permission.status is Status.PASS and not three.permission.holds_back
+    assert three.high_rise is None  # the site's high-rise eligibility is not its question
+    assert three.status is Status.UNVERIFIED  # the airport height has no number: never a PASS
+    assert 3 in _counts(feasible_floors(rules, brief, None, STILT_COUNTED))
+    assert all(o.permission is not None for reading in floors_by_reading(rules, brief, None)
+               .values() for o in reading if o.below_high_rise)
+
+
+def _band_permission(rules, contains_m: float, permission: Eligibility, note: str = ""):
+    """The rules with the band below the high-rise height that holds `contains_m` (above the stilt)
+    given another permission: made up for the test, the figures kept."""
+    bands = [b.model_copy(update={"permission": permission, "permission_note": note})
+             if b.measure is HeightMeasure.HEIGHT_ABOVE_STILT and b.contains(contains_m) else b
+             for b in rules.height.bands]
+    return rules.model_copy(update={"height": rules.height.model_copy(update={"bands": bands})})
+
+
+def test_a_count_whose_band_is_prohibited_is_never_offered_and_does_not_stop_the_scan():
+    """A band below 21 m that may not stand here (made up: 7-15 m) holds its counts back and
+    fails them, and says nothing of a taller band: the scan goes on past them, so the counts of
+    the high-rise bands above are still offered."""
+    _, rules = rules_with_dead_end(None)
+    brief = max_legal(fixture()[2])
+    prohibited = _band_permission(rules, 12.0, Eligibility.PROHIBITED, "made up: no road for it")
+    options = assess_floors(prohibited, brief, None, STILT_COUNTED)
+    assert _counts(options) == list(range(1, 11))  # past 3-5, up to the road's limit at 10
+    for floors in (3, 4, 5):  # 9, 12 and 15 m above the stilt
+        held = options[floors - 1]
+        assert held.permission.status is Status.FAIL and held.permission.holds_back
+        assert not held.feasible and held.status is Status.FAIL
+        assert "made up: no road for it" in held.permission.reason
+    assert _counts(feasible_floors(prohibited, brief, None, STILT_COUNTED)) == [1, 2, 6, 7, 8, 9]
+
+
+def test_a_count_whose_bands_permission_is_open_is_offered_labelled_unverified():
+    _, rules = rules_with_dead_end(None)
+    brief = max_legal(fixture()[2])
+    open_ = _band_permission(rules, 12.0, Eligibility.UNVERIFIED, "made up: the road not known")
+    four = assess_floor_count(open_, brief, None, STILT_COUNTED, 4)
+    assert four.feasible and four.permission.status is Status.UNVERIFIED
+    assert four.status is Status.UNVERIFIED
+    assert any("made up: the road not known" in item for item in four.open_items)
+    assert 4 in _counts(feasible_floors(open_, brief, None, STILT_COUNTED))
+
+
+def test_a_band_with_no_setback_is_never_offered():
+    """Without the stilt counted, 6 floors are 18 m: the stretch from 18 to 21 m that no order
+    read gives a setback for. Its permission is open, so nothing holds the count back, but nothing
+    would hold a block there to a setback either: it is never offered."""
+    _, rules = rules_with_dead_end(None)
+    brief = max_legal(fixture()[2])
+    six = assess_floor_count(rules, brief, None, STILT_NOT_COUNTED, 6)
+    assert six.below_high_rise and six.band.setback_m is None and not six.modelled
+    assert six.permission.status is Status.UNVERIFIED and six.feasible
+    assert six.status is Status.UNVERIFIED
+    assert 6 not in _counts(feasible_floors(rules, brief, None, STILT_NOT_COUNTED))
 
 
 def test_a_limit_with_no_value_is_reported_and_never_passed():
@@ -186,7 +242,8 @@ def test_without_a_stilt_the_stilt_reading_cannot_matter():
     brief = intent(max_legal(fixture()[2]), mode=HeightMode.MAX_LEGAL, has_stilt=False)
     counted = feasible_floors(rules, brief, None, STILT_COUNTED)
     not_counted = feasible_floors(rules, brief, None, STILT_NOT_COUNTED)
-    assert _counts(counted) == _counts(not_counted) == [7, 8, 9, 10]  # 7 floors = 21 m
+    # 7 floors = 21 m; 6 floors = 18 m, where no order gives a setback
+    assert _counts(counted) == _counts(not_counted) == [1, 2, 3, 4, 5, 7, 8, 9, 10]
     assert counted[-1].physical_height_m == counted[-1].rule_height_m == 30.0
 
 
@@ -236,19 +293,24 @@ def _eligibility(rules, road_met: bool | None):
         update={"high_rise": high_rise})})
 
 
-def test_where_a_high_rise_is_prohibited_no_count_is_offered_and_nothing_lower_either():
+def test_where_a_high_rise_is_prohibited_no_high_rise_count_is_offered_and_lower_ones_stand_alone():
+    """A prohibited high-rise offers no count of 21 m or more, and permits nothing lower: each
+    count below it stands on its own band's permission, which it would have anyway (here ALLOWED,
+    so those counts are offered, prohibition or not)."""
     _, rules = rules_with_dead_end(None)
     brief = max_legal(fixture()[2])
     prohibited = _eligibility(rules, False)
     assert prohibited.height.high_rise.eligibility is Eligibility.PROHIBITED
-    assert feasible_floors(prohibited, brief, None, STILT_COUNTED) == []
+    offered = feasible_floors(prohibited, brief, None, STILT_COUNTED)
+    assert _counts(offered) == [1, 2, 3, 4, 5] == _counts(
+        o for o in feasible_floors(rules, brief, None, STILT_COUNTED) if o.below_high_rise)
     six = assess_floor_count(prohibited, brief, None, STILT_COUNTED, 6)  # 21 m
     assert six.high_rise.status is Status.FAIL and not six.feasible
     assert "road_width" in six.high_rise.reason
     five = assess_floor_count(prohibited, brief, None, STILT_COUNTED, 5)  # 18 m: Table III
     assert five.high_rise is None and five.modelled  # 15 m above the stilt: its own row
-    assert five.status is not Status.PASS  # a prohibited high-rise passes nothing lower
-    # ...and decides nothing about it: the low band keeps its own permission, either way.
+    assert five.permission.status is Status.PASS  # its band's own permission, not the site's
+    # ...and the prohibition decides nothing about it: the low band keeps its own permission.
     assert prohibited.height.band_permission(five.band) is five.band.permission
     assert rules.height.band_permission(five.band) is five.band.permission
 
@@ -258,7 +320,8 @@ def test_an_unsettled_eligibility_offers_high_rise_counts_labelled_unverified():
     brief = max_legal(fixture()[2])
     unsettled = _eligibility(rules, None)
     assert unsettled.height.high_rise.eligibility is Eligibility.UNVERIFIED
-    offered = feasible_floors(unsettled, brief, None, STILT_COUNTED)
+    offered = [o for o in feasible_floors(unsettled, brief, None, STILT_COUNTED)
+               if not o.below_high_rise]
     assert _counts(offered) == [6, 7, 8, 9]
     assert all(o.high_rise.status is Status.UNVERIFIED and o.status is Status.UNVERIFIED
                for o in offered)
@@ -277,7 +340,9 @@ def test_where_no_limit_stops_the_count_a_search_ceiling_does():
 def test_a_small_plots_road_gives_a_lower_limit():
     site, rules = rules_with_dead_end(None, "small_plot")  # 12.19 m road: up to 24 m
     brief = max_legal(fixture("small_plot")[2])
-    assert _counts(feasible_floors(rules, brief, None, STILT_COUNTED)) == [6, 7]
+    assert _counts(feasible_floors(rules, brief, None, STILT_COUNTED)) == [1, 2, 3, 4, 5, 6, 7]
+    assert max(o.floors for o in feasible_floors(rules, brief, None, STILT_COUNTED)
+               if o.below_high_rise) == 5
 
 
 def test_a_reading_the_rules_do_not_have_is_refused():

@@ -61,6 +61,12 @@ class Quantities:
     stilt_m: float
     floor_m: float
     has_stilt: bool
+    # Rule 8(l): a pathway this wide may reach a block up to this high (physical, the stilt
+    # included); a taller block opens onto an internal road, unless the rules read the clause as
+    # allowing a pathway to any block. No pathway is drawn where the rules give no width.
+    pathway_m: float | None
+    pathway_max_height_m: float
+    pathway_any_block: bool
 
 
 def quantities(site: CanonicalSiteModel, rules: ResolvedRules, brief: DesignBrief,
@@ -107,7 +113,11 @@ def quantities(site: CanonicalSiteModel, rules: ResolvedRules, brief: DesignBrie
         surface_bays=brief.program.parking.surface_bays_allowed,
         cellar_extra_per_level_m=rules.parking.cellar_extra_setback_per_level_m.value,
         stilt_m=standards.stilt_height_m.value, floor_m=standards.floor_to_floor_m.value,
-        has_stilt=brief.height_intent.has_stilt)
+        has_stilt=brief.height_intent.has_stilt,
+        pathway_m=(rules.circulation.pathway_width_m.value
+                   if rules.circulation.pathway_width_m is not None else None),
+        pathway_max_height_m=rules.circulation.pathway_max_block_height_m.value,
+        pathway_any_block=not rules.circulation.block_over_12m_on_road.value)
 
 
 def _turnings(rules: ResolvedRules, lane: float) -> list[tuple[float, float]]:

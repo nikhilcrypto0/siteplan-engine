@@ -15,6 +15,10 @@ A profile that adds nothing over `ALL` (a reading whose floor counts are no more
 every reading allows) is not tried. Everything else the rules leave open (the turning radius, the
 spacing of blocks of different heights, the denominators of the open space, the club house share)
 is always met under every reading, which costs nothing here.
+
+The floor counts below the high-rise height are here too (C3), each with its Table III band's
+figures: the setback on the sides, the Building Line on the access road's frontage, the gap
+(rule 5(f)(xiii): the side setback of the taller of two such blocks) and the planting strip.
 """
 
 from __future__ import annotations
@@ -28,7 +32,7 @@ from siteplan.contracts.resolved_rules import (
     NOT_ALLOWED,
     STILT_IN_RULE_HEIGHT,
 )
-from siteplan.optimizer.floors import feasible_floors
+from siteplan.optimizer.floors import FloorOption, feasible_floors
 
 ALL = "ALL"
 
@@ -59,14 +63,28 @@ class Profile:
 @dataclass(frozen=True)
 class FloorClass:
     """A floor count and what the law asks of a block that tall under the profile's readings: the
-    setback and the gap are the greatest of those the readings ask."""
+    setback, the front setback, the gap and the planting strip are the greatest of those the
+    readings ask, and the block is a high-rise when it is one under any of them (the fire lanes
+    and the turns round it are then asked)."""
 
     floors: int
     physical_m: float
-    setback_m: float
+    setback_m: float  # on every side but the front where the band gives a front figure
     gap_m: float
     rule_heights: tuple[tuple[str, float], ...]  # reading -> the height that picks the row
     open_items: tuple[str, ...]  # what rests on an input nobody has settled
+    front_m: float | None = None  # on the access road's frontage, where a band gives its own
+    high_rise: bool = True
+    strip_m: float = 0.0  # the planting strip its band asks along the plot line
+
+    @property
+    def front(self) -> float:
+        return self.front_m if self.front_m is not None else self.setback_m
+
+    @property
+    def zone_m(self) -> float:
+        """The most it keeps from any stretch of the plot line: the larger of its two setbacks."""
+        return max(self.setback_m, self.front)
 
 
 def floor_classes(rules: ResolvedRules, brief: DesignBrief, prototype: TowerPrototype,
@@ -80,12 +98,31 @@ def floor_classes(rules: ResolvedRules, brief: DesignBrief, prototype: TowerProt
     classes = []
     for floors in common:
         options = [found[floors] for found in per_reading]
+        fronts = [o.band.front_setback_m for o in options if o.band.front_setback_m is not None]
         classes.append(FloorClass(
             floors=floors, physical_m=options[0].physical_height_m,
-            setback_m=max(o.setback_m for o in options), gap_m=max(o.gap_m for o in options),
+            setback_m=max(o.setback_m for o in options),
+            gap_m=max(o.gap_m if o.gap_m is not None else o.setback_m for o in options),
             rule_heights=tuple((o.reading, o.rule_height_m) for o in options),
-            open_items=tuple(sorted({item for o in options for item in o.open_items}))))
+            open_items=tuple(sorted({item for o in options for item in o.open_items})),
+            front_m=max(o.band.front_m for o in options) if fronts else None,
+            high_rise=any(not o.below_high_rise for o in options),
+            strip_m=max(_strip_asked(rules, o) for o in options)))
     return classes
+
+
+def _strip_asked(rules: ResolvedRules, option: FloorOption) -> float:
+    """The planting strip a block's band asks, as the validator reads it: the band's own figure
+    (Table III's 1 m, or the 2 m a high-rise band carries), else, for a high-rise, rule 7(a)(viii)'s
+    strip where its setback reaches the width the rule names."""
+    band = option.band
+    if band.green_strip_m is not None:
+        return band.green_strip_m
+    green = rules.green_strip
+    if not option.below_high_rise and max(band.setback_m, band.front_m) >= (
+            green.where_setback_from_m.value):
+        return green.width_m.value
+    return 0.0
 
 
 def profiles(rules: ResolvedRules, brief: DesignBrief, prototypes: list[TowerPrototype]
