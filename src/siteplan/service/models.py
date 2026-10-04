@@ -3,11 +3,12 @@
 The caller is meant to be a language model one day, so a request carries only identifiers (a
 file in the workspace, a run, a candidate), the architect's own words and an enumerated intent:
 never a legal dimension, a site measurement, a coordinate, a provenance label, a reading of the
-law, a test profile, a validator or a strategy. Those come from the project file the architect
-made through the human intake flow, from the firm's workspace file, from rules.py, or from the
-engine itself. Every model refuses a field it does not know and is frozen, so nothing can be
-slipped in beside a field or changed afterwards. Every number in an `Intent` must be written in
-the architect's brief; the service checks it before anything runs.
+law, a test profile, a validator, a strategy, a firm standard or an approval. Those come from the
+project file the architect made through the human intake flow, from the firm's workspace file,
+from rules.py, from the engine itself, or (an approval) from the person on the host's channel.
+Every model refuses a field it does not know and is frozen, so nothing can be slipped in beside
+a field or changed afterwards. Every number in an `Intent` must be written in the architect's
+brief; the service checks it before anything runs.
 
 The numbers here bound what a request may hold (lengths, counts); none of them shapes a layout.
 """
@@ -58,6 +59,40 @@ class Mode(StrEnum):
 
     BLIND = "BLIND"  # the firm's finished plans are refused, as blind.py refuses them
     DEBUG = "DEBUG"  # allowed, for regression; every output then says DEBUG RUN
+
+
+class Decision(StrEnum):
+    """What came back when the service asked the person. Only APPROVED is a yes."""
+
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
+    UNANSWERED = "UNANSWERED"  # no person answered: the page timed out, or no terminal to ask
+    CHANNEL_FAILURE = "CHANNEL_FAILURE"  # the channel broke before an answer came
+
+
+class Asked(StrEnum):
+    PROPOSAL = "PROPOSAL"  # run the search for this request
+    EXPORT = "EXPORT"  # draw this candidate with its UNVERIFIED items open
+
+
+class ApprovalRecord(Frozen):
+    """One approval the service asked of the person, as the service wrote it down when it asked:
+    the words it showed (and their digest), the answer, the channel that carried it and when.
+    Nothing here is taken from the caller of an operation: the run and the candidate are the
+    stored ones, and an export's acknowledged items are the fresh report's own, never the
+    caller's strings. Entries are only ever appended (service/audit.py)."""
+
+    asked: Asked
+    title: str
+    lines: tuple[str, ...]
+    asked_digest: str  # sha256 of the title and the lines, as shown
+    decision: Decision
+    channel: str  # the class of the approver the host chose
+    at: str  # when the answer came, UTC, ISO 8601
+    run_id: str | None = None  # the run a proposal made, or the run an export draws from
+    candidate_id: str | None = None  # an export's candidate
+    acknowledged: tuple[str, ...] = ()  # an export's UNVERIFIED items, as the fresh report names
+    report_digest: str | None = None  # an export: the fresh ValidationReport it judged
 
 
 # --- Requests ------------------------------------------------------------------------------
@@ -315,7 +350,8 @@ class PrototypesResult(Frozen):
     flat_library: str
     flat_library_status: Provenance
     unit_mix: dict[str, float]
-    prototypes: list[PrototypeOut]
+    prototypes: list[PrototypeOut]  # the kit the search may use
+    left_out: list[str] = []  # composed, but longer than the firm's longest block
 
 
 class UnresolvedItem(Frozen):
@@ -401,6 +437,7 @@ class ValidationResult(Frozen):
     design_targets: list[TargetOut]  # beside the verdict, never in it
     program: list[CheckOut]  # never decides legality
     next: str
+    approvals: tuple[ApprovalRecord, ...] = ()  # the run's, as recorded: who approved what
 
 
 class CompareRow(Frozen):
@@ -441,3 +478,4 @@ class ExportResult(Frozen):
     unverified: list[str] = []
     files: list[str] = []
     not_produced: list[str] = []
+    approvals: tuple[ApprovalRecord, ...] = ()  # the run's, this export's included

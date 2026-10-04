@@ -4,6 +4,81 @@ A characterization test (tests/manifest.py) pins what the engine produces today.
 only together with a normative replacement test and an entry here: what changed, why, the
 evidence, and the test that now holds the behaviour. Newest first.
 
+## 2026-10-04: the service keeps the project's firm standards, writes down every approval, and has a host boundary
+
+No characterization test changed, and contracts stay at 1.2. Nothing the legacy path produces
+changed: `approval.ApprovalDesk.ask`, which the MCP server calls, answers exactly as before (it
+now reads `ApprovalDesk.answer`, which tells a rejection from no answer). Each change is held by a
+normative test.
+
+- **The firm's standards are the approved project file's, else the workspace's, else the
+  engine's default** (`service/standards.py`). Before, the service took every standard from the
+  workspace file and wrote it over the project file's own, so a longest block the architect set
+  in the project (Suchitra's 56 m) was dropped. Now the stilt and floor heights, the common-area
+  loading, the cellar storey's height, the cellar utilities share, the deepest cellar and the
+  longest block are each the project file's when the file states it (a value the file records
+  as the engine's default yields to the workspace's own), else the workspace's, else the
+  engine's default labelled ASSUMED_FOR_TEST; the flat and amenity libraries are the
+  workspace's, as the legacy path finds them beside the project. For a project made through
+  intake both pipelines take the same values. Each reaches the DesignBrief with source kind
+  FIRM_STANDARD (an engine default was ENGINE_DEFAULT before), its status and a source naming
+  the project file, the workspace file or the engine's default; the design margins are the
+  workspace's, unchanged. No request carries a standard. The search is given only prototypes
+  whose footprint's longer side is within the longest block; `list_prototypes` (new
+  `left_out`), the proposal's notes and its approval lines name those left out, and with none
+  left `propose_layouts` stops before anyone is asked. Tests: tests/test_service_standards.py
+  (`test_each_standard_is_the_projects_else_the_workspaces_else_the_engines`,
+  `test_the_search_and_the_validator_are_given_those_standards`,
+  `test_no_tower_is_longer_than_the_firms_longest_block`,
+  `test_the_legacy_path_and_the_service_agree_on_a_project_made_through_intake`,
+  `test_no_request_can_carry_a_firm_standard`,
+  `test_a_longest_block_no_prototype_fits_stops_before_anyone_is_asked`) and
+  tests/test_service_client.py `test_the_longest_block_the_project_sets_is_kept_and_honoured`,
+  where Suchitra's project now carries its own 56 m.
+  Evidence, the service run on the two real sites as tests/test_service_client.py runs them,
+  before and after: with no longest block set, Dhulapally (DEBUG) and Suchitra give the same
+  three alternatives, figure for figure. With Suchitra's 56 m the kit loses two-core-large-12
+  (61.34 m). No alternative used it before either (the longest block proposed was 45.61 m), but
+  the full search picks each configuration's blocks from the kit and lays out and judges only
+  the best-ranked configurations of each profile (the counts stay 1,152 evaluated, 112 laid
+  out, 24 judged, 12 proposed), so a smaller kit changes which layouts are proposed, and two of
+  the three alternatives change: MAX_YIELD stays 2 towers at stilt + 7, 98 flats, 117,012 sft;
+  BALANCED goes from 2 towers at stilt + 8, 96 flats, 115,232 sft, to 2 towers at stilt + 7,
+  84 flats, 100,828 sft; CONVENTIONAL_OPEN_SPACE goes from 1 tower, 64 flats, 76,112 sft, to
+  2 towers, 80 flats, 96,736 sft. Every one is still UNVERIFIED with no legal FAIL, and no
+  tower is longer than 45.61 m. The search is not monotone in its kit: taking away a prototype
+  nothing used can still cost a layout it found before.
+- **Every approval the service asks is written down before anything it allows runs**
+  (`service/audit.py`, `models.ApprovalRecord`): the title and lines shown and their sha256, the
+  decision (APPROVED, REJECTED, UNANSWERED or CHANNEL_FAILURE), the approver's class, the UTC
+  time, and for an export the fresh report's UNVERIFIED items as it names them and its digest.
+  Every one goes to `out/approvals.jsonl`, refused ones included, and a run's own to its
+  `run.json` (`RunRecord.approvals`: the proposal, then each export approval asked on it);
+  `validate_candidate` and `export_candidate` return the run's approvals read-only. Nothing in an
+  entry comes from the caller. An approval that cannot be written down allows nothing. The
+  person channels say which answer came (`decide`); `approve` is unchanged. Behaviour that
+  changed: a refused proposal now writes that one line under `out` (before, nothing at all), so
+  `test_nothing_runs_or_is_written_without_the_architects_approval` asserts the log is the only
+  thing there; an export the person does not approve says which decision it was. Tests in
+  tests/test_service.py (`test_the_proposal_is_asked_of_the_person_before_anything_runs`,
+  `test_the_export_is_asked_before_anything_is_drawn`,
+  `test_the_proposal_approval_is_in_the_run_record_and_the_service_log`,
+  `test_an_export_records_the_fresh_reports_items_and_its_digest`,
+  `test_nothing_in_an_entry_comes_from_the_caller`,
+  `test_every_proposal_asked_is_logged_and_a_refusal_runs_nothing`,
+  `test_an_approval_that_cannot_be_written_down_allows_nothing`,
+  `test_an_export_the_person_does_not_approve_is_recorded_in_the_run_and_draws_nothing`; a FAIL
+  is now also shown to be refused without asking anyone) and tests/test_service_approvers.py.
+- **The host boundary** (`service/host.py`, `ToolHost(workspace, out, approver, mode)`): the
+  nine operations as tools (name, description, input and output JSON schema; `call` validates
+  against the request model and returns JSON), nothing else. Construction refuses any approver
+  but the approval page itself (a terminal, any object with an approve method, a subclass) and an
+  `out` inside or around the workspace. It imports only `siteplan.service`. No model or
+  transport is connected. Tests: tests/test_service_host.py.
+- **Test helpers**: `_copy_run` drops a copied run's exports, so a test starts from nothing
+  drawn whatever ran before it; the injected-field and banned-word lists also cover the firm's
+  standards and the approval; the import ban also covers the command line.
+
 ## 2026-10-04: one reading of a compass side; the rule inventory scans every module
 
 No rule value changed and no characterization test changed. On the two real sites nothing moved:

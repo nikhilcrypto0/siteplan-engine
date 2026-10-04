@@ -18,6 +18,7 @@ from test_service import BRIEF, make_workspace
 from siteplan.approval import ApprovalDesk
 from siteplan.cli import main as cli
 from siteplan.service import (
+    Decision,
     Intent,
     PageApprover,
     ProposeLayouts,
@@ -86,6 +87,17 @@ def test_a_rejection_or_an_unanswered_page_is_a_no(decision, timeout_s):
         approver.close()
 
 
+@pytest.mark.parametrize(("decision", "timeout_s", "answer"), [
+    ("approve", 10.0, Decision.APPROVED), ("reject", 10.0, Decision.REJECTED),
+    (None, 0.3, Decision.UNANSWERED)])
+def test_the_page_says_which_answer_came_back_for_the_audit(decision, timeout_s, answer):
+    approver, _ = _page(decision, timeout_s)
+    try:
+        assert approver.decide(TITLE, LINES) is answer
+    finally:
+        approver.close()
+
+
 def test_the_link_goes_to_the_browser_and_never_back_to_the_caller():
     approver, browser = _page("approve")
     try:
@@ -131,6 +143,14 @@ def test_a_terminal_whose_input_is_not_interactive_is_a_no_without_asking():
     approver, shown, asked = _terminal("yes", interactive=False)
     assert approver.approve(TITLE, LINES) is False
     assert shown == [] and asked == []  # piped "yes" never reaches the question
+
+
+@pytest.mark.parametrize(("answer", "interactive", "decision"), [
+    ("yes", True, Decision.APPROVED), ("no", True, Decision.REJECTED),
+    (None, True, Decision.UNANSWERED), ("yes", False, Decision.UNANSWERED)])
+def test_the_terminal_says_which_answer_came_back_for_the_audit(answer, interactive, decision):
+    approver, _, _ = _terminal(answer, interactive)
+    assert approver.decide(TITLE, LINES) is decision
 
 
 # --- one channel, chosen at startup --------------------------------------------------------
