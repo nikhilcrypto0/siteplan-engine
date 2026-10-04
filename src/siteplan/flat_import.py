@@ -188,6 +188,8 @@ def to_library(
                 width_m=round(median(f.width_m(depth_m) for f in group), 2),
                 depth_m=depth_m,
                 saleable_sqft=round(median(f.saleable_sqft(common_area_pct) for f in group)),
+                carpet_sqft=round(median(f.carpet_sqm for f in group) * SQM_SQFT),
+                built_up_sqft=round(median(f.built_up_sqm for f in group) * SQM_SQFT),
             ))
     if not types:
         raise ValueError("No flat type repeated in this drawing; nothing to build a library on.")
