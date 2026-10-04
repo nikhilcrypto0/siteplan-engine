@@ -13,6 +13,10 @@ A deterministic test-fit search. No language model is involved and no geometry i
    checked by the rule checker, which measures the drawing again. A layout that fails any rule is
    a rejected candidate, never an option. The options are the best that pass, each genuinely
    different from the others.
+
+LEGACY, not for production generation by a language model: kept only for regression comparison
+(the characterization tests, the debug baseline, the LEGACY strategy). Production generation is
+`siteplan.service`, which runs the full search and the independent validator.
 """
 
 from __future__ import annotations

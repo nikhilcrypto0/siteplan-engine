@@ -156,7 +156,10 @@ def search_heights(plot: Polygon, library: FlatLibrary, request: LayoutRequest,
 
     `heights` and `stop` are for optimizer/legacy.py: the heights to try in place of
     heights_to_try(request), and a question asked before each one (is the time budget spent?).
-    A height not reached is absent from the results."""
+    A height not reached is absent from the results.
+
+    LEGACY, not for production generation by a language model: kept for regression comparison;
+    production is `siteplan.service`, on the full search."""
     result = HeightSearch()
     passing: list[LayoutOption] = []
     for floors in heights_to_try(request) if heights is None else heights:

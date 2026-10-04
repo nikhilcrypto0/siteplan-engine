@@ -4,6 +4,69 @@ A characterization test (tests/manifest.py) pins what the engine produces today.
 only together with a normative replacement test and an entry here: what changed, why, the
 evidence, and the test that now holds the behaviour. Newest first.
 
+## 2026-10-04: the production service (siteplan.service)
+
+No characterization test changed, and contracts stay at 1.2. Nothing the legacy path produces
+changed. What is new, each held by a normative test (tests/test_service.py on made-up land,
+tests/test_service_client.py on the two real sites, skipped on a clean clone):
+
+- **`siteplan.service` is the production surface.** `Service(workspace, out, approver, mode)` is
+  built by the host; the workspace is the only folder read (anything else is refused with one
+  message, the reason logged), the Approver is asked of the person, and the mode is BLIND
+  (blind.py's refusals) or DEBUG (allowed, every output says DEBUG RUN). Nine operations, each one
+  frozen request model in (unknown fields refused) and one response model out: `start_project`
+  (read-only: what the survey settles and the questions; answers go through `siteplan start`),
+  `open_project`, `resolve_rules`, `inspect_envelope`, `list_prototypes`, `propose_layouts`,
+  `validate_candidate`, `compare_candidates`, `export_candidate`. The firm's standards come from
+  the workspace file only; the readings and the conservative test mode are as the project file
+  states them. `test_no_operation_or_request_has_a_parameter_for_what_a_caller_may_not_set`,
+  `test_a_request_refuses_every_field_a_caller_may_not_set`,
+  `test_a_number_the_brief_never_writes_is_refused_before_anyone_is_asked`,
+  `test_only_the_workspace_is_read`,
+  `test_a_blind_service_refuses_the_firms_finished_plan_and_a_debug_one_says_so`.
+- **The full search and the independent validator, never LEGACY and never optional.**
+  `propose_layouts` asks the architect to approve the site facts (the access road's legal width
+  and the land given up, each with its status), the readings and the brief, then runs `optimize`
+  with `FullSearchStrategy` alone and no validator argument, and judges every alternative again
+  with `siteplan.validator.validate` itself before storing it under `out/<run_id>/` with the
+  digests of the site model, rules, brief and envelope.
+  `test_the_service_runs_the_full_search_and_never_the_legacy_generator`,
+  `test_the_service_imports_no_legacy_generator_or_checker`,
+  `test_every_stored_candidate_has_a_report_the_service_made_itself`,
+  `test_nothing_runs_or_is_written_without_the_architects_approval`.
+- **Export judges again and never trusts a stored report.** It parses the stored contracts, holds
+  every reference against the files and the recorded digests, and validates afresh; a legal FAIL,
+  a blocking discrepancy, a report that could not measure the candidate or a broken reference is
+  refused, and UNVERIFIED is exported only when the request names exactly its UNVERIFIED items and
+  the architect approves them. Every output then lists them (a SOLVER-NOTES layer in the DXF, a
+  SHEET-NOTES note on the A1 sheet, lines under the SVG, a section of the report); the program
+  verdict never blocks or grants anything.
+  `test_a_candidate_moved_into_the_setback_is_judged_again_and_refused`,
+  `test_a_stored_report_turned_into_a_pass_is_not_trusted`,
+  `test_a_contract_changed_after_the_run_breaks_its_digest_and_cannot_export`,
+  `test_a_report_that_could_not_measure_the_candidate_is_never_exported`,
+  `test_unverified_needs_exactly_its_items_and_the_architects_approval`,
+  `test_every_output_lists_the_unresolved_items`, `test_every_output_of_a_debug_run_says_debug_run`.
+- **The drawings are the candidate's own geometry.** The DXF uses layout_export's BuildNow layer
+  names and road labels (imported, not copied); the A1 sheet uses sheet.py's scale, dimensions,
+  north arrow, scale bar, border, statement column and title block. Those helpers now take plain
+  geometry: `sheet._dimension` takes the footprints and `sheet._border` the rendered area
+  statement (it also returns where the statement column and the title block are). The legacy sheet
+  is unchanged: written before and after for two options of tests/test_sheet.py's layout under one
+  hash seed, the files agree line for line apart from the save timestamps, the random GUIDs and
+  ezdxf's version stamp (the order of the DXF CLASSES section follows Python's string hashing, so
+  it differs between any two runs that do not fix the seed). tests/test_sheet.py is unchanged.
+- **LEGACY marks, docstrings only**: layout, `heights.search_heights`, towers' placement, grounds,
+  access's road generators, `runner.run_search`/`run_layout`, checks, access_checks,
+  parking_checks, optimizer/legacy.py, and in mcp_server.py's module docstring `propose_layouts`
+  and `check_rules` (the tools' own docstrings are what Hermes's model reads, so they are left as
+  they were).
+
+Not settled here: no runtime dependency draws a PDF (reportlab is a test dependency, PyMuPDF is
+AGPL), so the export says so and the sheet is a DXF to plot; the Approver is a protocol no person
+channel is wired to yet; a project file does not name its survey, so the requests that build the
+site name it beside the project (`survey_file`).
+
 ## 2026-10-04: C3, blocks below 21 m in the full search
 
 No characterization test changed, and contracts stay at 1.2. LEGACY keeps to the high-rise counts it

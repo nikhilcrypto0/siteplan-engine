@@ -16,6 +16,9 @@ which readings it was made under (`interpretation_basis`) and a validator can ju
 
 The time budget is checked before each height, so a run overruns it by at most one height's
 search. What was found at the heights tried is still the best of them; the rest are listed.
+
+Not for production generation by a language model: LEGACY is kept only for regression
+comparison against the full search. `siteplan.service` runs the full search alone.
 """
 
 from __future__ import annotations
@@ -65,6 +68,9 @@ class LegacyRun:
 
 
 class LegacyStrategy:
+    """Today's generator as a strategy. LEGACY: for regression comparison only, never production
+    generation by a language model (that is `siteplan.service`, on the full search)."""
+
     name = NAME
 
     def __init__(self, library: FlatLibrary, amenities: AmenityLibrary | None = None, *,
