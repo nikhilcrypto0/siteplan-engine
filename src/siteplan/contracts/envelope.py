@@ -17,7 +17,7 @@ from pydantic import Field
 
 from siteplan.contracts.accounting import RuleLayers
 from siteplan.contracts.common import Contract, Finding, Line, Part, Shape, Side
-from siteplan.contracts.resolved_rules import Band, BandKind
+from siteplan.contracts.resolved_rules import Band, BandKind, Eligibility
 
 
 class ExclusionKind(StrEnum):
@@ -44,9 +44,13 @@ class BandEnvelope(Part):
     above_m: float = Field(ge=0)
     up_to_m: float = Field(gt=0)
     kind: BandKind
-    modelled: bool = True  # False until the band's rules are encoded (Table III, A2)
-    setback_m: float | None = None
-    setback_envelope: list[Shape] = []  # the net plot inset by the setback
+    modelled: bool = True  # False until the band's rules are encoded
+    setback_m: float | None = None  # the band's setback_m (every side but the front, if given)
+    front_setback_m: float | None = Field(None, ge=0)  # the band's front setback, if any
+    permission: Eligibility = Eligibility.ALLOWED  # HeightRules.band_permission of the band
+    # The net plot inset by the setback. Where the front setback differs, until an edge-wise
+    # inset exists the land is inset all round by the larger of the two: never more lenient.
+    setback_envelope: list[Shape] = []
     buildable: list[Shape] = []  # the setback envelope less the exclusions
     area_sqm: float = Field(0.0, ge=0)
     green_strip_applies: bool | None = None

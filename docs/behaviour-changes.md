@@ -4,6 +4,12 @@ A characterization test (tests/manifest.py) pins what the engine produces today.
 only together with a normative replacement test and an entry here: what changed, why, the
 evidence, and the test that now holds the behaviour. Newest first.
 
+## 2026-10-04: contracts 1.2
+
+No behaviour changed and no test changed but the version test: every addition is a field or a
+method nothing reads yet (A2's resolver, D2's checks and C3's search will), and a 1.1 document is
+now refused. `test_the_contracts_are_version_1_2_and_refuse_an_older_document`.
+
 ## 2026-10-03: Wave 1 integrated on contracts 1.1; the independent validator guards the optimizer
 
 No characterization test changed here. What now behaves differently, each held by a normative
