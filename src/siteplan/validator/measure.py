@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from shapely.geometry import Polygon
 
 from siteplan.contracts.candidate import CandidateLayout, PlacedTower
+from siteplan.contracts.common import Provenance
 from siteplan.contracts.design_brief import DesignBrief
 from siteplan.contracts.prototype import TowerPrototype
 from siteplan.contracts.resolved_rules import Band, BandKind, ResolvedRules
@@ -21,6 +22,21 @@ from siteplan.validator.readings import COUNTED, EACH_OWN, NOT_COUNTED, TALLER_G
 from siteplan.validator.shapes import polygon_of, snapped
 
 TOL_M = 1e-6  # a length this close to the rule's is the rule's
+
+# Rule 5(xiii), read on page 11 of fixtures/rules/go168-2012.pdf (the 2012 text): between two
+# blocks below the high-rise height the order itself says whose figure it is, so the open reading
+# of mixed-height spacing (a Table IV question, rule 7(a)(xii)) does not reach them.
+LOW_GAP_RULE = ("G.O.168 rule 5(xiii), p.11: \"The space between 2 blocks shall not be less than "
+                "the side setback of the tallest block as mentioned in Table - III\"")
+LOW_GAP_CLAUSE = ("G.O.168 rule 5(xiii) (the space between 2 blocks: the tallest block's side "
+                  "setback)")
+
+# INTERIM (contracts 1.2): a band carries one setback, all round. Table III gives the Building Line
+# at the front apart from the setback on the other sides, which ResolvedRules cannot say yet.
+ALL_ROUND_NOTE = ("Held to the band's all-round figure, measured on the net plot. Table III's "
+                  "Building Line at the front is a separate figure that ResolvedRules does not "
+                  "carry apart from it, so the front is not judged on its own.")
+UNCONFIRMED_NOTE = ("The rules mark this band UNVERIFIED: its values settle nothing either way.")
 
 
 @dataclass(frozen=True)
@@ -119,6 +135,19 @@ class HeightClass:
         return self.state == "ok"
 
     @property
+    def confirmed(self) -> bool:
+        """Whether the rules stand behind the band's values. A band they mark UNVERIFIED settles
+        nothing either way, as a height limit on unconfirmed inputs does
+        (`HeightLimit.evaluate`): a result on it is UNVERIFIED, never PASS or FAIL."""
+        return self.band is None or self.band.status is not Provenance.UNVERIFIED
+
+    @property
+    def table(self) -> str:
+        """The clause of the band's own table: Table IV above the high-rise height, Table III
+        (rule 5) below it; empty beyond the bands."""
+        return self.band.clause if self.band is not None else ""
+
+    @property
     def label(self) -> str:
         if self.band is None:
             return "beyond the bands in the rules"
@@ -163,22 +192,32 @@ def setback_of(net: Polygon, footprint: Polygon) -> float:
     return float(net.boundary.distance(footprint))
 
 
+def gap_sources(a: HeightClass, b: HeightClass, a_height_m: float, b_height_m: float,
+                spacing: str) -> tuple[HeightClass, ...] | None:
+    """The blocks whose own gap figure decides what two blocks need between them under a reading
+    of mixed-height spacing; None for a reading this validator cannot evaluate.
+
+    taller_governs: the taller block's, whatever the shorter block is. each_own: each block keeps
+    its own gap on its own half of the space between them, so both. Blocks of the same height
+    need the same gap either way. Two blocks below the high-rise height are not an open question:
+    rule 5(xiii) gives the tallest block's (LOW_GAP_RULE), whatever the reading."""
+    taller = a if a_height_m >= b_height_m else b
+    if not (a.high_rise or b.high_rise) or spacing == TALLER_GOVERNS:
+        return (taller,)
+    if spacing == EACH_OWN:
+        return (a, b)
+    return None
+
+
 def required_gap(a: HeightClass, b: HeightClass, a_height_m: float, b_height_m: float,
                  spacing: str) -> tuple[float | None, str]:
     """The gap two blocks need under a reading of mixed-height spacing: 'ok', or None and why
     there is none: 'unmodelled' (a block's own gap is not in the rules) or 'unknown' (a reading
-    this validator cannot evaluate).
-
-    taller_governs: the taller block's Table IV gap, whatever the shorter block is. each_own:
-    each block keeps its own gap on its own half of the space between them, so the mean of the
-    two. Blocks of the same height need the same gap either way."""
-    if spacing == TALLER_GOVERNS:
-        taller = a if a_height_m >= b_height_m else b
-        if taller.gap_m is None:
-            return None, "unmodelled"
-        return taller.gap_m, "ok"
-    if spacing == EACH_OWN:
-        if a.gap_m is None or b.gap_m is None:
-            return None, "unmodelled"
-        return (a.gap_m + b.gap_m) / 2, "ok"
-    return None, "unknown"
+    this validator cannot evaluate). It is the mean of the figures `gap_sources` names."""
+    sources = gap_sources(a, b, a_height_m, b_height_m, spacing)
+    if sources is None:
+        return None, "unknown"
+    gaps = [c.gap_m for c in sources]
+    if any(g is None for g in gaps):
+        return None, "unmodelled"
+    return sum(gaps) / len(gaps), "ok"

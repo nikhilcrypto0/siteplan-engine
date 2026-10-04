@@ -69,6 +69,16 @@ class Context:
         names = {t.name for r in self.stilt_readings for t in self.high_rise(r)}
         return [t for t in self.towers if t.name in names]
 
+    def low_rise(self, reading: str) -> list[TowerGeometry]:
+        """The towers below the high-rise height under a reading of the stilt: Table III's, not
+        Table IV's. Whether a band is modelled is a separate question (`HeightClass.state`)."""
+        by_name = self.classes.get(reading, {})
+        return [t for t in self.towers if t.name in by_name and not by_name[t.name].high_rise]
+
+    def low_rise_anywhere(self) -> list[TowerGeometry]:
+        names = {t.name for r in self.stilt_readings for t in self.low_rise(r)}
+        return [t for t in self.towers if t.name in names]
+
 
 def build(site: CanonicalSiteModel, rules: ResolvedRules, brief: DesignBrief,
           candidate: CandidateLayout) -> Context | None:
@@ -82,6 +92,10 @@ def build(site: CanonicalSiteModel, rules: ResolvedRules, brief: DesignBrief,
         heights = {t.name: t.rule_height_m(reading) for t in towers}
         if None in heights.values():
             continue  # a reading this validator cannot evaluate: its checks say so
+        # INTERIM (contracts 1.2): a block's band, whichever table it is in, is picked on the
+        # reading's own height. Rule 5(c) leaves the stilt out of Table III's height always,
+        # which ResolvedRules cannot say yet; until it can, a low block under `counted` may fall
+        # in a taller band than 5(c) gives (stricter, never a false PASS).
         classes[reading] = {name: classify(rules, h) for name, h in heights.items()}
     drawn = drawing.read(candidate, brief)
     entrances = tuple(g for g in drawn.gates
