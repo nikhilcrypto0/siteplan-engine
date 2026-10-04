@@ -427,10 +427,13 @@ def test_the_orders_are_listed_with_how_each_was_read_and_the_unread_ones_named(
     orders = {o.id: o.read for o in resolve(make_site(PLOT)).orders}
     assert orders["G.O.Ms.No.168 of 2012"] is OrderRead.TEXT
     assert orders["G.O.Ms.No.7 of 2016"] is OrderRead.TEXT
-    for scanned in ("G.O.Ms.No.50 of 2019", "G.O.Ms.No.65 of 2019", "G.O.Ms.No.95 of 2026"):
+    for scanned in ("G.O.Ms.No.50 of 2019", "G.O.Ms.No.65 of 2019", "G.O.Ms.No.95 of 2026",
+                    "G.O.Ms.No.264 of 2019", "G.O.Ms.No.14 of 2022", "G.O.Ms.No.103 of 2021"):
         assert orders[scanned] is OrderRead.SCAN
+    assert orders["G.O.Ms.No.49 of 2023"] is OrderRead.TEXT
     unread = {name for name, read in orders.items() if read is OrderRead.UNREAD}
-    assert {"G.O.Ms.No.245 of 2012", "G.O.Ms.No.103 of 2021", "G.O.Ms.No.16 of 2026"} <= unread
+    # G.O.245 of 2012 may have changed rule 5: Table III stands on the order as first issued
+    assert {"G.O.Ms.No.245 of 2012", "G.O.Ms.No.16 of 2026", "TS-bPASS G.O.201"} <= unread
 
 
 def test_the_45_t_loading_is_carried_unverified_and_the_water_widths_are_the_rules():

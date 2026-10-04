@@ -44,8 +44,9 @@ APPLICABILITY = {True: Applicability.APPLIES, False: Applicability.DOES_NOT_APPL
                  None: Applicability.UNKNOWN}
 # What a high-rise's prohibition does not say (the user's clarification of 2026-10-03).
 PROHIBITED_NOTE = ("No building of the high-rise height or more may stand here. That permits "
-                   "nothing below it: the permissible lower height, its Table III setbacks, road "
-                   "conditions and spacing are not encoded yet (A2) and not validated (D2).")
+                   "nothing below it: what may be built below it is the non-high-rise bands' "
+                   "(Table III: the permissible height, its setbacks, the road it asks and the "
+                   "spacing), each band with its own permission.")
 
 # The orders ResolvedRules rests on, and how each was read (AGENTS.md); the unread ones are
 # listed because they may amend what is relied on.
@@ -53,14 +54,22 @@ ORDERS = (
     ("G.O.Ms.No.168 of 2012", "TEXT", "the base rules: the 2012 wording stands where no later "
      "order replaced it"),
     ("G.O.Ms.No.7 of 2016", "TEXT", "green strip, road-widening concessions, amenities, EWS, "
-     "river buffer"),
-    ("G.O.Ms.No.50 of 2019", "SCAN", "Table IV substituted"),
+     "river buffer; Table III's parking column and the stilt's use (rule 5)"),
+    ("G.O.Ms.No.50 of 2019", "SCAN", "Table IV substituted; rule 15(a)(i) moved to NBC 2016"),
     ("G.O.Ms.No.65 of 2019", "SCAN", "the note under Table IV for buildings over 40 m deleted"),
-    ("G.O.Ms.No.95 of 2026", "SCAN", "a high-rise is 21 m; TDR bands"),
-    ("G.O.Ms.No.245 of 2012", "UNREAD", ""),
-    ("G.O.Ms.No.103 of 2021", "UNREAD", "podium parking"),
+    ("G.O.Ms.No.95 of 2026", "SCAN", "a high-rise is 21 m; TDR bands (18-21 m on 750-2,000 m², "
+     "setback relaxation); no change to rule 5 or Table III"),
+    ("G.O.Ms.No.264 of 2019", "SCAN", "rule 17(c) only: TDR certificates usable within the ORR"),
+    ("G.O.Ms.No.14 of 2022", "SCAN", "rule 3(j)(vii) only: no height limit on sites of 7.5 acres "
+     "or more in Banjara and Jubilee Hills"),
+    ("G.O.Ms.No.49 of 2023", "TEXT", "dual piping, EV charging, digital infrastructure"),
+    ("G.O.Ms.No.103 of 2021", "SCAN", "rule 7(b) substituted: podium parking for towers, not "
+     "Table III"),
+    ("G.O.Ms.No.245 of 2012", "UNREAD", "read with G.O.168 by the 2016 and 2019 orders: it may "
+     "have changed rule 5"),
     ("G.O.Ms.No.16 of 2026", "UNREAD", ""),
-    ("TS-bPASS G.O.201", "UNREAD", ""),
+    ("TS-bPASS G.O.201", "UNREAD", "skimmed by OCR only: procedure for bodies other than GHMC; "
+     "its own Table III is the user charges"),
 )
 MEASURES = {
     HeightMeasure.RULE_HEIGHT: "the height Table IV and the high-rise class are read on; whether "
@@ -302,13 +311,24 @@ def _airport_limit(site: CanonicalSiteModel) -> dict:
 def _setbacks() -> dict:
     return {
         "measured_on": _rv("net plot", rules.SETBACK_ON_NET_PLOT_CLAUSE),
-        "front": _rv("Table IV column 4, as on every other side", rules.FRONT_SETBACK_CLAUSE,
-                     note="rule 7(a)(xi) takes the higher of Table IV column 4 and the Building "
-                          "Line of Table III; Table III is not encoded yet (stream A2), so a "
-                          "Building Line above the Table IV figure would not show"),
-        "concessions": [_rv("down to 7 m clear on all sides", rules.ROAD_WIDENING_CLAUSE,
-                            note="applies only when land is surrendered for a road; the engine "
-                                 "does not apply it, so setbacks stay at the Table IV figure")]}
+        "front": _rv("a block below 21 m: the Building Line of Table III for the road's width; a "
+                     "high-rise: the higher of that and Table IV column 4",
+                     rules.BUILDING_LINE_HIGH_RISE_CLAUSE,
+                     note="Table III's front is by the abutting road's legal width, reckoned as "
+                          "rule 5(f)(xvii) reckons it. A site on more than one road keeps its "
+                          "front towards the bigger (rule 5(f)(iii)); the model knows the access "
+                          "road only. The clause the legacy checker cites for the front, p.17(b), "
+                          "is rule 12(b), for commercial courtyard buildings"),
+        "concessions": [
+            _rv("down to 7 m clear on all sides", rules.ROAD_WIDENING_CLAUSE,
+                note="a high-rise's, when land is surrendered for a road; the engine does not "
+                     "apply it, so setbacks stay at the Table IV figure"),
+            _rv("a block below 21 m: building line of 6, 3 or 2 m for a road of 30 m or more, "
+                "18 m to under 30 m, under 18 m; side and rear 2, 2.5 or 3 m up to 12, 15 or "
+                "18 m of height", rules.ROAD_WIDENING_NON_HIGH_RISE_CLAUSE,
+                note="the owner's choice when land is surrendered for a road, and the floor of a "
+                     f"TDR relaxation ({rules.TDR_NON_HIGH_RISE_SETBACK_CLAUSE}); the engine "
+                     "does not apply it, so setbacks stay at the Table III figure")]}
 
 
 def _open_space(site: CanonicalSiteModel) -> dict:
