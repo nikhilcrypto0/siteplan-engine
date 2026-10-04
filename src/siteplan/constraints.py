@@ -14,10 +14,14 @@ from numbers. Not all of them are law. Each one here is classified as one of:
 - SITE_INPUT: a per-site fact from the survey or the architect, carrying its own provenance in
   the project file.
 
-Values are read from the modules that hold them, so this list cannot drift from the code, and
-`tests/test_constraints.py` fails when a numeric constant in a generation module, or a numeric
-default on a request or standards model, has no entry here. Inline literals (a bisection step,
-a 45 degree test) cannot be caught that way; the ones that shape a result are listed by hand.
+Values are read from the modules that hold them, so this list cannot drift from the code.
+`tests/test_constraints.py` holds every module under src/siteplan either to this audit or to an
+exemption with its reason (rendering, survey reading, the model's transport, the command line):
+a module in an audited package (legal, optimizer, validator, prototypes, adapters, contracts,
+service) is audited without being named, and the test fails when a named number in an audited
+module, or a numeric default on one of its request, standards or config models, has no entry
+here. Inline literals cannot be caught that way: in the new stages the ones that shape a result
+are named constants; in the prototype's own modules they are listed here by hand.
 """
 
 from __future__ import annotations
@@ -30,6 +34,7 @@ from siteplan import (
     access,
     access_checks,
     checks,
+    flat_import,
     grounds,
     intake,
     layout,
@@ -42,8 +47,34 @@ from siteplan import (
     site_amenities,
     towers,
 )
+from siteplan.adapters import legacy_site
 from siteplan.basis import Basis  # lives in basis.py so the contracts need not import this module
+from siteplan.contracts import accounting as ledger
+from siteplan.contracts import design_brief, prototype, resolved_rules, site_model
+from siteplan.legal import frontage, widths
+from siteplan.optimizer import floors as optimizer_floors
+from siteplan.optimizer.search import build, columns, network, parking_plan, strategy
+from siteplan.optimizer.search import fit as search_fit
+from siteplan.optimizer.search import ground as search_ground
 from siteplan.optimizer.search import land as search_land
+from siteplan.optimizer.search import layout as search_layout
+from siteplan.prototypes import compose
+from siteplan.prototypes import library as prototype_library
+from siteplan.validator import (
+    accounting,
+    clubhouse,
+    context,
+    cross_checks,
+    fire,
+    land_checks,
+    open_space,
+    program,
+    refusals,
+    shapes,
+)
+from siteplan.validator import network as validator_network
+from siteplan.validator import parking as validator_parking
+from siteplan.validator import roads as validator_roads
 
 
 @dataclass(frozen=True)
@@ -64,6 +95,11 @@ def _m(value: float) -> str:
 
 def _pct(fraction: float) -> str:
     return f"{fraction:.0%}"
+
+
+def _share(fraction: float) -> str:
+    """A share as a percentage that keeps its decimals: 0.005 is 0.5%, not 0%."""
+    return f"{fraction * 100:g}%"
 
 
 _setback_rows = ", ".join(f"{b.min_open_space_m:g} m up to {b.up_to_m:g} m" if b.up_to_m < 1000
@@ -100,6 +136,10 @@ _lr = layout.LayoutRequest.model_fields
 _ws = intake.WorkspaceDefaults.model_fields
 _fl = library.FlatLibrary.model_fields
 _ps = parking.ParkingStandards()
+_lim = strategy.Limits()
+_mix = design_brief.Program.model_fields["mix_tolerance"].default
+_own = ledger.OwnershipReconciliation.model_fields["tolerance"].default
+_ledger = ledger.PartitionLedger.model_fields["tolerance"].default
 _WORKSPACE = "the firm's siteplan.workspace.json (intake.WorkspaceDefaults)"
 _LIBRARY = "the firm's flat library file (library.FlatLibrary)"
 _SANCTIONED = "a sanctioned plan, or the architect"
@@ -134,6 +174,15 @@ REGISTRY: tuple[Constraint, ...] = (
              "stilt_in_rule_height false; NBC's fire height (the 30 m dead-end limit) counts the "
              "stilt either way.",
         settles="A sanctioned stilt + N high-rise whose approved setback fits one reading only.",
+    ),
+    Constraint(
+        "Height", "Where no limit stops the floor count (a road of 30 m or more), how high the "
+                  "optimizer assesses counts.",
+        f"up to {optimizer_floors.CEILING_M:g} m, the top of Table IV's last bounded row",
+        Basis.ENGINE_DESIGN_ASSUMPTION, "none (optimizer.floors)", ("optimizer.floors.CEILING_M",),
+        note="A search bound, not a rule: from a 30 m road Table IV sets no height limit. The "
+             "figure is read from rules.TABLE_IV, so the bound follows the table.",
+        settles="Nothing: a search bound; a firm that builds higher would raise it.",
     ),
     Constraint(
         "Setbacks", "The Table IV figure is kept on every side, the front included.",
@@ -173,17 +222,24 @@ REGISTRY: tuple[Constraint, ...] = (
     ),
     Constraint(
         "Setbacks", "Which stretches of the plot line face the access road, where a block's band "
-                    "keeps its Building Line apart from its side setback (the full search).",
+                    "keeps its Building Line apart from its side setback (the full search and "
+                    "the validator), and where the envelope lets a gate open.",
         f"a stretch whose outward side is within {search_land.FACING_DEG:g} degrees of the access "
         f"side ({search_land.FACING_DEG + search_land.DIAGONAL_SLOP_DEG:g} for a diagonal label "
         f"such as SW); within {search_land.FACING_DOUBT_DEG:g} degree of either limit the larger "
-        "of the two setbacks is kept", Basis.ENGINE_DESIGN_ASSUMPTION,
-        "none (optimizer.search.land.setback_land)",
+        f"of the two setbacks is kept; the envelope's frontage takes "
+        f"{frontage.FACING_TOLERANCE_DEG:g} degrees for every label",
+        Basis.ENGINE_DESIGN_ASSUMPTION,
+        "none (optimizer.search.land.setback_land, validator.zones.faces, legal.frontage)",
         ("optimizer.search.land.FACING_DEG", "optimizer.search.land.DIAGONAL_SLOP_DEG",
-         "optimizer.search.land.FACING_DOUBT_DEG"),
+         "optimizer.search.land.FACING_DOUBT_DEG", "validator.zones.FRONT_SECTOR_DEG",
+         "validator.zones.DIAGONAL_SLOP_DEG", "legal.frontage.FACING_TOLERANCE_DEG"),
         note="The validator's reading of a frontage (a diagonal label stands for either side it "
-             "lies between); where the access side is not known the larger figure is kept all "
-             "round.",
+             "lies between), which it keeps in its own copy; where the access side is not known "
+             "the larger figure is kept all round. The envelope's frontage (legal.frontage: the "
+             "access zones a gate may open in, the front zone and the frontage strip) has no "
+             "diagonal reach, like the legacy entrance (access._faces), so for a diagonal label "
+             "it takes in fewer stretches than the validator does.",
         settles="The architect's word on which edge is the frontage, or a sanctioned plan.",
     ),
     Constraint(
@@ -346,19 +402,41 @@ REGISTRY: tuple[Constraint, ...] = (
         "Plot", "A site short of the minimum through road widening may be short by this much.",
         _pct(rules.ROAD_WIDENING_SHORTFALL_ALLOWANCE), Basis.LEGAL_RULE,
         rules.ROAD_WIDENING_SHORTFALL_CLAUSE, ("rules.ROAD_WIDENING_SHORTFALL_ALLOWANCE",),
-        note="Not applied by generation or the checker: the text does not say 10% of what.",
+        note="Never applied as a pass: the text does not say 10% of what. The resolved rules "
+             "(legal/resolve.py) call a site that surrendered land and falls short by less than "
+             "this UNVERIFIED rather than failed.",
     ),
     Constraint(
         "Plot", "Drawing tolerances for the net plot: a survey outline this close to the stated "
                 "net area is taken as the net plot, and a strip the architect describes may "
                 "differ from the stated deduction by this much.",
         f"{runner.NET_AREA_TOLERANCE_SQM:g} m²; the larger of that and "
-        f"{runner.STRIP_AREA_TOLERANCE:.0%} of the deduction", Basis.ENGINE_DESIGN_ASSUMPTION,
-        "none (runner.load_plot)",
-        ("runner.NET_AREA_TOLERANCE_SQM", "runner.STRIP_AREA_TOLERANCE"),
+        f"{runner.STRIP_AREA_TOLERANCE:.0%} of the deduction; the site model refuses a net "
+        f"outline more than {_share(site_model.NET_PLOT_TOLERANCE)} off the stated net area; "
+        f"the adapter takes a net within {legacy_site.NET_GROSS_TOLERANCE_SQM:g} m² of the gross "
+        "as no deduction", Basis.ENGINE_DESIGN_ASSUMPTION,
+        "none (runner.load_plot, contracts.site_model, adapters.legacy_site)",
+        ("runner.NET_AREA_TOLERANCE_SQM", "runner.STRIP_AREA_TOLERANCE",
+         "contracts.site_model.NET_PLOT_TOLERANCE", "adapters.legacy_site.NET_GROSS_TOLERANCE_SQM"),
         note="The engine never places a strip from the area alone: without the strip's side "
              "and width, its outline or the net plot outline, the run stops and asks.",
         settles="Nothing: tolerances; the strip's location is a site input.",
+    ),
+    Constraint(
+        "Plot", "How the envelope reports the land's widths: where a narrow region is split "
+                "off, the widths it reports land narrower than, and the noise it ignores.",
+        f"regions split below {widths.REGION_SPLIT_M:g} m; land narrower than "
+        f"{', '.join(f'{w:g}' for w in widths.REPORTED_WIDTHS_M)} m reported; pieces under "
+        f"{widths.MIN_REGION_SQM:g} m² and hairlines under {widths.HAIRLINE_M:g} m ignored; "
+        f"corners sharper than 60 degrees cut (mitre limit {widths.MITRE_LIMIT:g}); the widest "
+        f"circle's centre found to {widths.CENTRE_TOLERANCE_M:g} m",
+        Basis.ENGINE_DESIGN_ASSUMPTION, "none (legal.widths)",
+        ("legal.widths.REGION_SPLIT_M", "legal.widths.REPORTED_WIDTHS_M",
+         "legal.widths.MIN_REGION_SQM", "legal.widths.HAIRLINE_M", "legal.widths.MITRE_LIMIT",
+         "legal.widths.CENTRE_TOLERANCE_M"),
+        note="Reported, never judged: nothing removes land for being narrow. The split is about "
+             "a tower's depth.",
+        settles="Nothing: how the report groups the land; the optimizer decides what fits where.",
     ),
     # ----------------------------------------------------------------- open space
     Constraint(
@@ -382,11 +460,28 @@ REGISTRY: tuple[Constraint, ...] = (
         "Open space", "A tot-lot pocket much bigger than what is still needed is cut down, a "
                       "little over, so the rest stays free for facilities and bays.",
         f"cut when {grounds.TRIM_ABOVE:g} x what is needed; cut to "
-        f"{grounds.TRIM_MARGIN:g} x it", Basis.ENGINE_DESIGN_ASSUMPTION, "none (grounds._trim)",
-        ("grounds.TRIM_ABOVE", "grounds.TRIM_MARGIN"),
-        note="The piece kept must still be a pocket the rule accepts; the 0.98 width test in "
-             "_trim is the same tolerance as findings.narrower_than.",
+        f"{grounds.TRIM_MARGIN:g} x it; the piece cut keeps {_share(search_fit.TRIM_WIDE_SHARE)} "
+        "of itself at the full width", Basis.ENGINE_DESIGN_ASSUMPTION,
+        "none (grounds._trim, optimizer.search.fit._trim)",
+        ("grounds.TRIM_ABOVE", "grounds.TRIM_MARGIN", "optimizer.search.fit.TRIM_ABOVE",
+         "optimizer.search.fit.TRIM_MARGIN", "optimizer.search.fit.TRIM_WIDE_SHARE"),
+        note="The piece kept must still be a pocket the rule accepts. The full search keeps its "
+             "own copies; the legacy _trim writes the 0.98 inline, the same tolerance as "
+             "findings.narrower_than.",
         settles="Nothing: a search choice that only moves where the tot-lot is drawn.",
+    ),
+    Constraint(
+        "Open space", "When a facility stands on a piece of ground in the area accounting: a "
+                      "soft facility mostly on an open-space pocket is the pocket's own ground.",
+        f"more than {_pct(accounting.PLAY_SHARE)} of it", Basis.ENGINE_DESIGN_ASSUMPTION,
+        "none (validator.accounting, optimizer.search.build, adapters.legacy_layout)",
+        ("validator.accounting.PLAY_SHARE", "optimizer.search.build.ON_POCKET_SHARE",
+         "adapters.legacy_layout.ON_GROUND_SHARE"),
+        note="Whether a facility's ground counts as organised open space is the resolved rules', "
+             "by its use and surface; this only says which ground it stands on, so the "
+             "PartitionLedger counts it once. The validator also names the zone unused ground "
+             "mostly lies in by the same share.",
+        settles="Nothing that the rule decides: a way of counting ground once.",
     ),
     Constraint(
         "Open space", "The green planting strip inside the boundary, where the setback is at "
@@ -524,12 +619,49 @@ REGISTRY: tuple[Constraint, ...] = (
     ),
     Constraint(
         "Roads", "A road's two ends, and what counts as joining the network or touching a road.",
-        f"ends {access.END_M:g} m deep; joined within {access.TOUCH_M:g} m; a block or ramp "
-        f"within {towers.TOUCH_M:g} m of a road opens onto it", Basis.ENGINE_DESIGN_ASSUMPTION,
-        "none (access.through_roads, towers.corridor_roads, access_checks)",
-        ("access.END_M", "access.TOUCH_M", "towers.TOUCH_M", "access_checks.TOUCH_M"),
-        note="Drawing tolerances for 'joins' and 'on a road'.",
+        f"ends {access.END_M:g} m deep; joined within {access.TOUCH_M:g} m; a block, ramp or "
+        f"fire lane within {towers.TOUCH_M:g} m of a road or the entrance opens onto it; roads "
+        f"meeting over less than {validator_network.JOIN_SQM:g} m² touch at a corner only; a "
+        f"lane meeting a block's band over less than {fire.REACH_MIN_SQM:g} m² does not reach "
+        f"it; pieces drawn to meet may miss by {shapes.HEAL_M:g} m; a gate within "
+        f"{context.GATE_ON_BOUNDARY_M:g} m of the boundary, or a shape within "
+        f"{shapes.EDGE_REACH_M:g} m of the plot's edge, stands in it",
+        Basis.ENGINE_DESIGN_ASSUMPTION,
+        "none (access.through_roads, towers.corridor_roads, access_checks; the full search's "
+        "and the validator's own copies)",
+        ("access.END_M", "access.TOUCH_M", "towers.TOUCH_M", "access_checks.TOUCH_M",
+         "optimizer.search.layout.TOUCH_M", "optimizer.search.network.TOUCH_M",
+         "validator.network.TOUCH_M", "validator.parking.RAMP_TOUCH_M",
+         "validator.fire.GATE_TOUCH_M", "validator.network.JOIN_SQM",
+         "validator.fire.REACH_MIN_SQM", "validator.shapes.HEAL_M",
+         "validator.context.GATE_ON_BOUNDARY_M", "validator.shapes.EDGE_REACH_M"),
+        note="Drawing tolerances for 'joins' and 'on a road'. The full search and the validator "
+             "keep their own copies of the 0.5 m; the legacy access.healed closes the same "
+             "0.05 m cracks inline.",
         settles="Nothing: measurement tolerances.",
+    ),
+    Constraint(
+        "Roads", "How the full search draws its roads from the blocks: the shortest street, how "
+                 "much of a corner the ring road may lose to a slanted boundary, where the "
+                 "entrance is tried and how far the approach may run.",
+        f"streets at least {network.MIN_STREET_LENGTH_M:g} m long; the ring may lose "
+        f"{network.RING_TIP_SQM:g} m² at a corner; gates every {network.GATE_STEP_M:g} m, the "
+        f"{network.ENTRANCES_TRIED} shortest approaches checked, each up to "
+        f"{network.APPROACH_LONGEST_M:g} m deep and running {network.APPROACH_REACH_SQM:g} m² "
+        f"into the ring; an approach of under {network.MIN_APPROACH_SQM:g} m² beyond the ring "
+        f"is the ring itself; the gate at least {network.GATE_DEPTH_M:g} m deep",
+        Basis.ENGINE_DESIGN_ASSUMPTION, "none (optimizer.search.network)",
+        ("optimizer.search.network.MIN_STREET_LENGTH_M", "optimizer.search.network.RING_TIP_SQM",
+         "optimizer.search.network.GATE_STEP_M", "optimizer.search.network.ENTRANCES_TRIED",
+         "optimizer.search.network.APPROACH_LONGEST_M",
+         "optimizer.search.network.APPROACH_REACH_SQM",
+         "optimizer.search.network.MIN_APPROACH_SQM", "optimizer.search.network.GATE_DEPTH_M"),
+        note="The shortest street is rule 8(m)'s 9 m road width and the gate's depth the 2 m "
+             "planted strip, both read from rules.py; using them as a length and a depth is the "
+             "engine's. The legacy layout tries its entrance its own way (access.ENTRANCE_STEP_M, "
+             f"and an approach of up to {access.APPROACH_MAX_M:g} m). The validator measures "
+             "every road the search draws.",
+        settles="The firm's road pattern; the sanctioned plans.",
     ),
     # ----------------------------------------------------------------- fire access
     Constraint(
@@ -555,11 +687,15 @@ REGISTRY: tuple[Constraint, ...] = (
         f"the outer edge of the {access.LANE_M:g} m lane (inner edge {access.R_IN:g} m), so "
         f"{access.FIRE_BAND_M:.2f} m clear beside each face", Basis.UNRESOLVED_INTERPRETATION,
         rules.FIRE_ACCESS_CLAUSE,
-        ("access.R_IN", "access.FIRE_BAND_M", "access_checks.FIRE_BAND_M"),
+        ("access.R_IN", "access.FIRE_BAND_M", "access_checks.FIRE_BAND_M",
+         "optimizer.search.quantities.QUARTER_TURN"),
         note="The order gives the 9 m, not where it is measured. The outer-edge reading is the "
              "one that fits the state's 7 m minimum setback and the 7 m rule 13(c)(vii) keeps "
              "for fire vehicles; a 9 m centreline would need 7.76 m. The 6.88 m is derived from "
-             "this reading and is nowhere written in the rule. Kept as the conservative test.",
+             "this reading and is nowhere written in the rule. Kept as the conservative test. "
+             "The full search takes both readings from the resolved rules and keeps the larger "
+             "band, outer radius less inner radius x sin 45 degrees for a square corner "
+             "(optimizer.search.quantities.QUARTER_TURN).",
         settles="The fire NOC of a sanctioned high-rise, or the layout agreed with the Chief "
                 "Fire Officer, which 4.6(c) asks for.",
     ),
@@ -569,10 +705,15 @@ REGISTRY: tuple[Constraint, ...] = (
                        "bend must be to count as a turn.",
         f"{access.SECTOR_STEPS} chords; {access.SECTOR_TOLERANCE_SQM:g} m² outside allowed; "
         f"bends under {access.MIN_TURN_DEG:g} degrees are straight",
-        Basis.ENGINE_DESIGN_ASSUMPTION, "none (access.sector, access.blocked, access._corners)",
-        ("access.SECTOR_STEPS", "access.SECTOR_TOLERANCE_SQM", "access.MIN_TURN_DEG"),
+        Basis.ENGINE_DESIGN_ASSUMPTION,
+        "none (access.sector, access.blocked, access._corners; optimizer.search.turns; "
+        "validator.turning)",
+        ("access.SECTOR_STEPS", "access.SECTOR_TOLERANCE_SQM", "access.MIN_TURN_DEG",
+         "optimizer.search.turns.ARC_STEPS", "optimizer.search.turns.MIN_TURN_DEG",
+         "validator.turning.ARC_STEPS", "validator.turning.MIN_TURN_DEG"),
         note="Drawing tolerances; the 0.05 m healing of hairline cracks between road pieces "
-             "(access.healed) is the same kind.",
+             "(access.healed) is the same kind. The full search and the validator draw their "
+             "turns with their own copies.",
         settles="Nothing: measurement tolerances.",
     ),
     # ----------------------------------------------------------------- amenities
@@ -602,16 +743,22 @@ REGISTRY: tuple[Constraint, ...] = (
         "Amenities", "The club house footprint's proportion, and its storeys, when the firm "
                      "gives no size.",
         f"{grounds.CLUB_ASPECT:g}:1; {_lr['club_house_floors'].default} storeys",
-        Basis.ENGINE_DESIGN_ASSUMPTION, "none (grounds._club_item; layout.LayoutRequest)",
-        ("grounds.CLUB_ASPECT", "layout.LayoutRequest.club_house_floors"),
+        Basis.ENGINE_DESIGN_ASSUMPTION,
+        "none (grounds._club_item; layout.LayoutRequest; optimizer.search.ground, "
+        "optimizer.search.layout)",
+        ("grounds.CLUB_ASPECT", "layout.LayoutRequest.club_house_floors",
+         "optimizer.search.ground.CLUB_ASPECT", "optimizer.search.layout.CLUB_FLOORS"),
         note="A firm gives its club house as club_house_sqm on the request; the storeys are "
-             "not yet a workspace standard.",
+             "not yet a workspace standard. The full search takes the same when the brief "
+             "gives no storeys.",
         settles="The firm's club house drawings.",
     ),
     Constraint(
         "Amenities", "Walking room kept round the club house, the ramp and each facility.",
         _m(grounds.CLEARANCE_M), Basis.ENGINE_DESIGN_ASSUMPTION,
-        "none (grounds, site_amenities)", ("grounds.CLEARANCE_M", "site_amenities.CLEARANCE_M"),
+        "none (grounds, site_amenities, optimizer.search.ground)",
+        ("grounds.CLEARANCE_M", "site_amenities.CLEARANCE_M",
+         "optimizer.search.ground.CLEARANCE_M"),
         settles="The firm's site plans.",
     ),
     Constraint(
@@ -624,7 +771,8 @@ REGISTRY: tuple[Constraint, ...] = (
     Constraint(
         "Amenities", "How finely a facility's position is searched.",
         f"every {site_amenities.SCAN_STEP_M:g} m", Basis.ENGINE_DESIGN_ASSUMPTION,
-        "none (site_amenities._fit)", ("site_amenities.SCAN_STEP_M",),
+        "none (site_amenities._fit, optimizer.search.fit.fit_rectangle)",
+        ("site_amenities.SCAN_STEP_M", "optimizer.search.fit.SCAN_STEP_M"),
         settles="Nothing: a search step.",
     ),
     # ----------------------------------------------------------------- parking
@@ -748,6 +896,19 @@ REGISTRY: tuple[Constraint, ...] = (
         settles="The bay size on the firm's drawings, or a primary source that fixes one.",
     ),
     Constraint(
+        "Parking", "Where the first bay of a row and the first row of a floor are tried when the "
+                   "cars a parking floor holds are counted.",
+        f"bays from {', '.join(f'{x:g}' for x in parking_plan.OFFSETS_ALONG)} m along; rows "
+        f"from {', '.join(f'{y:g}' for y in parking_plan.OFFSETS_ACROSS)} m across",
+        Basis.ENGINE_DESIGN_ASSUMPTION, "none (optimizer.search.parking_plan, validator.cars)",
+        ("optimizer.search.parking_plan.OFFSETS_ALONG",
+         "optimizer.search.parking_plan.OFFSETS_ACROSS", "validator.cars.OFFSETS_ALONG",
+         "validator.cars.OFFSETS_ACROSS"),
+        note="The full search and the validator count with the same offsets, each in its own "
+             "copy. More offsets could only find more cars.",
+        settles="Nothing: a search breadth; the count is what physically fits.",
+    ),
+    Constraint(
         "Parking", "The share of a parking floor that bays and aisles are expected to fill, for "
                    "sizing the cellars before the cars are counted.",
         _pct(grounds.LAYOUT_SHARE), Basis.ENGINE_DESIGN_ASSUMPTION, "none (grounds._attempt)",
@@ -790,8 +951,11 @@ REGISTRY: tuple[Constraint, ...] = (
         f"loading {_ws['common_area_pct'].default:g}%", Basis.FIRM_STANDARD, _WORKSPACE,
         ("intake.WorkspaceDefaults.floor_height_m", "intake.WorkspaceDefaults.stilt_height_m",
          "intake.WorkspaceDefaults.common_area_pct", "layout.LayoutRequest.floor_height_m",
-         "layout.LayoutRequest.stilt_height_m", "layout.LayoutRequest.common_area_pct"),
-        note="ASSUMED_FOR_TEST until the firm sets them.",
+         "layout.LayoutRequest.stilt_height_m", "layout.LayoutRequest.common_area_pct",
+         "area_statement.TowerGroup.common_area_pct", "assistant.DEFAULTS"),
+        note="ASSUMED_FOR_TEST until the firm sets them. The area statement takes the same "
+             "loading when a project leaves it out (area_statement.TowerGroup), and the assistant "
+             "names the same three when a brief leaves them out (assistant.DEFAULTS).",
     ),
     Constraint(
         "Towers", "The longest block the firm builds, if it has one; else lengths are explored.",
@@ -838,8 +1002,10 @@ REGISTRY: tuple[Constraint, ...] = (
                   "mostly the same ground.",
         f"directions within {layout.ANGLE_FAMILY_DEG:g} degrees; tower ground overlapping by "
         f"{_pct(layout.SAME_IDEA_OVERLAP)} or more", Basis.ENGINE_DESIGN_ASSUMPTION,
-        "none (layout.same_idea, layout._massing)",
-        ("layout.ANGLE_FAMILY_DEG", "layout.SAME_IDEA_OVERLAP"),
+        "none (layout.same_idea, layout._massing, optimizer.pareto)",
+        ("layout.ANGLE_FAMILY_DEG", "layout.SAME_IDEA_OVERLAP", "optimizer.pareto.ANGLE_FAMILY_DEG",
+         "optimizer.pareto.SAME_IDEA_OVERLAP"),
+        note="The new stages' Pareto selection keeps its own copy (optimizer.pareto).",
         settles="Nothing: how the options are chosen for variety, not whether one passes.",
     ),
     Constraint(
@@ -860,8 +1026,101 @@ REGISTRY: tuple[Constraint, ...] = (
     ),
     Constraint(
         "Towers", "How many options are returned.", f"{_lr['options'].default}",
-        Basis.ENGINE_DESIGN_ASSUMPTION, "none (layout.LayoutRequest)",
-        ("layout.LayoutRequest.options",), settles="Nothing: the architect asks for more.",
+        Basis.ENGINE_DESIGN_ASSUMPTION, "none (layout.LayoutRequest, design_brief.Objectives)",
+        ("layout.LayoutRequest.options", "contracts.design_brief.Objectives.options"),
+        settles="Nothing: the architect asks for more.",
+    ),
+    Constraint(
+        "Towers", "How close the flats must come to the brief to meet it: the unit mix, and a "
+                  "number of units asked.",
+        f"a mix error within {_mix:g}, unless the brief sets its own; units within "
+        f"{_pct(program.UNITS_TARGET_TOLERANCE)} of the number asked",
+        Basis.ENGINE_DESIGN_ASSUMPTION,
+        "none (contracts.design_brief.Program, validator.program)",
+        ("contracts.design_brief.Program.mix_tolerance",
+         "validator.program.UNITS_TARGET_TOLERANCE"),
+        note="The brief's program, judged by the validator; neither is law.",
+        settles="The architect's brief, which may set its own tolerance.",
+    ),
+    Constraint(
+        "Towers", "The tower prototypes composed from the firm's flats: the cores a block has, "
+                  "the flats each core serves on a side, and what a core holds.",
+        "; ".join(f"{family.value} {plan.cores} x {plan.flats_per_core_per_side}"
+                  for family, plan in compose.FAMILY_PLANS.items())
+        + f" (cores x flats a side); {compose.LIFTS_PER_CORE} lifts and "
+        f"{compose.STAIRS_PER_CORE} stair to a core", Basis.ENGINE_DESIGN_ASSUMPTION,
+        "none (prototypes.compose)",
+        ("prototypes.compose.FAMILY_PLANS", "prototypes.compose.LIFTS_PER_CORE",
+         "prototypes.compose.STAIRS_PER_CORE"),
+        note="Design choices, not law: no order limits a block's cores or flats a floor, and a "
+             "family the library's flats_per_core_per_side cannot serve is not composed. The "
+             "lifts and stair are placeholders until egress is modelled (the validator reports "
+             "egress NOT_CHECKED).",
+        settles="The firm's own block types and core drawings.",
+    ),
+    Constraint(
+        "Towers", "How much the full search looks at: where the columns start, the floor counts "
+                  "tried, the configurations laid out, tried, judged and proposed for each set "
+                  "of readings, and how the time budget is shared.",
+        f"{_lim.offsets} column offsets over one pitch (a block's depth and the larger of the "
+        f"road and {strategy.PITCH_GAP_M:g} m); positions along a column every "
+        f"{columns.STEP_M:g} m, a gap kept at the figure asked plus {columns.GAP_SLACK_M:g} m; "
+        f"the {_lim.heights} tallest counts; for each profile {_lim.laid_per_profile} laid of "
+        f"up to {_lim.attempts_per_profile} tried, {_lim.judged_per_profile} judged and "
+        f"{_lim.per_profile_proposed} proposed; evaluating stops at "
+        f"{_pct(strategy.EVALUATE_SHARE)} of the time budget and laying out at "
+        f"{_pct(strategy.LAY_OUT_SHARE)}", Basis.ENGINE_DESIGN_ASSUMPTION,
+        "none (optimizer.search.strategy.Limits, optimizer.search.columns)",
+        ("optimizer.search.strategy.Limits.offsets", "optimizer.search.strategy.Limits.heights",
+         "optimizer.search.strategy.Limits.laid_per_profile",
+         "optimizer.search.strategy.Limits.attempts_per_profile",
+         "optimizer.search.strategy.Limits.judged_per_profile",
+         "optimizer.search.strategy.Limits.per_profile_proposed",
+         "optimizer.search.strategy.PITCH_GAP_M", "optimizer.search.strategy.EVALUATE_SHARE",
+         "optimizer.search.strategy.LAY_OUT_SHARE", "optimizer.search.columns.STEP_M",
+         "optimizer.search.columns.GAP_SLACK_M"),
+        note="Search bounds, never rules: a wider search can only add options, and the "
+             "validator judges every candidate. A firm's design margin on the gap is added "
+             "apart (design_margins.tower_gap_extra_m).",
+        settles="Nothing: search breadth.",
+    ),
+    Constraint(
+        "Towers", "When the plot has no room to spare, the end of it the full search keeps for "
+                  "the open space, the club house, the ramp and the facilities, and how big it "
+                  "is reckoned.",
+        f"{search_layout.RESERVE_OPEN_FACTOR:g} x the open space, "
+        f"{search_layout.RESERVE_CLUB_FACTOR:g} x twice a club house of "
+        f"{search_layout.CLUB_ASSUMED_SHARE_OF_NET:g} x the net plot over its storeys, "
+        f"{search_layout.RAMP_RESERVE_SQM:g} m² for the ramp and "
+        f"{search_layout.FACILITY_ROOM_SQM:g} m² for the facilities; an end too small is tried "
+        f"again {strategy.RETRY_SCALE:g} times bigger", Basis.ENGINE_DESIGN_ASSUMPTION,
+        "none (optimizer.search.layout.Run.reserve_target_sqm, optimizer.search.strategy)",
+        ("optimizer.search.layout.RESERVE_OPEN_FACTOR",
+         "optimizer.search.layout.RESERVE_CLUB_FACTOR",
+         "optimizer.search.layout.CLUB_ASSUMED_SHARE_OF_NET",
+         "optimizer.search.layout.RAMP_RESERVE_SQM", "optimizer.search.layout.FACILITY_ROOM_SQM",
+         "optimizer.search.strategy.RETRY_SCALE"),
+        note="Estimates that only decide which configurations are tried; the exact laying "
+             "decides whether one fits. The club house's figure folds the 3% share into a "
+             "built-up area reckoned at 1.25 times the net plot, so it would not follow a change "
+             "to the rule's share.",
+        settles="Nothing that passes a layout: the exact laying decides.",
+    ),
+    Constraint(
+        "Towers", "Reading the firm's flats from its floor-plan DXF: carpet to built-up, how far "
+                  "a room may lie from its flat's kitchen, and what a plausible flat is.",
+        f"built-up = carpet x {flat_import.BUILT_UP_FROM_CARPET:g}; rooms within "
+        f"{flat_import.ROOM_REACH_M:g} m of a kitchen; at least "
+        f"{flat_import.MIN_CARPET_PER_BEDROOM_SQM:g} m² of carpet a bedroom; "
+        f"{flat_import.PLAUSIBLE_ROOMS.start} to {flat_import.PLAUSIBLE_ROOMS.stop - 1} rooms and "
+        f"{flat_import.PLAUSIBLE_BEDROOMS.start} to {flat_import.PLAUSIBLE_BEDROOMS.stop - 1} "
+        "bedrooms a flat", Basis.ENGINE_DESIGN_ASSUMPTION, "none (flat_import)",
+        ("flat_import.BUILT_UP_FROM_CARPET", "flat_import.ROOM_REACH_M",
+         "flat_import.MIN_CARPET_PER_BEDROOM_SQM", "flat_import.PLAUSIBLE_ROOMS",
+         "flat_import.PLAUSIBLE_BEDROOMS"),
+        note="The importer writes the firm's flat library, which generation then reads as the "
+             "firm's standard, so these shape what the library says.",
+        settles="The firm's own built-up and saleable figures for its flats, in its library file.",
     ),
     # ----------------------------------------------------------------- tolerances
     Constraint(
@@ -874,10 +1133,144 @@ REGISTRY: tuple[Constraint, ...] = (
         "a floor count", Basis.ENGINE_DESIGN_ASSUMPTION, "none",
         ("access.EPS_M", "towers.EPS_M", "grounds.EPS_M", "parking.EPS_M", "layout.EPS_M",
          "site_amenities.EPS_M", "access_checks.OVERLAP_SQM", "parking_checks.AREA_SLACK_SQM",
-         "checks.WATER_OVERLAP_SQM", "max_floors._EPS"),
+         "checks.WATER_OVERLAP_SQM", "max_floors._EPS", "validator.parking.AREA_SLACK_SQM",
+         "validator.land_checks.WATER_OVERLAP_SQM"),
         note="findings.narrower_than calls a shape narrower when removing every part thinner "
-             "than the width loses more than 2% of its area.",
+             "than the width loses more than 2% of its area. The validator keeps its own copies "
+             "of the area slack and the water-buffer overlap.",
         settles="Nothing: tolerances, all well under a drawing's precision.",
+    ),
+    Constraint(
+        "Tolerances", "The new stages' drawing tolerances: the slivers and noise the envelope, "
+                      "the full search and the adapters ignore, the hair a block keeps inside "
+                      "its ground, and the floating point epsilons of heights and targets.",
+        f"heights to {resolved_rules.HEIGHT_TOL_M:g} m; a block {search_layout.EPS_LAND_M:g} m "
+        f"inside its ground; slivers under {build.SLIVER_SQM:g} m² to "
+        f"{network.RING_CLIP_SQM:g} m² ignored; frontage under {frontage.MIN_ZONE_M:g} m is "
+        "noise", Basis.ENGINE_DESIGN_ASSUMPTION, "none",
+        ("contracts.resolved_rules.HEIGHT_TOL_M", "contracts.validation.TARGET_TOL",
+         "legal.non_high_rise.WIDTH_TOL_M", "legal.frontage.MIN_ZONE_M",
+         "optimizer.floors.EPS_M", "optimizer.search.build.SLIVER_SQM",
+         "optimizer.search.columns.EPS", "optimizer.search.fit.EPS_M",
+         "optimizer.search.ground.MIN_PIECE_SQM", "optimizer.search.layout.EPS_LAND_M",
+         "optimizer.search.network.FILL_SLIVER_SQM", "optimizer.search.network.RING_CLIP_SQM",
+         "optimizer.search.network.APPROACH_OUTSIDE_SQM", "optimizer.search.network.EPS_M",
+         "optimizer.search.parking_plan.EPS_M", "optimizer.search.parking_plan.EDGE_M",
+         "prototypes.legacy.SNAP_M", "adapters.legacy_layout.SLIVER_SQM"),
+        note="A height sums floor heights, so 21.000000000000004 m is 21 m. A legacy tower is "
+             "snapped to a micrometre when it becomes a prototype, so shared edges are one.",
+        settles="Nothing: tolerances, all well under a drawing's precision.",
+    ),
+    Constraint(
+        "Tolerances", "The validator's drawing tolerances: the noise it ignores, the grid it "
+                      "snaps to and how finely it finds a circle.",
+        f"shapes snapped to {shapes.GRID_M:g} m; edges within {shapes.EPS_M:g} m are one; "
+        f"overlaps under {shapes.NOISE_SQM:g} m² are noise, two claims on ground under "
+        f"{accounting.CONFLICT_SQM:g} m² are their edges meeting; pockets within "
+        f"{open_space.CRACK_M:g} m are one; the widest circle's centre found to "
+        f"{shapes.CENTRE_TOLERANCE_M:g} m", Basis.ENGINE_DESIGN_ASSUMPTION, "none (validator)",
+        ("validator.shapes.GRID_M", "validator.shapes.EPS_M", "validator.shapes.FLAW_SQM",
+         "validator.shapes.NOISE_SQM", "validator.shapes.CENTRE_TOLERANCE_M",
+         "validator.accounting.CONFLICT_SQM", "validator.layers.SAME_ZONE_SQM",
+         "validator.measure.TOL_M", "validator.open_space.CRACK_M", "validator.zones.DEPTH_EPS_M",
+         "validator.cars.EPS_M", "validator.cars.EDGE_M"),
+        note="The circle's centre decides the radius a cul-de-sac's head is measured at.",
+        settles="Nothing: tolerances, all well under a drawing's precision.",
+    ),
+    Constraint(
+        "Tolerances", "The validator's slack on a verdict: how far a measured width, size or "
+                      "share may fall short of what it declares or the rule asks and still meet "
+                      "it, and what it takes for a shape to be a bay or a bend.",
+        f"a gate {fire.GATE_SLACK_M:g} m and a road {validator_roads.DECLARED_SLACK_M:g} m "
+        f"under the width it declares; a cul-de-sac's head {validator_roads.HEAD_SLACK_M:g} m "
+        f"under its radius; a part {shapes.OPENING_SLACK_M:g} m under the width asked; a bay "
+        f"{validator_parking.BAY_SLACK_M:g} m and a ramp {validator_parking.RAMP_SLACK_M:g} m "
+        f"short of their size, a cellar {validator_parking.CELLAR_SLACK_M:g} m short of its "
+        f"setback; the planted strip {_share(land_checks.STRIP_SLACK)} short of its area or "
+        f"{land_checks.STRIP_WIDTH_SLACK_M:g} m of its width; a club house "
+        f"{clubhouse.SIZE_SLACK_SQM:g} m² under the share it needs or "
+        f"{program.SIZE_SLACK_SQM:g} m² under the size the brief states; a bay is one when it "
+        f"fills {_share(validator_parking.BAY_FILL)} of its box and on other ground when over "
+        f"{validator_parking.BAY_OVERLAP_SQM:g} m² of it lies there; a strip "
+        f"{_share(shapes.BEND_RATIO - 1)} longer along its middle than its box is bent",
+        Basis.ENGINE_DESIGN_ASSUMPTION, "none (validator)",
+        ("validator.fire.GATE_SLACK_M", "validator.roads.DECLARED_SLACK_M",
+         "validator.roads.HEAD_SLACK_M", "validator.roads.HEAD_CUT_M",
+         "validator.parking.BAY_SLACK_M", "validator.parking.RAMP_SLACK_M",
+         "validator.parking.CELLAR_SLACK_M", "validator.parking.BAY_FILL",
+         "validator.parking.BAY_OVERLAP_SQM", "validator.shapes.OPENING_SLACK_M",
+         "validator.shapes.BEND_RATIO", "validator.land_checks.STRIP_SLACK",
+         "validator.land_checks.STRIP_WIDTH_SLACK_M", "validator.clubhouse.SIZE_SLACK_SQM",
+         "validator.program.SIZE_SLACK_SQM"),
+        note="Each can turn a verdict at the margin, always by a drawing's rounding: a road "
+             "drawn as chords of an arc is a centimetre narrower than the arc. A bent "
+             "cul-de-sac's length is UNVERIFIED rather than failed; its stem is what is left "
+             f"once the head's circle is cut {validator_roads.HEAD_CUT_M:g} m wider.",
+        settles="Nothing: measurement tolerances, each under a drawing's precision.",
+    ),
+    Constraint(
+        "Tolerances", "How far the generator's own figures may differ from the validator's "
+                      "measure before the validator says they disagree.",
+        f"footprints by {cross_checks.FOOTPRINT_SQM:g} m² or "
+        f"{_share(cross_checks.FOOTPRINT_SHARE)}; a figure by "
+        f"{_share(cross_checks.METRIC_SHARE)}, a ledger use by "
+        f"{_share(cross_checks.PARTITION_SHARE)} of the net area, cars by "
+        f"{_share(cross_checks.CARS_SHARE)}; a setback by {cross_checks.SETBACK_SLACK_M:g} m; "
+        f"the open space the rules and the site ask by {_share(open_space.AGREEMENT_SHARE)}",
+        Basis.ENGINE_DESIGN_ASSUMPTION, "none (validator.cross_checks, validator.open_space)",
+        ("validator.cross_checks.FOOTPRINT_SQM", "validator.cross_checks.FOOTPRINT_SHARE",
+         "validator.cross_checks.METRIC_SHARE", "validator.cross_checks.PARTITION_SHARE",
+         "validator.cross_checks.CARS_SHARE", "validator.cross_checks.SETBACK_SLACK_M",
+         "validator.cross_checks.BAND_SLACK_M", "validator.open_space.AGREEMENT_SHARE"),
+        note="A disagreement is reported against the generator's claim; the verdicts rest on "
+             "the validator's own measure.",
+        settles="Nothing: tolerances on the generator's arithmetic.",
+    ),
+    Constraint(
+        "Tolerances", "What the full search keeps in hand above what it is asked, so rounding "
+                      "never leaves a layout short.",
+        f"claims {_share(build.OPEN_SPACE_CLAIM)} of the open space drawn; the club house "
+        f"{search_ground.CLUB_SIZE_SLACK_SQM:g} m² over its share; parking "
+        f"{parking_plan.SAFETY_SQM:g} m² over the need", Basis.ENGINE_DESIGN_ASSUMPTION,
+        "none (optimizer.search.build, optimizer.search.ground, optimizer.search.parking_plan)",
+        ("optimizer.search.build.OPEN_SPACE_CLAIM", "optimizer.search.ground.CLUB_SIZE_SLACK_SQM",
+         "optimizer.search.parking_plan.SAFETY_SQM"),
+        settles="Nothing that passes a layout: the validator measures each one again.",
+    ),
+    Constraint(
+        "Tolerances", "What the validator refuses to measure at all, so a broken candidate gets "
+                      "one check that can never pass instead of a guess.",
+        f"a whole number above {refusals.MAX_COUNT:.0e}; ground drawn more than "
+        f"{refusals.EXTENT_FACTOR} plot-widths away (never within {refusals.EXTENT_FLOOR_M:g} "
+        f"m); a parking bay narrower than {refusals.MIN_BAY_M:g} m",
+        Basis.ENGINE_DESIGN_ASSUMPTION, "none (validator.refusals)",
+        ("validator.refusals.MAX_COUNT", "validator.refusals.EXTENT_FACTOR",
+         "validator.refusals.EXTENT_FLOOR_M", "validator.refusals.MIN_BAY_M"),
+        settles="Nothing: guards against input no site could give.",
+    ),
+    Constraint(
+        "Tolerances", "What the contracts and the prototype loader refuse: how far a stated "
+                      "figure may miss what is drawn, or shares what they must add up to.",
+        f"ownership arithmetic within {_share(_own)} of the gross; a ledger within "
+        f"{_share(_ledger)} of the net, its entries overlapping by at most "
+        f"{ledger.OVERLAP_TOLERANCE_SQM:g} m² and a shape's stated area within "
+        f"{ledger.AREA_TOLERANCE_SQM:g} m²; a prototype's per-floor areas within "
+        f"{_share(prototype.AREA_TOLERANCE)} and its saleable area within "
+        f"{prototype.SALEABLE_TOLERANCE_SQFT:g} sft a flat; its parts within "
+        f"{_share(prototype_library.BALANCE_TOLERANCE)} of the footprint and "
+        f"{prototype_library.FRAME_TOLERANCE_M:g} m of its frame; a unit mix adding up to 1 "
+        f"within {design_brief.MIX_SUM_TOLERANCE:g}", Basis.ENGINE_DESIGN_ASSUMPTION,
+        "none (contracts, prototypes.library)",
+        ("contracts.accounting.OwnershipReconciliation.tolerance",
+         "contracts.accounting.PartitionLedger.tolerance",
+         "contracts.accounting.OVERLAP_TOLERANCE_SQM", "contracts.accounting.AREA_TOLERANCE_SQM",
+         "contracts.prototype.AREA_TOLERANCE", "contracts.prototype.SALEABLE_TOLERANCE_SQFT",
+         "prototypes.library.BALANCE_TOLERANCE", "prototypes.library.SLIVER_SQM",
+         "prototypes.library.FRAME_TOLERANCE_M", "contracts.design_brief.MIX_SUM_TOLERANCE",
+         "prototypes.compose.MIX_SUM_TOLERANCE"),
+        note="The prototype composer checks a unit mix with its own copy of the brief's "
+             "tolerance.",
+        settles="Nothing: tolerances on figures the engine itself states; the drawing decides.",
     ),
     # ----------------------------------------------------------------- site inputs
     Constraint(

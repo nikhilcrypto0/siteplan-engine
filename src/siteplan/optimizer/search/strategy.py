@@ -61,6 +61,11 @@ from siteplan.towers import orientations
 NAME = "FULL"
 ROOM_FAILURES = ("no room", "open space", "no approach", "no road touches", "the ring road")
 RETRY_SCALE = 1.3
+# The share of the time budget spent when evaluating stops and when laying out stops; judging
+# may use the rest.
+EVALUATE_SHARE = 0.35
+LAY_OUT_SHARE = 0.75
+PITCH_GAP_M = 10.0  # the least gap reckoned beside a column when offsets are spread over a pitch
 
 
 @dataclass(frozen=True)
@@ -152,8 +157,8 @@ class FullSearchStrategy:
     def _search(self, context: SearchContext, run: Run, wanted: Sequence[Profile], tally: Tally
                 ) -> list[Judged]:
         budget = context.budget
-        queues = self._evaluate(context, run, wanted, tally, _Stage(budget, 0.35))
-        laid = self._lay_out(context, run, queues, tally, _Stage(budget, 0.75))
+        queues = self._evaluate(context, run, wanted, tally, _Stage(budget, EVALUATE_SHARE))
+        laid = self._lay_out(context, run, queues, tally, _Stage(budget, LAY_OUT_SHARE))
         return self._judge(context, run, laid, tally, _Stage(budget, 1.0))
 
     def _evaluate(self, context: SearchContext, run: Run, wanted: Sequence[Profile],
@@ -180,7 +185,7 @@ class FullSearchStrategy:
             if stage.expired():
                 tally.exhausted = True
                 break
-            pitch = run.depth_m + max(run.q.road_m, 10.0)
+            pitch = run.depth_m + max(run.q.road_m, PITCH_GAP_M)
             ev = _guarded(evaluate, run, Config(profile, angle, step * pitch / self.limits.offsets,
                                                 tallest, None, low_blocks=low))
             tally.evaluated += 1

@@ -57,6 +57,7 @@ LOW_FIRE_CLAUSE = ("G.O.168 rule 15(a)(i) (a building below the high-rise height
                    "Building Code's requirements and standards other than heights and setbacks)")
 REACH_MIN_SQM = 1.0  # a lane that only touches a block's band at a point does not reach it
 GATE_SLACK_M = 0.05  # a gate may measure this much under the width it declares
+GATE_TOUCH_M = 0.5  # a lane this close to the entrance's ground starts from it
 
 
 def clear_band(footprint: Polygon, lane_m: float) -> BaseGeometry:
@@ -68,7 +69,7 @@ def clear_band(footprint: Polygon, lane_m: float) -> BaseGeometry:
 def reached(ctx: Context) -> BaseGeometry:
     """The lanes (ground at least a lane wide) that connect to a gate."""
     lane = ctx.rules.fire.clear_width_m.value
-    start = ctx.entrance_land.buffer(0.5)
+    start = ctx.entrance_land.buffer(GATE_TOUCH_M)
     if start.is_empty:
         return Polygon()
     passable = opening(ctx.drawn.motorable, lane)
