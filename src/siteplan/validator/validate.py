@@ -39,6 +39,7 @@ from siteplan.validator import (
     refusals,
     report,
     roads,
+    targets,
 )
 from siteplan.validator.context import Context
 from siteplan.validator.ground import Ground
@@ -78,7 +79,8 @@ def _legal_checks(ctx: Context, ground: Ground, ledger: accounting.Ledger
     groups: list[tuple[str, Callable[[], list[Check]]]] = [
         ("Net plot and heights", lambda: [
             land_checks.net_plot_check(ctx), *blocks.height_class_checks(ctx),
-            *_present(blocks.plot_size_check(ctx), blocks.road_width_check(ctx)),
+            *_present(blocks.eligibility_check(ctx), blocks.plot_size_check(ctx),
+                      blocks.road_width_check(ctx)),
             *blocks.height_limit_checks(ctx), *_present(blocks.tdr_check(ctx)),
             *_present(blocks.prototype_height_check(ctx))]),
         ("Setbacks and gaps", lambda: blocks.setback_checks(ctx) + blocks.spacing_checks(ctx)),
@@ -87,11 +89,11 @@ def _legal_checks(ctx: Context, ground: Ground, ledger: accounting.Ledger
         ("Fire access", lambda: fire.fire_checks(ctx, ground)),
         ("Open space", with_quantities(open_space_group)),
         ("Green strip and water", lambda: [land_checks.green_strip_check(ctx),
-                                           *_present(land_checks.water_check(ctx))]),
+                                           *_present(land_checks.water_check(ctx),
+                                                     land_checks.electricity_line_check(ctx))]),
         ("Club house", lambda: [clubhouse.club_house_check(ctx),
                                 *_present(clubhouse.club_setback_check(ctx)),
-                                *clubhouse.club_gap_checks(ctx),
-                                *_present(clubhouse.large_project_check(ctx))]),
+                                *clubhouse.club_gap_checks(ctx)]),
         ("Parking", with_quantities(lambda: parking.parking_checks(ctx, ground))),
         ("Egress", lambda: _present(land_checks.egress_check(ctx))),
         ("Every square metre once", lambda: [accounting.ledger_check(ctx, ledger)])]
@@ -147,6 +149,7 @@ def _judge(site: CanonicalSiteModel, rules: ResolvedRules, brief: DesignBrief,
     counting = min((v for k, v in found.items() if k.startswith("open_space_counting_sqm")),
                    default=0.0)
     discrepancies = _discrepancies(ctx, ground, ledger, envelope, legal, found, counting, units)
+    design = targets.design_targets(ctx, ground, found)
     try:
         rule_layers = layers.recompute_layers(ctx)
     except (GEOSException, TopologicalError) as error:
@@ -158,7 +161,10 @@ def _judge(site: CanonicalSiteModel, rules: ResolvedRules, brief: DesignBrief,
         site, rules, brief, candidate, envelope,
         recomputed=Recomputed(towers=blocks.tower_measures(ctx), pairs=blocks.pair_measures(ctx),
                               quantities=_quantities(ctx, found, ledger), units_by_type=units),
-        legal=legal, program=program.program_checks(brief, candidate, ctx.towers, rules),
+        legal=legal,
+        program=[*program.program_checks(brief, candidate, ctx.towers, rules),
+                 *_present(targets.margin_check(ctx, design))],
+        design_targets=design,
         partition=ledger.ledger,
         partition_problems=ledger.problems + [
             f"claimed partition: {d.theirs}" for d in discrepancies
@@ -183,6 +189,11 @@ def _discrepancies(ctx: Context, ground: Ground, ledger: accounting.Ledger,
         ("metrics", lambda: cross_checks.metrics(
             ctx, clubhouse.built_up_sqm(ctx), counting, units)),
         ("cars", lambda: cross_checks.cars(candidate, found.get("parking_cars", 0.0))),
+        ("facilities", lambda: [
+            Discrepancy(item=f"facility {a.name}: use and surface", source="generator",
+                        theirs="; ".join(a.mismatch), ours="as the brief states",
+                        blocks_pass=True)
+            for a in ctx.drawn.amenities if a.mismatch]),
         ("road widths", lambda: roads.width_discrepancies(ctx, ground)),
         ("gates", lambda: fire.gate_discrepancies(ctx)),
         ("cellars", lambda: cross_checks.cellars(ctx)),

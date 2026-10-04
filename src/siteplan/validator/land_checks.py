@@ -77,6 +77,25 @@ def water_check(ctx: Context) -> Check | None:
         "amenity is a building here; one whose surface the brief does not say is not judged.")
 
 
+def electricity_line_check(ctx: Context) -> Check | None:
+    """Rule 3(c)(i): a building keeps 3 m from a high-tension line and 1.5 m from a low-tension
+    one, vertically and horizontally. The site model marks a line without its geometry or its
+    height, so where the survey marks one the distance is said and never passed."""
+    marked = [f.text or f.kind for f in ctx.site.features
+              if f.kind == "HT_LINE" or "HT line" in f.text or "LT line" in f.text]
+    if not marked:
+        return None
+    lines = ctx.rules.electrical
+    return plain(
+        Family.OTHER, "Distance from electricity lines", Status.UNVERIFIED,
+        "a line is marked on the survey: " + "; ".join(marked),
+        f"{lines.ht_clearance_m.value:g} m from a high-tension line, "
+        f"{lines.lt_clearance_m.value:g} m from a low-tension line, vertical and horizontal",
+        lines.ht_clearance_m.clause,
+        "The survey marks the line but not where it runs or how high: the distance cannot be "
+        "measured.")
+
+
 def green_strip_check(ctx: Context) -> Check:
     green, d = ctx.rules.green_strip, ctx.drawn
     rule, clause = "Peripheral green strip", ctx.rules.green_strip.width_m.clause

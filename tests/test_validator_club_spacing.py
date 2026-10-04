@@ -101,12 +101,8 @@ def test_a_club_house_of_a_tiny_footprint_and_dozens_of_floors_cannot_pass_the_3
     assert c.finding.status is Z.UNVERIFIED and "cannot pass" in c.finding.note
 
 
-def test_a_project_over_5_acres_says_rule_8o_is_not_modelled():
-    def large(rules):
-        rules.category.above_5_acres.value = True
+def test_no_five_acre_amenity_share_is_held_against_a_group_scheme():
+    """The 5% of site area for amenities in projects over 5 acres is rule 9(o) and 10(i), row
+    and cluster housing, not rule 8: contracts 1.1 carry no such field and nothing checks it."""
     names = {c.finding.rule for c in fixture("rectangle").report().legal}
-    assert "Large project: land set aside (rule 8(o))" not in names
-    report = fixture("rectangle").with_rules(large).report()
-    c = check(report, "Large project: land set aside (rule 8(o))")
-    assert c.finding.status is Z.NOT_CHECKED and "5%" in c.finding.required
-    assert "Large project: land set aside (rule 8(o))" in report.not_checked
+    assert not [n for n in names if "Large project" in n or "8(o)" in n]

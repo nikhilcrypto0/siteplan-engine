@@ -306,13 +306,15 @@ def test_a_block_that_is_high_rise_only_if_the_stilt_counts_is_unverified_not_pa
     assert c.by_reading[STILT_IN_RULE_HEIGHT][NOT_COUNTED] is Z.NOT_CHECKED
 
 
-def test_a_block_exactly_at_the_threshold_is_held_to_the_stricter_row_above_it():
+def test_a_block_exactly_at_the_threshold_is_a_high_rise_on_table_ivs_first_row():
+    """Contracts 1.1: a building of exactly 21 m is a high-rise (rule 2(f)) and has a band of
+    its own, on the Table IV row that reaches 21 m: 7 m all round, a 12 m road. It is judged on
+    that row, PASS or FAIL, as the optimizer reads it (HeightRules.band_for)."""
     inputs = _counted_only(fixture("rectangle")).edited(lambda c: set_floors(c, "T1", 6))
-    # T1 is 21.0 m: the resolved bands have no Table IV row for exactly 21 m
-    assert status(inputs.report(), "All-round setback: T1") is Z.PASS  # 13 m meets the row above
-    short = _north_to(inputs, "T1", 7.5).report()
-    c = check(short, "All-round setback: T1")
-    assert c.finding.status is Z.UNVERIFIED and "threshold" in c.finding.note
+    assert status(inputs.report(), "All-round setback: T1") is Z.PASS  # 13 m
+    assert status(_north_to(inputs, "T1", 7.5).report(), "All-round setback: T1") is Z.PASS
+    short = check(_north_to(inputs, "T1", 6.5).report(), "All-round setback: T1")
+    assert short.finding.status is Z.FAIL and ">= 7.00 m" in short.finding.required
 
 
 def test_an_unknown_reading_is_unverified_never_guessed():
@@ -356,10 +358,14 @@ def _limit(**fields):
     from siteplan.contracts.resolved_rules import HeightLimit, HeightMeasure
 
     def add(rules):
-        base = dict(measure=HeightMeasure.PHYSICAL_HEIGHT, max_m=25.0, reason="a made-up cap",
-                    clause="made up", status=Provenance.VERIFIED, applies_if=None)
+        base = dict(id="made_up_cap", measure=HeightMeasure.PHYSICAL_HEIGHT, bound="BOUNDED",
+                    max_m=25.0, reason="a made-up cap", clause="made up",
+                    status=Provenance.VERIFIED)
         rules.height.limits.append(HeightLimit(**{**base, **fields}))
     return add
+
+
+CONDITION = {"fact": "access.dead_end", "holds_when": True, "text": "the road ends at the plot"}
 
 
 def test_a_limit_on_the_physical_height_in_the_rules_is_held_against_the_tallest_tower():
@@ -370,11 +376,19 @@ def test_a_limit_on_the_physical_height_in_the_rules_is_held_against_the_tallest
     assert status(ok, "Physical-height limit: a made-up cap") is Z.PASS
 
 
-def test_a_limit_that_depends_on_a_condition_or_an_unconfirmed_input_is_unverified():
-    for fields in ({"applies_if": "the road ends at the plot"}, {"status": Provenance.UNVERIFIED},
-                   {"max_m": None}):
-        report = fixture("rectangle").with_rules(_limit(**fields)).report()
-        assert status(report, "Physical-height limit: a made-up cap") is Z.UNVERIFIED, fields
+@pytest.mark.parametrize(("fields", "expected"), [
+    ({"condition": CONDITION, "applicability": "UNKNOWN"}, Z.UNVERIFIED),
+    ({"condition": CONDITION, "applicability": "APPLIES"}, Z.FAIL),
+    ({"condition": CONDITION, "applicability": "DOES_NOT_APPLY"}, Z.INFO),
+    ({"status": Provenance.UNVERIFIED}, Z.UNVERIFIED),
+    ({"bound": "NOT_EVALUATED", "max_m": None}, Z.UNVERIFIED),
+    ({"bound": "UNBOUNDED", "max_m": None}, Z.PASS)],
+    ids=["may apply", "applies", "does not apply", "unconfirmed", "not evaluated", "no limit"])
+def test_a_limit_is_judged_as_the_contract_judges_it(fields, expected):
+    """The verdict is HeightLimit.evaluate, the table the optimizer reads too: the 27 m tower is
+    beyond the made-up 25 m cap."""
+    report = fixture("rectangle").with_rules(_limit(**fields)).report()
+    assert status(report, "Physical-height limit: a made-up cap") is expected
 
 
 def test_the_dead_end_limit_in_the_rules_is_left_to_the_fire_check_that_reads_the_site():

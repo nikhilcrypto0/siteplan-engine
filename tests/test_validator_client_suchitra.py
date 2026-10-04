@@ -19,6 +19,7 @@ TEST_CLASS = "characterization"
 WORKSPACE = Path(__file__).parent.parent / "fixtures" / "workspace"
 SURVEY = WORKSPACE / "suchitra_survey.pdf"
 PROJECT = WORKSPACE / "suchitra.project.json"
+STATED = Path(__file__).parent.parent / "examples" / "amenities.hyderabad.json"
 
 pytestmark = pytest.mark.skipif(not (SURVEY.exists() and PROJECT.exists()),
                                 reason="client fixtures not present")
@@ -38,7 +39,6 @@ STRICTER = {
 @pytest.fixture(scope="module", params=sorted(LAYOUTS))
 def suchitra(request):
     from siteplan.adapters import Readings, brief, candidate_from_option, site_model
-    from siteplan.contracts.design_brief import AmenityRequest
     from siteplan.intake import load_defaults
     from siteplan.library import FlatLibrary
     from siteplan.project import Project
@@ -61,17 +61,17 @@ def suchitra(request):
     site = site_model(project, site_id="suchitra", boundary=read_survey(SURVEY).boundary)
     drawn = list(read_survey(SURVEY, project.site.water[0]).water)
     site.water[0].lines = [Line(points=[tuple(c) for c in line.coords]) for line in drawn]
-    design = brief(project, defaults)
-    # The brief says what surface each facility has, as the adapters should from the firm's list.
-    design.program.amenities = [
-        AmenityRequest(name=i.name, surface="SOFT" if i.counts_as_open_space else "HARD")
-        for i in facilities.items]
+    # The brief states each facility's use and surface, as a firm's library does: the firm's own
+    # file does not yet, so the same items as the repo's researched list states them (its own
+    # statements, assumed for the test, never read off a name).
+    stated = AmenityLibrary.model_validate_json(STATED.read_text())
+    design = brief(project, defaults, amenities=stated)
     rules = resolved_rules(site)
     readings = Readings.of(project.layout)
     refs = {"site_ref": digest(site), "rules_ref": digest(rules), "brief_ref": digest(design)}
     candidates = [candidate_from_option(
         option, plot, candidate_id=f"suchitra-{n}", readings=readings.selections,
-        access_side=project.site.access_side, keep_out=keep_out, **refs)
+        access_side=project.site.access_side, keep_out=keep_out, amenities=stated, **refs)
         for n, option in enumerate(found.options, 1)]
     return request.param, plot, keep_out, site, rules, design, candidates
 

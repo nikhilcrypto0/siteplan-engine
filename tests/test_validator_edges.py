@@ -84,17 +84,20 @@ def _legal_road(inputs, metres):
     return inputs.with_site(edit)
 
 
-def test_a_road_short_only_of_the_row_above_a_seam_is_unverified_not_failed():
+def test_a_road_short_of_the_21_m_row_fails_a_block_of_exactly_21_m():
+    """1.1: exactly 21 m is Table IV's first row (a 12 m road), not a seam between rows."""
     inputs = _legal_road(_counted(fixture("rectangle")).edited(_all_at_the_seam), 10.0)
-    assert status(inputs.report(), "Abutting road width (for T1)") is Z.UNVERIFIED
+    assert status(inputs.report(), "Abutting road width (for T1)") is Z.FAIL
+    wide = _legal_road(_counted(fixture("rectangle")).edited(_all_at_the_seam), 12.0)
+    assert status(wide.report(), "Abutting road width (for T1)") is Z.PASS
 
 
-def test_a_gap_short_only_of_the_row_above_a_seam_is_unverified_not_failed():
+def test_a_gap_short_of_the_21_m_row_fails_two_blocks_of_exactly_21_m():
     def close(candidate):
         _all_at_the_seam(candidate)
-        move_tower(candidate, "T1", 0.0, -4.0)  # 5 m from T2: short of the row above's gap
+        move_tower(candidate, "T1", 0.0, -4.0)  # 5 m from T2, the row asks 7 m
     c = check(_counted(fixture("rectangle")).edited(close).report(), "Gap between blocks: T1 / T2")
-    assert c.finding.status is Z.UNVERIFIED
+    assert c.finding.status is Z.FAIL and ">= 7.00 m" in c.finding.required
 
 
 def test_where_each_block_keeps_its_own_gap_the_gap_asked_is_their_mean_not_the_smaller():

@@ -5,6 +5,8 @@ report, and none costs a verdict the layout had earned."""
 
 import time
 
+import pytest
+from pydantic import ValidationError
 from shapely.geometry import Polygon, box
 from validator_helpers import check, fixture, move_tower, shape, status
 
@@ -19,8 +21,15 @@ SQUARE = [(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0)]
 
 
 def _a_hole_of_two_points():
-    """The contract's outer ring needs three points and its holes need none."""
-    return Shape(outer=SQUARE, holes=[[(1.0, 1.0), (2.0, 2.0)]])
+    """Since contracts 1.1 a hole needs three points and the contract refuses one of two
+    (test_the_contract_refuses_a_hole_of_two_points). The validator still defends itself against
+    such a shape put together without the contract's check, which is what this builds."""
+    return Shape.model_construct(outer=SQUARE, holes=[[(1.0, 1.0), (2.0, 2.0)]])
+
+
+def test_the_contract_refuses_a_hole_of_two_points():
+    with pytest.raises(ValidationError, match="three points"):
+        Shape(outer=SQUARE, holes=[[(1.0, 1.0), (2.0, 2.0)]])
 
 
 def test_a_hole_too_short_to_be_a_ring_is_dropped_named_and_blocks_a_pass():

@@ -17,7 +17,10 @@ from siteplan.contracts.resolved_rules import (
     MIXED_HEIGHT_SPACING,
     STILT_IN_RULE_HEIGHT,
     BandKind,
+    Eligibility,
+    HeightLimit,
     HeightMeasure,
+    LimitBound,
     ResolvedRules,
 )
 from siteplan.contracts.site_model import CanonicalSiteModel
@@ -45,9 +48,6 @@ from siteplan.validator.readings import (
 UNVERIFIED_DRAWING = "UNVERIFIED_DRAWING_VALUE"  # a road's width as drawn, never confirmed
 TABLE_III_NOTE = ("Below the high-rise threshold Table III (rule 5) applies and is not modelled "
                   "yet: the validator does not judge it.")
-SEAM_NOTE = ("A height exactly at the high-rise threshold falls between the table rows in the "
-             "resolved rules, so which row applies is not settled: the row above is the stricter, "
-             "and the block does not meet it.")
 
 
 def _table_clause(rules: ResolvedRules) -> str:
@@ -65,11 +65,6 @@ def _stopped(cls: HeightClass, what: str) -> Cell | None:
     if cls.state == "unmodelled":
         return Cell(Status.NOT_CHECKED, f"{cls.height_m:.2f} m: {cls.label}", what, TABLE_III_NOTE)
     return None
-
-
-def _fails_as(cls: HeightClass) -> Status:
-    """What falling short of a row means: FAIL, unless the row is only an upper bound."""
-    return Status.FAIL if cls.settled else Status.UNVERIFIED
 
 
 # --- Height class, plot size, road width ----------------------------------------------------
@@ -164,7 +159,6 @@ def road_width_check(ctx: Context) -> Check | None:
             if stopped is not None:
                 return stopped
         need = max(c.min_road_m or 0.0 for c in high)
-        sure = max((c.min_road_m or 0.0 for c in high if c.settled), default=0.0)
         required = f">= {need:g} m"
         if width is None:
             return Cell(Status.UNVERIFIED, f"unknown ({how})", required)
@@ -173,9 +167,7 @@ def road_width_check(ctx: Context) -> Check | None:
                         " ".join([*basis, "The width is a drawing's, never confirmed."]))
         if width + TOL_M >= need:
             return Cell(Status.PASS, f"{width:.2f} m ({how})", required, " ".join(basis))
-        status = Status.FAIL if width + TOL_M < sure else Status.UNVERIFIED
-        return Cell(status, f"{width:.2f} m ({how})", required,
-                    " ".join([*basis, SEAM_NOTE] if status is Status.UNVERIFIED else basis))
+        return Cell(Status.FAIL, f"{width:.2f} m ({how})", required, " ".join(basis))
 
     return check_from(run(ctx.rules, [STILT_IN_RULE_HEIGHT], cell), family=Family.HEIGHT,
                       rule=f"Abutting road width (for {tallest.name})",
@@ -203,19 +195,35 @@ def height_limit_checks(ctx: Context) -> list[Check]:
     return out
 
 
-def _physical_height_limit(ctx: Context, limit) -> Check:
-    """A limit on the height NBC measures (stilt included), whatever the reading of the stilt."""
+def _limit_required(limit: HeightLimit) -> str:
+    if limit.bound is LimitBound.UNBOUNDED:
+        return "no limit from this rule"
+    if limit.bound is LimitBound.NOT_EVALUATED:
+        return "evaluated once the limit is known"
+    return f"{'<=' if limit.inclusive else '<'} {limit.max_m:g} m"
+
+
+def _limit_note(limit: HeightLimit) -> str:
+    """Why a limit's verdict is what it is, beside its own reason: whether it is in force and
+    how far the inputs behind it are confirmed (HeightLimit.evaluate reads both)."""
+    parts = [limit.reason]
+    if limit.condition is not None:
+        parts.append(f"it applies only if {limit.condition.text} "
+                     f"({limit.applicability.value.lower().replace('_', ' ')})")
+    if limit.status is Provenance.UNVERIFIED:
+        parts.append("the limit rests on inputs nobody has confirmed, so it settles nothing "
+                     "either way")
+    return "; ".join(parts) + "."
+
+
+def _physical_height_limit(ctx: Context, limit: HeightLimit) -> Check:
+    """A limit on the height NBC measures (stilt included), whatever the reading of the stilt.
+    The verdict is the contract's (HeightLimit.evaluate), as the optimizer's is."""
     tallest = max(ctx.towers, key=lambda t: t.physical_height_m)
     measured = f"{tallest.physical_height_m:.2f} m ({tallest.name})"
-    required = ("evaluated once the limit is known" if limit.max_m is None
-                else f"<= {limit.max_m:g} m")
-    if limit.max_m is None or limit.applies_if or limit.status is Provenance.UNVERIFIED:
-        status = Status.UNVERIFIED
-    else:
-        status = verdict(tallest.physical_height_m <= limit.max_m + TOL_M)
-    return plain(Family.HEIGHT, f"Physical-height limit: {limit.reason}", status, measured,
-                 required, limit.clause, f"Applies if {limit.applies_if}." if limit.applies_if
-                 else "", subject=tallest.name)
+    return plain(Family.HEIGHT, f"Physical-height limit: {limit.reason}",
+                 limit.evaluate(tallest.physical_height_m), measured, _limit_required(limit),
+                 limit.clause, _limit_note(limit), subject=tallest.name)
 
 
 def prototype_height_check(ctx: Context) -> Check | None:
@@ -268,9 +276,11 @@ def tdr_check(ctx: Context) -> Check | None:
                       rule="TDR for a building of 18 to 21 m", clause=height.tdr_band_m.clause)
 
 
-def _rule_height_limit(ctx: Context, limit) -> Check:
-    required = ("evaluated once the limit is known" if limit.max_m is None
-                else f"<= {limit.max_m:g} m")
+def _rule_height_limit(ctx: Context, limit: HeightLimit) -> Check:
+    """A limit on the rule height, under each reading of the stilt. The verdict is the
+    contract's (HeightLimit.evaluate): a limit that cannot be worked out, rests on unconfirmed
+    inputs, or may not apply settles nothing either way."""
+    required = _limit_required(limit)
 
     def cell(a: Assignment) -> Cell:
         reading = a[STILT_IN_RULE_HEIGHT]
@@ -278,18 +288,44 @@ def _rule_height_limit(ctx: Context, limit) -> Check:
         if None in heights.values():
             return unknown_reading(STILT_IN_RULE_HEIGHT, reading)
         tallest = max(heights, key=heights.get)
-        measured = f"{heights[tallest]:.2f} m ({tallest})"
-        if limit.max_m is None or limit.applies_if or limit.status is Provenance.UNVERIFIED:
-            # A limit that cannot be evaluated, that depends on a condition, or that itself
-            # rests on an input nobody has confirmed settles nothing either way.
-            return Cell(Status.UNVERIFIED, measured, required,
-                        f"{limit.reason}" + (f"; applies if {limit.applies_if}"
-                                             if limit.applies_if else ""))
-        over = heights[tallest] > limit.max_m + TOL_M
-        return Cell(Status.FAIL if over else Status.PASS, measured, required, limit.reason)
+        return Cell(limit.evaluate(heights[tallest]), f"{heights[tallest]:.2f} m ({tallest})",
+                    required, _limit_note(limit))
 
     return check_from(run(ctx.rules, [STILT_IN_RULE_HEIGHT], cell), family=Family.HEIGHT,
                       rule=f"Rule-height limit: {limit.reason}", clause=limit.clause)
+
+
+ELIGIBILITY_STATUS = {Eligibility.ALLOWED: Status.PASS, Eligibility.PROHIBITED: Status.FAIL,
+                      Eligibility.UNVERIFIED: Status.UNVERIFIED}
+
+
+def eligibility_check(ctx: Context) -> Check | None:
+    """Whether the site may take a high-rise at all, as the rules resolve it, held against the
+    blocks of the high-rise height or more. A prohibition fails such a block; it permits nothing
+    lower, and a lower block is Table III's, which this validator does not judge."""
+    if not ctx.high_rise_anywhere():
+        return None
+    high_rise = ctx.rules.height.high_rise
+    named = ([g for g in high_rise.grounds if g.settled and g.met is False]
+             or [g for g in high_rise.grounds if not g.settled])
+    required = "; ".join(f"{g.id} {g.required}" for g in high_rise.grounds)
+
+    def cell(a: Assignment) -> Cell:
+        reading = a[STILT_IN_RULE_HEIGHT]
+        if _classes(ctx, reading) is None:
+            return unknown_reading(STILT_IN_RULE_HEIGHT, reading)
+        high = ctx.high_rise(reading)
+        if not high:
+            return Cell(Status.NOT_CHECKED, "no high-rise under this reading", required,
+                        TABLE_III_NOTE)
+        measured = (f"{high_rise.eligibility.value}: "
+                    + "; ".join(f"{g.id} {g.measured}" for g in named or high_rise.grounds))
+        return Cell(ELIGIBILITY_STATUS[high_rise.eligibility], measured, required,
+                    high_rise.note)
+
+    clause = "; ".join(sorted({g.clause for g in named or high_rise.grounds}))
+    return check_from(run(ctx.rules, [STILT_IN_RULE_HEIGHT], cell), family=Family.HEIGHT,
+                      rule="High-rise eligibility", clause=clause)
 
 
 # --- Setbacks ------------------------------------------------------------------------------
@@ -316,10 +352,10 @@ def setback_checks(ctx: Context) -> list[Check]:
                 return Cell(Status.FAIL, f"{gap:.2f} m: not wholly inside the net plot",
                             f">= {need:.2f} m to the net plot line")
             ok = gap + TOL_M >= need
-            return Cell(Status.PASS if ok else _fails_as(cls), f"{gap:.2f} m",
+            return Cell(Status.PASS if ok else Status.FAIL, f"{gap:.2f} m",
                         f">= {need:.2f} m to the net plot line",
                         "The front of a high-rise keeps the Table IV figure too, measured on the "
-                        "net plot." + ("" if cls.settled or ok else " " + SEAM_NOTE))
+                        "net plot.")
 
         out.append(check_from(run(ctx.rules, [STILT_IN_RULE_HEIGHT], cell), family=Family.SETBACK,
                               rule=f"All-round setback: {t.name}", clause=clause, subject=t.name))
@@ -340,10 +376,8 @@ def _gap_cell(ca: HeightClass, cb: HeightClass, ha: float, hb: float, spacing: s
     suffix = (" (the mean of the two blocks' gaps, each keeping its own half)"
               if spacing == EACH_OWN else "")
     ok = gap + TOL_M >= need
-    status = Status.PASS if ok else (Status.FAIL if why == "ok" else Status.UNVERIFIED)
-    note = "This gap does not count towards the tot-lot." + (
-        " " + SEAM_NOTE if why == "seam" and not ok else "")
-    return Cell(status, shown, f">= {need:.2f} m{suffix}", note)
+    return Cell(Status.PASS if ok else Status.FAIL, shown, f">= {need:.2f} m{suffix}",
+                "This gap does not count towards the tot-lot.")
 
 
 def pair_gap(a: TowerGeometry, b: TowerGeometry) -> float:

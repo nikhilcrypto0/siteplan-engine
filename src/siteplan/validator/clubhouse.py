@@ -168,17 +168,3 @@ def club_gap_checks(ctx: Context) -> list[Check]:
             family=Family.SPACING, rule=f"Club house gap to {tower.name}",
             clause=ctx.rules.spacing.clause, subject=tower.name))
     return out
-
-
-def large_project_check(ctx: Context) -> Check | None:
-    """Rule 8(o) sets aside land for amenities in a project over 5 acres; nothing models it, so
-    it is said whenever it applies."""
-    a, c = ctx.rules.amenities, ctx.rules.category
-    if not c.above_5_acres.value:
-        return None
-    return plain(Family.AMENITIES, "Large project: land set aside (rule 8(o))", Status.NOT_CHECKED,
-                 f"site {ctx.site.ownership.gross_sqm.value:,.0f} m², over "
-                 f"{a.large_project_from_acres.value:g} acres",
-                 f"{a.large_project_share_of_site.value:.0%} of the site",
-                 a.large_project_share_of_site.clause,
-                 "Not modelled: the land to be set aside and where it may lie.")

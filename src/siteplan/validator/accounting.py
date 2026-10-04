@@ -21,7 +21,7 @@ from shapely.geometry import Polygon
 from shapely.geometry.base import BaseGeometry
 
 from siteplan.contracts.accounting import PartitionEntry, PartitionLedger, PhysicalUse
-from siteplan.contracts.common import Shape, Status, shapes_from
+from siteplan.contracts.common import Shape, Status, Surface, shapes_from
 from siteplan.contracts.resolved_rules import MIXED_HEIGHT_SPACING
 from siteplan.contracts.validation import Check, Family
 from siteplan.validator.context import Context
@@ -31,6 +31,11 @@ from siteplan.validator.shapes import NOISE_SQM, clean_pieces, union_of_all
 from siteplan.validator.zones import gap_zones, green_strip_zone, setback_zone
 
 U = PhysicalUse
+# A facility's ground by the surface the brief states for it; one nobody stated is entered as an
+# amenity and tagged so, never read off its name (as the adapter's ledger does).
+GROUND_BY_SURFACE = {Surface.BUILT: U.OTHER_BUILT, Surface.HARD: U.HARD_AMENITY,
+                     Surface.SOFT: U.SOFT_OPEN_SPACE}
+SURFACE_UNSTATED = "SURFACE_UNSTATED"
 # Where two drawn things claim the same ground, the earlier use keeps it: what is built stands
 # where it stands; the ramp is a cut in the ground beside a road; a paved road is a road even if
 # it is also the tender's route; clear hardstanding keeps a bay off it; a bay is a bay before a
@@ -107,11 +112,12 @@ def claims_of(ctx: Context) -> list[Claim]:
                          and a.shape.intersection(pockets).area > PLAY_SHARE * a.shape.area)
         if on_open_space and not a.hard:
             continue  # a play area on the tot-lot: the tot-lot's ground, tagged below
-        out.append(Claim(U.SOFT_OPEN_SPACE if a.surface == "SOFT" else U.HARD_AMENITY, a.name,
-                         a.shape))
+        use = GROUND_BY_SURFACE.get(a.surface, U.HARD_AMENITY)
+        tags = {None: (SURFACE_UNSTATED,), Surface.SOFT: (f"AMENITY:{a.name}",)}.get(a.surface, ())
+        out.append(Claim(use, a.name, a.shape, tags))
     for i, pocket in enumerate(d.open_space, 1):
         tags = tuple(f"AMENITY:{a.name}" for a in d.amenities
-                     if a.shape.area > 0 and a.shape.intersection(pocket).area
+                     if not a.hard and a.shape.area > 0 and a.shape.intersection(pocket).area
                      > PLAY_SHARE * a.shape.area)
         out.append(Claim(U.SOFT_OPEN_SPACE, f"open space {i}", pocket, tags))
     if not d.green_strip.is_empty:

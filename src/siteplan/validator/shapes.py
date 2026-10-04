@@ -108,9 +108,13 @@ def opening(shape: BaseGeometry, width_m: float) -> BaseGeometry:
     A part within two centimetres of the width is kept: shrunk by exactly half its width a part
     leaves a hairline that the geometry library drops or swells, and a road drawn as chords of
     an arc is a centimetre narrower than the arc, so the shrink stops a centimetre short on each
-    side."""
+    side.
+
+    The result is clipped to the shape: growing a shrunk shape back with square corners can
+    reach past a corner the shape itself cuts, and open space counted there would be ground no
+    one drew (13 m² on one layout before this clip)."""
     half = width_m / 2 - OPENING_SLACK_M
-    return mitred(mitred(shape, -half), half)
+    return mitred(mitred(shape, -half), half).intersection(shape)
 
 
 def narrow_part(shape: BaseGeometry, width_m: float) -> BaseGeometry:

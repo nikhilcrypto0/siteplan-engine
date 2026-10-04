@@ -89,8 +89,10 @@ def test_a_triangular_hole_is_a_ring_and_stays():
 
 
 def test_a_ring_too_short_is_dropped_and_a_triangle_beside_it_stays():
-    holed, flaw = polygon_of(Shape(outer=SQUARE, holes=[[(1.0, 1.0), (3.0, 1.0), (3.0, 3.0)],
-                                                         [(5.0, 5.0), (6.0, 6.0)]]))
+    # The contract refuses a hole of two points since 1.1; the validator still copes with one
+    # put together without that check.
+    holed, flaw = polygon_of(Shape.model_construct(
+        outer=SQUARE, holes=[[(1.0, 1.0), (3.0, 1.0), (3.0, 3.0)], [(5.0, 5.0), (6.0, 6.0)]]))
     assert "a hole too short to be a ring was dropped" in flaw
     assert holed.area == pytest.approx(100.0 - 2.0)
 
@@ -108,15 +110,15 @@ def test_the_width_of_nothing_along_a_boundary_is_nothing():
 # --- the club house against a tower at the Table IV seam ----------------------------------------
 
 
-def test_a_club_house_close_to_a_block_exactly_21_m_high_is_unverified_not_failed():
-    """At exactly 21 m the resolved bands have no row: the row above is only an upper bound."""
+def test_a_club_house_too_close_to_a_block_exactly_21_m_high_fails():
+    """1.1: exactly 21 m is Table IV's first row, which asks 7 m; 5 m is short of it."""
     def close(candidate):
         set_floors(candidate, "T1", 6)  # 21 m with the stilt
         club = candidate.program.club_house
         club.shape = shape(affinity.translate(club.shape.to_shapely(), -4.0, 0.0))  # 5 m off T1
     inputs = _counted(fixture("rectangle")).with_rules(
         lambda r: select(r, MIXED_HEIGHT_SPACING, "taller_governs")).edited(close)
-    assert status(inputs.report(), "Club house gap to T1") is Z.UNVERIFIED
+    assert status(inputs.report(), "Club house gap to T1") is Z.FAIL
 
 
 def test_where_each_block_keeps_its_own_gap_a_club_house_the_towers_gap_away_passes():
@@ -233,8 +235,8 @@ def test_a_flaw_in_one_of_a_roads_shapes_names_which():
 
 def test_a_claimed_ledger_the_contract_cannot_even_read_blocks_a_pass():
     def malformed(candidate):
-        candidate.partition.entries[0].shapes = [Shape(outer=SQUARE, holes=[[(1.0, 1.0),
-                                                                              (2.0, 2.0)]])]
+        candidate.partition.entries[0].shapes = [Shape.model_construct(
+            outer=SQUARE, holes=[[(1.0, 1.0), (2.0, 2.0)]])]
     report = fixture("rectangle").edited(malformed).report()
     found = [d for d in report.cross_checks if d.item == "partition could not be compared"]
     assert found and found[0].blocks_pass
