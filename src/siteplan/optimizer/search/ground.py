@@ -46,6 +46,7 @@ class Zones:
     roads: BaseGeometry
     lanes: BaseGeometry  # fire hardstanding
     gap_zones: BaseGeometry
+    turns: BaseGeometry = EMPTY  # the ground the tender sweeps turning along the ring road
 
 
 def gap_zones(footprints: Sequence[Polygon], gaps_m: Sequence[float]) -> BaseGeometry:
@@ -65,17 +66,17 @@ def gap_zones(footprints: Sequence[Polygon], gaps_m: Sequence[float]) -> BaseGeo
 
 
 def zones_of(footprints: Sequence[Polygon], gaps_m: Sequence[float], roads: BaseGeometry,
-             lanes: BaseGeometry, reach_m: float) -> Zones:
+             lanes: BaseGeometry, reach_m: float, turns: BaseGeometry = EMPTY) -> Zones:
     return Zones(unary_union(list(footprints)) if footprints else EMPTY,
                  unary_union([grow(f, reach_m) for f in footprints]) if footprints else EMPTY,
-                 roads, lanes, gap_zones(footprints, gaps_m))
+                 roads, lanes, gap_zones(footprints, gaps_m), turns)
 
 
 def open_ground(plot: Plot, land: Land, zones: Zones) -> BaseGeometry:
     """Ground open space may stand on: the plot less the setback zone, the planted strip, the clear
     ground round the blocks, the roads and lanes, and the gaps between blocks."""
     taken = [g for g in (land.zone, land.strip, zones.nogo, zones.roads, zones.lanes,
-                         zones.gap_zones, zones.blocks) if not g.is_empty]
+                         zones.gap_zones, zones.blocks, zones.turns) if not g.is_empty]
     return plot.net.difference(unary_union(taken)) if taken else plot.net
 
 

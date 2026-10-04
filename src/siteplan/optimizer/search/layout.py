@@ -52,6 +52,7 @@ from siteplan.optimizer.search.land import (
 from siteplan.optimizer.search.parking_plan import plan_parking, ramp_length_m
 from siteplan.optimizer.search.quantities import Quantities, quantities
 from siteplan.optimizer.search.readings import FloorClass, Profile, floor_classes
+from siteplan.optimizer.search.turns import Turning, loop_turns
 
 EPS_LAND_M = 0.02  # ground a block must stand this far inside, so no rounding puts it over a line
 TOUCH_M = 0.5
@@ -173,7 +174,8 @@ def evaluate(run: Run, config: Config) -> Evaluation | Failure:
     if not standing:
         return Failure("no block fits the ground")
     fitted, streets, cluster, why = network.fit_cluster(
-        standing, frame, street, land, q.road_m, [s.choice.value for s in standing])
+        standing, frame, street, land, q.road_m, q.legal_road_m,
+        [s.choice.value for s in standing])
     if cluster is None:
         return Failure(why)
     return Evaluation(config, frame, land, street, tuple(fitted), tuple(streets), cluster,
@@ -235,7 +237,12 @@ def lay_out(run: Run, ev: Evaluation) -> tuple[Laid | None, str]:
     unserved = [p.name for p in placements if p.footprint.distance(roads) > TOUCH_M]
     if unserved:
         return None, f"no road touches {', '.join(unserved)}"
-    zones = ground.zones_of(footprints, gaps, roads, lanes, q.reach_m)
+    turns = loop_turns(cluster.ring, [Turning(*t) for t in q.turnings])
+    off = turns.difference(plot.net).area + turns.intersection(
+        unary_union([land.strip, plot.excluded])).area
+    if off > network.RING_CLIP_SQM:
+        return None, f"a turn of the ring road lies off the plot, on the strip or in the water ({off:,.0f} m²)"
+    zones = ground.zones_of(footprints, gaps, roads, lanes, q.reach_m, turns)
     open_land = ground.open_ground(plot, land, zones)
     buildable = ground.buildable_ground(plot, open_land)
 

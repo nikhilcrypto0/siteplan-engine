@@ -33,6 +33,7 @@ class Quantities:
     approach_m: float
     lane_m: float  # clear, motorable ground on every side of a high-rise
     reach_m: float  # clear ground at a corner of a block, for the tender to turn round it
+    turnings: tuple[tuple[float, float], ...]  # (inner, outer) radius of the lane, each reading
     pocket_width_m: float
     pocket_sqm: float
     open_space_sqm: float  # what the open space aims at: the largest legal need, plus the margin
@@ -81,7 +82,7 @@ def quantities(site: CanonicalSiteModel, rules: ResolvedRules, brief: DesignBrie
     return Quantities(
         road_m=road + margins.road_width_extra_m.value, legal_road_m=road,
         approach_m=min(approach_high, approach_low + margins.road_width_extra_m.value),
-        lane_m=lane, reach_m=_reach(rules, lane),
+        lane_m=lane, reach_m=_reach(rules, lane), turnings=tuple(_turnings(rules, lane)),
         pocket_width_m=rules.open_space.min_width_m.value,
         pocket_sqm=rules.open_space.min_pocket_sqm.value,
         open_space_sqm=margins.open_space_target_sqm(legal_open, share),
@@ -109,19 +110,25 @@ def quantities(site: CanonicalSiteModel, rules: ResolvedRules, brief: DesignBrie
         has_stilt=brief.height_intent.has_stilt)
 
 
+def _turnings(rules: ResolvedRules, lane: float) -> list[tuple[float, float]]:
+    """The inner and outer radius of the lane's turn under each reading of where the tender's
+    turning radius is measured (a reading nobody can evaluate is left out: the validator leaves
+    it UNVERIFIED)."""
+    radius = rules.fire.turning_radius_m.value
+    found = []
+    for reading in rules.readings(FIRE_TURNING_RADIUS):
+        if reading == "outer_edge":
+            found.append((radius - lane, radius))
+        elif reading == "centreline":
+            found.append((radius - lane / 2, radius + lane / 2))
+    return found
+
+
 def _reach(rules: ResolvedRules, lane: float) -> float:
     """How far from each face of a block the ground must stay clear at its corners, under the
     readings of where the tender's turning radius is measured: the greatest of them."""
-    radius = rules.fire.turning_radius_m.value
-    reach = 0.0
-    for reading in rules.readings(FIRE_TURNING_RADIUS):
-        if reading == "outer_edge":
-            r_in, r_out = radius - lane, radius
-        elif reading == "centreline":
-            r_in, r_out = radius - lane / 2, radius + lane / 2
-        else:
-            continue  # a reading nobody can evaluate: the validator leaves it UNVERIFIED
-        reach = max(reach, r_out - r_in * math.sin(QUARTER_TURN))
+    reach = max((r_out - r_in * math.sin(QUARTER_TURN) for r_in, r_out in _turnings(rules, lane)),
+                default=0.0)
     return reach or lane
 
 

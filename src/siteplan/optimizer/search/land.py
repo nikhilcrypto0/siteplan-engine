@@ -26,7 +26,7 @@ from shapely.geometry.base import BaseGeometry
 from shapely.ops import unary_union
 
 from siteplan.contracts import BuildableEnvelope, CanonicalSiteModel
-from siteplan.geometry import opening
+from siteplan.geometry import opening, straight_runs
 
 EMPTY = Polygon()
 
@@ -53,16 +53,15 @@ def polygons(geometry: BaseGeometry | None, min_sqm: float = 0.0) -> list[Polygo
 @dataclass(frozen=True)
 class Plot:
     """The net plot and what the envelope fixes on it: the exclusions no block, road or building
-    may stand on, and the stretches of boundary a gate may open in."""
+    may stand on, and the stretches of boundary a gate may open in. When nobody has said which
+    side the access road runs along, any straight stretch of the boundary may take the gate and
+    the layout says it assumed one (`access_assumed`)."""
 
     net: Polygon
     excluded: BaseGeometry
     gate_runs: tuple[LineString, ...]
     access_side: str | None
-
-    @property
-    def minimum_inset_m(self) -> float:
-        return 0.0
+    access_assumed: bool = False
 
 
 def plot_of(site: CanonicalSiteModel, envelope: BuildableEnvelope) -> Plot:
@@ -70,8 +69,12 @@ def plot_of(site: CanonicalSiteModel, envelope: BuildableEnvelope) -> Plot:
     excluded = unary_union([shape.to_shapely() for item in envelope.exclusions
                             for shape in item.shapes]) if envelope.exclusions else EMPTY
     runs = tuple(zone.frontage.to_shapely() for zone in envelope.circulation.access_zones)
-    return Plot(net, excluded.intersection(net) if not excluded.is_empty else EMPTY, runs,
-                site.access.side.value)
+    side = site.access.side.value
+    assumed = not runs and side is None
+    if assumed:
+        runs = tuple(run.line for run in straight_runs(net))
+    return Plot(net, excluded.intersection(net) if not excluded.is_empty else EMPTY, runs, side,
+                assumed)
 
 
 @dataclass(frozen=True)
