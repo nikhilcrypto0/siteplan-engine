@@ -2,7 +2,9 @@
 pathways, and fire access, where a low block is not held to the NBC high-rise lanes and the report
 says what it is held to instead.
 
-Every band is MADE UP (tests/validator_low_helpers.py); no figure is a value of the order.
+Every band is MADE UP (tests/validator_low_helpers.py); no figure is a value of the order. What the
+validator does for a pathway it cannot see, and for fire access, until contracts 1.2 gives it more
+to go on, is pinned alone in test_validator_low_interim.py.
 """
 
 from shapely import affinity
@@ -10,6 +12,7 @@ from validator_helpers import check, fixture, move_tower, select, set_floors, sh
 from validator_low_helpers import (
     MADE_UP,
     all_low,
+    flat,
     floors_of,
     low_band,
     spacing_open,
@@ -28,11 +31,10 @@ CLUB_SETBACK = "Club house: setback"
 SERVED = "Internal roads: every block served"
 PATHWAYS = "Internal roads: blocks up to 12 m (pathways)"
 BELOW = "Fire access below 21 m (rule 15(a)(i))"
-RULE_15_A_I = ('"The building requirements and standards other than heights and setbacks '
-               'specified in the National Building Code - 2005 shall be complied with."')
 
 
 def _counted(inputs):
+    """Only the reading in which the stilt counts, for the high-rise blocks of a mixed layout."""
     return inputs.with_rules(lambda r: select(r, STILT_IN_RULE_HEIGHT, COUNTED))
 
 
@@ -46,6 +48,10 @@ def _club_edge_at(candidate, x):
 def _club_west_by(candidate, metres):
     club = candidate.program.club_house
     club.shape = shape(affinity.translate(club.shape.to_shapely(), -metres, 0.0))
+
+
+def _off_the_roads(candidate, name="T3"):
+    move_tower(candidate, name, 0.0, -10.0)  # 34 m from the nearest road
 
 
 def _names(report, family):
@@ -74,7 +80,7 @@ def test_a_club_house_in_a_band_the_rules_do_not_model_is_not_checked():
     bands = (low_band(0, 9, setback=None, road=None, modelled=False),
              low_band(9, 18, setback=3.7, gap=4.3, road=8.4),
              low_band(18, 21, setback=4.9, gap=5.7, road=11.6, up_to_inclusive=False))
-    report = _counted(with_bands_below(all_low(fixture("rectangle")), bands)).report()
+    report = with_bands_below(all_low(fixture("rectangle")), bands).report()
     c = check(report, CLUB_SETBACK)  # 6 m: the band that is not modelled
     assert c.finding.status is Z.NOT_CHECKED and "Table III" in c.finding.note
     assert status(report, "All-round setback: T1") is Z.PASS  # the towers' band is modelled
@@ -85,23 +91,21 @@ def test_a_club_house_in_a_band_the_rules_do_not_model_is_not_checked():
 def test_a_club_house_keeps_the_gap_its_band_and_the_towers_ask():
     """A 6 m club house (band A, 3.1 m) beside 15 m towers (band B, 4.3 m): two blocks below the
     high-rise height, so the tallest block's gap, 4.3 m, whatever mixed-height spacing says."""
-    base = _counted(spacing_open(with_low_bands(all_low(fixture("rectangle")))))
+    base = spacing_open(with_low_bands(all_low(fixture("rectangle"))))
     assert status(base.report(), "Club house gap to T1") is Z.PASS  # 9.02 m
     near = check(base.edited(lambda c: _club_west_by(c, 5.0)).report(),
                  "Club house gap to T1")  # 4.02 m
     assert near.finding.status is Z.FAIL
     assert ">= 4.30 m (the tallest block's side setback)" in near.finding.required
     assert "rule 5(xiii)" in near.finding.note
-    both = check(with_low_bands(all_low(fixture("rectangle"))).edited(
-        lambda c: _club_west_by(c, 5.0)).report(), "Club house gap to T1")
-    assert both.finding.status is Z.UNVERIFIED  # 3.1 m if the stilt does not count: it passes
-    assert both.by_reading[STILT_IN_RULE_HEIGHT] == {COUNTED: Z.FAIL, NOT_COUNTED: Z.PASS}
+    just = base.edited(lambda c: _club_west_by(c, 4.7))  # 4.32 m
+    assert status(just.report(), "Club house gap to T1") is Z.PASS
 
 
 def test_a_club_house_beside_a_high_rise_is_judged_under_every_reading_of_spacing():
     """T1 is 27 m (Table IV, 9 m); the 6 m club house is band A (3.1 m): 7.02 m clears the mean of
     the two (6.05 m) and not the taller block's gap."""
-    inputs = _counted(spacing_open(with_low_bands(floors_of(fixture("rectangle"), T2=4)))
+    inputs = _counted(spacing_open(with_low_bands(flat(fixture("rectangle"), T2=5)))
                       ).edited(lambda c: _club_west_by(c, 2.0))
     c = check(inputs.report(), "Club house gap to T1")
     assert c.finding.status is Z.UNVERIFIED
@@ -112,25 +116,11 @@ def test_a_club_house_beside_a_high_rise_is_judged_under_every_reading_of_spacin
 # --- rule 8(l): the blocks up to 12 m and the blocks above ----------------------------------------
 
 
-def _off_the_roads(candidate, name="T3"):
-    move_tower(candidate, name, 0.0, -10.0)  # 34 m from the nearest road
-
-
 def test_a_block_up_to_12_m_on_an_internal_road_is_served():
-    report = with_low_bands(all_low(fixture("rectangle"), 3)).report()  # 12 m with the stilt
+    report = with_low_bands(all_low(fixture("rectangle"), 3)).report()  # 9 m
     c = check(report, PATHWAYS)
     assert c.finding.status is Z.PASS and c.finding.measured == "all 3 on an internal road"
     assert "8(l)" in c.finding.clause
-
-
-def test_a_block_up_to_12_m_on_no_road_is_unverified_because_a_pathway_is_not_drawn():
-    """Rule 8(l) lets such a block take a 6 m pathway branching out of an internal road, and the
-    candidate cannot draw one: so it is neither a pass nor a fail (contracts 1.2 will let it)."""
-    report = fixture("rectangle").edited(lambda c: (set_floors(c, "T3", 3),
-                                                    _off_the_roads(c))).report()
-    c = check(report, PATHWAYS)
-    assert c.finding.status is Z.UNVERIFIED
-    assert c.finding.measured == "on no road: T3; a pathway is not drawn"
 
 
 def test_every_block_is_in_exactly_one_of_the_two_rule_8l_checks():
@@ -173,34 +163,28 @@ def test_a_low_block_above_12_m_off_every_road_fails_as_a_high_rise_would():
 # --- fire access below 21 m ----------------------------------------------------------------------
 
 
-def test_a_low_block_is_not_held_to_the_high_rise_fire_lanes_and_the_report_says_what_it_is():
-    """As a high-rise T2 has the 6 m lanes and corner turns checked; at 15 m it has none of
-    those, and the report names the rule that holds it instead and says it checks no figure."""
-    high = fixture("rectangle").report()
-    assert "Fire access: T2" in _names(high, Family.FIRE)
+def test_a_low_block_is_not_held_to_the_high_rise_fire_lanes():
+    """As a high-rise T2 has the 6 m lanes and corner turns checked; at 15 m none of those is made
+    for it, and the report lists the blocks it is not holding to them."""
+    assert "Fire access: T2" in _names(fixture("rectangle").report(), Family.FIRE)
     low = with_low_bands(all_low(fixture("rectangle"))).report()
     fire = _names(low, Family.FIRE)
     assert not [n for n in fire if n.startswith("Fire access: T")]
     c = check(low, BELOW)
-    assert c.finding.status is Z.NOT_CHECKED and c.family is Family.FIRE
-    assert BELOW in low.not_checked
-    assert "T1, T2, T3" in c.finding.measured and "not held to the high-rise lanes" in (
-        c.finding.measured)
+    assert c.family is Family.FIRE and BELOW in low.not_checked
+    assert "T1, T2, T3" in c.finding.measured
+    assert "not held to the high-rise lanes" in c.finding.measured
     assert "6 m clear and motorable on all sides" in c.finding.measured  # read from the rules
-    assert "other than heights and setbacks" in c.finding.required
-    assert "rule 15(a)(i), p.20" in c.finding.note and RULE_15_A_I in c.finding.note
-    assert "no value" in c.finding.note
 
 
-def test_a_low_blocks_fire_access_is_never_a_pass_or_a_fail_from_a_figure_the_rules_do_not_give():
+def test_a_low_blocks_fire_access_never_fails_a_block_for_a_lane_it_is_not_held_to():
     report = with_low_bands(all_low(fixture("rectangle"))).report()
     fire = {c.finding.rule: c.finding.status for c in report.legal if c.family is Family.FIRE}
-    assert fire[BELOW] is Z.NOT_CHECKED
-    assert Z.FAIL not in fire.values()  # nothing here fails a block for a lane it is not held to
+    assert Z.FAIL not in fire.values()
 
 
 def test_in_a_mixed_layout_the_high_rise_fire_checks_are_unchanged_and_the_low_block_is_named():
-    shut = floors_of(fixture("rectangle"), T3=4)
+    shut = flat(fixture("rectangle"), T3=5)
     for inputs in (shut, with_low_bands(shut)):
         report = inputs.report()
         assert "Fire access: T3" not in _names(report, Family.FIRE)
@@ -228,6 +212,20 @@ def test_a_low_block_standing_on_a_road_still_takes_the_road_from_its_width():
     c = check(report, "Internal roads: loop and other roads")
     assert c.finding.status is Z.FAIL and "narrower than 9 m" in c.finding.measured
     assert status(report, "Every square metre once") is Z.FAIL
+
+
+def test_a_low_blocks_planting_rules_are_not_cleared_by_the_high_rise_strip_check():
+    """Where no band was modelled the strip check stopped at 'setbacks not known'. With a band
+    modelled it must not turn into an all-clear: the 2 m strip is not required under a 9 m
+    setback, and what Table III asks round a low block is not carried, so that is said."""
+    report = with_low_bands(all_low(fixture("rectangle"))).report()
+    c = check(report, "Peripheral green strip")
+    assert c.finding.status is Z.NOT_CHECKED and "Peripheral green strip" in report.not_checked
+    assert "T1, T2, T3" in c.finding.measured and "not in the resolved rules" in c.finding.note
+    unmodelled = check(all_low(fixture("rectangle")).report(), "Peripheral green strip")
+    assert unmodelled.finding.status is Z.NOT_CHECKED  # as shipped: the setbacks are not known
+    high_only = with_low_bands(floors_of(fixture("rectangle"), T1=7, T2=7, T3=7))  # 8 m setbacks
+    assert status(high_only.report(), "Peripheral green strip") is Z.INFO
 
 
 def test_the_fire_statement_is_absent_where_no_block_is_below_21_m():

@@ -110,6 +110,16 @@ def green_strip_check(ctx: Context) -> Check:
                      required, clause,
                      "Below the high-rise threshold Table III applies and is not modelled yet.")
     if not required_anywhere:
+        low = ctx.low_rise_judged()
+        if low:  # judged on Table III, whose own planting rules the resolved rules do not carry
+            return plain(
+                Family.GREEN_STRIP, rule, Status.NOT_CHECKED,
+                f"deepest setback here is {deepest:.2f} m; {', '.join(t.name for t in low)} "
+                f"below {ctx.rules.height.high_rise_from_m.value:g} m", required, clause,
+                f"This strip is required only where the setback reaches "
+                f"{green.where_setback_from_m.value:g} m. What Table III asks of a block below "
+                "the high-rise height for planting round it is not in the resolved rules, so "
+                "it is not checked.")
         return plain(Family.GREEN_STRIP, rule, Status.INFO,
                      f"deepest setback here is {deepest:.2f} m", required, clause,
                      f"The strip is required only where the setback reaches "

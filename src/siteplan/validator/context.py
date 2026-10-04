@@ -79,6 +79,14 @@ class Context:
         names = {t.name for r in self.stilt_readings for t in self.low_rise(r)}
         return [t for t in self.towers if t.name in names]
 
+    def low_rise_judged(self) -> list[TowerGeometry]:
+        """The towers below the high-rise height, under some reading, in a band the rules model:
+        the ones this validator judges on Table III, and so the ones whose other Table III rules
+        must not go quietly unsaid."""
+        names = {t.name for r in self.stilt_readings for t in self.low_rise(r)
+                 if self.classes[r][t.name].settled}
+        return [t for t in self.towers if t.name in names]
+
 
 def build(site: CanonicalSiteModel, rules: ResolvedRules, brief: DesignBrief,
           candidate: CandidateLayout) -> Context | None:

@@ -4,6 +4,65 @@ A characterization test (tests/manifest.py) pins what the engine produces today.
 only together with a normative replacement test and an entry here: what changed, why, the
 evidence, and the test that now holds the behaviour. Newest first.
 
+## 2026-10-03: D2, the validator for blocks below 21 m
+
+No characterization test changed, and on every input whose blocks are all high-rise, or whose
+blocks below 21 m sit in a band the rules do not model (everything A1 emits today), no status moved:
+27 runs of the contract fixtures, the made-up firm case and their variants were dumped before and
+after and diffed check by check (verdicts, statuses, per-reading results, recomputed measures); the
+only differences are the new checks below and the wording of what is said about a block below 21 m.
+Each change is held by a normative test (tests/test_validator_low_blocks.py,
+tests/test_validator_low_blocks_site.py, on made-up bands: tests/validator_low_helpers.py).
+
+Where ResolvedRules models a band below 21 m (`Band.modelled`, with a setback), a block in it is
+judged on it:
+
+- **Setback and gap.** The band's all-round setback; the gap between blocks. Between two blocks
+  below 21 m the tallest block's gap governs whatever `mixed_height_spacing` says, because rule 5(xiii)
+  says so in terms (p.11: "The space between 2 blocks shall not be less than the side setback of the
+  tallest block as mentioned in Table - III"): the check quotes it. A low block beside a high-rise, and
+  two high-rise blocks, are evaluated under every reading, as before. `gap_m` unset still reads as the
+  setback. Clauses name the band's own table; a high-rise's Table IV front clause is no longer cited
+  for a block that is not one.
+- **Road.** The "Abutting road width" check now also holds a block below 21 m to its band's
+  `min_road_m` (it used to be made only where a high-rise stood; all-low layouts now get it). Its name,
+  and its verdict for high-rise blocks, are unchanged. `min_road_m` None on a modelled band is "not
+  stated": that block is named in the note and not judged (NOT_CHECKED when nothing else is);
+  0.0 is "asks none".
+- **Club house.** Its setback and its gap to each tower go through its band when that is below 21 m
+  and modelled; one as tall as a high-rise is unchanged (it cannot pass), one in a band the rules do not
+  model is NOT_CHECKED as before.
+- **A band the rules mark UNVERIFIED settles nothing** (setback, gap, road, club house): UNVERIFIED,
+  never PASS or FAIL, as `HeightLimit.evaluate` does for a limit on unconfirmed inputs.
+- **A band that is not modelled stays NOT_CHECKED**, never PASS; the cell now names the band's own
+  table instead of "Table IV". A prohibited high-rise (eligibility PROHIBITED) fails only blocks of 21
+  m or more, exactly 21 m included, and a block below it neither passes nor fails on it: its band
+  decides. The cells that said a block below 21 m is "not modelled yet" under a high-rise-only check now
+  say that the rule does not apply to it.
+- **Rule 8(l).** A new check for blocks up to 12 m (physical height, exactly 12 m included) that stand
+  on no internal road: UNVERIFIED, "a pathway is not drawn" (INTERIM, below). Together with the check
+  for blocks above 12 m every block is in exactly one of the two; the "every block served: all 0 blocks"
+  PASS that said nothing is no longer made when no block is above 12 m.
+- **Fire access below 21 m (rule 15(a)(i)).** A low block is not held to the NBC high-rise lanes. A
+  new NOT_CHECKED check names each such block (and the stilt reading it is low under), quotes rule
+  15(a)(i) (p.20) and says the resolved rules carry no value for what it asks of access (INTERIM,
+  below). The high-rise fire checks are untouched, and a block that is high-rise under only one reading
+  of the stilt is still UNVERIFIED there.
+- **The peripheral green strip.** With a band below 21 m modelled the check no longer stops at "setbacks
+  not known"; so that this does not become an all-clear it is NOT_CHECKED, saying what Table III asks
+  of a low block for planting is not in the resolved rules, whenever the 2 m strip is not required.
+
+Interim behaviours, each one place to change when contracts 1.2 lets ResolvedRules say more, pinned in
+tests/test_validator_low_interim.py (flip them there):
+
+1. The front is not judged apart from the other sides (needs `Band.front_setback_m`):
+   `measure.ALL_ROUND_NOTE`, `blocks.setback_checks`, `clubhouse.club_setback_check`.
+2. A block up to 12 m on no road is UNVERIFIED (needs `RoadKind.PATHWAY` and a pathway width):
+   `roads._pathway_check`.
+3. A low block's band is picked on the reading's own height, so under `counted` it can fall in a taller
+   band than rule 5(c) gives (needs a way to say Table III leaves the stilt out): `context.build`.
+4. Fire access below 21 m is NOT_CHECKED (needs a figure for what 15(a)(i) asks): `fire.low_block_check`.
+
 ## 2026-10-03: Wave 1 integrated on contracts 1.1; the independent validator guards the optimizer
 
 No characterization test changed here. What now behaves differently, each held by a normative
