@@ -15,6 +15,7 @@ from validator_low_helpers import (
     floors_of,
     low_band,
     spacing_open,
+    unmodelled_below,
     with_bands_below,
     with_low_bands,
 )
@@ -74,7 +75,9 @@ def test_the_club_houses_setback_is_its_own_bands_where_the_rules_model_it():
     assert too_near.finding.status is Z.FAIL
     assert too_near.finding.required == ">= 2.30 m to the net plot line"
     assert MADE_UP in too_near.finding.clause
-    assert status(fixture("rectangle").report(), CLUB_SETBACK) is Z.NOT_CHECKED  # as shipped
+    assert status(unmodelled_below(fixture("rectangle")).report(), CLUB_SETBACK) is Z.NOT_CHECKED
+    shipped = check(fixture("rectangle").report(), CLUB_SETBACK)  # Table III's own band (A2)
+    assert shipped.finding.status is Z.PASS and "Table III" in shipped.finding.clause
 
 
 def test_a_club_house_in_a_band_the_rules_do_not_model_is_not_checked():

@@ -294,9 +294,14 @@ def test_the_height_above_sea_level_is_unverified_without_coordinates():
 
 
 def test_a_block_below_the_high_rise_threshold_is_not_judged_by_table_iv():
+    """It is Table III's (A2): row 11 up to 15 m asks 6 m, on 15 m above the stilt under either
+    reading, with the 3 m Building Line of its 12 m road in front."""
     report = fixture("small_plot").report()  # 18 m with the stilt, 15 m without
-    assert status(report, "All-round setback: T1") is Z.NOT_CHECKED
-    assert "All-round setback: T1" in report.not_checked
+    c = check(report, "All-round setback: T1")
+    assert c.finding.status is Z.PASS and "All-round setback: T1" not in report.not_checked
+    assert c.finding.required == ">= 3.00 m at the front (the S side), >= 6.00 m on the other sides"
+    assert "Table III" in c.finding.clause and "row 11, up to 15 m" in c.finding.clause
+    assert "Table IV" not in c.finding.clause
 
 
 def test_a_block_that_is_high_rise_only_if_the_stilt_counts_is_unverified_not_passed():

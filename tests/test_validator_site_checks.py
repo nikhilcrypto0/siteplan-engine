@@ -13,6 +13,7 @@ from validator_helpers import (
     status,
     tower,
 )
+from validator_low_helpers import unmodelled_below
 
 from siteplan.contracts.common import Status
 from siteplan.contracts.resolved_rules import ALL, AMENITY_SHARE, STILT_IN_RULE_HEIGHT
@@ -179,7 +180,7 @@ def test_a_setback_under_9_m_asks_for_no_strip():
 
 
 def test_with_no_setback_known_the_strip_is_not_checked():
-    assert status(fixture("small_plot").report(), STRIP) is Z.NOT_CHECKED
+    assert status(unmodelled_below(fixture("small_plot")).report(), STRIP) is Z.NOT_CHECKED
 
 
 # --- exits ---------------------------------------------------------------------------------

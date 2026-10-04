@@ -17,6 +17,7 @@ from validator_low_helpers import (
     flat_block,
     floors_of,
     low_band,
+    unmodelled_below,
     with_bands_below,
     with_low_bands,
 )
@@ -96,8 +97,9 @@ def test_a_band_the_rules_mark_unverified_settles_nothing_even_when_it_allows_th
 
 
 def test_a_band_the_rules_do_not_model_asks_nothing_of_the_site():
-    names = {c.finding.rule for c in all_low(fixture("rectangle")).report().legal}
-    assert not [n for n in names if n.startswith("Height permitted")]  # as shipped: said elsewhere
+    names = {c.finding.rule
+             for c in unmodelled_below(all_low(fixture("rectangle"))).report().legal}
+    assert not [n for n in names if n.startswith("Height permitted")]  # said elsewhere
 
 
 def test_a_layout_of_high_rise_blocks_makes_no_permission_check():

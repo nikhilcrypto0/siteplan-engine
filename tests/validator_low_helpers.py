@@ -1,11 +1,14 @@
 """Shared by the tests of blocks below 21 m: made-up non-high-rise bands and layouts edited to use
-them. Every number here is MADE UP so the validator's logic can be tested before A2 encodes the
-real Table III; none of it is a value of the order, and none may stand in for one.
+them. Every number here is MADE UP so the validator's logic is tested apart from the real Table
+III; none of it is a value of the order, and none may stand in for one.
 
-The contract fixtures ship the band below 21 m as not modelled (stream A1). `with_bands_below`
-replaces it with bands that are, in the shape the contract gives a band (`Band`): the heights it
-covers (read on the height above the stilt, as Table III's are), whether it is modelled, its road,
-its setback and front setback, its gap between blocks, its permission and its planting strip.
+The contract fixtures ship Table III's bands below 21 m (stream A2). `with_bands_below` replaces
+them with made-up bands, in the shape the contract gives a band (`Band`): the heights it covers
+(read on the height above the stilt, as Table III's are), whether it is modelled, its road, its
+setback and front setback, its gap between blocks, its permission and its planting strip.
+`unmodelled_below` puts back the one band the fixtures shipped before A2, not modelled: the rules
+still leave heights with no setback (18-21 m on most plots), and what the validator says of a block
+there is tested on it.
 
 A low block here usually has no stilt (`flat`), so every reading of the stilt gives it one height.
 """
@@ -66,6 +69,16 @@ def with_bands_below(inputs: Inputs, bands=MADE_UP_LOW_BANDS) -> Inputs:
 
 def with_low_bands(inputs: Inputs) -> Inputs:
     return with_bands_below(inputs, MADE_UP_LOW_BANDS)
+
+
+# The band below 21 m as the contract fixtures shipped it before A2: one band, not modelled.
+UNMODELLED = Band(above_m=0.0, up_to_m=21.0, up_to_inclusive=False, kind=BandKind.NON_HIGH_RISE,
+                  modelled=False, clause="G.O.168 rule 5, Table III (as unmodelled before A2)",
+                  status=Provenance.UNVERIFIED)
+
+
+def unmodelled_below(inputs: Inputs) -> Inputs:
+    return with_bands_below(inputs, (UNMODELLED,))
 
 
 def floors_of(inputs: Inputs, **floors: int) -> Inputs:
