@@ -356,6 +356,17 @@ INVENTORY: tuple[Entry, ...] = (
                "under a tower line, is not modelled at all.",
     ),
     Entry(
+        "Plot", "A plot of 750 m² and above earmarks a corner for public utilities such as a "
+                "distribution transformer.",
+        f"{rules.PUBLIC_UTILITY_AREA_M[0]:g} x {rules.PUBLIC_UTILITY_AREA_M[1]:g} m, plots from "
+        f"{rules.PUBLIC_UTILITY_AREA_FROM_SQM:g} m²", rules.PUBLIC_UTILITY_AREA_CLAUSE,
+        Reading.NOT_MODELLED,
+        uses=("PUBLIC_UTILITY_AREA_M", "PUBLIC_UTILITY_AREA_FROM_SQM",
+              "PUBLIC_UTILITY_AREA_CLAUSE"),
+        choice="Rule 5(f)(viii), p.10, 'subject to mandated public safety requirements'. The "
+               "corner is not placed or reserved.",
+    ),
+    Entry(
         "Plot", "No building within the buffers of railways, power lines and protected "
                 "monuments.",
         "e.g. 3 m clear of a high-tension line; 100 m from a protected monument",
@@ -433,6 +444,48 @@ INVENTORY: tuple[Entry, ...] = (
         choice="Not used: every side must meet the full figure.",
     ),
     Entry(
+        "Setbacks", "A block below high-rise may move setback from one side to another, never "
+                    "from the front.",
+        f"{rules.SETBACK_TRANSFER_300_TO_750_M:g} m on a plot of 300-750 m², "
+        f"{rules.SETBACK_TRANSFER_ABOVE_750_M:g} m above 750 m² (keeping "
+        f"{rules.SETBACK_TRANSFER_MIN_OTHER_SIDE_M:g} m on the other side and a minimum building "
+        "line), without exceeding the plinth area",
+        rules.SETBACK_TRANSFER_CLAUSE, Reading.NOT_MODELLED,
+        uses=("SETBACK_TRANSFER_300_TO_750_M", "SETBACK_TRANSFER_ABOVE_750_M",
+              "SETBACK_TRANSFER_MIN_OTHER_SIDE_M", "SETBACK_TRANSFER_CLAUSE"),
+        choice="Rule 5(f)(viiii) and (ixi), p.10: a design option, for the optimizer later. "
+               "Every side keeps its full Table III figure here. The plinth area it may not "
+               "exceed is not a quantity the engine holds.",
+    ),
+    Entry(
+        "Setbacks", "A narrow plot (up to 400 m², four times as long as wide) may compensate its "
+                    "side setbacks in the front and rear.",
+        f"sides of {rules.NARROW_PLOT_MIN_SIDE_M[0][1]:g} m up to "
+        f"{rules.NARROW_PLOT_MIN_SIDE_M[0][0]:g} m of height, "
+        f"{rules.NARROW_PLOT_MIN_SIDE_M[1][1]:g} m up to {rules.NARROW_PLOT_MIN_SIDE_M[1][0]:g} m",
+        rules.NARROW_PLOT_CLAUSE, Reading.NOT_MODELLED,
+        uses=("NARROW_PLOT_MAX_SQM", "NARROW_PLOT_LENGTH_TO_WIDTH", "NARROW_PLOT_MIN_SIDE_M",
+              "NARROW_PLOT_CLAUSE"),
+        choice="Rule 5(f)(xi), pp.10-11, not for made-up plots. The engine plans sites of "
+               "thousands of square metres, so it never meets one.",
+    ),
+    Entry(
+        "Setbacks", "An owner who surrenders land for road widening may take concessions in a "
+                    "block below high-rise's setbacks, through the concession or through TDR.",
+        "building line 6, 3 or 2 m for a road of 30 m or more, 18 m to under 30 m, under 18 m; "
+        "side and rear 2, 2.5 or 3 m up to 12, 15 or 18 m of height",
+        f"{rules.ROAD_WIDENING_NON_HIGH_RISE_CLAUSE}; {rules.TDR_NON_HIGH_RISE_SETBACK_CLAUSE}",
+        Reading.NOT_MODELLED,
+        uses=("ROAD_WIDENING_NON_HIGH_RISE_BUILDING_LINE_M",
+              "ROAD_WIDENING_NON_HIGH_RISE_SIDE_REAR_M", "ROAD_WIDENING_NON_HIGH_RISE_CLAUSE",
+              "TDR_NON_HIGH_RISE_SETBACK_CLAUSE"),
+        choice="G.O.Ms.No.7 of 2016, Amendment 16 (p.5), is the owner's choice of one reward "
+               "among TDR, extra floors and these concessions; G.O.Ms.No.95 of 2026, rule "
+               "17(d)(ix), lets a non-high-rise building relax its setbacks through TDR down to "
+               "the same minimums. Never applied: a surrendering site's blocks keep Table III in "
+               "full, stricter than the law.",
+    ),
+    Entry(
         "Setbacks", "An owner who surrenders land for road widening may take setback concessions "
                     "instead of TDR or extra floors.",
         "high-rise: down to 7 m clear on all sides",
@@ -502,8 +555,10 @@ INVENTORY: tuple[Entry, ...] = (
         "Open space", "Part of the open space as permeable softscape, and a cap on paved area.",
         "softscape 30% of open space (10% of the plot at least); paving at most 25% of the site",
         "NBC 2016 Part 11, 6.2.4 and 7.4.1", Reading.NOT_MODELLED,
-        choice="Not applied. G.O.168 adopts NBC 2005 (rule 15(a)(i)); whether HMDA enforces "
-               "these 2016 figures is not shown by any document we hold.",
+        choice="Not applied. G.O.168's rule 15(a)(i) named NBC 2005; G.O.Ms.No.50 of 2019, "
+               "Amendment-1, substituted it with NBC 2016 'other than heights and setbacks' "
+               "(read 2026-10-03, p.1), so the edition is no longer the question; whether HMDA "
+               "enforces these particular figures is not shown by any document we hold.",
     ),
     Entry(
         "Open space", "A continuous green planting strip inside the setback.",
@@ -515,6 +570,36 @@ INVENTORY: tuple[Entry, ...] = (
         choice="Reserved along the whole boundary where the setback is 9 m or more, broken only "
                "by the entrance; nothing drives, parks or is built on it, and the loop road runs "
                "just inside it.",
+    ),
+    Entry(
+        "Open space", "A block below high-rise has a greenery strip along the frontage, and on a "
+                      "plot above 300 m² a continuous planting strip on the other sides.",
+        f"{rules.NON_HIGH_RISE_FRONTAGE_STRIP_M:g} m along the frontage; "
+        f"{rules.NON_HIGH_RISE_PERIPHERY_STRIP_M:g} m on the remaining sides above "
+        f"{rules.NON_HIGH_RISE_PERIPHERY_STRIP_ABOVE_SQM:g} m²",
+        rules.NON_HIGH_RISE_GREEN_STRIP_CLAUSE, Reading.NOT_MODELLED,
+        uses=("NON_HIGH_RISE_FRONTAGE_STRIP_M", "NON_HIGH_RISE_PERIPHERY_STRIP_M",
+              "NON_HIGH_RISE_PERIPHERY_STRIP_ABOVE_SQM", "NON_HIGH_RISE_GREEN_STRIP_CLAUSE"),
+        choice="Rule 5(f), p.10. Within the setback, never added to it. G.O.Ms.No.7 of 2016 "
+               "does not touch these (its Amendment 8 is the high-rise 2 m strip of rule "
+               "7(viii)), nor does any later order read. The legacy layout plans high-rise "
+               "blocks only, so it never draws them.",
+    ),
+    Entry(
+        "Open space", "A residential plot above 750 m² with no high-rise keeps a smaller share "
+                      "as organised open space.",
+        f"{rules.NON_HIGH_RISE_OPEN_SPACE_FRACTION:.0%} of the site; pockets at least "
+        f"{rules.NON_HIGH_RISE_OPEN_SPACE_MIN_WIDTH_M:g} m wide and "
+        f"{rules.NON_HIGH_RISE_OPEN_SPACE_MIN_POCKET_SQM:g} m², plots above "
+        f"{rules.NON_HIGH_RISE_OPEN_SPACE_ABOVE_SQM:g} m²",
+        rules.NON_HIGH_RISE_OPEN_SPACE_CLAUSE, Reading.NOT_MODELLED,
+        uses=("NON_HIGH_RISE_OPEN_SPACE_FRACTION", "NON_HIGH_RISE_OPEN_SPACE_ABOVE_SQM",
+              "NON_HIGH_RISE_OPEN_SPACE_MIN_WIDTH_M", "NON_HIGH_RISE_OPEN_SPACE_MIN_POCKET_SQM",
+              "NON_HIGH_RISE_OPEN_SPACE_CLAUSE"),
+        choice="Rule 5(f)(vi), p.10, for the plots Table III governs. A group development scheme "
+               "(rule 8(g)) and a high-rise site (rule 7(a)(vii)) keep 10%, the same 'over and "
+               "above the setbacks', so the engine's schemes never meet the 5%. Which applies to "
+               "a site that could take either depends on the design.",
     ),
     # Access and fire
     Entry(
