@@ -110,7 +110,8 @@ def test_a_test_profile_sets_its_values_labels_them_and_leaves_the_rules_alone(t
                    "floors": {"value": 8, "source": "assumed"}},
         "open_facts": ["the 60 ft legal right of way"],
     })
-    made = generate(ws / "survey.dxf", ANSWERS, ws / "out", profile=profile)
+    made = generate(ws / "survey.dxf", ANSWERS, ws / "out", profile=profile, mode="debug")
+    assert report(made, [("No comparison", "-", "-")]).startswith("DEBUG RUN")
     assert made.project["site"]["abutting_road_m"] == 14.04
     assert "abutting_road_ft" not in made.project["site"]
     assert made.project["status"]["abutting_road"] == "ASSUMED_FOR_TEST"

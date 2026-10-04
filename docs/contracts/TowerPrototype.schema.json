@@ -1,0 +1,371 @@
+{
+  "$defs": {
+    "CoreZone": {
+      "additionalProperties": false,
+      "properties": {
+        "lifts": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Lifts",
+          "type": "integer"
+        },
+        "shape": {
+          "$ref": "#/$defs/Shape"
+        },
+        "stairs": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Stairs",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "shape"
+      ],
+      "title": "CoreZone",
+      "type": "object"
+    },
+    "FlatModule": {
+      "additionalProperties": false,
+      "properties": {
+        "built_up_sqft": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Built Up Sqft"
+        },
+        "carpet_sqft": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Carpet Sqft"
+        },
+        "category": {
+          "title": "Category",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "saleable_sqft": {
+          "exclusiveMinimum": 0,
+          "title": "Saleable Sqft",
+          "type": "number"
+        },
+        "shape": {
+          "$ref": "#/$defs/Shape"
+        },
+        "type_id": {
+          "title": "Type Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "type_id",
+        "category",
+        "shape",
+        "saleable_sqft"
+      ],
+      "title": "FlatModule",
+      "type": "object"
+    },
+    "PerFloor": {
+      "additionalProperties": false,
+      "properties": {
+        "common_core_sqm": {
+          "minimum": 0,
+          "title": "Common Core Sqm",
+          "type": "number"
+        },
+        "flats": {
+          "minimum": 0,
+          "title": "Flats",
+          "type": "integer"
+        },
+        "flats_by_type": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "Flats By Type",
+          "type": "object"
+        },
+        "flats_own_sqm": {
+          "minimum": 0,
+          "title": "Flats Own Sqm",
+          "type": "number"
+        },
+        "gross_floor_sqm": {
+          "exclusiveMinimum": 0,
+          "title": "Gross Floor Sqm",
+          "type": "number"
+        },
+        "saleable_sqft": {
+          "minimum": 0,
+          "title": "Saleable Sqft",
+          "type": "number"
+        }
+      },
+      "required": [
+        "flats",
+        "flats_by_type",
+        "gross_floor_sqm",
+        "flats_own_sqm",
+        "common_core_sqm",
+        "saleable_sqft"
+      ],
+      "title": "PerFloor",
+      "type": "object"
+    },
+    "PrototypeFamily": {
+      "enum": [
+        "SINGLE_CORE_SMALL",
+        "SINGLE_CORE",
+        "TWO_CORE_MEDIUM",
+        "TWO_CORE_LARGE",
+        "LEGACY_RECTANGLE"
+      ],
+      "title": "PrototypeFamily",
+      "type": "string"
+    },
+    "PrototypeHeights": {
+      "additionalProperties": false,
+      "properties": {
+        "floor_to_floor_m": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Floor To Floor M"
+        },
+        "stilt_height_m": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Stilt Height M"
+        }
+      },
+      "title": "PrototypeHeights",
+      "type": "object"
+    },
+    "Shape": {
+      "additionalProperties": false,
+      "description": "A polygon: its outer ring and any holes, metres, survey frame, not closed (the first\npoint is not repeated). Every ring has at least three points and only finite coordinates.",
+      "properties": {
+        "holes": {
+          "default": [],
+          "items": {
+            "items": {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "type": "array"
+            },
+            "type": "array"
+          },
+          "title": "Holes",
+          "type": "array"
+        },
+        "outer": {
+          "items": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "type": "array"
+          },
+          "minItems": 3,
+          "title": "Outer",
+          "type": "array"
+        }
+      },
+      "required": [
+        "outer"
+      ],
+      "title": "Shape",
+      "type": "object"
+    },
+    "SourceKind": {
+      "enum": [
+        "SURVEY",
+        "ARCHITECT",
+        "DOCUMENT",
+        "FIRM_STANDARD",
+        "FIRM_FINISHED_PLAN",
+        "ENGINE_DEFAULT",
+        "TEST_PROFILE"
+      ],
+      "title": "SourceKind",
+      "type": "string"
+    },
+    "Stretch": {
+      "additionalProperties": false,
+      "description": "A block that can be built longer or shorter by whole modules.",
+      "properties": {
+        "max_modules": {
+          "exclusiveMinimum": 0,
+          "title": "Max Modules",
+          "type": "integer"
+        },
+        "min_modules": {
+          "exclusiveMinimum": 0,
+          "title": "Min Modules",
+          "type": "integer"
+        },
+        "module_pitch_m": {
+          "exclusiveMinimum": 0,
+          "title": "Module Pitch M",
+          "type": "number"
+        }
+      },
+      "required": [
+        "module_pitch_m",
+        "min_modules",
+        "max_modules"
+      ],
+      "title": "Stretch",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "core_zones": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/CoreZone"
+      },
+      "title": "Core Zones",
+      "type": "array"
+    },
+    "cores": {
+      "minimum": 0,
+      "title": "Cores",
+      "type": "integer"
+    },
+    "corridor": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Shape"
+      },
+      "title": "Corridor",
+      "type": "array"
+    },
+    "depth_m": {
+      "exclusiveMinimum": 0,
+      "title": "Depth M",
+      "type": "number"
+    },
+    "family": {
+      "$ref": "#/$defs/PrototypeFamily"
+    },
+    "footprint": {
+      "$ref": "#/$defs/Shape"
+    },
+    "heights": {
+      "$ref": "#/$defs/PrototypeHeights",
+      "default": {
+        "floor_to_floor_m": null,
+        "stilt_height_m": null
+      }
+    },
+    "id": {
+      "title": "Id",
+      "type": "string"
+    },
+    "length_m": {
+      "exclusiveMinimum": 0,
+      "title": "Length M",
+      "type": "number"
+    },
+    "modules": {
+      "items": {
+        "$ref": "#/$defs/FlatModule"
+      },
+      "minItems": 1,
+      "title": "Modules",
+      "type": "array"
+    },
+    "per_floor": {
+      "$ref": "#/$defs/PerFloor"
+    },
+    "schema_version": {
+      "const": "1.1",
+      "default": "1.1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source": {
+      "default": "",
+      "title": "Source",
+      "type": "string"
+    },
+    "source_kind": {
+      "$ref": "#/$defs/SourceKind"
+    },
+    "stretch": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Stretch"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    }
+  },
+  "required": [
+    "id",
+    "family",
+    "source_kind",
+    "footprint",
+    "length_m",
+    "depth_m",
+    "cores",
+    "modules",
+    "per_floor"
+  ],
+  "title": "TowerPrototype",
+  "type": "object"
+}

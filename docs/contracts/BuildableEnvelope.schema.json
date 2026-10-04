@@ -1,0 +1,745 @@
+{
+  "$defs": {
+    "AccessZone": {
+      "additionalProperties": false,
+      "description": "Where a gate may open: frontage on the access road, less any buffer.",
+      "properties": {
+        "frontage": {
+          "$ref": "#/$defs/Line"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "length_m": {
+          "minimum": 0,
+          "title": "Length M",
+          "type": "number"
+        },
+        "note": {
+          "default": "",
+          "title": "Note",
+          "type": "string"
+        },
+        "road_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Road Id"
+        },
+        "side": {
+          "anyOf": [
+            {
+              "enum": [
+                "N",
+                "NE",
+                "E",
+                "SE",
+                "S",
+                "SW",
+                "W",
+                "NW"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Side"
+        }
+      },
+      "required": [
+        "id",
+        "frontage",
+        "length_m"
+      ],
+      "title": "AccessZone",
+      "type": "object"
+    },
+    "BandEnvelope": {
+      "additionalProperties": false,
+      "description": "The land one of ResolvedRules' height bands leaves to build on. It carries that band's\ntwo edges and is matched to it by them (`BuildableEnvelope.of_band`); which band a height\nfalls in is ResolvedRules' to say, never worked out again from these edges.",
+      "properties": {
+        "above_m": {
+          "minimum": 0,
+          "title": "Above M",
+          "type": "number"
+        },
+        "area_sqm": {
+          "default": 0.0,
+          "minimum": 0,
+          "title": "Area Sqm",
+          "type": "number"
+        },
+        "buildable": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Shape"
+          },
+          "title": "Buildable",
+          "type": "array"
+        },
+        "green_strip_applies": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Green Strip Applies"
+        },
+        "kind": {
+          "$ref": "#/$defs/BandKind"
+        },
+        "modelled": {
+          "default": true,
+          "title": "Modelled",
+          "type": "boolean"
+        },
+        "note": {
+          "default": "",
+          "title": "Note",
+          "type": "string"
+        },
+        "setback_envelope": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Shape"
+          },
+          "title": "Setback Envelope",
+          "type": "array"
+        },
+        "setback_m": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Setback M"
+        },
+        "up_to_m": {
+          "exclusiveMinimum": 0,
+          "title": "Up To M",
+          "type": "number"
+        }
+      },
+      "required": [
+        "above_m",
+        "up_to_m",
+        "kind"
+      ],
+      "title": "BandEnvelope",
+      "type": "object"
+    },
+    "BandKind": {
+      "enum": [
+        "HIGH_RISE",
+        "NON_HIGH_RISE"
+      ],
+      "title": "BandKind",
+      "type": "string"
+    },
+    "Basis": {
+      "enum": [
+        "LEGAL_RULE",
+        "FIRM_STANDARD",
+        "ENGINE_DESIGN_ASSUMPTION",
+        "UNRESOLVED_INTERPRETATION",
+        "SITE_INPUT"
+      ],
+      "title": "Basis",
+      "type": "string"
+    },
+    "CirculationRequirements": {
+      "additionalProperties": false,
+      "properties": {
+        "access_zones": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/AccessZone"
+          },
+          "title": "Access Zones",
+          "type": "array"
+        },
+        "obligations": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Obligation"
+          },
+          "title": "Obligations",
+          "type": "array"
+        }
+      },
+      "title": "CirculationRequirements",
+      "type": "object"
+    },
+    "Exclusion": {
+      "additionalProperties": false,
+      "description": "Statutory and fixed in place: no building, whatever the design.",
+      "properties": {
+        "clause": {
+          "title": "Clause",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/ExclusionKind"
+        },
+        "shapes": {
+          "items": {
+            "$ref": "#/$defs/Shape"
+          },
+          "minItems": 1,
+          "title": "Shapes",
+          "type": "array"
+        },
+        "source_ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Ref"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "shapes",
+        "clause"
+      ],
+      "title": "Exclusion",
+      "type": "object"
+    },
+    "ExclusionKind": {
+      "enum": [
+        "WATER_BUFFER",
+        "HT_CORRIDOR",
+        "OTHER_STATUTORY"
+      ],
+      "title": "ExclusionKind",
+      "type": "string"
+    },
+    "Finding": {
+      "properties": {
+        "clause": {
+          "title": "Clause",
+          "type": "string"
+        },
+        "measured": {
+          "title": "Measured",
+          "type": "string"
+        },
+        "note": {
+          "default": "",
+          "title": "Note",
+          "type": "string"
+        },
+        "required": {
+          "title": "Required",
+          "type": "string"
+        },
+        "rule": {
+          "title": "Rule",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/Status"
+        }
+      },
+      "required": [
+        "rule",
+        "status",
+        "measured",
+        "required",
+        "clause"
+      ],
+      "title": "Finding",
+      "type": "object"
+    },
+    "LayerKind": {
+      "enum": [
+        "SETBACK",
+        "BLOCK_GAP",
+        "FIRE_CLEAR_BAND",
+        "FIRE_ACCESS_ROUTE",
+        "TURNING_SECTOR",
+        "WATER_BUFFER",
+        "GREEN_STRIP_ZONE",
+        "QUALIFYING_OPEN_SPACE",
+        "RAMP_FORBIDDEN",
+        "BAYS_FORBIDDEN",
+        "CELLAR_SETBACK"
+      ],
+      "title": "LayerKind",
+      "type": "string"
+    },
+    "Line": {
+      "additionalProperties": false,
+      "description": "An open line (a road edge, a water line, a stretch of boundary), metres, survey frame.",
+      "properties": {
+        "points": {
+          "items": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "type": "array"
+          },
+          "minItems": 2,
+          "title": "Points",
+          "type": "array"
+        }
+      },
+      "required": [
+        "points"
+      ],
+      "title": "Line",
+      "type": "object"
+    },
+    "Obligation": {
+      "additionalProperties": false,
+      "description": "Something the law will ask of the layout here, and where ResolvedRules holds its value.",
+      "properties": {
+        "applies": {
+          "title": "Applies",
+          "type": "boolean"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "note": {
+          "default": "",
+          "title": "Note",
+          "type": "string"
+        },
+        "rule_ref": {
+          "title": "Rule Ref",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "applies",
+        "rule_ref"
+      ],
+      "title": "Obligation",
+      "type": "object"
+    },
+    "Permission": {
+      "additionalProperties": false,
+      "properties": {
+        "condition": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Condition"
+        },
+        "interpretation_ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Interpretation Ref"
+        },
+        "permit": {
+          "$ref": "#/$defs/Permit"
+        },
+        "use": {
+          "$ref": "#/$defs/PhysicalUse"
+        }
+      },
+      "required": [
+        "use",
+        "permit"
+      ],
+      "title": "Permission",
+      "type": "object"
+    },
+    "Permit": {
+      "enum": [
+        "ALLOWED",
+        "FORBIDDEN",
+        "CONDITIONAL"
+      ],
+      "title": "Permit",
+      "type": "string"
+    },
+    "PhysicalUse": {
+      "enum": [
+        "TOWER",
+        "CLUB_HOUSE",
+        "OTHER_BUILT",
+        "ROAD",
+        "FIRE_HARDSTANDING",
+        "SURFACE_PARKING",
+        "RAMP",
+        "SOFT_OPEN_SPACE",
+        "GREEN_STRIP",
+        "HARD_AMENITY",
+        "BUFFER_LAND",
+        "UNALLOCATED"
+      ],
+      "title": "PhysicalUse",
+      "type": "string"
+    },
+    "Provenance": {
+      "enum": [
+        "VERIFIED",
+        "USER_CONFIRMED",
+        "EXTRACTED",
+        "ASSUMED_FOR_TEST",
+        "UNVERIFIED"
+      ],
+      "title": "Provenance",
+      "type": "string"
+    },
+    "RuleLayer": {
+      "additionalProperties": false,
+      "properties": {
+        "applies_to": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Applies To"
+        },
+        "area_sqm": {
+          "default": 0.0,
+          "title": "Area Sqm",
+          "type": "number"
+        },
+        "basis": {
+          "$ref": "#/$defs/Basis"
+        },
+        "clause": {
+          "title": "Clause",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "interpretation_ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Interpretation Ref"
+        },
+        "kind": {
+          "$ref": "#/$defs/LayerKind"
+        },
+        "permits": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Permission"
+          },
+          "title": "Permits",
+          "type": "array"
+        },
+        "shapes": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Shape"
+          },
+          "title": "Shapes",
+          "type": "array"
+        },
+        "status": {
+          "$ref": "#/$defs/Provenance"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "clause",
+        "basis",
+        "status"
+      ],
+      "title": "RuleLayer",
+      "type": "object"
+    },
+    "RuleLayers": {
+      "additionalProperties": false,
+      "properties": {
+        "layers": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/RuleLayer"
+          },
+          "title": "Layers",
+          "type": "array"
+        },
+        "schema_version": {
+          "const": "1.1",
+          "default": "1.1",
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "title": "RuleLayers",
+      "type": "object"
+    },
+    "Shape": {
+      "additionalProperties": false,
+      "description": "A polygon: its outer ring and any holes, metres, survey frame, not closed (the first\npoint is not repeated). Every ring has at least three points and only finite coordinates.",
+      "properties": {
+        "holes": {
+          "default": [],
+          "items": {
+            "items": {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "type": "array"
+            },
+            "type": "array"
+          },
+          "title": "Holes",
+          "type": "array"
+        },
+        "outer": {
+          "items": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "type": "array"
+          },
+          "minItems": 3,
+          "title": "Outer",
+          "type": "array"
+        }
+      },
+      "required": [
+        "outer"
+      ],
+      "title": "Shape",
+      "type": "object"
+    },
+    "Status": {
+      "enum": [
+        "PASS",
+        "FAIL",
+        "UNVERIFIED",
+        "NOT_CHECKED",
+        "INFO"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "WidthProfile": {
+      "additionalProperties": false,
+      "description": "How wide a piece of land is, region by region; reported, never classified.",
+      "properties": {
+        "applies_to": {
+          "title": "Applies To",
+          "type": "string"
+        },
+        "area_narrower_than": {
+          "default": [],
+          "items": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "type": "array"
+          },
+          "title": "Area Narrower Than",
+          "type": "array"
+        },
+        "regions": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/WidthRegion"
+          },
+          "title": "Regions",
+          "type": "array"
+        }
+      },
+      "required": [
+        "applies_to"
+      ],
+      "title": "WidthProfile",
+      "type": "object"
+    },
+    "WidthRegion": {
+      "additionalProperties": false,
+      "properties": {
+        "area_sqm": {
+          "minimum": 0,
+          "title": "Area Sqm",
+          "type": "number"
+        },
+        "length_m": {
+          "minimum": 0,
+          "title": "Length M",
+          "type": "number"
+        },
+        "max_inscribed_width_m": {
+          "minimum": 0,
+          "title": "Max Inscribed Width M",
+          "type": "number"
+        },
+        "shape": {
+          "$ref": "#/$defs/Shape"
+        }
+      },
+      "required": [
+        "shape",
+        "area_sqm",
+        "max_inscribed_width_m",
+        "length_m"
+      ],
+      "title": "WidthRegion",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "bands": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/BandEnvelope"
+      },
+      "title": "Bands",
+      "type": "array"
+    },
+    "circulation": {
+      "$ref": "#/$defs/CirculationRequirements",
+      "default": {
+        "access_zones": [],
+        "obligations": []
+      }
+    },
+    "exclusions": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Exclusion"
+      },
+      "title": "Exclusions",
+      "type": "array"
+    },
+    "facts": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Finding"
+      },
+      "title": "Facts",
+      "type": "array"
+    },
+    "requirements": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Obligation"
+      },
+      "title": "Requirements",
+      "type": "array"
+    },
+    "rule_layers": {
+      "$ref": "#/$defs/RuleLayers",
+      "default": {
+        "layers": [],
+        "schema_version": "1.1"
+      }
+    },
+    "rules_ref": {
+      "title": "Rules Ref",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.1",
+      "default": "1.1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "site_ref": {
+      "title": "Site Ref",
+      "type": "string"
+    },
+    "width_profiles": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/WidthProfile"
+      },
+      "title": "Width Profiles",
+      "type": "array"
+    }
+  },
+  "required": [
+    "site_ref",
+    "rules_ref"
+  ],
+  "title": "BuildableEnvelope",
+  "type": "object"
+}

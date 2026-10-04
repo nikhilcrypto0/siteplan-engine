@@ -1,0 +1,898 @@
+{
+  "$defs": {
+    "Accounting": {
+      "additionalProperties": false,
+      "properties": {
+        "partition": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PartitionLedger"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "partition_problems": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Partition Problems",
+          "type": "array"
+        },
+        "rule_layers": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RuleLayers"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "title": "Accounting",
+      "type": "object"
+    },
+    "Basis": {
+      "enum": [
+        "LEGAL_RULE",
+        "FIRM_STANDARD",
+        "ENGINE_DESIGN_ASSUMPTION",
+        "UNRESOLVED_INTERPRETATION",
+        "SITE_INPUT"
+      ],
+      "title": "Basis",
+      "type": "string"
+    },
+    "Check": {
+      "additionalProperties": false,
+      "properties": {
+        "by_reading": {
+          "additionalProperties": {
+            "additionalProperties": {
+              "$ref": "#/$defs/Status"
+            },
+            "type": "object"
+          },
+          "default": {},
+          "title": "By Reading",
+          "type": "object"
+        },
+        "family": {
+          "$ref": "#/$defs/Family"
+        },
+        "finding": {
+          "$ref": "#/$defs/Finding"
+        },
+        "subject": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Subject"
+        }
+      },
+      "required": [
+        "family",
+        "finding"
+      ],
+      "title": "Check",
+      "type": "object"
+    },
+    "Discrepancy": {
+      "additionalProperties": false,
+      "properties": {
+        "blocks_pass": {
+          "title": "Blocks Pass",
+          "type": "boolean"
+        },
+        "item": {
+          "title": "Item",
+          "type": "string"
+        },
+        "ours": {
+          "title": "Ours",
+          "type": "string"
+        },
+        "source": {
+          "enum": [
+            "generator",
+            "envelope"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
+        "theirs": {
+          "title": "Theirs",
+          "type": "string"
+        }
+      },
+      "required": [
+        "item",
+        "source",
+        "theirs",
+        "ours",
+        "blocks_pass"
+      ],
+      "title": "Discrepancy",
+      "type": "object"
+    },
+    "Family": {
+      "enum": [
+        "SETBACK",
+        "SPACING",
+        "ROADS",
+        "DEAD_END",
+        "FIRE",
+        "HEIGHT",
+        "OPEN_SPACE",
+        "PARKING",
+        "AMENITIES",
+        "WATER",
+        "GREEN_STRIP",
+        "EGRESS",
+        "ACCOUNTING",
+        "CONSISTENCY",
+        "PROGRAM",
+        "OTHER"
+      ],
+      "title": "Family",
+      "type": "string"
+    },
+    "Finding": {
+      "properties": {
+        "clause": {
+          "title": "Clause",
+          "type": "string"
+        },
+        "measured": {
+          "title": "Measured",
+          "type": "string"
+        },
+        "note": {
+          "default": "",
+          "title": "Note",
+          "type": "string"
+        },
+        "required": {
+          "title": "Required",
+          "type": "string"
+        },
+        "rule": {
+          "title": "Rule",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/Status"
+        }
+      },
+      "required": [
+        "rule",
+        "status",
+        "measured",
+        "required",
+        "clause"
+      ],
+      "title": "Finding",
+      "type": "object"
+    },
+    "LayerKind": {
+      "enum": [
+        "SETBACK",
+        "BLOCK_GAP",
+        "FIRE_CLEAR_BAND",
+        "FIRE_ACCESS_ROUTE",
+        "TURNING_SECTOR",
+        "WATER_BUFFER",
+        "GREEN_STRIP_ZONE",
+        "QUALIFYING_OPEN_SPACE",
+        "RAMP_FORBIDDEN",
+        "BAYS_FORBIDDEN",
+        "CELLAR_SETBACK"
+      ],
+      "title": "LayerKind",
+      "type": "string"
+    },
+    "LegalVerdict": {
+      "enum": [
+        "PASS",
+        "FAIL",
+        "UNVERIFIED"
+      ],
+      "title": "LegalVerdict",
+      "type": "string"
+    },
+    "PairMeasure": {
+      "additionalProperties": false,
+      "properties": {
+        "a": {
+          "title": "A",
+          "type": "string"
+        },
+        "b": {
+          "title": "B",
+          "type": "string"
+        },
+        "gap_m": {
+          "title": "Gap M",
+          "type": "number"
+        },
+        "required_m": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Required M"
+        }
+      },
+      "required": [
+        "a",
+        "b",
+        "gap_m"
+      ],
+      "title": "PairMeasure",
+      "type": "object"
+    },
+    "PartitionEntry": {
+      "additionalProperties": false,
+      "properties": {
+        "area_sqm": {
+          "minimum": 0,
+          "title": "Area Sqm",
+          "type": "number"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason"
+        },
+        "ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ref"
+        },
+        "shapes": {
+          "items": {
+            "$ref": "#/$defs/Shape"
+          },
+          "minItems": 1,
+          "title": "Shapes",
+          "type": "array"
+        },
+        "tags": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Tags",
+          "type": "array"
+        },
+        "use": {
+          "$ref": "#/$defs/PhysicalUse"
+        }
+      },
+      "required": [
+        "use",
+        "shapes",
+        "area_sqm"
+      ],
+      "title": "PartitionEntry",
+      "type": "object"
+    },
+    "PartitionLedger": {
+      "additionalProperties": false,
+      "description": "The net site, every square metre once, by what it physically is.",
+      "properties": {
+        "entries": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/PartitionEntry"
+          },
+          "title": "Entries",
+          "type": "array"
+        },
+        "net_area_sqm": {
+          "exclusiveMinimum": 0,
+          "title": "Net Area Sqm",
+          "type": "number"
+        },
+        "schema_version": {
+          "const": "1.1",
+          "default": "1.1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "tolerance": {
+          "default": 0.005,
+          "maximum": 0.05,
+          "minimum": 0,
+          "title": "Tolerance",
+          "type": "number"
+        }
+      },
+      "required": [
+        "net_area_sqm"
+      ],
+      "title": "PartitionLedger",
+      "type": "object"
+    },
+    "Permission": {
+      "additionalProperties": false,
+      "properties": {
+        "condition": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Condition"
+        },
+        "interpretation_ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Interpretation Ref"
+        },
+        "permit": {
+          "$ref": "#/$defs/Permit"
+        },
+        "use": {
+          "$ref": "#/$defs/PhysicalUse"
+        }
+      },
+      "required": [
+        "use",
+        "permit"
+      ],
+      "title": "Permission",
+      "type": "object"
+    },
+    "Permit": {
+      "enum": [
+        "ALLOWED",
+        "FORBIDDEN",
+        "CONDITIONAL"
+      ],
+      "title": "Permit",
+      "type": "string"
+    },
+    "PhysicalUse": {
+      "enum": [
+        "TOWER",
+        "CLUB_HOUSE",
+        "OTHER_BUILT",
+        "ROAD",
+        "FIRE_HARDSTANDING",
+        "SURFACE_PARKING",
+        "RAMP",
+        "SOFT_OPEN_SPACE",
+        "GREEN_STRIP",
+        "HARD_AMENITY",
+        "BUFFER_LAND",
+        "UNALLOCATED"
+      ],
+      "title": "PhysicalUse",
+      "type": "string"
+    },
+    "ProgramVerdict": {
+      "enum": [
+        "MET",
+        "PARTLY_MET",
+        "NOT_MET"
+      ],
+      "title": "ProgramVerdict",
+      "type": "string"
+    },
+    "Provenance": {
+      "enum": [
+        "VERIFIED",
+        "USER_CONFIRMED",
+        "EXTRACTED",
+        "ASSUMED_FOR_TEST",
+        "UNVERIFIED"
+      ],
+      "title": "Provenance",
+      "type": "string"
+    },
+    "Recomputed": {
+      "additionalProperties": false,
+      "properties": {
+        "pairs": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/PairMeasure"
+          },
+          "title": "Pairs",
+          "type": "array"
+        },
+        "quantities": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "default": {},
+          "title": "Quantities",
+          "type": "object"
+        },
+        "towers": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/TowerMeasure"
+          },
+          "title": "Towers",
+          "type": "array"
+        },
+        "units_by_type": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "default": {},
+          "title": "Units By Type",
+          "type": "object"
+        }
+      },
+      "title": "Recomputed",
+      "type": "object"
+    },
+    "RuleLayer": {
+      "additionalProperties": false,
+      "properties": {
+        "applies_to": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Applies To"
+        },
+        "area_sqm": {
+          "default": 0.0,
+          "title": "Area Sqm",
+          "type": "number"
+        },
+        "basis": {
+          "$ref": "#/$defs/Basis"
+        },
+        "clause": {
+          "title": "Clause",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "interpretation_ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Interpretation Ref"
+        },
+        "kind": {
+          "$ref": "#/$defs/LayerKind"
+        },
+        "permits": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Permission"
+          },
+          "title": "Permits",
+          "type": "array"
+        },
+        "shapes": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Shape"
+          },
+          "title": "Shapes",
+          "type": "array"
+        },
+        "status": {
+          "$ref": "#/$defs/Provenance"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "clause",
+        "basis",
+        "status"
+      ],
+      "title": "RuleLayer",
+      "type": "object"
+    },
+    "RuleLayers": {
+      "additionalProperties": false,
+      "properties": {
+        "layers": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/RuleLayer"
+          },
+          "title": "Layers",
+          "type": "array"
+        },
+        "schema_version": {
+          "const": "1.1",
+          "default": "1.1",
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "title": "RuleLayers",
+      "type": "object"
+    },
+    "Shape": {
+      "additionalProperties": false,
+      "description": "A polygon: its outer ring and any holes, metres, survey frame, not closed (the first\npoint is not repeated). Every ring has at least three points and only finite coordinates.",
+      "properties": {
+        "holes": {
+          "default": [],
+          "items": {
+            "items": {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "type": "array"
+            },
+            "type": "array"
+          },
+          "title": "Holes",
+          "type": "array"
+        },
+        "outer": {
+          "items": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "type": "array"
+          },
+          "minItems": 3,
+          "title": "Outer",
+          "type": "array"
+        }
+      },
+      "required": [
+        "outer"
+      ],
+      "title": "Shape",
+      "type": "object"
+    },
+    "Status": {
+      "enum": [
+        "PASS",
+        "FAIL",
+        "UNVERIFIED",
+        "NOT_CHECKED",
+        "INFO"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "TargetCheck": {
+      "additionalProperties": false,
+      "description": "A legal minimum, the design target above it and what the layout provides, side by side.\n\nNever a legal check: the legal verdict comes from the legal checks, which hold the layout to\nthe legal minimum alone. The target is the legal minimum plus the brief's design margin (the\nfirm's standard or the engine's design assumption, never law); with no margin set it is the\nlegal minimum itself, and the row still shows how much the layout keeps in hand. Where the\nlegal minimum depends on an open reading there is a row for each reading.",
+      "properties": {
+        "basis": {
+          "$ref": "#/$defs/Basis"
+        },
+        "item": {
+          "$ref": "#/$defs/TargetItem"
+        },
+        "legal_minimum": {
+          "minimum": 0,
+          "title": "Legal Minimum",
+          "type": "number"
+        },
+        "note": {
+          "default": "",
+          "title": "Note",
+          "type": "string"
+        },
+        "provided": {
+          "minimum": 0,
+          "title": "Provided",
+          "type": "number"
+        },
+        "readings": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "default": {},
+          "title": "Readings",
+          "type": "object"
+        },
+        "subject": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Subject"
+        },
+        "target": {
+          "minimum": 0,
+          "title": "Target",
+          "type": "number"
+        },
+        "unit": {
+          "enum": [
+            "m",
+            "m\u00b2"
+          ],
+          "title": "Unit",
+          "type": "string"
+        }
+      },
+      "required": [
+        "item",
+        "unit",
+        "legal_minimum",
+        "target",
+        "provided",
+        "basis"
+      ],
+      "title": "TargetCheck",
+      "type": "object"
+    },
+    "TargetItem": {
+      "enum": [
+        "setback",
+        "tower_gap",
+        "road_width",
+        "open_space",
+        "parking"
+      ],
+      "title": "TargetItem",
+      "type": "string"
+    },
+    "TowerMeasure": {
+      "additionalProperties": false,
+      "properties": {
+        "band_by_reading": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "default": {},
+          "title": "Band By Reading",
+          "type": "object"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "physical_height_m": {
+          "title": "Physical Height M",
+          "type": "number"
+        },
+        "required_setback_m_by_reading": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "default": {},
+          "title": "Required Setback M By Reading",
+          "type": "object"
+        },
+        "rule_height_m_by_reading": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "default": {},
+          "title": "Rule Height M By Reading",
+          "type": "object"
+        },
+        "setback_m": {
+          "title": "Setback M",
+          "type": "number"
+        }
+      },
+      "required": [
+        "name",
+        "physical_height_m",
+        "setback_m"
+      ],
+      "title": "TowerMeasure",
+      "type": "object"
+    },
+    "Verdict": {
+      "additionalProperties": false,
+      "properties": {
+        "legal": {
+          "$ref": "#/$defs/LegalVerdict"
+        },
+        "program": {
+          "$ref": "#/$defs/ProgramVerdict"
+        },
+        "reasons": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Reasons",
+          "type": "array"
+        }
+      },
+      "required": [
+        "legal",
+        "program"
+      ],
+      "title": "Verdict",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "accounting": {
+      "$ref": "#/$defs/Accounting",
+      "default": {
+        "partition": null,
+        "partition_problems": [],
+        "rule_layers": null
+      }
+    },
+    "brief_ref": {
+      "title": "Brief Ref",
+      "type": "string"
+    },
+    "candidate_ref": {
+      "title": "Candidate Ref",
+      "type": "string"
+    },
+    "cross_checks": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Discrepancy"
+      },
+      "title": "Cross Checks",
+      "type": "array"
+    },
+    "design_targets": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/TargetCheck"
+      },
+      "title": "Design Targets",
+      "type": "array"
+    },
+    "envelope_ref": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Envelope Ref"
+    },
+    "legal": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Check"
+      },
+      "title": "Legal",
+      "type": "array"
+    },
+    "not_checked": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Not Checked",
+      "type": "array"
+    },
+    "program": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Check"
+      },
+      "title": "Program",
+      "type": "array"
+    },
+    "recomputed": {
+      "$ref": "#/$defs/Recomputed",
+      "default": {
+        "pairs": [],
+        "quantities": {},
+        "towers": [],
+        "units_by_type": {}
+      }
+    },
+    "rules_ref": {
+      "title": "Rules Ref",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.1",
+      "default": "1.1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "site_ref": {
+      "title": "Site Ref",
+      "type": "string"
+    },
+    "validator_version": {
+      "title": "Validator Version",
+      "type": "string"
+    },
+    "verdict": {
+      "$ref": "#/$defs/Verdict"
+    }
+  },
+  "required": [
+    "candidate_ref",
+    "site_ref",
+    "rules_ref",
+    "brief_ref",
+    "validator_version",
+    "verdict"
+  ],
+  "title": "ValidationReport",
+  "type": "object"
+}
