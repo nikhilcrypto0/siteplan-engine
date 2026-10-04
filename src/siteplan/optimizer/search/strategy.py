@@ -59,7 +59,8 @@ class Limits:
     offsets: int = 8  # where the columns start, across one pitch
     heights: int = 3  # the tallest block a configuration allows: this many floor counts, top down
     laid_per_profile: int = 14  # configurations laid out exactly, for each profile
-    judged: int = 24  # candidates the validator judges
+    attempts_per_profile: int = 60  # and the most tried to get them
+    judged_per_profile: int = 6  # candidates the validator judges, for each profile
     per_profile_proposed: int = 4  # the most proposed for each profile
 
 
@@ -178,8 +179,9 @@ class FullSearchStrategy:
             heapq.heapify(heap)
             counter = len(evaluations)
             seen: set[tuple] = set()
-            made = 0
-            while heap and made < self.limits.laid_per_profile:
+            made = attempts = 0
+            while heap and made < self.limits.laid_per_profile \
+                    and attempts < self.limits.attempts_per_profile:
                 if stage.expired():
                     tally.exhausted = True
                     break
@@ -189,7 +191,7 @@ class FullSearchStrategy:
                     continue
                 seen.add(signature)
                 result, why = lay_out(run, ev)
-                made += 1
+                attempts += 1
                 if result is None:
                     tally.reasons[why] += 1
                     if ev.config.reserve is None and why.startswith(ROOM_FAILURES):
@@ -206,6 +208,7 @@ class FullSearchStrategy:
                             counter += 1
                             heapq.heappush(heap, (-variant.value, counter, variant))
                     continue
+                made += 1
                 tally.laid += 1
                 laid.append((by_key[key], ev.config, (ev, result)))
         return laid
@@ -218,11 +221,18 @@ class FullSearchStrategy:
             candidate = build_candidate(
                 result, site=site, rules=rules, brief=brief, plot=run.plot, q=run.q,
                 profile=profile, envelope=run.envelope,
-                candidate_id=f"{NAME.lower()}-{profile.key}-{number}", seed=context.seed, notes=[])
+                candidate_id=f"{NAME.lower()}-{profile.key}-{number}", seed=context.seed,
+                notes=_planning_notes(run))
             drawn.append((measure(candidate, brief), profile, candidate))
         drawn.sort(key=lambda d: (-d[0].yield_score, d[2].candidate_id))
+        taken: Counter = Counter()
+        order = []
+        for scores, profile, candidate in drawn:  # each profile has its own quota
+            if taken[profile.key] < self.limits.judged_per_profile:
+                taken[profile.key] += 1
+                order.append((scores, profile, candidate))
         judged: list[Judged] = []
-        for scores, profile, candidate in drawn[:max(self.limits.judged, 1)]:
+        for scores, profile, candidate in order:
             if stage.expired() and judged:
                 tally.exhausted = True
                 break
@@ -233,7 +243,8 @@ class FullSearchStrategy:
                 tally.rejected.append(f"{candidate.candidate_id}: "
                                       + ("; ".join(problems) or "a blocking discrepancy"))
                 continue
-            noted = candidate.model_copy(update={"caveats": caveats(report)})
+            noted = candidate.model_copy(update={
+                "caveats": [*candidate.caveats, *caveats(report)]})
             judged.append(Judged(noted, report, scores, rests_on(report), profile))
         return judged
 
@@ -254,6 +265,14 @@ class FullSearchStrategy:
             chosen.append(max(robust, key=lambda j: (j.scores.yield_score, j.candidate.candidate_id)))
         unique = {j.candidate.candidate_id: j for j in chosen}
         return sorted(unique.values(), key=lambda j: (-j.scores.yield_score, j.candidate.candidate_id))
+
+
+def _planning_notes(run: Run) -> list[str]:
+    """What the layout assumed that nothing in the inputs settles."""
+    if run.plot.access_assumed:
+        return ["ASSUMED: nobody has said which side the access road runs along, so the entrance "
+                "stands where the approach to the ring road is shortest; the architect confirms it"]
+    return []
 
 
 def _reserved(config: Config, side: str, scale: float) -> Config:
