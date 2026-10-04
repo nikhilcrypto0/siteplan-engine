@@ -47,6 +47,7 @@ from siteplan.validator.shapes import (
 from siteplan.validator.zones import gap_zones, setback_zone
 
 CRACK_M = 0.02  # pockets drawn this close to each other are one pocket
+AGREEMENT_SHARE = 0.005  # the rules' area asked and the site's this close (a share) are one figure
 
 
 @dataclass(frozen=True)
@@ -165,7 +166,7 @@ def _requirement_agreement(ctx: Context) -> Check | None:
     off = []
     for basis, asked in ctx.rules.open_space.requirement_sqm_by_reading.items():
         expected = expected_requirement(ctx, basis)
-        if expected is not None and abs(asked - expected) > 0.005 * max(expected, 1.0):
+        if expected is not None and abs(asked - expected) > AGREEMENT_SHARE * max(expected, 1.0):
             off.append(f"{basis}: rules {asked:,.1f} m², site {expected:,.1f} m²")
     if not off:
         return None

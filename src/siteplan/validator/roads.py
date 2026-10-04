@@ -55,6 +55,8 @@ from siteplan.validator.shapes import (
 from siteplan.validator.zones import deepest_setback_m, setback_zone
 
 DECLARED_SLACK_M = 0.05  # a road may measure this much under the width it declares
+HEAD_SLACK_M = 0.05  # a cul-de-sac's turning head may measure this much under the radius asked
+HEAD_CUT_M = 0.1  # the head's circle is cut this much wider, so none of it is left on the stem
 ROAD_KINDS = (RoadKind.APPROACH, RoadKind.LOOP, RoadKind.INTERNAL, RoadKind.CUL_DE_SAC)
 RULE_8M_KINDS = (RoadKind.APPROACH, RoadKind.LOOP, RoadKind.INTERNAL)
 BEND_NOTE = ("A road round a bend is longer along its own middle than the box round it, which is "
@@ -195,7 +197,7 @@ def _stem(body: Polygon | None, head: float, centre: Point | None, width_m: floa
     corner of a head that is not round is opened away."""
     if body is None or centre is None:
         return body
-    left = body.difference(centre.buffer(head + 0.1))
+    left = body.difference(centre.buffer(head + HEAD_CUT_M))
     pieces = polygons_of(opening(left, width_m / 2) if not left.is_empty else left)
     return max(pieces, key=lambda p: p.area) if pieces else None
 
@@ -225,7 +227,7 @@ def _cul_de_sac_checks(ctx: Context, ground: Ground) -> list[Check]:
             (doubts if crooked else problems).append(f"{length:.0f} m long")
         elif crooked:
             doubts.append(f"{length:.0f} m across a bend")
-        if head + TOL_M < radius - 0.05:
+        if head + TOL_M < radius - HEAD_SLACK_M:
             problems.append(f"head radius {head:.1f} m")
         if usable.distance(network) > TOUCH_M:
             problems.append("not joined to the road network")

@@ -32,6 +32,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from dataclasses import dataclass
 
+from siteplan import rules as law
 from siteplan.contracts.common import Provenance, Status
 from siteplan.contracts.design_brief import DesignBrief, HeightIntent, HeightMode
 from siteplan.contracts.prototype import TowerPrototype
@@ -52,8 +53,9 @@ STILT_NOT_COUNTED = "not_counted"
 READINGS = (STILT_COUNTED, STILT_NOT_COUNTED)
 EPS_M = HEIGHT_TOL_M  # a height that meets its limit to a millionth of a metre meets it
 # A search bound, not a rule: where no limit stops the count (a road of 30 m or more), counts are
-# assessed up to the top of Table IV's last bounded row.
-CEILING_M = 120.0
+# assessed up to the top of Table IV's last bounded row, where its open-ended row starts (120 m),
+# read from rules.py so the bound follows the table.
+CEILING_M = float(law.TABLE_IV[-1].above_m)
 CONDITION = {Applicability.APPLIES: True, Applicability.DOES_NOT_APPLY: False,
              Applicability.UNKNOWN: None}
 HIGH_RISE_CHECK = "High-rise eligibility"
