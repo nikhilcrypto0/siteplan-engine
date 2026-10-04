@@ -11,6 +11,7 @@ it first. Nothing here comes from a client drawing.
 from __future__ import annotations
 
 import ast
+import hashlib
 import inspect
 import json
 import shutil
@@ -19,6 +20,7 @@ import typing
 import uuid
 import xml.etree.ElementTree as ElementTree
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import ezdxf
@@ -28,13 +30,15 @@ from shapely.errors import GEOSException
 
 import siteplan.validator
 from siteplan.cli import main as cli
-from siteplan.contracts import CandidateLayout, digest
+from siteplan.contracts import CandidateLayout, ValidationReport, digest
 from siteplan.contracts.design_brief import ParetoPoint
 from siteplan.contracts.validation import LegalVerdict
 from siteplan.optimizer import LegacyStrategy
 from siteplan.optimizer.search import FullSearchStrategy
 from siteplan.service import (
+    Asked,
     CompareCandidates,
+    Decision,
     ExportCandidate,
     ExportStatus,
     HeightChoice,
@@ -49,7 +53,10 @@ from siteplan.service import (
     Service,
     ServiceError,
     StartProject,
+    TerminalApprover,
     ValidateCandidate,
+    audit,
+    store,
 )
 from siteplan.service import service as service_module
 from siteplan.service.models import REQUESTS
@@ -71,19 +78,23 @@ OPERATIONS = ("start_project", "open_project", "resolve_rules", "inspect_envelop
 
 
 class Approver:
-    """The person, as a test plays them: answers every request the same way and remembers it."""
+    """The person, as a test plays them: answers every request the same way and remembers it
+    (and, given a list, when it was asked)."""
 
-    def __init__(self, answer: bool = True):
-        self.answer, self.asked = answer, []
+    def __init__(self, answer: bool = True, events: list | None = None):
+        self.answer, self.asked, self.events = answer, [], events
 
     def approve(self, title: str, lines: list[str]) -> bool:
         self.asked.append((title, list(lines)))
+        if self.events is not None:
+            self.events.append(("asked", title))
         return self.answer
 
 
-def make_workspace(folder: Path, finished: tuple[str, ...] = ()) -> Path:
-    """A survey, the firm's (made-up) libraries and workspace file, and the project file the
-    architect's answers make through `siteplan start`."""
+def make_workspace(folder: Path, finished: tuple[str, ...] = (),
+                   standards: dict | None = None) -> Path:
+    """A survey, the firm's (made-up) libraries and workspace file (with any standards the firm
+    sets), and the project file the architect's answers make through `siteplan start`."""
     doc = ezdxf.new("R2018")
     doc.header["$INSUNITS"] = 6
     doc.modelspace().add_lwpolyline([(0, 0), (150, 0), (150, 120), (0, 120)], close=True,
@@ -94,7 +105,7 @@ def make_workspace(folder: Path, finished: tuple[str, ...] = ()) -> Path:
     shutil.copy(EXAMPLES / "amenities.hyderabad.json", folder / "amenities.json")
     (folder / "siteplan.workspace.json").write_text(json.dumps(
         {"flat_library": "flats.json", "amenities": "amenities.json",
-         "finished_plans": list(finished)}))
+         "finished_plans": list(finished), **(standards or {})}))
     answers = folder / "answers.json"
     answers.write_text(json.dumps(ANSWERS))
     assert cli(["start", str(folder / "survey.dxf"), "--answers", str(answers)]) == 0
@@ -109,6 +120,7 @@ class Ran:
     proposed: object
     validated: list  # (calling module, digest of the candidate judged)
     optimized: list  # (args, kwargs) of every optimize call
+    events: list  # ("asked", title) and ("optimize", "") in the order they happened
 
 
 def _propose(service: Service, **intent) -> object:
@@ -120,7 +132,8 @@ def _propose(service: Service, **intent) -> object:
 @pytest.fixture(scope="module")
 def ran(tmp_path_factory) -> Ran:
     ws = make_workspace(tmp_path_factory.mktemp("service"))
-    approver = Approver()
+    events = []
+    approver = Approver(events=events)
     service = Service(ws, ws / "out", approver)
     validated, optimized = [], []
     real_validate, real_optimize = siteplan.validator.validate, service_module.optimize
@@ -131,13 +144,14 @@ def ran(tmp_path_factory) -> Ran:
 
     def watch_optimize(*args, **kwargs):
         optimized.append((args, kwargs))
+        events.append(("optimize", ""))
         return real_optimize(*args, **kwargs)
 
     with pytest.MonkeyPatch.context() as patch:
         patch.setattr(siteplan.validator, "validate", watch_validate)
         patch.setattr(service_module, "optimize", watch_optimize)
         proposed = _propose(service)
-    return Ran(ws, service, approver, proposed, validated, optimized)
+    return Ran(ws, service, approver, proposed, validated, optimized, events)
 
 
 def _first(ran: Ran):
@@ -160,9 +174,11 @@ def exported(ran: Ran):
 
 
 def _copy_run(ran: Ran, mode: Mode | None = None) -> str:
-    """A copy of the module's run under a new id, so a test may tamper with it."""
+    """A copy of the module's run under a new id, with nothing exported yet, so a test may
+    tamper with it."""
     out, new = ran.ws / "out", uuid.uuid4().hex[:12]
     shutil.copytree(out / ran.proposed.run_id, out / new)
+    shutil.rmtree(out / new / "exports", ignore_errors=True)
     record = json.loads((out / new / "run.json").read_text())
     record["run_id"] = new
     if mode is not None:
@@ -198,6 +214,8 @@ def test_the_service_runs_the_full_search_and_never_the_legacy_generator(ran):
 
 LEGACY = {"layout", "heights", "towers", "grounds", "access", "runner", "checks", "access_checks",
           "parking_checks", "parking", "acceptance", "cases", "mcp_server", "assistant"}
+# Nor the command line: it drives the service from outside (siteplan propose), never the reverse.
+BANNED = LEGACY | {"cli"}
 LEGACY_DEEP = ("siteplan.optimizer.legacy", "siteplan.prototypes.legacy")
 LEGACY_NAMES = {"LegacyStrategy", "LegacyRun", "legacy", "legacy_tower"}
 
@@ -215,10 +233,10 @@ def _imports(source: str) -> list[tuple[str, tuple[str, ...]]]:
 def _legacy(module: str, names: tuple[str, ...]) -> list[str]:
     parts = module.split(".")
     wrong = []
-    if parts[0] == "siteplan" and len(parts) > 1 and parts[1] in LEGACY:
+    if parts[0] == "siteplan" and len(parts) > 1 and parts[1] in BANNED:
         wrong.append(module)
     if module == "siteplan":
-        wrong += [f"siteplan.{n}" for n in names if n in LEGACY]
+        wrong += [f"siteplan.{n}" for n in names if n in BANNED]
     if any(module == deep or module.startswith(deep + ".") for deep in LEGACY_DEEP):
         wrong.append(module)
     if module.startswith("siteplan") and set(names) & LEGACY_NAMES:
@@ -230,13 +248,16 @@ def test_the_scanner_sees_every_way_of_importing_the_legacy_path():
     for source in ("import siteplan.layout", "from siteplan.towers import place",
                    "from siteplan import grounds", "def f():\n    from siteplan.runner import x",
                    "from siteplan.optimizer import LegacyStrategy",
-                   "from siteplan.optimizer.legacy import LegacyRun"):
+                   "from siteplan.optimizer.legacy import LegacyRun",
+                   "from siteplan.cli import main", "from siteplan import cli",
+                   "import siteplan.mcp_server"):
         assert [w for m, n in _imports(source) for w in _legacy(m, n)], source
 
 
 def test_the_service_imports_no_legacy_generator_or_checker():
     files = sorted(SERVICE.glob("*.py"))
-    assert {f.name for f in files} >= {"service.py", "judge.py", "render.py", "store.py"}
+    assert {f.name for f in files} >= {"service.py", "judge.py", "render.py", "store.py",
+                                       "host.py", "audit.py", "standards.py"}
     offenders = {path.name: wrong for path in files
                  if (wrong := [w for m, n in _imports(path.read_text()) for w in _legacy(m, n)])}
     assert not offenders, offenders
@@ -305,12 +326,16 @@ def test_a_candidate_moved_into_the_setback_is_judged_again_and_refused(ran):
     run_id, candidate_id = _copy_run(ran), _first(ran).candidate_id
     _tower_into_the_setback(ran, run_id, candidate_id)
     _report_into_a_pass(ran, run_id, candidate_id)  # what was stored says nothing either way
+    asked = len(ran.approver.asked)
+    recorded = len(store.read_record(ran.ws / "out", run_id).approvals)
     result = ran.service.export_candidate(ExportCandidate(
         run_id=run_id, candidate_id=candidate_id, acknowledged_unresolved=items))
     assert result.status is ExportStatus.REFUSED and result.legal_verdict is LegalVerdict.FAIL
     assert any(r.startswith("FAIL All-round setback") for r in result.reasons), result.reasons
     assert any("stored candidate changed since the run" in r for r in result.reasons)
     assert not (ran.ws / "out" / run_id / "exports").exists()
+    assert len(ran.approver.asked) == asked  # a FAIL is never put to the person: it never ships
+    assert len(result.approvals) == recorded  # so nothing was asked, and nothing recorded
 
 
 def test_a_stored_report_turned_into_a_pass_is_not_trusted(ran):
@@ -423,7 +448,15 @@ INJECTED = {"setback_m": 10.0, "front_setback_m": 3.0, "abutting_road_m": 18.29,
             "readings": {"stilt_in_rule_height": "not_counted"},
             "profile": {"name": "x", "purpose": "y"}, "debug_fixture": True,
             "validator": "none", "strategies": ["LEGACY"], "stilt_height_m": 2.0,
-            "floor_height_m": 2.5, "mode": "DEBUG"}
+            "floor_height_m": 2.5, "mode": "DEBUG",
+            # the firm's standards: the project file's, else the workspace's, never a caller's
+            "max_tower_length_m": 200.0, "common_area_pct": 10.0, "cellar_floor_height_m": 2.0,
+            "cellar_utilities_pct": 0.0, "max_cellars": 6, "flat_library": "elsewhere.json",
+            "amenities": "elsewhere.json", "design_margins": {"setback_extra_m": 0},
+            # the approval: asked of the person by the host's channel, never answered here
+            "approved": True, "approve": True, "approval": "APPROVED", "decision": "APPROVED",
+            "approver": "terminal", "approvals": [], "channel": "page",
+            "workspace": "/", "out": "/tmp"}
 
 
 @pytest.mark.parametrize("model", REQUESTS, ids=lambda m: m.__name__)
@@ -451,7 +484,8 @@ ALLOWED_FIELDS = {"survey_file", "project_file", "brief", "intent", "run_id", "c
                   "unit_mix_percent", "massing"}
 BANNED_WORDS = ("validator", "strateg", "selection", "profile", "when_open", "conservative",
                 "status", "source", "provenance", "setback", "coordinate", "reading", "width",
-                "legal", "mode", "debug")
+                "legal", "mode", "debug", "approv", "decision", "channel", "standard", "library",
+                "amenit", "loading", "cellar", "length", "margin", "workspace")
 
 
 def test_no_operation_or_request_has_a_parameter_for_what_a_caller_may_not_set():
@@ -492,7 +526,10 @@ def test_nothing_runs_or_is_written_without_the_architects_approval(ran):
     for words in ("access road: legal right of way: 18.29 m [USER_CONFIRMED", "net plot outline",
                   "Height (the brief): the most the rules allow", "2BHK 70%", BRIEF):
         assert words in shown, words
-    assert not out.exists()
+    # No run: the only thing written is the refusal itself, in the approvals log.
+    assert sorted(p.name for p in out.iterdir()) == [audit.LOG]
+    (entry,) = audit.read(out)
+    assert entry.decision is Decision.REJECTED and entry.run_id is None
 
 
 def test_only_the_workspace_is_read(ran):
@@ -587,3 +624,123 @@ def test_every_output_of_a_debug_run_says_debug_run(ran):
         assert "DEBUG RUN" in text, name
     report = next(f for f in result.files if f.endswith(".report.txt"))
     assert Path(report).read_text().startswith("DEBUG RUN")
+
+
+# --- The person's approval, asked before anything runs and written down -----------------------
+
+
+def _export_items(ran: Ran) -> tuple[str, str, list[str]]:
+    """A fresh copy of the module's run, its first candidate and that candidate's items."""
+    return _copy_run(ran), _first(ran).candidate_id, _items(ran)
+
+
+def test_the_proposal_is_asked_of_the_person_before_anything_runs(ran):
+    title = f"Generate layout options for {ANSWERS['name']}"
+    assert ran.events[:2] == [("asked", title), ("optimize", "")]
+
+
+def test_the_export_is_asked_before_anything_is_drawn(ran):
+    run_id, candidate_id, items = _export_items(ran)
+    folder = ran.ws / "out" / run_id / "exports"
+    drawn_when_asked = []
+
+    class Watching(Approver):
+        def approve(self, title: str, lines: list[str]) -> bool:
+            drawn_when_asked.append(folder.exists())
+            return super().approve(title, lines)
+
+    result = Service(ran.ws, ran.ws / "out", Watching()).export_candidate(ExportCandidate(
+        run_id=run_id, candidate_id=candidate_id, acknowledged_unresolved=items))
+    assert drawn_when_asked == [False]
+    assert result.status is ExportStatus.EXPORTED and all(Path(f).is_file() for f in result.files)
+
+
+def test_the_proposal_approval_is_in_the_run_record_and_the_service_log(ran):
+    checked = ran.service.validate_candidate(ValidateCandidate(
+        run_id=ran.proposed.run_id, candidate_id=_first(ran).candidate_id))
+    proposal = checked.approvals[0]
+    title, lines = ran.approver.asked[0]
+    assert proposal.asked is Asked.PROPOSAL and proposal.decision is Decision.APPROVED
+    assert (proposal.title, list(proposal.lines)) == (title, lines)  # exactly what was shown
+    shown = json.dumps({"title": title, "lines": lines}, sort_keys=True, separators=(",", ":"),
+                       ensure_ascii=False)
+    assert proposal.asked_digest == hashlib.sha256(shown.encode()).hexdigest()
+    assert proposal.channel == "Approver" and proposal.run_id == ran.proposed.run_id
+    assert datetime.fromisoformat(proposal.at).utcoffset() == timedelta(0)
+    assert proposal in audit.read(ran.ws / "out")
+    with pytest.raises(ValidationError):  # read-only: what a caller gets back cannot be changed
+        proposal.decision = Decision.REJECTED
+
+
+def test_an_export_records_the_fresh_reports_items_and_its_digest(ran, exported):
+    items, result = exported
+    entry = result.approvals[-1]
+    assert entry.asked is Asked.EXPORT and entry.decision is Decision.APPROVED
+    assert (entry.run_id, entry.candidate_id) == (ran.proposed.run_id, _first(ran).candidate_id)
+    assert list(entry.acknowledged) == items
+    fresh = next(f for f in result.files if f.endswith(".validation.json"))
+    assert entry.report_digest == digest(ValidationReport.model_validate_json(
+        Path(fresh).read_text()))
+    record = store.read_record(ran.ws / "out", ran.proposed.run_id)
+    assert entry in record.approvals and record.approvals[0].asked is Asked.PROPOSAL
+    assert entry in audit.read(ran.ws / "out")
+
+
+def test_nothing_in_an_entry_comes_from_the_caller(ran):
+    run_id, candidate_id, items = _export_items(ran)
+    given = [*reversed(items), items[0]]  # the same items in another order, one given twice
+    recorded = len(store.read_record(ran.ws / "out", run_id).approvals)
+    result = ran.service.export_candidate(ExportCandidate(
+        run_id=run_id, candidate_id=candidate_id, acknowledged_unresolved=given))
+    assert result.status is ExportStatus.EXPORTED
+    (entry,) = result.approvals[recorded:]
+    assert list(entry.acknowledged) == items  # as the fresh report names them, each once
+    assert (entry.run_id, entry.candidate_id) == (run_id, candidate_id)  # the stored run's
+    assert entry.channel == type(ran.approver).__name__  # the host's channel, never a field
+
+
+class Broken:
+    def approve(self, title: str, lines: list[str]) -> bool:
+        raise OSError("the channel went away")
+
+
+@pytest.mark.parametrize(("approver", "decision"), [
+    (Approver(False), Decision.REJECTED),
+    (TerminalApprover(interactive=lambda: False), Decision.UNANSWERED),
+    (Broken(), Decision.CHANNEL_FAILURE)], ids=["rejected", "unanswered", "broken"])
+def test_every_proposal_asked_is_logged_and_a_refusal_runs_nothing(ran, tmp_path, approver,
+                                                                    decision):
+    out = tmp_path / "out"
+    result = _propose(Service(ran.ws, out, approver))
+    assert result.status is ProposeStatus.NOT_APPROVED and not list(out.glob("*/run.json"))
+    (entry,) = audit.read(out)
+    assert (entry.asked, entry.decision, entry.run_id) == (Asked.PROPOSAL, decision, None)
+    assert entry.channel == type(approver).__name__
+
+
+def test_an_approval_that_cannot_be_written_down_allows_nothing(ran, tmp_path, monkeypatch):
+    out = tmp_path / "out"
+    out.write_text("a file where the service's folder should be")  # nothing can go under it
+    searched = []
+    monkeypatch.setattr(service_module, "optimize", lambda *args, **kwargs: searched.append(1))
+    with pytest.raises(ServiceError, match="could not be recorded"):
+        _propose(Service(ran.ws, out, Approver()))
+    assert searched == []
+
+
+def test_an_export_the_person_does_not_approve_is_recorded_in_the_run_and_draws_nothing(ran):
+    run_id, candidate_id, items = _export_items(ran)
+    recorded = store.read_record(ran.ws / "out", run_id).approvals
+    logged = audit.read(ran.ws / "out")
+    unanswered = Service(ran.ws, ran.ws / "out", TerminalApprover(interactive=lambda: False))
+    result = unanswered.export_candidate(ExportCandidate(
+        run_id=run_id, candidate_id=candidate_id, acknowledged_unresolved=items))
+    assert result.status is ExportStatus.NOT_APPROVED and not result.files
+    assert "UNANSWERED" in result.reasons[0]
+    assert result.approvals[:len(recorded)] == recorded  # appended: nothing before it changed
+    (entry,) = result.approvals[len(recorded):]
+    assert (entry.asked, entry.decision, entry.channel) == (
+        Asked.EXPORT, Decision.UNANSWERED, "TerminalApprover")
+    assert store.read_record(ran.ws / "out", run_id).approvals == (*recorded, entry)
+    assert audit.read(ran.ws / "out") == [*logged, entry]
+    assert not (ran.ws / "out" / run_id / "exports").exists()

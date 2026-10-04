@@ -6,7 +6,9 @@ blind service refuses it and every output of the debug run says DEBUG RUN. Suchi
 from its survey and the project file the architect's answers make through the intake flow. The
 files are copied into a workspace under pytest's temporary folder, which is never committed.
 What is asserted is what the service promises, never a number: FULL alternatives, no legal FAIL
-among them when the service judges each again, and DEBUG RUN on Dhulapally's drawings and report.
+among them when the service judges each again, DEBUG RUN on Dhulapally's drawings and report,
+and Suchitra's own longest block (56 m, as the architect's project file sets it) kept: no tower
+of any alternative is longer.
 """
 
 from __future__ import annotations
@@ -18,7 +20,10 @@ from pathlib import Path
 import ezdxf
 import pytest
 from client_baseline import ANSWERS, SURVEY, WORKSPACE, profile_path
+from shapely.geometry import Polygon
 
+from siteplan.contracts import CandidateLayout, DesignBrief
+from siteplan.contracts.common import SourceKind
 from siteplan.contracts.validation import LegalVerdict
 from siteplan.intake import WORKSPACE_FILE, build_project, extract, load_defaults, save
 from siteplan.profiles import apply_profile, load_profile
@@ -36,10 +41,13 @@ from siteplan.service import (
     ServiceError,
     ValidateCandidate,
 )
+from siteplan.validator.shapes import sides_of
 
 TEST_CLASS = "normative"
 
 SUCHITRA_SURVEY = WORKSPACE / "suchitra_survey.pdf"
+SUCHITRA_PROJECT = WORKSPACE / "suchitra.project.json"  # the architect's own: its longest block
+SUCHITRA_LONGEST_M = 56.0
 # Suchitra has no answers file in fixtures; these are test_envelope_client.py's: the road it
 # takes access from is the one drawn to the north-east, its width as drawn, the nala cyan.
 SUCHITRA_ANSWERS = {
@@ -48,7 +56,7 @@ SUCHITRA_ANSWERS = {
     "inside_cure": "no", "name": "Suchitra (survey only)", "mix": "70% 2BHK, 30% 3BHK",
     "floors": "max", "club_house": "yes"}
 NEEDED = {"dhulapally": (SURVEY, ANSWERS, profile_path("counted"), WORKSPACE / WORKSPACE_FILE),
-          "suchitra": (SUCHITRA_SURVEY, WORKSPACE / WORKSPACE_FILE)}
+          "suchitra": (SUCHITRA_SURVEY, SUCHITRA_PROJECT, WORKSPACE / WORKSPACE_FILE)}
 BRIEF = "The most floors the rules allow, 70% 2BHK and the rest 3BHK"
 INTENT = Intent(height=HeightChoice.MOST_THE_RULES_ALLOW,
                 unit_mix_percent={"2BHK": 70, "3BHK": 30})
@@ -84,8 +92,14 @@ def _dhulapally(folder: Path) -> tuple[str, str]:
 
 
 def _suchitra(folder: Path) -> tuple[str, str]:
-    """Suchitra's project as `siteplan start` writes it from the architect's answers."""
+    """Suchitra's project as `siteplan start` writes it from the architect's answers, with the
+    longest block the architect's own project file sets (the workspace sets none)."""
     built = build_project(extract(SUCHITRA_SURVEY), SUCHITRA_ANSWERS, load_defaults(WORKSPACE))
+    longest = json.loads(SUCHITRA_PROJECT.read_text())["layout"]["max_tower_length_m"]
+    assert longest == SUCHITRA_LONGEST_M, "Suchitra's project file changed its longest block"
+    built["layout"]["max_tower_length_m"] = longest
+    built["sources"]["max_tower_length_m"] = f"architect: {SUCHITRA_PROJECT.name}"
+    built["status"]["max_tower_length_m"] = Provenance.USER_CONFIRMED
     save(built, folder / "suchitra.project.json")
     shutil.copy(SUCHITRA_SURVEY, folder / SUCHITRA_SURVEY.name)
     return "suchitra.project.json", SUCHITRA_SURVEY.name
@@ -116,6 +130,24 @@ def test_the_service_proposes_full_alternatives_with_no_legal_fail(site):
             run_id=proposed.run_id, candidate_id=candidate.candidate_id))
         assert checked.refusals == [], (name, candidate.candidate_id, checked.refusals)
         assert checked.legal_verdict is not LegalVerdict.FAIL
+
+
+def test_the_longest_block_the_project_sets_is_kept_and_honoured(site):
+    name, folder, _, proposed, _ = site
+    run = folder / "out" / proposed.run_id
+    longest = DesignBrief.model_validate_json((run / "brief.json").read_text()) \
+        .firm_standards.max_tower_length_m
+    if name == "dhulapally":  # neither its project nor the workspace sets one
+        assert longest is None
+        return
+    assert longest.value == SUCHITRA_LONGEST_M and longest.source_kind is SourceKind.FIRM_STANDARD
+    assert longest.source.startswith("the project file suchitra.project.json")
+    for summary in proposed.candidates:
+        candidate = CandidateLayout.model_validate_json(
+            (run / "candidates" / f"{summary.candidate_id}.json").read_text())
+        for tower in candidate.towers:
+            long_side, _ = sides_of(Polygon(tower.footprint.outer))
+            assert long_side <= SUCHITRA_LONGEST_M + 1e-6, (summary.candidate_id, tower.name)
 
 
 def test_a_debug_run_says_so_and_a_blind_service_refuses_its_inputs(site):

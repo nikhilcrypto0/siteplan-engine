@@ -8,11 +8,16 @@ each other).
 
 - `PageApprover`: the approval page (`approval.ApprovalDesk`) on 127.0.0.1, opened in the
   architect's browser behind a one-time token that never reaches the caller. Only a click on
-  Approve is a yes; a rejection or a timeout is a no. The channel for any host a model drives.
+  Approve is a yes; a rejection or a timeout is a no. The channel for any host a model drives,
+  and the only one `host.ToolHost` takes.
 - `TerminalApprover`: the question on the terminal the architect typed the command in. Only
   "y" or "yes" is a yes, and a terminal whose input is not interactive (piped in, a script, a
   job) is a no without asking. For the architect running `siteplan` by hand, never for a host
   whose terminal a model can type into.
+
+Each says what came back (`decide`): APPROVED, REJECTED, or UNANSWERED when no person answered
+(the page timed out, the terminal could not ask). The service writes that down in its approval
+audit; `approve` is the same question answered yes or no, and only APPROVED is a yes.
 
 No approver here says yes by itself; the tests play the person with their own.
 """
@@ -24,6 +29,7 @@ import sys
 from collections.abc import Callable
 
 from siteplan.approval import ApprovalDesk
+from siteplan.service.models import Decision
 
 log = logging.getLogger("siteplan.service")
 
@@ -41,8 +47,14 @@ class PageApprover:
         self._desk = desk or ApprovalDesk()
         self._timeout_s = timeout_s
 
+    def decide(self, title: str, lines: list[str]) -> Decision:
+        answer = self._desk.answer(title, list(lines), self._timeout_s)
+        if answer is None:
+            return Decision.UNANSWERED
+        return Decision.APPROVED if answer is True else Decision.REJECTED
+
     def approve(self, title: str, lines: list[str]) -> bool:
-        return self._desk.ask(title, list(lines), self._timeout_s)
+        return self.decide(title, lines) is Decision.APPROVED
 
     def close(self) -> None:
         self._desk.close()
@@ -57,10 +69,10 @@ class TerminalApprover:
         # The terminal is looked up when the question is put, not when the host starts.
         self._ask, self._show, self._interactive = ask, show, interactive
 
-    def approve(self, title: str, lines: list[str]) -> bool:
+    def decide(self, title: str, lines: list[str]) -> Decision:
         if not (self._interactive or sys.stdin.isatty)():
             log.info("not asked: the terminal's input is not interactive, so no person answers")
-            return False
+            return Decision.UNANSWERED
         show = self._show or print
         show(f"\n{title}")
         for line in lines:
@@ -68,8 +80,11 @@ class TerminalApprover:
         try:
             answer = (self._ask or input)(QUESTION)
         except EOFError:
-            return False
-        return answer.strip().lower() in YES
+            return Decision.UNANSWERED
+        return Decision.APPROVED if answer.strip().lower() in YES else Decision.REJECTED
+
+    def approve(self, title: str, lines: list[str]) -> bool:
+        return self.decide(title, lines) is Decision.APPROVED
 
     def close(self) -> None:
         pass
