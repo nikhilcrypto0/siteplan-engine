@@ -26,6 +26,8 @@ from collections import Counter
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 
+from shapely.errors import GEOSException, TopologicalError
+
 from siteplan import validator as independent
 from siteplan.contracts import CandidateLayout, ValidationReport
 from siteplan.optimizer.interfaces import Budget, Proposal, SearchContext, Validator
@@ -161,8 +163,8 @@ class FullSearchStrategy:
                 tally.exhausted = True
                 break
             pitch = run.depth_m + max(run.q.road_m, 10.0)
-            ev = evaluate(run, Config(profile, angle, step * pitch / self.limits.offsets,
-                                      tallest, None))
+            ev = _guarded(evaluate, run, Config(profile, angle, step * pitch / self.limits.offsets,
+                                                tallest, None))
             tally.evaluated += 1
             if isinstance(ev, Failure):
                 tally.reasons[ev.reason] += 1
@@ -190,20 +192,20 @@ class FullSearchStrategy:
                 if signature in seen:
                     continue
                 seen.add(signature)
-                result, why = lay_out(run, ev)
+                result, why = _guarded(lay_out, run, ev, failed=(None, ""))
                 attempts += 1
                 if result is None:
                     tally.reasons[why] += 1
                     if ev.config.reserve is None and why.startswith(ROOM_FAILURES):
                         for side in SIDES:
-                            variant = evaluate(run, _reserved(ev.config, side, 1.0))
+                            variant = _guarded(evaluate, run, _reserved(ev.config, side, 1.0))
                             if not isinstance(variant, Failure):
                                 counter += 1
                                 heapq.heappush(heap, (-variant.value, counter, variant))
                     elif ev.config.reserve and ev.config.reserve_scale == 1.0 \
                             and why.startswith(ROOM_FAILURES):
-                        variant = evaluate(run, _reserved(ev.config, ev.config.reserve,
-                                                          RETRY_SCALE))
+                        variant = _guarded(evaluate, run, _reserved(
+                            ev.config, ev.config.reserve, RETRY_SCALE))
                         if not isinstance(variant, Failure):
                             counter += 1
                             heapq.heappush(heap, (-variant.value, counter, variant))
@@ -265,6 +267,17 @@ class FullSearchStrategy:
             chosen.append(max(robust, key=lambda j: (j.scores.yield_score, j.candidate.candidate_id)))
         unique = {j.candidate.candidate_id: j for j in chosen}
         return sorted(unique.values(), key=lambda j: (-j.scores.yield_score, j.candidate.candidate_id))
+
+
+def _guarded(step, run: Run, argument, failed=None):
+    """One step of the search, with a shape the geometry library cannot resolve counted as a
+    configuration that lays nothing, never as a stop: the validator would refuse such a layout
+    anyway, and the other configurations are still worth their turn."""
+    try:
+        return step(run, argument)
+    except (GEOSException, TopologicalError) as error:
+        reason = f"the geometry library could not resolve a shape ({type(error).__name__})"
+        return Failure(reason) if failed is None else (failed[0], reason)
 
 
 def _planning_notes(run: Run) -> list[str]:
