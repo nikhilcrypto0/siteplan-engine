@@ -12,6 +12,8 @@ site number. No model is connected here.
 
 - models.py: the request and response models (extra fields refused, frozen), ServiceError;
 - service.py: `Service` and its nine operations, the workspace it alone reads, the approval;
+- approvers.py: the person channels a host gives it (the approval page, the terminal), one
+  chosen at startup and never falling back to the other;
 - brief.py: the brief's numbers held to its words, the DesignBrief, what the architect approves;
 - judge.py: the independent verdict made again from the stored contracts, and what blocks an
   export;
@@ -23,6 +25,7 @@ runner, checks, access_checks, parking_checks, optimizer/legacy.py) are kept onl
 comparison; nothing here imports them (tests/test_service.py).
 """
 
+from siteplan.service.approvers import PageApprover, TerminalApprover, approver_for
 from siteplan.service.models import (
     CompareCandidates,
     CompareResult,
@@ -53,7 +56,7 @@ from siteplan.service.service import Approver, Service
 
 __all__ = ["Approver", "CompareCandidates", "CompareResult", "EnvelopeResult", "ExportCandidate",
            "ExportResult", "ExportStatus", "HeightChoice", "InspectEnvelope", "Intent",
-           "ListPrototypes", "Mode", "OpenProject", "ProjectResult", "ProposeLayouts",
-           "ProposeResult", "ProposeStatus", "PrototypesResult", "ResolveRules", "RulesResult",
-           "Service", "ServiceError", "StartProject", "StartProjectResult", "ValidateCandidate",
-           "ValidationResult"]
+           "ListPrototypes", "Mode", "OpenProject", "PageApprover", "ProjectResult",
+           "ProposeLayouts", "ProposeResult", "ProposeStatus", "PrototypesResult", "ResolveRules",
+           "RulesResult", "Service", "ServiceError", "StartProject", "StartProjectResult",
+           "TerminalApprover", "ValidateCandidate", "ValidationResult", "approver_for"]
