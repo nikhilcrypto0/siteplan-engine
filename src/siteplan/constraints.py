@@ -247,6 +247,65 @@ REGISTRY: tuple[Constraint, ...] = (
         ("rules.PATHWAY_WIDTH_M", "rules.SUBDIVISION_PATHWAY_M"),
     ),
     Constraint(
+        "Setbacks", "The planting strips of a block below high-rise: along the frontage within "
+                    "the front setback, and on a plot above 300 m² on the remaining sides.",
+        f"{_m(rules.NON_HIGH_RISE_FRONTAGE_STRIP_M)} along the frontage; "
+        f"{_m(rules.NON_HIGH_RISE_PERIPHERY_STRIP_M)} on the other sides above "
+        f"{rules.NON_HIGH_RISE_PERIPHERY_STRIP_ABOVE_SQM:g} m²", Basis.LEGAL_RULE,
+        rules.NON_HIGH_RISE_GREEN_STRIP_CLAUSE,
+        ("rules.NON_HIGH_RISE_FRONTAGE_STRIP_M", "rules.NON_HIGH_RISE_PERIPHERY_STRIP_M",
+         "rules.NON_HIGH_RISE_PERIPHERY_STRIP_ABOVE_SQM"),
+        note="Within the setback, never added to it. A high-rise's strip is rule 7(viii)'s 2 m "
+             "where the setback is 9 m or more. Not applied by generation or the checker.",
+    ),
+    Constraint(
+        "Open space", "Organised open space on a residential plot above 750 m² (rule 5(f)(vi)).",
+        f"{_pct(rules.NON_HIGH_RISE_OPEN_SPACE_FRACTION)} of the site above "
+        f"{rules.NON_HIGH_RISE_OPEN_SPACE_ABOVE_SQM:g} m²; pockets "
+        f"{_m(rules.NON_HIGH_RISE_OPEN_SPACE_MIN_WIDTH_M)} wide and "
+        f"{rules.NON_HIGH_RISE_OPEN_SPACE_MIN_POCKET_SQM:g} m²", Basis.LEGAL_RULE,
+        rules.NON_HIGH_RISE_OPEN_SPACE_CLAUSE,
+        ("rules.NON_HIGH_RISE_OPEN_SPACE_FRACTION", "rules.NON_HIGH_RISE_OPEN_SPACE_ABOVE_SQM",
+         "rules.NON_HIGH_RISE_OPEN_SPACE_MIN_WIDTH_M",
+         "rules.NON_HIGH_RISE_OPEN_SPACE_MIN_POCKET_SQM"),
+        note="A group development scheme and a high-rise site keep 10%. Not applied by "
+             "generation or the checker.",
+    ),
+    Constraint(
+        "Plot", "The corner of a plot of 750 m² and above earmarked for public utilities.",
+        f"{rules.PUBLIC_UTILITY_AREA_M[0]:g} x {_m(rules.PUBLIC_UTILITY_AREA_M[1])}, from "
+        f"{rules.PUBLIC_UTILITY_AREA_FROM_SQM:g} m²", Basis.LEGAL_RULE,
+        rules.PUBLIC_UTILITY_AREA_CLAUSE,
+        ("rules.PUBLIC_UTILITY_AREA_M", "rules.PUBLIC_UTILITY_AREA_FROM_SQM"),
+        note="Not applied by generation or the checker.",
+    ),
+    Constraint(
+        "Setbacks", "Setback a block below high-rise may move from one side to another (a design "
+                    "option), and what a narrow plot may compensate in its front and rear.",
+        f"{_m(rules.SETBACK_TRANSFER_300_TO_750_M)} on 300-750 m², "
+        f"{_m(rules.SETBACK_TRANSFER_ABOVE_750_M)} above, keeping "
+        f"{_m(rules.SETBACK_TRANSFER_MIN_OTHER_SIDE_M)}; narrow plots up to "
+        f"{rules.NARROW_PLOT_MAX_SQM:g} m² four times as long as wide keep "
+        f"{_m(rules.NARROW_PLOT_MIN_SIDE_M[0][1])} of side up to "
+        f"{_m(rules.NARROW_PLOT_MIN_SIDE_M[0][0])}, {_m(rules.NARROW_PLOT_MIN_SIDE_M[1][1])} up to "
+        f"{_m(rules.NARROW_PLOT_MIN_SIDE_M[1][0])}", Basis.LEGAL_RULE,
+        f"{rules.SETBACK_TRANSFER_CLAUSE}; {rules.NARROW_PLOT_CLAUSE}",
+        ("rules.SETBACK_TRANSFER_300_TO_750_M", "rules.SETBACK_TRANSFER_ABOVE_750_M",
+         "rules.SETBACK_TRANSFER_MIN_OTHER_SIDE_M", "rules.NARROW_PLOT_MAX_SQM",
+         "rules.NARROW_PLOT_LENGTH_TO_WIDTH", "rules.NARROW_PLOT_MIN_SIDE_M"),
+        note="Never from the front. Not applied: every side keeps its full Table III figure.",
+    ),
+    Constraint(
+        "Setbacks", "The concessions a block below high-rise may take when its owner surrenders "
+                    "land for road widening, and the minimums TDR relaxation keeps.",
+        "building line 6, 3 or 2 m for a road of 30 m or more, 18 m to under 30 m, under 18 m; "
+        "side and rear 2, 2.5 or 3 m up to 12, 15 or 18 m", Basis.LEGAL_RULE,
+        f"{rules.ROAD_WIDENING_NON_HIGH_RISE_CLAUSE}; {rules.TDR_NON_HIGH_RISE_SETBACK_CLAUSE}",
+        ("rules.ROAD_WIDENING_NON_HIGH_RISE_BUILDING_LINE_M",
+         "rules.ROAD_WIDENING_NON_HIGH_RISE_SIDE_REAR_M"),
+        note="An option the owner takes in place of TDR or extra floors. Not applied.",
+    ),
+    Constraint(
         "Fire", "Residential buildings above this height need the Fire Services Department's "
                 "prior clearance.", _m(rules.FIRE_CLEARANCE_RESIDENTIAL_ABOVE_M),
         Basis.LEGAL_RULE, rules.FIRE_CLEARANCE_CLAUSE,

@@ -263,13 +263,17 @@ NEW_CLAUSES = [
     "TABLE_III_CLAUSE", "TABLE_III_STILT_CLAUSE", "TABLE_III_TOP_TIER_CLAUSE",
     "TABLE_III_BIGGER_ROAD_CLAUSE", "NON_HIGH_RISE_SPACING_CLAUSE", "GROUP_SCHEME_SPACING_CLAUSE",
     "BUILDING_LINE_HIGH_RISE_CLAUSE", "ROAD_WIDTH_CONVERSION_CLAUSE", "TABLE_II_CLAUSE",
-    "GROUP_DEVELOPMENT_ROAD_CLAUSE", "SUBDIVISION_PATHWAY_CLAUSE", "FIRE_CLEARANCE_CLAUSE"]
+    "GROUP_DEVELOPMENT_ROAD_CLAUSE", "SUBDIVISION_PATHWAY_CLAUSE", "FIRE_CLEARANCE_CLAUSE",
+    "NON_HIGH_RISE_GREEN_STRIP_CLAUSE", "NON_HIGH_RISE_OPEN_SPACE_CLAUSE",
+    "PUBLIC_UTILITY_AREA_CLAUSE", "SETBACK_TRANSFER_CLAUSE", "NARROW_PLOT_CLAUSE",
+    "ROAD_WIDENING_NON_HIGH_RISE_CLAUSE", "TDR_NON_HIGH_RISE_SETBACK_CLAUSE"]
 
 
 @pytest.mark.parametrize("name", NEW_CLAUSES)
-def test_a_clause_read_from_the_2012_order_names_the_order_the_rule_and_the_page(name):
+def test_a_clause_names_the_order_the_rule_and_the_page(name):
     clause = getattr(rules, name)
-    assert clause.startswith("G.O.168 rule") and re.search(r"\bpp?\.\d", clause), clause
+    assert clause.startswith("G.O.") and re.search(r"\bpp?\.\d", clause), clause
+    assert "rule" in clause.split("(")[0], clause
 
 
 # What each clause quotes, on the page the clause names. The order has a text layer (the tables
@@ -299,7 +303,76 @@ QUOTED = [
     (17, "The Front setback shall be as per Table-III of rule-5 & Table-IV of rule-7 for Non High"),
     (20, "Non High Rise Buildings"),
     (20, "other than heights and setbacks specified in the National Building Code - 2005"),
+    (10, "A strip of at least 1m greenery / lawn along the frontage of the site"),
+    (10, "within the front setback shall be developed and maintained with greenery"),
+    (10, "a minimum 1m wide continuous green planting strip in the periphery on remaining"),
+    (10, "For Plots above 300sq.m in addition to (iii) above"),
+    (10, "5% of the site area to be developed as organized open space"),
+    (10, "minimum width of 3m with a minimum area of 15sq.m at each location"),
+    (10, "For all residential / institutional / industrial plots above 750sq.m"),
+    (10, "provision shall be made for earmarking an area of 3m X 3m"),
+    (10, "In all plots 750sq.m and above"),
+    (10, "it is permitted to transfer up to 1m of setback from any one side to any other side"),
+    (10, "In case of plots 300 - 750sq.m"),
+    (10, "it is permitted to transfer up to 2m"),
+    (10, "subject to maintaining of a minimum 2.5m setback on other side and a minimum building "
+         "line"),
+    (10, "The transfer of setback from front setback is not allowed"),
+    (10, "For narrow plots having extent not more than 400sq.m and where the length is 4 times of "
+         "the width of the plot"),
+    (11, "subject to maintaining a minimum of side setback of 1m in case of buildings of height up "
+         "to 10m"),
+    (11, "minimum of 2m in case of buildings of height above 10m and up to 15m"),
+    (10, "The setbacks are to be left after leaving the affected area of the plot"),
 ]
+
+
+def test_the_planting_strips_of_rule_5_f_are_1_m_and_the_periphery_one_is_for_plots_above_300_m2():
+    """Rule 5(f)(iiii) and (ivi), p.10. G.O.Ms.No.7 of 2016 does not touch them; its Amendment 8
+    is rule 7(viii), the high-rise strip (2 m where the setback is 9 m or more), which stays."""
+    assert rules.NON_HIGH_RISE_FRONTAGE_STRIP_M == 1.0
+    assert rules.NON_HIGH_RISE_PERIPHERY_STRIP_M == 1.0
+    assert rules.NON_HIGH_RISE_PERIPHERY_STRIP_ABOVE_SQM == 300.0
+    assert rules.PERIPHERAL_GREEN_STRIP_M == 2.0
+    assert rules.PERIPHERAL_GREEN_STRIP_FROM_SETBACK_M == 9.0
+
+
+def test_the_five_percent_open_space_of_rule_5_f_vi_is_not_the_ten_percent_of_a_group_scheme():
+    """Rule 5(f)(vi), p.10: plots above 750 m², 3 m wide and 15 m² a pocket; rule 8(g) and rule
+    7(a)(vii) keep 10% and 50 m²."""
+    assert rules.NON_HIGH_RISE_OPEN_SPACE_FRACTION == 0.05
+    assert rules.NON_HIGH_RISE_OPEN_SPACE_ABOVE_SQM == 750.0
+    assert (rules.NON_HIGH_RISE_OPEN_SPACE_MIN_WIDTH_M,
+            rules.NON_HIGH_RISE_OPEN_SPACE_MIN_POCKET_SQM) == (3.0, 15.0)
+    assert (rules.OPEN_SPACE_MIN_FRACTION, rules.OPEN_SPACE_MIN_POCKET_SQM) == (0.10, 50.0)
+
+
+def test_a_plot_of_750_m2_and_above_earmarks_3_m_by_3_m_for_utilities():
+    assert rules.PUBLIC_UTILITY_AREA_M == (3.0, 3.0)
+    assert rules.PUBLIC_UTILITY_AREA_FROM_SQM == 750.0
+
+
+def test_setback_may_move_between_sides_by_1_m_or_2_m_and_never_from_the_front():
+    """Rule 5(f)(viiii) and (ixi), p.10, and (xi), pp.10-11 for narrow plots: design options,
+    carried as read and applied nowhere."""
+    assert (rules.SETBACK_TRANSFER_300_TO_750_M, rules.SETBACK_TRANSFER_ABOVE_750_M) == (1.0, 2.0)
+    assert rules.SETBACK_TRANSFER_MIN_OTHER_SIDE_M == 2.5
+    assert "never from the front" in rules.SETBACK_TRANSFER_CLAUSE
+    assert (rules.NARROW_PLOT_MAX_SQM, rules.NARROW_PLOT_LENGTH_TO_WIDTH) == (400.0, 4.0)
+    assert rules.NARROW_PLOT_MIN_SIDE_M == ((10.0, 1.0), (15.0, 2.0))
+
+
+def test_the_concessions_of_a_surrendering_owner_are_the_minimums_tdr_relaxation_keeps():
+    """G.O.Ms.No.7 of 2016, Amendment 16 (p.5): building line 6 m for roads of 30 m and above,
+    3 m for 18 m and below 30 m, 2 m under 18 m; side and rear 2 m up to 12 m of height, 2.5 m
+    above 12 and up to 15 m, 3 m above 15 and up to 18 m. G.O.Ms.No.95 of 2026, rule 17(d)(ix),
+    keeps 'minimum setbacks as prescribed in cases of road widening'."""
+    line = rules.ROAD_WIDENING_NON_HIGH_RISE_BUILDING_LINE_M
+    assert line == ((30.0, 6.0), (18.0, 3.0), (0.0, 2.0))
+    side = rules.ROAD_WIDENING_NON_HIGH_RISE_SIDE_REAR_M
+    assert side == ((12.0, 2.0), (15.0, 2.5), (18.0, 3.0))
+    assert "Amendment 16" in rules.ROAD_WIDENING_NON_HIGH_RISE_CLAUSE
+    assert "17(d)(ix)" in rules.TDR_NON_HIGH_RISE_SETBACK_CLAUSE
 
 
 def test_what_the_clauses_quote_is_on_the_page_they_name():

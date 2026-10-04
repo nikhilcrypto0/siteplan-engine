@@ -570,6 +570,98 @@ NON_HIGH_RISE_NBC_CLAUSE = (
     "setbacks; IGBC Green Homes norms for the ventilation of rooms)"
 )
 
+# Rule 5(f), p.10. The order's numbering of this list is irregular: its (iiii) and (ivi) stand
+# where (iv) and (v) belong. "(iiii) A strip of at least 1m greenery / lawn along the frontage of
+# the site within the front setback shall be developed and maintained with greenery." "(ivi) For
+# Plots above 300sq.m in addition to (iii) above, a minimum 1m wide continuous green planting
+# strip in the periphery on remaining sides are required to be developed and maintained within
+# the setback." G.O.Ms.No.7 of 2016 does not touch them (its Amendment 8 is rule 7(viii), the
+# high-rise strip), nor does any later order read.
+NON_HIGH_RISE_FRONTAGE_STRIP_M = 1.0
+NON_HIGH_RISE_PERIPHERY_STRIP_M = 1.0
+NON_HIGH_RISE_PERIPHERY_STRIP_ABOVE_SQM = 300.0
+NON_HIGH_RISE_GREEN_STRIP_CLAUSE = (
+    "G.O.168 rule 5(f)(iiii) and (ivi), p.10 (a 1 m strip of greenery along the frontage within "
+    "the front setback; on a plot above 300 m² a continuous 1 m planting strip on the remaining "
+    "sides within the setback)"
+)
+# Rule 5(f)(vi), p.10: "For all residential / institutional / industrial plots above 750sq.m, in
+# addition to (iii) and (iv) above, 5% of the site area to be developed as organized open space
+# and be utilized as greenery, tot lot or soft landscaping etc., and shall be provided over and
+# above the mandatory setbacks. Such organized open space could be in more than one location and
+# shall be of a minimum width of 3m with a minimum area of 15sq.m at each location." A group
+# development scheme (rule 8(g)) and a high-rise site (rule 7(a)(vii)) keep 10%.
+NON_HIGH_RISE_OPEN_SPACE_FRACTION = 0.05
+NON_HIGH_RISE_OPEN_SPACE_ABOVE_SQM = 750.0
+NON_HIGH_RISE_OPEN_SPACE_MIN_WIDTH_M = 3.0
+NON_HIGH_RISE_OPEN_SPACE_MIN_POCKET_SQM = 15.0
+NON_HIGH_RISE_OPEN_SPACE_CLAUSE = (
+    "G.O.168 rule 5(f)(vi), p.10 (residential, institutional and industrial plots above 750 m²: "
+    "5% of the site as organised open space over and above the setbacks, pockets at least 3 m "
+    "wide and 15 m²)"
+)
+# Rule 5(f)(viii), p.10: "In all plots 750sq.m and above, provision shall be made for earmarking
+# an area of 3m X 3m for the purpose of setting of public utilities like distribution
+# transformer, etc. within the owner's site subject to mandated public safety requirements."
+PUBLIC_UTILITY_AREA_M = (3.0, 3.0)
+PUBLIC_UTILITY_AREA_FROM_SQM = 750.0
+PUBLIC_UTILITY_AREA_CLAUSE = (
+    "G.O.168 rule 5(f)(viii), p.10 (plots of 750 m² and above earmark 3 m x 3 m of the site for "
+    "public utilities such as a distribution transformer)"
+)
+# Rule 5(f)(viiii) and (ixi), p.10, setback transfers, design options and never applied here:
+# "In case of plots 300 - 750sq.m, it is permitted to transfer up to 1m of setback from any one
+# side to any other side without exceeding overall permissible plinth area. The transfer of
+# setback from front setback is not allowed." "In case of plots above 750sq.m, it is permitted to
+# transfer up to 2m of setback from any one side to any other side without exceeding overall
+# permissible plinth area, subject to maintaining of a minimum 2.5m setback on other side and a
+# minimum building line. The transfer of setback from front setback is not allowed."
+SETBACK_TRANSFER_300_TO_750_M = 1.0
+SETBACK_TRANSFER_ABOVE_750_M = 2.0
+SETBACK_TRANSFER_MIN_OTHER_SIDE_M = 2.5
+SETBACK_TRANSFER_CLAUSE = (
+    "G.O.168 rule 5(f)(viiii) and (ixi), p.10 (a plot of 300-750 m² may move up to 1 m of setback "
+    "from one side to another, a plot above 750 m² up to 2 m, keeping 2.5 m on the other side and "
+    "a minimum building line; never from the front)"
+)
+# Rule 5(f)(xi), pp.10-11: "For narrow plots having extent not more than 400sq.m and where the
+# length is 4 times of the width of the plot, the setbacks on sides may be compensated in front
+# and rear setbacks so as to ensure that the overall aggregate setbacks are maintained in the
+# site, subject to maintaining a minimum of side setback of 1m in case of buildings of height up
+# to 10m and minimum of 2m in case of buildings of height above 10m and up to 15m without
+# exceeding overall permissible plinth area. (This Rule shall not be applicable for made-up
+# plots)." The minimum sides are (height up to, metres).
+NARROW_PLOT_MAX_SQM = 400.0
+NARROW_PLOT_LENGTH_TO_WIDTH = 4.0
+NARROW_PLOT_MIN_SIDE_M = ((10.0, 1.0), (15.0, 2.0))
+NARROW_PLOT_CLAUSE = (
+    "G.O.168 rule 5(f)(xi), pp.10-11 (a plot of up to 400 m² four times as long as wide may move "
+    "side setbacks into the front and rear, keeping 1 m of side up to 10 m of height and 2 m up "
+    "to 15 m)"
+)
+# Rule 16(b) as substituted by G.O.Ms.No.7 of 2016, Amendment 16 (p.5): an owner who surrenders
+# land for road widening may take "concessions in setbacks including the front set-back (subject
+# to ensuring a building line of 6 m in respect of roads 30m and above; 3m in respect of roads 18m
+# and below 30m and 2m in respect of roads less than 18m and subject to ensuring minimum side and
+# rear setback of 2m in case of buildings of height up to 12m and 2.5m in case of buildings of
+# height above 12m and upto 15m and 3m for buildings of height above 15m and up to 18m)". The
+# building lines are (road at least, metres); the side and rear setbacks (height up to, metres).
+# G.O.Ms.No.95 of 2026, rule 17(d)(ix) (p.2) lets a non-high-rise building relax its setbacks
+# through TDR "subject to maintaining minimum setbacks as prescribed in cases of road widening",
+# which are these. Options the owner takes, never applied here.
+ROAD_WIDENING_NON_HIGH_RISE_BUILDING_LINE_M = ((30.0, 6.0), (18.0, 3.0), (0.0, 2.0))
+ROAD_WIDENING_NON_HIGH_RISE_SIDE_REAR_M = ((12.0, 2.0), (15.0, 2.5), (18.0, 3.0))
+ROAD_WIDENING_NON_HIGH_RISE_CLAUSE = (
+    "G.O.168 rule 16(b) as substituted by G.O.Ms.No.7 of 2016, Amendment 16, p.5 (a surrendering "
+    "owner may take setback concessions: a building line of 6, 3 or 2 m for a road of 30 m or "
+    "more, 18 m to under 30 m, or under 18 m; side and rear of 2, 2.5 or 3 m up to 12, 15 or 18 m "
+    "of height)"
+)
+TDR_NON_HIGH_RISE_SETBACK_CLAUSE = (
+    "G.O.Ms.No.95 of 2026, rule 17(d)(ix), p.2 (a non-high-rise building may relax its setbacks "
+    "through TDR, keeping the minimums of road widening)"
+)
+
 
 def table_iii_lines(plot_sqm: float) -> tuple[TableIIILine, ...]:
     """The lines of the Table III row a plot falls in. Column 2 reads 'Above - Up to', so a plot is
