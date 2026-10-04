@@ -30,14 +30,12 @@ from shapely.geometry.polygon import orient
 from shapely.ops import unary_union
 
 from siteplan.contracts import BuildableEnvelope, CanonicalSiteModel
-from siteplan.geometry import COMPASS_DEG, opening, straight_runs
+from siteplan.geometry import faces, opening, straight_runs
 
 EMPTY = Polygon()
-# A stretch of the plot line faces the access road within 45 degrees of it, a diagonal label half
-# a compass step more (the validator's reading, zones.faces); a stretch this near either limit
-# keeps the larger setback, so a hair of drawing never puts the smaller one on the wrong side.
-FACING_DEG = 45.0
-DIAGONAL_SLOP_DEG = 22.5
+# A stretch of the plot line faces the access road as `geometry.faces` reads it, the reading the
+# envelope and the validator take; a stretch this near either limit keeps the larger setback, so
+# a hair of drawing never puts the smaller one on the wrong side.
 FACING_DOUBT_DEG = 1.0
 
 
@@ -154,15 +152,11 @@ def _edges(net: Polygon) -> list[tuple[LineString, float]]:
 def _figure(bearing_deg: float, side: str, front_m: float, side_m: float) -> float:
     """The setback a stretch facing this bearing keeps: the front figure where it plainly faces
     the access side, the side figure where it plainly does not, the larger where it is a hair
-    from the line between the two."""
-    centre = COMPASS_DEG[side]
-    reach = FACING_DEG + (DIAGONAL_SLOP_DEG if centre % 90 else 0.0)
-    off = abs((bearing_deg - centre + 180) % 360 - 180)
-    if off < reach - FACING_DOUBT_DEG:
-        return front_m
-    if off > reach + FACING_DOUBT_DEG:
-        return side_m
-    return max(front_m, side_m)
+    from the line between the two (turned FACING_DOUBT_DEG either way, it changes sides)."""
+    turned = {faces(bearing_deg + turn, side) for turn in (-FACING_DOUBT_DEG, FACING_DOUBT_DEG)}
+    if len(turned) > 1:
+        return max(front_m, side_m)
+    return front_m if faces(bearing_deg, side) else side_m
 
 
 def reserve_end(interior_turned: BaseGeometry, side: str, target_sqm: float, min_width_m: float
