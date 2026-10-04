@@ -2,9 +2,8 @@
 pathways, and fire access, where a low block is not held to the NBC high-rise lanes and the report
 says what it is held to instead.
 
-Every band is MADE UP (tests/validator_low_helpers.py); no figure is a value of the order. What the
-validator does for a pathway it cannot see, and for fire access, until contracts 1.2 gives it more
-to go on, is pinned alone in test_validator_low_interim.py.
+Every band is MADE UP (tests/validator_low_helpers.py); no figure is a value of the order. The
+pathways, drawn, are in test_validator_pathways.py and the planting in test_validator_planting.py.
 """
 
 from shapely import affinity
@@ -99,7 +98,7 @@ def test_a_club_house_keeps_the_gap_its_band_and_the_towers_ask():
                  "Club house gap to T1")  # 4.02 m
     assert near.finding.status is Z.FAIL
     assert ">= 4.30 m (the tallest block's side setback)" in near.finding.required
-    assert "rule 5(xiii)" in near.finding.note
+    assert "rule 5(f)(xiii)" in near.finding.note
     just = base.edited(lambda c: _club_west_by(c, 4.7))  # 4.32 m
     assert status(just.report(), "Club house gap to T1") is Z.PASS
 

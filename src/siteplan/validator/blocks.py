@@ -8,7 +8,7 @@ or more and permits nothing lower.
 
 Every check is run once per reading of whether the stilt counts toward the rule height (and, for
 a gap, per reading of which block's gap governs between blocks of different heights; two blocks
-below the high-rise height have no such reading, rule 5(xiii) decides). A tower that is legal
+below the high-rise height have no such reading, rule 5(f)(xiii) decides). A tower that is legal
 only if the stilt does not count is UNVERIFIED and says so; one that is legal under every reading
 is PASS; one that fails under every reading is FAIL.
 """
@@ -434,7 +434,7 @@ def _gap_asked(ca: HeightClass, cb: HeightClass) -> str:
 
 def gap_cell(ca: HeightClass, cb: HeightClass, spacing: str, gap: float) -> Cell:
     """The gap between two blocks on the figures `gap_sources` names. Two blocks below the
-    high-rise height are held to the tallest block's side setback in terms (rule 5(xiii)), which
+    high-rise height are held to the tallest block's side setback in terms (rule 5(f)(xiii)), which
     the cell quotes; every other pair is judged under the reading of mixed-height spacing."""
     need, why = required_gap(ca, cb, spacing)
     shown = f"{gap:.2f} m"
@@ -457,7 +457,7 @@ def gap_cell(ca: HeightClass, cb: HeightClass, spacing: str, gap: float) -> Cell
 
 def gap_clause(ctx: Context, pairs: list[tuple[HeightClass, HeightClass]]) -> str:
     """The spacing clause, and for each pair of bands below the high-rise height the band's table
-    and, where both blocks are below it, rule 5(xiii) too."""
+    and, where both blocks are below it, rule 5(f)(xiii) too."""
     parts = [ctx.rules.spacing.clause]
     for ca, cb in pairs:
         parts += [c.table for c in (ca, cb) if not c.high_rise and c.table]

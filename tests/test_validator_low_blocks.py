@@ -6,8 +6,8 @@ Every band here is MADE UP (tests/validator_low_helpers.py): the validator's log
 before A2 encodes the real Table III, and no figure below is a value of the order. A band the
 rules do not model stays NOT_CHECKED, never PASS, and a band they mark UNVERIFIED settles nothing.
 
-A low block here has no stilt, so the open reading of the stilt does not choose its band; what the
-validator does about the stilt for a low block is pinned alone in test_validator_low_interim.py.
+A low block here usually has no stilt (`flat`), so every reading of the stilt gives it one height;
+test_table_iii_is_read_on_the_height_above_the_stilt_whatever_the_reading holds the stilt itself.
 """
 
 import pytest
@@ -202,7 +202,7 @@ def test_a_block_below_21_m_with_the_stilt_counted_is_not_shifted_a_row_by_it():
 
 
 def test_two_low_blocks_keep_the_tallest_blocks_gap_whatever_the_open_reading_says():
-    """Rule 5(xiii) says whose figure it is, so mixed-height spacing (a Table IV question) does
+    """Rule 5(f)(xiii) says whose figure it is, so mixed-height spacing (a Table IV question) does
     not reach two blocks below the high-rise height: T2 is 12 m (3.1 m), T3 15 m (4.3 m), and a
     4.0 m gap is under the taller block's under every reading, though it would clear the mean of
     the two (3.7 m). The check quotes the rule, page and words."""
@@ -212,8 +212,8 @@ def test_two_low_blocks_keep_the_tallest_blocks_gap_whatever_the_open_reading_sa
     assert c.finding.status is Z.FAIL
     assert c.by_reading[MIXED_HEIGHT_SPACING] == {TALLER: Z.FAIL, EACH_OWN: Z.FAIL}
     assert ">= 4.30 m (the tallest block's side setback)" in c.finding.required
-    assert "rule 5(xiii), p.11" in c.finding.note and RULE_5_XIII in c.finding.note
-    assert "rule 5(xiii)" in c.finding.clause and MADE_UP in c.finding.clause
+    assert "rule 5(f)(xiii), p.11" in c.finding.note and RULE_5_XIII in c.finding.note
+    assert "rule 5(f)(xiii)" in c.finding.clause and MADE_UP in c.finding.clause
 
 
 def test_a_reading_of_spacing_the_validator_does_not_know_never_reaches_two_low_blocks():

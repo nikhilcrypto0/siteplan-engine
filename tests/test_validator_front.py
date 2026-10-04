@@ -140,7 +140,7 @@ def test_the_club_house_keeps_its_bands_front_apart_from_its_sides():
 
 
 def test_where_a_band_gives_no_gap_of_its_own_two_low_blocks_keep_the_sides_figure():
-    """Rule 5(xiii): between two low blocks, the taller block's side setback, never its front."""
+    """Rule 5(f)(xiii): between two low blocks, the taller block's side setback, never its front."""
     bands = (low_band(0, 12, setback=2.3, front=4.1, road=0.0),
              low_band(12, 18, setback=3.7, front=5.3, road=8.4),
              low_band(18, 21, setback=4.9, front=6.7, road=11.6, up_to_inclusive=False))
