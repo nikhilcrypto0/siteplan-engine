@@ -1,7 +1,7 @@
 {
- "schema_version": "1.1",
- "site_ref": "a3ef41f7ee2c7ea9",
- "rules_ref": "75ccdbc7b5a1b77e",
+ "schema_version": "1.2",
+ "site_ref": "fa33ddc081d84bb0",
+ "rules_ref": "3c0d624279bb3524",
  "exclusions": [],
  "bands": [
   {
@@ -10,6 +10,8 @@
    "kind": "NON_HIGH_RISE",
    "modelled": false,
    "setback_m": null,
+   "front_setback_m": null,
+   "permission": "ALLOWED",
    "setback_envelope": [],
    "buildable": [],
    "area_sqm": 0.0,
@@ -22,6 +24,8 @@
    "kind": "HIGH_RISE",
    "modelled": true,
    "setback_m": 7.0,
+   "front_setback_m": null,
+   "permission": "ALLOWED",
    "setback_envelope": [
     {
      "outer": [
@@ -78,6 +82,8 @@
    "kind": "HIGH_RISE",
    "modelled": true,
    "setback_m": 8.0,
+   "front_setback_m": null,
+   "permission": "ALLOWED",
    "setback_envelope": [
     {
      "outer": [
@@ -266,7 +272,7 @@
   }
  ],
  "rule_layers": {
-  "schema_version": "1.1",
+  "schema_version": "1.2",
   "layers": [
    {
     "id": "setback 21 m",
