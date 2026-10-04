@@ -179,7 +179,7 @@ def _ramp_and_bay_layers(ctx: Context) -> list[RuleLayer]:
     def bays(reading: str) -> BaseGeometry:
         zone = setback_zone(ctx, reading)
         bands = [clear_band(t.footprint, lane) for t in ctx.high_rise(reading)]
-        return union_of_all([zone, *bands, ctx.drawn.road_land, ctx.drawn.fire_hardstanding])
+        return union_of_all([zone, *bands, ctx.drawn.paved_land, ctx.drawn.fire_hardstanding])
 
     out = _per_stilt(ctx, "ramps forbidden", LayerKind.RAMP_FORBIDDEN,
                      ctx.rules.parking.ramp_single_min_m.clause,

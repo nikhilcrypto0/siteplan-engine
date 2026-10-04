@@ -31,6 +31,8 @@ CLUB_SETBACK = "Club house: setback"
 SERVED = "Internal roads: every block served"
 PATHWAYS = "Internal roads: blocks up to 12 m (pathways)"
 BELOW = "Fire access below 21 m (rule 15(a)(i))"
+RULE_15_A_I = ('"The building requirements and standards other than heights and setbacks '
+               'specified in the National Building Code - 2005 shall be complied with."')
 
 
 def _counted(inputs):
@@ -175,6 +177,21 @@ def test_a_low_block_is_not_held_to_the_high_rise_fire_lanes():
     assert "T1, T2, T3" in c.finding.measured
     assert "not held to the high-rise lanes" in c.finding.measured
     assert "6 m clear and motorable on all sides" in c.finding.measured  # read from the rules
+
+
+def test_fire_access_below_21_m_is_not_checked_because_the_rule_gives_no_figure():
+    """Rule 15(a)(i) holds a block below the high-rise height to the National Building Code's
+    requirements other than heights and setbacks and gives no figure for what that asks of a fire
+    vehicle's access (A2 read the order so), so nothing numeric is judged: NOT_CHECKED, listed
+    beside the verdict, naming the rule. If a figure is ever carried, this one check is replaced
+    by a PASS or FAIL on it."""
+    report = with_low_bands(all_low(fixture("rectangle"))).report()
+    c = check(report, BELOW)
+    assert c.finding.status is Z.NOT_CHECKED and BELOW in report.not_checked
+    assert "rule 15(a)(i), p.20" in c.finding.note and RULE_15_A_I in c.finding.note
+    assert "no figure" in c.finding.note and "nothing numeric is judged" in c.finding.note
+    assert "other than heights and setbacks" in c.finding.required
+    assert status(report, "Fire access") is Z.INFO  # the high-rise lanes: no high-rise block
 
 
 def test_a_low_blocks_fire_access_never_fails_a_block_for_a_lane_it_is_not_held_to():
