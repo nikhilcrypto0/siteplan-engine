@@ -20,6 +20,7 @@ from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
+from siteplan.basis import Basis
 from siteplan.contracts.common import Provenance, SourceKind, Status
 from siteplan.contracts.design_brief import ParetoPoint
 from siteplan.contracts.resolved_rules import Applicability, Eligibility, LimitBound
@@ -187,6 +188,7 @@ class Fact(Frozen):
     unit: str = ""
     status: Provenance | None = None
     source_kind: SourceKind | None = None
+    basis: Basis | None = None  # what kind of fact it is, where that is not plain from the source
     source: str = ""
 
 

@@ -1,6 +1,6 @@
 """The firm's standards a run is planned and judged with, and where each one comes from.
 
-A standard is the firm's choice, never law (constraints.py classifies each one FIRM_STANDARD):
+A standard is the firm's choice, never law (constraints.py classifies each setting FIRM_STANDARD):
 the stilt and floor heights, the common-area loading, the parking standards (a cellar storey's
 height, the share of each cellar kept for utilities, the deepest the search digs), the longest
 block, and the flat and amenity libraries. Each is taken
@@ -19,10 +19,12 @@ engine's. The libraries have no place in a project file: they are the workspace'
 path finds them beside the project. The design margins are the workspace's too
 (adapters.design_margins), as before.
 
-Every standard reaches the DesignBrief with source kind FIRM_STANDARD (the engine's default
-standing in for the firm's until the firm sets one, as constraints.py has it), its status, and a
-source naming the project file, the workspace file or the engine's default. No request carries a
-standard, so a caller never sets or overrides one.
+Every standard reaches the DesignBrief with its status, a source naming the project file, the
+workspace file or the engine's default, and the kind of fact its value is, kept strictly apart: a
+value the project file or the firm's workspace set is the firm's (source kind FIRM_STANDARD, basis
+FIRM_STANDARD); a value the engine filled in because neither set one is the engine's own (source
+kind ENGINE_DEFAULT, basis ENGINE_DESIGN_ASSUMPTION), never labelled the firm's, whatever its
+status. No request carries a standard, so a caller never sets or overrides one.
 """
 
 from __future__ import annotations
@@ -34,6 +36,7 @@ from enum import StrEnum
 from pydantic import ValidationError
 
 from siteplan.adapters.legacy_site import kind_of
+from siteplan.basis import Basis
 from siteplan.contracts import TowerPrototype
 from siteplan.contracts.common import Provenance, SourceKind
 from siteplan.intake import WORKSPACE_FILE, WorkspaceDefaults
@@ -61,15 +64,27 @@ class Standard:
     status: Provenance
     source: str
 
+    @property
+    def source_kind(self) -> SourceKind:
+        """The firm's when the project file or the workspace set it; else the engine's own."""
+        return (SourceKind.ENGINE_DEFAULT if self.origin is Origin.ENGINE_DEFAULT
+                else SourceKind.FIRM_STANDARD)
+
+    @property
+    def basis(self) -> Basis:
+        return (Basis.ENGINE_DESIGN_ASSUMPTION if self.origin is Origin.ENGINE_DEFAULT
+                else Basis.FIRM_STANDARD)
+
     def fact(self) -> Fact:
-        return Fact(name=f"firm standard: {self.key}", value=self.value, status=self.status,
-                    source_kind=SourceKind.FIRM_STANDARD, source=self.source)
+        return Fact(name=f"standard: {self.key}", value=self.value, status=self.status,
+                    source_kind=self.source_kind, basis=self.basis, source=self.source)
 
     def line(self) -> str:
         """As the architect is shown it before a run."""
         value = "not set" if self.value is None else f"{self.value:g}" if isinstance(
             self.value, float) else str(self.value)
-        return f"Firm standard {self.key}: {value} [{self.status}], from {self.source}"
+        return (f"Standard {self.key}: {value} [{self.status}, {self.basis}], "
+                f"from {self.source}")
 
 
 def resolve(project: Project, defaults: WorkspaceDefaults, project_file: str
@@ -111,7 +126,7 @@ def apply(project: Project, standards: Sequence[Standard]) -> Project:
     sources, status = dict(project.sources), dict(project.status)
     kinds = dict(project.source_kinds)
     for s in standards:
-        sources[s.key], status[s.key], kinds[s.key] = s.source, s.status, SourceKind.FIRM_STANDARD
+        sources[s.key], status[s.key], kinds[s.key] = s.source, s.status, s.source_kind
     return project.model_copy(update={"layout": layout, "sources": sources, "status": status,
                                       "source_kinds": kinds})
 
