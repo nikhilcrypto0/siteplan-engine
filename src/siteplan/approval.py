@@ -97,6 +97,11 @@ class ApprovalDesk:
 
     def ask(self, title: str, lines: list[str], timeout: float) -> bool:
         """Open the page and block until someone clicks. A timeout is a no."""
+        return self.answer(title, lines, timeout) is True
+
+    def answer(self, title: str, lines: list[str], timeout: float) -> bool | None:
+        """As `ask`, telling the two noes apart: True for a click on Approve, False for a click
+        on Reject, None when nobody answered in time."""
         self._start()
         request_id, token = secrets.token_urlsafe(9), secrets.token_urlsafe(24)
         pending = Pending(title=title, lines=list(lines), token=token)
@@ -111,7 +116,8 @@ class ApprovalDesk:
         self._pending.pop(request_id, None)
         if not answered:
             log.info("approval page timed out after %.0f s", timeout)
-        return answered and pending.approved
+            return None
+        return pending.approved
 
     def _lookup(self, path: str, token: str | None) -> Pending | None:
         pending = self._pending.get(path.rsplit("/", 1)[-1])

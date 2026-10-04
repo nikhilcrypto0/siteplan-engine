@@ -3,13 +3,16 @@
 Every number an Intent holds must be written in the brief (guards.ungrounded_values), a flat
 category the firm's library does not have is refused, and a value neither the brief nor the
 project file states is asked for, never guessed. The DesignBrief is the project's own
-(adapters.brief, with the firm's standards from the workspace) with what the brief states in
-place of the project's values; the architect is shown both, each with where it came from.
+(adapters.brief, with the firm's standards as standards.py resolves them: the project file's,
+else the workspace's, else the engine's default) with what the brief states in place of the
+project's values; the architect is shown both, each with where it came from. The brief never
+sets a standard.
 """
 
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
 from pathlib import Path
 
 from siteplan.adapters import brief as brief_of
@@ -18,20 +21,16 @@ from siteplan.contracts.common import Provenance, Sourced, SourceKind
 from siteplan.contracts.design_brief import MIX_SUM_TOLERANCE, HeightMode
 from siteplan.contracts.resolved_rules import WhenOpen
 from siteplan.guards import sanitize_brief, ungrounded_values
-from siteplan.intake import WORKSPACE_FILE, WorkspaceDefaults
+from siteplan.intake import WorkspaceDefaults
 from siteplan.legal.site import readings_of
 from siteplan.library import FlatLibrary
 from siteplan.project import Project
 from siteplan.service import summaries
 from siteplan.service.models import MAX_BRIEF_CHARS, Fact, HeightChoice, Intent, ServiceError
+from siteplan.service.standards import Standard
 from siteplan.site_amenities import AmenityLibrary
 
 log = logging.getLogger("siteplan.service")
-
-# The firm's standards a layout uses, as the project's layout section names them; each comes
-# from the workspace file, or is the engine's default (intake.build_project records them so).
-STANDARDS = ("stilt_height_m", "floor_height_m", "common_area_pct", "cellar_floor_height_m",
-             "cellar_utilities_pct", "max_cellars", "max_tower_length_m")
 
 
 def read_brief(text: str, intent: Intent, project: Project, library: FlatLibrary
@@ -98,17 +97,6 @@ def _percent(intent: Intent) -> str:
     return ", ".join(f"{k} {v:g}%" for k, v in sorted(intent.unit_mix_percent.items()))
 
 
-def standard_facts(project: Project, defaults: WorkspaceDefaults) -> list[Fact]:
-    layout = project.layout
-    out = [Fact(name=f"firm standard: {key}", value=getattr(layout, key),
-                status=project.status.get(key), source=project.sources.get(key, ""))
-           for key in STANDARDS if layout is not None]
-    out += [Fact(name=f"firm standard: {key}", value=getattr(defaults, key),
-                 status=defaults.standard_status(key), source=f"the workspace's {WORKSPACE_FILE}")
-            for key in ("flat_library", "amenities")]
-    return out
-
-
 def brief_facts(project: Project) -> list[Fact]:
     layout = project.layout
     if layout is None:
@@ -130,12 +118,13 @@ def _said(f: Fact) -> str:
 
 
 def approval_lines(*, debug: bool, finished: tuple[str, ...], project_file: str,
-                   survey: Path | None, project: Project, defaults: WorkspaceDefaults,
-                   site: CanonicalSiteModel, brief: DesignBrief, intent: Intent) -> list[str]:
+                   survey: Path | None, project: Project, standards: Sequence[Standard],
+                   left_out: Sequence[str], site: CanonicalSiteModel, brief: DesignBrief,
+                   intent: Intent) -> list[str]:
     """What the architect is shown before anything runs: the site facts that drive the rules,
     each with how it is known (the access road's legal width and the land given up among them),
-    the readings and test mode the project states, the firm's standards, and what the brief
-    asks, saying where each came from."""
+    the readings and test mode the project states, the firm's standards (and any prototype the
+    firm's longest block leaves out), and what the brief asks, saying where each came from."""
     selections, when_open = readings_of(project)
     h, mix = brief.height_intent, brief.program.unit_mix.value
     run = ("Blind: the firm's finished plans are refused" if not debug else
@@ -150,7 +139,8 @@ def approval_lines(*, debug: bool, finished: tuple[str, ...], project_file: str,
     if when_open is WhenOpen.CONSERVATIVE:
         lines.append("The project's conservative test mode: the GHMC parking column while whose "
                      "rules apply is open")
-    lines += [_said(f) for f in standard_facts(project, defaults)]
+    lines += [s.line() for s in standards]
+    lines += list(left_out)
     height = ("the most the rules allow" if h.mode is HeightMode.MAX_LEGAL
               else f"stilt + {h.floors_above_stilt} floors")
     lines += [f"Height ({'the brief' if intent.height else 'the project file'}): {height}",
