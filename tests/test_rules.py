@@ -236,13 +236,15 @@ def test_below_21_m_the_order_gives_one_fire_figure_and_it_is_the_clearance_abov
     assert "other than heights and setbacks" in rules.NON_HIGH_RISE_NBC_CLAUSE
 
 
-def test_the_front_clause_the_engine_cites_is_the_commercial_courtyard_rule_not_the_high_rise_one():
-    """FRONT_SETBACK_CLAUSE cites p.17(b), which is rule 12(b), 'U' type commercial buildings with
-    a central courtyard. The high-rise front is rule 7(a)(xi), p.14: the higher of Table IV
-    column 4 and the Building Line of Table III."""
-    assert "p.17" in rules.FRONT_SETBACK_CLAUSE
-    assert "7(a)(xi)" in rules.BUILDING_LINE_HIGH_RISE_CLAUSE
-    assert "higher" in rules.BUILDING_LINE_HIGH_RISE_CLAUSE
+def test_the_high_rise_front_is_rule_7_a_xi_and_not_the_commercial_courtyard_rule_it_was_cited_to():
+    """The engine first cited p.17(b) for the front. That is rule 12(b), 'U' type commercial
+    buildings with a central courtyard (the order's rule 12 heading is on p.17, above it). The
+    high-rise front is rule 7(a)(xi), p.14: the higher of Table IV column 4 and the Building Line
+    of Table III."""
+    clause = rules.FRONT_SETBACK_CLAUSE
+    assert "7(a)(xi)" in clause and "p.14" in clause and "higher" in clause
+    assert "p.17" not in clause and "12(b)" not in clause
+    assert clause == rules.BUILDING_LINE_HIGH_RISE_CLAUSE
 
 
 def test_height_rules_answers_table_iii_when_it_is_given_the_plot_and_the_road():

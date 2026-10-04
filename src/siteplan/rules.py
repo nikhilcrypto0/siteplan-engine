@@ -115,12 +115,18 @@ PARKING_FLOOR_HEIGHT_CLAUSE = (
 
 BLOCK_SPACING_CLAUSE = "G.O.168 rule 7(a)(xii) (same as Table IV column 4)"
 
-# The front setback, read on 2026-10-01 from the 2012 text (p.17, clause (b)): "The Front setback
-# shall be as per Table-III of rule-5 & Table-IV of rule-7 for Non High Rise & High Rise
-# buildings respectively." So a high-rise keeps Table IV's column 4 at the front too, and the
-# engine's all-round figure is the rule as written, not a reading.
+# The front setback of a high-rise, rule 7(a)(xi), p.14: "The front open space shall be on the
+# basis of the abutting road width and shall be either as given in Col. 4 of above Table - IV or
+# the Building Line given in Table - III of rule-5 whichever is higher." Table IV's column 4 all
+# round, the front included, is therefore the rule except where the Building Line is higher: a
+# block of exactly 21 m on a road above 30 m (7.5 m against 7 m). The engine first read the front
+# on 2026-10-01 from p.17, clause (b), "The Front setback shall be as per Table-III of rule-5 &
+# Table-IV of rule-7 for Non High Rise & High Rise buildings respectively", which is rule 12(b),
+# written for 'U' type commercial buildings with a central courtyard; the citation was corrected
+# on 2026-10-03 (stream A2) and the figure it gave stands.
 FRONT_SETBACK_CLAUSE = (
-    "G.O.168 p.17, clause (b) (the front setback of a high-rise is as per Table IV of rule 7)"
+    "G.O.168 rule 7(a)(xi), p.14 (a high-rise's front open space is the higher of Table IV "
+    "column 4 and the Building Line of Table III, on the basis of the abutting road width)"
 )
 
 # Setbacks are measured on the net plot, after the road-widening strip. Rule 7(a)(iii), read on
@@ -494,16 +500,12 @@ GROUP_SCHEME_SPACING_CLAUSE = (
     "G.O.168 rule 8(j), p.15 (in a Group Development Scheme the space between two blocks equals "
     "Column 10 of Table III or Column 4 of Table IV, as the case may be)"
 )
-# Rule 7(a)(xi), p.14: "The front open space shall be on the basis of the abutting road width and
-# shall be either as given in Col. 4 of above Table - IV or the Building Line given in Table - III
-# of rule-5 whichever is higher." The 2012 order's rule 12(b), p.17, which says the front setback is
-# "as per Table-III of rule-5 & Table-IV of rule-7 for Non High Rise & High Rise buildings
-# respectively", is written for 'U' type commercial buildings with a central courtyard, so it is
-# not the front rule for apartments (FRONT_SETBACK_CLAUSE above cites it as if it were).
-BUILDING_LINE_HIGH_RISE_CLAUSE = (
-    "G.O.168 rule 7(a)(xi), p.14 (a high-rise's front open space is the higher of Table IV "
-    "column 4 and the Building Line of Table III, on the basis of the abutting road width)"
-)
+# Rule 7(a)(xi), p.14, quoted at FRONT_SETBACK_CLAUSE above, of which this is the other name: the
+# high-rise front, as the resolver and the bands carry it. The 2012 order's rule 12(b), p.17, which
+# says the front setback is "as per Table-III of rule-5 & Table-IV of rule-7 for Non High Rise &
+# High Rise buildings respectively", is for 'U' type commercial buildings with a central
+# courtyard, so it is not the front rule for apartments.
+BUILDING_LINE_HIGH_RISE_CLAUSE = FRONT_SETBACK_CLAUSE
 # Rule 5(f)(xvii), the second paragraph so numbered, p.11: "For the purpose of these Rules, the
 # following conversion from M.K.S. and F.P.S. system shall be reckoned for the road widths only".
 # The pairs are the order's own (metres, feet); a width the engine converted from feet (units.py,
