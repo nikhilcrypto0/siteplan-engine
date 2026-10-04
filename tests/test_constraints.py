@@ -92,6 +92,8 @@ NOT_DOMAIN = {
                                              "the search's ceiling: the rules decide the height",
     "service.models.RUN_ID_CHARS": "the length of a run's id",
     "service.models.MAX_TEXT_CHARS": "how much text read off a drawing a reply returns",
+    "service.approvers.PAGE_TIMEOUT_S": "how long the architect has to answer the approval "
+                                        "page; an unanswered page is a no",
 }
 # The request, standards and config models: each numeric default stands in for a choice, so
 # every one is classified, a 0 or a 1 included.
