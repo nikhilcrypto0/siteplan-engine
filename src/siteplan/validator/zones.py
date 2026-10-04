@@ -9,6 +9,7 @@ them is taken from an envelope or from the generator's rule layers.
 from __future__ import annotations
 
 import math
+from dataclasses import dataclass
 from itertools import combinations
 
 from shapely.geometry import LineString, Polygon
@@ -97,15 +98,70 @@ def gap_zones(ctx: Context, reading: str, spacing: str) -> list[tuple[str, BaseG
     return out
 
 
-def green_strip_zone(ctx: Context, reading: str) -> BaseGeometry | None:
-    """The peripheral strip the rules ask for where the setback reaches 9 m; None when the
-    setback is shallower under this reading (or unknown), and so asks for none."""
-    depth = deepest_setback_m(ctx, reading)
+@dataclass(frozen=True)
+class StripAsk:
+    """A planting strip the blocks' bands ask: how wide, and along which stretches of the plot
+    line (the front, the other sides, or both). It lies within the setbacks and is never added to
+    them."""
+
+    width_m: float
+    front: bool
+    others: bool
+    given: bool  # the band says so (`Band.green_strip_m`), rather than the high-rise rule below
+
+
+def strips_asked(ctx: Context, reading: str) -> list[StripAsk]:
+    """The planting each block's band asks under a reading of the stilt. A band that carries a
+    strip (`green_strip_m`, along all sides or the frontage) says it itself; a high-rise band that
+    carries none is held to the high-rise strip, rule 7(a)(viii): `width_m` where its setback
+    reaches `where_setback_from_m`, on the stretches where it does. A band below the high-rise
+    height that carries none asks none."""
     green = ctx.rules.green_strip
-    if depth is None or depth < green.where_setback_from_m.value:
+    found: list[StripAsk] = []
+    for cls in ctx.classes.get(reading, {}).values():
+        if not cls.settled:
+            continue
+        band = cls.band
+        if band.green_strip_m is not None:
+            if band.green_strip_m > 0:
+                found.append(StripAsk(band.green_strip_m, True, band.green_strip_sides == "ALL",
+                                      True))
+        elif cls.high_rise:
+            where = green.where_setback_from_m.value
+            front, others = cls.front_m >= where, cls.setback_m >= where
+            if front or others:
+                found.append(StripAsk(green.width_m.value, front, others, False))
+    return list(dict.fromkeys(found))
+
+
+def green_strip_zones(ctx: Context, reading: str) -> tuple[BaseGeometry, BaseGeometry] | None:
+    """The ground that must be planted under a reading, as (certainly, possibly); None when no
+    band asks a strip. A strip along the whole plot line, or along the front or the other sides
+    where the access road's side is known, is certain. Where that side is not known a strip along
+    only part of the plot line cannot be placed: the whole periphery of its width is possible."""
+    asked = strips_asked(ctx, reading)
+    if not asked:
         return None
-    width = green.width_m.value
-    return ctx.net.difference(mitred(ctx.net, -width))
+    groups = edge_groups(ctx)
+    certain: list[BaseGeometry] = []
+    possible: list[BaseGeometry] = []
+    for ask in asked:
+        around = ctx.net.difference(mitred(ctx.net, -ask.width_m))
+        if ask.front and ask.others:
+            certain.append(around)
+        elif groups is None:
+            possible.append(around)
+        else:
+            edges = groups[0] if ask.front else groups[1]
+            certain.append(edges.buffer(ask.width_m).intersection(ctx.net))
+    return union_of_all(certain), union_of_all(possible)
+
+
+def green_strip_zone(ctx: Context, reading: str) -> BaseGeometry | None:
+    """The ground a strip may be asked of, certainly or possibly (for the rule layers and the
+    ledger); None when no band asks one."""
+    zones = green_strip_zones(ctx, reading)
+    return None if zones is None else union_of_all(list(zones))
 
 
 def compass_name(bearing_deg: float) -> str:
