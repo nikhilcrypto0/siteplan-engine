@@ -24,6 +24,7 @@ from siteplan.contracts.resolved_rules import (
     OPEN_SPACE_BASIS,
     STILT_IN_RULE_HEIGHT,
     Applicability,
+    BandKind,
     Eligibility,
     HeightMeasure,
     LimitBound,
@@ -109,8 +110,15 @@ def test_dhulapally_on_its_60_ft_road_may_rise_to_30_m_of_rule_height():
     assert rules.height.high_rise_from_m.value == 21.0
     assert rules.height.high_rise.eligibility is Eligibility.ALLOWED
     assert rules.category.group_development.value and rules.circulation.applies.value
-    assert [b.setback_m for b in rules.height.bands if b.modelled] == [
+    high = [b for b in rules.height.bands if b.kind is BandKind.HIGH_RISE]
+    assert [b.setback_m for b in high] == [
         7, 8, 9, 10, 11, 12, 13, 14, 16, 17, 18, 20]  # 7 m: a block of exactly 21 m
+    # below 21 m: Table III's row for a plot above 2,500 m², the front 4 m (60 ft reckoned as 18 m)
+    low = [b for b in rules.height.bands if b.kind is BandKind.NON_HIGH_RISE]
+    assert [(b.up_to_m, b.setback_m, b.front_setback_m, b.min_road_m) for b in low[:3]] == [
+        (7.0, 5.0, 4.0, 12.0), (15.0, 6.0, 4.0, 12.0), (18.0, 7.0, 4.0, 12.0)]
+    top = rules.height.permissible_non_high_rise()
+    assert (top.up_to_m, top.up_to_inclusive) == (18.0, False)
 
 
 def test_dhulapally_keeps_the_dead_end_street_join_and_airport_open_not_guessed():
@@ -184,8 +192,10 @@ def test_the_debug_envelope_cuts_each_band_from_the_firms_net_outline():
     env = envelope(site, rules)
     net = site.net_plot.value.to_shapely()
     assert net.area == pytest.approx(18_968.9, rel=1e-3)
-    below, exactly, *high = env.bands
-    assert not below.modelled and below.kind.value == "NON_HIGH_RISE"
+    *low, exactly = env.bands[:5]
+    high = env.bands[5:]
+    assert [b.kind for b in low] == [BandKind.NON_HIGH_RISE] * 4 and all(b.modelled for b in low)
+    assert [b.setback_m for b in low[:3]] == [5.0, 6.0, 7.0] and low[3].setback_m is None
     assert (exactly.above_m, exactly.up_to_m, exactly.setback_m) == (21.0, 21.0, 7.0)
     assert exactly.area_sqm > high[0].area_sqm  # the 21 m block's 7 m leaves more land
     assert [(b.up_to_m, b.setback_m) for b in high] == [(24.0, 8.0), (27.0, 9.0), (30.0, 10.0)]
@@ -213,7 +223,8 @@ def test_the_northern_arm_is_in_every_width_profile_and_held_back_by_nothing():
                  if r.shape.to_shapely().centroid.y > 180]  # the tail, above the main body
         assert north, profile.applies_to
         arms[profile.applies_to] = max(north, key=lambda r: r.area_sqm)
-    assert list(arms) == ["net plot", "21 m", "21-24 m", "24-27 m", "27-30 m"]
+    assert list(arms) == ["net plot", "0-7 m", "7-15 m", "15-18 m", "21 m", "21-24 m",
+                          "24-27 m", "27-30 m"]
     assert 20 < arms["net plot"].max_inscribed_width_m < 30  # about 24 m where it tapers
     bands = ["21 m", "21-24 m", "24-27 m", "27-30 m"]
     widths = [arms[b].max_inscribed_width_m for b in bands]
@@ -222,7 +233,8 @@ def test_the_northern_arm_is_in_every_width_profile_and_held_back_by_nothing():
     # 18.6 m wide at 21 m (a 7 m setback), about 12 m at 27-30 m (10 m)
     assert 10 < widths[-1] < widths[0] < 20 and all(a > 900 for a in areas)
     assert env.exclusions == [] and all(r.length_m > 40 for r in arms.values())
-    for band, key in zip(env.bands[1:], bands, strict=True):  # kept in the buildable land
+    high = [b for b in env.bands if b.kind is BandKind.HIGH_RISE]
+    for band, key in zip(high, bands, strict=True):  # kept in the buildable land
         kept = _land(band.buildable).intersection(arms[key].shape.to_shapely())
         assert kept.area == pytest.approx(arms[key].area_sqm, rel=0.02)
     assert not [layer for layer in env.rule_layers.layers
@@ -335,7 +347,9 @@ def test_suchitras_12_38_m_road_allows_24_m_and_says_the_width_is_only_a_drawing
     assert limit.evaluate(24.0) is Status.UNVERIFIED and limit.beyond(27.0)
     assert rules.height.high_rise.eligibility is Eligibility.UNVERIFIED
     env = envelope(site, rules)
-    assert [b.up_to_m for b in env.bands if b.modelled] == [21.0, 24.0]
+    assert [b.up_to_m for b in env.bands if b.kind is BandKind.HIGH_RISE] == [21.0, 24.0]
+    low = [b for b in rules.height.bands if b.kind is BandKind.NON_HIGH_RISE]
+    assert {b.status for b in low[:3]} == {Provenance.UNVERIFIED}  # the same drawing value
     eligibility = next(f for f in env.facts if f.rule == "High-rise eligibility")
     assert eligibility.status is Status.UNVERIFIED  # a high-rise rests on an unverified road
     assert next(f for f in env.facts if f.rule == "Rule-height limit").status is Status.UNVERIFIED

@@ -16,6 +16,7 @@ from pathlib import Path
 from shapely.geometry import LineString, Polygon, box
 from shapely.ops import unary_union
 
+from siteplan import rules
 from siteplan.adapters import Readings, brief, candidate_from_option, request, site_model
 from siteplan.contracts import CandidateLayout, TowerPrototype, ValidationReport
 from siteplan.contracts.common import Finding, Line, Shape, Status, digest, shapes_from
@@ -143,12 +144,16 @@ def single_core_prototype() -> TowerPrototype:
 
 
 def _small_candidate(spec: dict, refs: dict, readings: Readings) -> CandidateLayout:
-    proto = single_core_prototype()
+    """A block of 5 floors on 3,000 m², laid to Table III (row 11 up to 15 m: 6 m on the sides,
+    the 3 m Building Line of its 12 m road in front): the open space between the block and the
+    north setback, and the 1 m strip round the plot broken only where the driveway comes in."""
+    proto, strip_m, net = single_core_prototype(), rules.NON_HIGH_RISE_FRONTAGE_STRIP_M, spec["net"]
     floors, (cx, cy) = spec["floors"], (30.0, 25.0)
     footprint = box(cx - 15.5, cy - 12.065, cx + 15.5, cy + 12.065)
-    driveway, gate = box(25, 0, 29.5, cy - 12.065), box(25, 0, 29.5, 0.5)
-    pocket = box(2, 40, 58, 48)
-    rest = spec["net"].difference(footprint).difference(driveway).difference(pocket)
+    driveway, gate = box(25, 0, 29.5, cy - 12.065), box(25, 0, 29.5, strip_m)
+    pocket = box(6, 37.5, 54, 44)  # 312 m²: clear of the 6 m setback, the block and the road
+    strip = net.difference(net.buffer(-strip_m)).difference(driveway)
+    rest = net.difference(unary_union([footprint, driveway, pocket, strip]))
     by_type = {k: n * floors for k, n in proto.per_floor.flats_by_type.items()}
     gross = proto.per_floor.gross_floor_sqm * floors
     return CandidateLayout(
@@ -160,7 +165,7 @@ def _small_candidate(spec: dict, refs: dict, readings: Readings) -> CandidateLay
                                 "shapes": [Shape.from_shapely(driveway)],
                                 "declared_width_m": 4.5}],
                      "gates": [{"shape": Shape.from_shapely(gate), "side": "S", "width_m": 4.5}]},
-        program={"open_space": [Shape.from_shapely(pocket)]},
+        program={"open_space": [Shape.from_shapely(pocket)], "green_strip": shapes_from(strip)},
         partition={"net_area_sqm": spec["net"].area, "entries": [
             {"use": "TOWER", "shapes": [Shape.from_shapely(footprint)],
              "area_sqm": footprint.area, "ref": "T1"},
@@ -168,6 +173,8 @@ def _small_candidate(spec: dict, refs: dict, readings: Readings) -> CandidateLay
              "ref": "road-1"},
             {"use": "SOFT_OPEN_SPACE", "shapes": [Shape.from_shapely(pocket)],
              "area_sqm": pocket.area, "ref": "tot-lot 1"},
+            {"use": "GREEN_STRIP", "shapes": shapes_from(strip), "area_sqm": strip.area,
+             "ref": "green strip"},
             {"use": "UNALLOCATED", "shapes": shapes_from(rest), "area_sqm": rest.area,
              "reason": "made-up fixture: ground left without a use"}]},
         rule_layers={"layers": []},
@@ -180,9 +187,9 @@ def _small_candidate(spec: dict, refs: dict, readings: Readings) -> CandidateLay
                  "open_space_share_pct": round(pocket.area / spec["net"].area * 100, 2),
                  "mix_error": mix_error(proto.per_floor.flats_by_type, {"2BHK": 0.7,
                                                                         "3BHK": 0.3})},
-        generator_claims=[Finding("Setbacks (Table III)", Status.UNVERIFIED, "14.5 m least",
-                                  "Table III (rule 5)", "G.O.168 rule 5",
-                                  "below 21 m: Table III is not encoded yet")],
+        generator_claims=[Finding("Setbacks (Table III)", Status.PASS, "12.9 m least",
+                                  ">= 6 m on the sides, >= 3 m in front", rules.TABLE_III_CLAUSE,
+                                  "row 11 up to 15 m, read above the stilt")],
         caveats=["made-up fixture: a non-high-rise block on a site under 4,000 m²"])
 
 

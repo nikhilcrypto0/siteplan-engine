@@ -1,10 +1,10 @@
 {
- "schema_version": "1.1",
+ "schema_version": "1.2",
  "candidate_id": "small_plot-1",
- "site_ref": "a3ef41f7ee2c7ea9",
- "rules_ref": "75ccdbc7b5a1b77e",
- "brief_ref": "ce0812345ac34130",
- "envelope_ref": "41dcaed41bebeaa2",
+ "site_ref": "fa33ddc081d84bb0",
+ "rules_ref": "a48a5919c4061e63",
+ "brief_ref": "53e640cea44f2082",
+ "envelope_ref": "cae0d864fc664ab6",
  "strategy": "hand-made",
  "seed": null,
  "interpretation_basis": {
@@ -13,7 +13,7 @@
  },
  "prototypes_used": [
   {
-   "schema_version": "1.1",
+   "schema_version": "1.2",
    "id": "single-core-small-4",
    "family": "SINGLE_CORE_SMALL",
    "source_kind": "ENGINE_DEFAULT",
@@ -324,11 +324,11 @@
       ],
       [
        29.5,
-       0.5
+       1.0
       ],
       [
        25.0,
-       0.5
+       1.0
       ],
       [
        25.0,
@@ -349,26 +349,80 @@
    {
     "outer": [
      [
-      58.0,
-      40.0
+      54.0,
+      37.5
      ],
      [
-      58.0,
-      48.0
+      54.0,
+      44.0
      ],
      [
-      2.0,
-      48.0
+      6.0,
+      44.0
      ],
      [
-      2.0,
-      40.0
+      6.0,
+      37.5
      ]
     ],
     "holes": []
    }
   ],
-  "green_strip": [],
+  "green_strip": [
+   {
+    "outer": [
+     [
+      0.0,
+      50.0
+     ],
+     [
+      60.0,
+      50.0
+     ],
+     [
+      60.0,
+      0.0
+     ],
+     [
+      29.5,
+      0.0
+     ],
+     [
+      29.5,
+      1.0
+     ],
+     [
+      59.0,
+      1.0
+     ],
+     [
+      59.0,
+      49.0
+     ],
+     [
+      1.0,
+      49.0
+     ],
+     [
+      1.0,
+      1.0
+     ],
+     [
+      25.0,
+      1.0
+     ],
+     [
+      25.0,
+      0.0
+     ],
+     [
+      0.0,
+      0.0
+     ]
+    ],
+    "holes": []
+   }
+  ],
   "club_house": null,
   "amenities": [],
   "amenities_missed": [],
@@ -377,7 +431,7 @@
   "bays": []
  },
  "partition": {
-  "schema_version": "1.1",
+  "schema_version": "1.2",
   "net_area_sqm": 3000.0,
   "tolerance": 0.005,
   "entries": [
@@ -447,27 +501,89 @@
      {
       "outer": [
        [
-        58.0,
-        40.0
+        54.0,
+        37.5
        ],
        [
-        58.0,
-        48.0
+        54.0,
+        44.0
        ],
        [
-        2.0,
-        48.0
+        6.0,
+        44.0
        ],
        [
-        2.0,
-        40.0
+        6.0,
+        37.5
        ]
       ],
       "holes": []
      }
     ],
-    "area_sqm": 448.0,
+    "area_sqm": 312.0,
     "ref": "tot-lot 1",
+    "tags": [],
+    "reason": null
+   },
+   {
+    "use": "GREEN_STRIP",
+    "shapes": [
+     {
+      "outer": [
+       [
+        0.0,
+        50.0
+       ],
+       [
+        60.0,
+        50.0
+       ],
+       [
+        60.0,
+        0.0
+       ],
+       [
+        29.5,
+        0.0
+       ],
+       [
+        29.5,
+        1.0
+       ],
+       [
+        59.0,
+        1.0
+       ],
+       [
+        59.0,
+        49.0
+       ],
+       [
+        1.0,
+        49.0
+       ],
+       [
+        1.0,
+        1.0
+       ],
+       [
+        25.0,
+        1.0
+       ],
+       [
+        25.0,
+        0.0
+       ],
+       [
+        0.0,
+        0.0
+       ]
+      ],
+      "holes": []
+     }
+    ],
+    "area_sqm": 211.5,
+    "ref": "green strip",
     "tags": [],
     "reason": null
    },
@@ -477,16 +593,28 @@
      {
       "outer": [
        [
-        60.0,
-        50.0
+        25.0,
+        1.0
        ],
        [
-        60.0,
-        0.0
+        1.0,
+        1.0
+       ],
+       [
+        1.0,
+        49.0
+       ],
+       [
+        59.0,
+        49.0
+       ],
+       [
+        59.0,
+        1.0
        ],
        [
         29.5,
-        0.0
+        1.0
        ],
        [
         29.5,
@@ -511,43 +639,31 @@
        [
         25.0,
         12.935
-       ],
-       [
-        25.0,
-        0.0
-       ],
-       [
-        0.0,
-        0.0
-       ],
-       [
-        0.0,
-        50.0
        ]
       ],
       "holes": [
        [
         [
-         58.0,
-         48.0
+         6.0,
+         37.5
         ],
         [
-         2.0,
-         48.0
+         54.0,
+         37.5
         ],
         [
-         2.0,
-         40.0
+         54.0,
+         44.0
         ],
         [
-         58.0,
-         40.0
+         6.0,
+         44.0
         ]
        ]
       ]
      }
     ],
-    "area_sqm": 1745.7625000000003,
+    "area_sqm": 1670.2624999999998,
     "ref": null,
     "tags": [],
     "reason": "made-up fixture: ground left without a use"
@@ -555,7 +671,7 @@
   ]
  },
  "rule_layers": {
-  "schema_version": "1.1",
+  "schema_version": "1.2",
   "layers": []
  },
  "metrics": {
@@ -569,19 +685,19 @@
   "flats_own_sqft": 27825.0,
   "common_core_sqft": 12434.0,
   "built_up_sqft": 40259.0,
-  "open_space_sqm": 448.0,
-  "open_space_share_pct": 14.93,
+  "open_space_sqm": 312.0,
+  "open_space_share_pct": 10.4,
   "mix_error": 0.19999999999999998,
   "extra": {}
  },
  "generator_claims": [
   {
    "rule": "Setbacks (Table III)",
-   "status": "UNVERIFIED",
-   "measured": "14.5 m least",
-   "required": "Table III (rule 5)",
-   "clause": "G.O.168 rule 5",
-   "note": "below 21 m: Table III is not encoded yet"
+   "status": "PASS",
+   "measured": "12.9 m least",
+   "required": ">= 6 m on the sides, >= 3 m in front",
+   "clause": "G.O.168 rule 5, Table III, pp.9-10 (non-high-rise setbacks and permissible height, by plot size and abutting road); parking column as amended by G.O.Ms.No.7 of 2016, Amendment 6",
+   "note": "row 11 up to 15 m, read above the stilt"
   }
  ],
  "scores": {},

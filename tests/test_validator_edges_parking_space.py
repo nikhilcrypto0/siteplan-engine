@@ -6,6 +6,7 @@ the fire bands that happen to stand beside every pocket and bay on the fixtures.
 import pytest
 from shapely.ops import unary_union
 from validator_helpers import check, fixture, move_tower, rectangle, select, status
+from validator_low_helpers import unmodelled_below
 
 from siteplan.contracts.candidate import SiteProgram
 from siteplan.contracts.common import Status
@@ -237,4 +238,5 @@ def test_where_the_setback_is_not_known_the_share_cannot_be_passed():
     def low(candidate):
         for t in candidate.towers:
             t.floors_above_stilt = 4  # 15 m
-    assert status(fixture("rectangle").edited(low).report(), OPEN_SPACE) is Z.UNVERIFIED
+    unknown = unmodelled_below(fixture("rectangle")).edited(low)  # no setback below 21 m
+    assert status(unknown.report(), OPEN_SPACE) is Z.UNVERIFIED

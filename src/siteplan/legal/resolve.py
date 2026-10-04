@@ -32,20 +32,21 @@ from siteplan.contracts.resolved_rules import (
     WhenOpen,
 )
 from siteplan.contracts.site_model import CanonicalSiteModel, Road
+from siteplan.legal import non_high_rise
 from siteplan.legal.readings import OPEN_SPACE_READINGS, interpretations
 from siteplan.provenance import confirmed, weakest
 
 # The airport clause lives in heights.py too; tests/test_resolve.py keeps the two the same.
 AIRPORT_CLAUSE = "G.O.168 rule 3(d) (airport and Air Force height limits)"
-TABLE_III_CLAUSE = "G.O.168 rule 5, Table III"
 LAW = {"basis": Basis.LEGAL_RULE, "status": Provenance.VERIFIED}
 YES_NO = {True: "yes", False: "no", None: "not known"}
 APPLICABILITY = {True: Applicability.APPLIES, False: Applicability.DOES_NOT_APPLY,
                  None: Applicability.UNKNOWN}
 # What a high-rise's prohibition does not say (the user's clarification of 2026-10-03).
 PROHIBITED_NOTE = ("No building of the high-rise height or more may stand here. That permits "
-                   "nothing below it: the permissible lower height, its Table III setbacks, road "
-                   "conditions and spacing are not encoded yet (A2) and not validated (D2).")
+                   "nothing below it: what may be built below it is the non-high-rise bands' "
+                   "(Table III: the permissible height, its setbacks, the road it asks and the "
+                   "spacing), each band with its own permission.")
 
 # The orders ResolvedRules rests on, and how each was read (AGENTS.md); the unread ones are
 # listed because they may amend what is relied on.
@@ -53,20 +54,30 @@ ORDERS = (
     ("G.O.Ms.No.168 of 2012", "TEXT", "the base rules: the 2012 wording stands where no later "
      "order replaced it"),
     ("G.O.Ms.No.7 of 2016", "TEXT", "green strip, road-widening concessions, amenities, EWS, "
-     "river buffer"),
-    ("G.O.Ms.No.50 of 2019", "SCAN", "Table IV substituted"),
+     "river buffer; Table III's parking column and the stilt's use (rule 5)"),
+    ("G.O.Ms.No.50 of 2019", "SCAN", "Table IV substituted; rule 15(a)(i) moved to NBC 2016"),
     ("G.O.Ms.No.65 of 2019", "SCAN", "the note under Table IV for buildings over 40 m deleted"),
-    ("G.O.Ms.No.95 of 2026", "SCAN", "a high-rise is 21 m; TDR bands"),
-    ("G.O.Ms.No.245 of 2012", "UNREAD", ""),
-    ("G.O.Ms.No.103 of 2021", "UNREAD", "podium parking"),
+    ("G.O.Ms.No.95 of 2026", "SCAN", "a high-rise is 21 m; TDR bands (18-21 m on 750-2,000 m², "
+     "setback relaxation); no change to rule 5 or Table III"),
+    ("G.O.Ms.No.264 of 2019", "SCAN", "rule 17(c) only: TDR certificates usable within the ORR"),
+    ("G.O.Ms.No.14 of 2022", "SCAN", "rule 3(j)(vii) only: no height limit on sites of 7.5 acres "
+     "or more in Banjara and Jubilee Hills"),
+    ("G.O.Ms.No.49 of 2023", "TEXT", "dual piping, EV charging, digital infrastructure"),
+    ("G.O.Ms.No.103 of 2021", "SCAN", "rule 7(b) substituted: podium parking for towers, not "
+     "Table III"),
+    ("G.O.Ms.No.245 of 2012", "UNREAD", "read with G.O.168 by the 2016 and 2019 orders: it may "
+     "have changed rule 5"),
     ("G.O.Ms.No.16 of 2026", "UNREAD", ""),
-    ("TS-bPASS G.O.201", "UNREAD", ""),
+    ("TS-bPASS G.O.201", "UNREAD", "skimmed by OCR only: procedure for bodies other than GHMC; "
+     "its own Table III is the user charges"),
 )
 MEASURES = {
     HeightMeasure.RULE_HEIGHT: "the height Table IV and the high-rise class are read on; whether "
                                "it includes the stilt is the stilt_in_rule_height reading",
     HeightMeasure.PHYSICAL_HEIGHT: "ground to the top, stilt included (NBC Part 3 2.10)",
     HeightMeasure.AMSL: "height above mean sea level (airport and Air Force limits)",
+    HeightMeasure.HEIGHT_ABOVE_STILT: "ground to the top with the parking stilt left out: the "
+                                      "height Table III is read on (rule 5(c))",
 }
 
 
@@ -101,7 +112,13 @@ def resolve(site: CanonicalSiteModel, *, selections: dict[str, str] | None = Non
             "width_m": _rv(rules.PERIPHERAL_GREEN_STRIP_M, rules.PERIPHERAL_GREEN_STRIP_CLAUSE,
                            unit="m"),
             "where_setback_from_m": _rv(rules.PERIPHERAL_GREEN_STRIP_FROM_SETBACK_M,
-                                        rules.PERIPHERAL_GREEN_STRIP_CLAUSE, unit="m")},
+                                        rules.PERIPHERAL_GREEN_STRIP_CLAUSE, unit="m"),
+            "frontage_m": _rv(rules.NON_HIGH_RISE_FRONTAGE_STRIP_M,
+                              rules.NON_HIGH_RISE_GREEN_STRIP_CLAUSE, unit="m"),
+            "periphery_m": _rv(rules.NON_HIGH_RISE_PERIPHERY_STRIP_M,
+                               rules.NON_HIGH_RISE_GREEN_STRIP_CLAUSE, unit="m"),
+            "periphery_above_sqm": _rv(rules.NON_HIGH_RISE_PERIPHERY_STRIP_ABOVE_SQM,
+                                       rules.NON_HIGH_RISE_GREEN_STRIP_CLAUSE, unit="m²")},
         circulation=_circulation(group, gross.status),
         fire=_fire(),
         electrical={
@@ -143,30 +160,76 @@ def _height(site: CanonicalSiteModel, road: Road | None) -> dict:
         "high_rise": _high_rise(site, road),
         "tdr_band_m": _rv(rules.TDR_BAND_M, rules.TDR_BAND_CLAUSE, unit="m"),
         "tdr_plot_sqm": _rv(rules.TDR_PLOT_RANGE_SQM, rules.TDR_BAND_CLAUSE, unit="m²"),
-        "bands": _bands(),
+        "bands": _bands(site, _widths(road)),
         "limits": [*_road_limits(road), _dead_end_limit(site), _airport_limit(site)]}
 
 
-def _bands() -> list[dict]:
-    """Every height in exactly one band. Below the high-rise height, Table III's band, present
-    and not modelled (stream A2). A building of exactly that height is a high-rise (rule 2(f)) on
-    the Table IV row that reaches it, in a band of its own. Then the high-rise rows of Table IV,
-    each with its road, its all-round setback and the gap between two blocks (the same figure,
-    rule 7(a)(xii))."""
+def _widths(road: Road | None) -> tuple[non_high_rise.Width, ...]:
+    """The access road's legal widths, with how each is known: the road as it stands, and the
+    master-plan width when one is given (which counts is the table_iv_road_width reading)."""
+    given = (road.legal_row_m, road.master_plan_row_m) if road else ()
+    return tuple((w.value, w.status) for w in given if w)
+
+
+def _bands(site: CanonicalSiteModel, widths: tuple[non_high_rise.Width, ...]) -> list[dict]:
+    """Every height in exactly one band. Below the high-rise height, the lines of the plot's
+    Table III row, each with its setbacks and the road it asks, then what the row leaves open
+    (legal/non_high_rise.py: not permitted, or open through TDR), all read on the height above
+    the stilt (rule 5(c)). Then a building of exactly the high-rise height, a high-rise (rule
+    2(f)) on the Table IV row that reaches it, in a band of its own, and the rest of Table IV,
+    each row with its road, its all-round setback and the gap between two blocks (the same
+    figure, rule 7(a)(xii)). A high-rise band is ALLOWED here: the site's high-rise eligibility
+    comes in through HeightRules.band_permission."""
+    own = site.ownership
+    plot = own.net_sqm
     start = rules.HIGH_RISE_THRESHOLD_M
-    at = rules.band_for_height(start)
-    below = {"above_m": 0.0, "up_to_m": start, "up_to_inclusive": False,
-             "kind": BandKind.NON_HIGH_RISE, "modelled": False, "clause": TABLE_III_CLAUSE,
-             "status": Provenance.UNVERIFIED}
-    exactly = {"above_m": start, "up_to_m": start, "above_inclusive": True,
-               "kind": BandKind.HIGH_RISE, "min_road_m": at.min_road_m,
-               "setback_m": at.min_open_space_m, "gap_m": at.min_open_space_m,
-               "clause": rules.TABLE_IV_CLAUSE}
-    return [below, exactly,
-            *({"above_m": b.above_m, "up_to_m": b.up_to_m, "kind": BandKind.HIGH_RISE,
-               "min_road_m": b.min_road_m, "setback_m": b.min_open_space_m,
-               "gap_m": b.min_open_space_m, "clause": rules.TABLE_IV_CLAUSE}
-              for b in rules.TABLE_IV if b.above_m >= start)]
+    below = [_below_band(s, plot.value) for s in non_high_rise.stretches(
+        plot_sqm=plot.value, plot_status=plot.status, gross_sqm=own.gross_sqm.value,
+        gross_status=own.gross_sqm.status, widths=widths, high_rise_from_m=start)]
+    exactly = {"above_m": start, "up_to_m": start, "above_inclusive": True}
+    high = [_high_rise_band(exactly, rules.band_for_height(start), plot, widths),
+            *(_high_rise_band({"above_m": row.above_m, "up_to_m": row.up_to_m}, row, plot, widths)
+              for row in rules.TABLE_IV if row.above_m >= start)]
+    return [*below, *high]
+
+
+def _below_band(stretch: non_high_rise.Stretch, plot_sqm: float) -> dict:
+    """A stretch below the high-rise height as a band. A line of Table III carries its setbacks
+    (the gap between two blocks is the side setback of the taller, rule 5(f)(xiii)) and its
+    planting strip (rule 5(f): along the frontage, and on a plot above 300 m² on the other sides
+    too); a stretch with no line carries none."""
+    band = {"above_m": stretch.above_m, "up_to_m": stretch.up_to_m,
+            "above_inclusive": stretch.above_inclusive, "up_to_inclusive": stretch.up_to_inclusive,
+            "kind": BandKind.NON_HIGH_RISE, "modelled": True,
+            "measure": HeightMeasure.HEIGHT_ABOVE_STILT, "min_road_m": stretch.min_road_m,
+            "setback_m": stretch.side_m, "gap_m": stretch.side_m,
+            "front_setback_m": stretch.front_m, "permission": stretch.permission,
+            "permission_note": stretch.note, "clause": stretch.clause, "status": stretch.status}
+    if stretch.side_m is not None:
+        around = plot_sqm > rules.NON_HIGH_RISE_PERIPHERY_STRIP_ABOVE_SQM
+        band["green_strip_m"] = (max(rules.NON_HIGH_RISE_FRONTAGE_STRIP_M,
+                                     rules.NON_HIGH_RISE_PERIPHERY_STRIP_M) if around
+                                 else rules.NON_HIGH_RISE_FRONTAGE_STRIP_M)
+        band["green_strip_sides"] = "ALL" if around else "FRONTAGE"
+    return band
+
+
+def _high_rise_band(edges: dict, row: rules.HeightBand, plot, widths) -> dict:
+    """A row of Table IV as a band. The front is the higher of column 4 and the Building Line
+    (rule 7(a)(xi)), kept only where it is higher, and the band says on which road that rests;
+    it carries the 2 m planting strip where the setback is 9 m or more (rule 7(a)(viii))."""
+    front, settled = non_high_rise.high_rise_front(row.min_open_space_m, plot.value, widths)
+    on_the_road = front is not None or not settled
+    band = {**edges, "kind": BandKind.HIGH_RISE, "min_road_m": row.min_road_m,
+            "setback_m": row.min_open_space_m, "gap_m": row.min_open_space_m,
+            "front_setback_m": front,
+            "clause": rules.TABLE_IV_CLAUSE
+            + (f"; {rules.BUILDING_LINE_HIGH_RISE_CLAUSE}" if on_the_road else ""),
+            "status": weakest(Provenance.VERIFIED, *(s for _, s in widths if on_the_road),
+                              *([] if settled else [Provenance.UNVERIFIED]))}
+    if row.min_open_space_m >= rules.PERIPHERAL_GREEN_STRIP_FROM_SETBACK_M:
+        band["green_strip_m"] = rules.PERIPHERAL_GREEN_STRIP_M
+    return band
 
 
 def _high_rise(site: CanonicalSiteModel, road: Road | None) -> dict:
@@ -253,10 +316,13 @@ def _table_iv_limit(limit_id: str, width_m: float, width_status: Provenance,
              else Applicability.UNKNOWN}
     if top is None:
         first = rules.TABLE_IV[0].min_road_m
-        return limit | {"bound": LimitBound.NOT_EVALUATED,
+        return limit | {"bound": LimitBound.BOUNDED, "max_m": rules.HIGH_RISE_THRESHOLD_M,
+                        "inclusive": False,
                         "reason": f"{road} is under the {first:g} m Table IV asks of a "
-                                  "high-rise, so no high-rise may stand on it; what it allows "
-                                  "below the high-rise height is Table III's, not encoded yet"}
+                                  "high-rise, so no building of "
+                                  f"{rules.HIGH_RISE_THRESHOLD_M:g} m or more may stand on it; "
+                                  "what it allows below that is the non-high-rise bands' (Table "
+                                  "III), not this limit's"}
     if math.isinf(top):
         return limit | {"bound": LimitBound.UNBOUNDED,
                         "reason": f"{road} meets every Table IV row: the road sets no height "
@@ -302,13 +368,24 @@ def _airport_limit(site: CanonicalSiteModel) -> dict:
 def _setbacks() -> dict:
     return {
         "measured_on": _rv("net plot", rules.SETBACK_ON_NET_PLOT_CLAUSE),
-        "front": _rv("Table IV column 4, as on every other side", rules.FRONT_SETBACK_CLAUSE,
-                     note="rule 7(a)(xi) takes the higher of Table IV column 4 and the Building "
-                          "Line of Table III; Table III is not encoded yet (stream A2), so a "
-                          "Building Line above the Table IV figure would not show"),
-        "concessions": [_rv("down to 7 m clear on all sides", rules.ROAD_WIDENING_CLAUSE,
-                            note="applies only when land is surrendered for a road; the engine "
-                                 "does not apply it, so setbacks stay at the Table IV figure")]}
+        "front": _rv("a block below 21 m: the Building Line of Table III for the road's width; a "
+                     "high-rise: the higher of that and Table IV column 4",
+                     rules.BUILDING_LINE_HIGH_RISE_CLAUSE,
+                     note="Table III's front is by the abutting road's legal width, reckoned as "
+                          "rule 5(f)(xvii) reckons it. A site on more than one road keeps its "
+                          "front towards the bigger (rule 5(f)(iii)); the model knows the access "
+                          "road only. The clause the legacy checker cites for the front, p.17(b), "
+                          "is rule 12(b), for commercial courtyard buildings"),
+        "concessions": [
+            _rv("down to 7 m clear on all sides", rules.ROAD_WIDENING_CLAUSE,
+                note="a high-rise's, when land is surrendered for a road; the engine does not "
+                     "apply it, so setbacks stay at the Table IV figure"),
+            _rv("a block below 21 m: building line of 6, 3 or 2 m for a road of 30 m or more, "
+                "18 m to under 30 m, under 18 m; side and rear 2, 2.5 or 3 m up to 12, 15 or "
+                "18 m of height", rules.ROAD_WIDENING_NON_HIGH_RISE_CLAUSE,
+                note="the owner's choice when land is surrendered for a road, and the floor of a "
+                     f"TDR relaxation ({rules.TDR_NON_HIGH_RISE_SETBACK_CLAUSE}); the engine "
+                     "does not apply it, so setbacks stay at the Table III figure")]}
 
 
 def _open_space(site: CanonicalSiteModel) -> dict:
@@ -347,6 +424,7 @@ def _circulation(group: bool, gross_status: Provenance) -> dict:
         "cul_de_sac_head_radius_m": _rv(rules.CUL_DE_SAC_HEAD_RADIUS_M, unit="m", **road),
         "pathway_max_block_height_m": _rv(rules.PATHWAY_MAX_BLOCK_HEIGHT_M, rules.PATHWAY_CLAUSE,
                                           unit="m"),
+        "pathway_width_m": _rv(rules.PATHWAY_WIDTH_M, rules.PATHWAY_CLAUSE, unit="m"),
         "driveway_min_m": _rv(rules.DRIVEWAY_MIN_WIDTH_M, rules.DRIVEWAY_CLAUSE, unit="m"),
         "driveway_is_road": _rv(False, rules.INTERNAL_ROAD_CLAUSE,
                                 note="a driveway is never counted as an internal road"),

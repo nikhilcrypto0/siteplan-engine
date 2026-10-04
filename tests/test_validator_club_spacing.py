@@ -5,6 +5,7 @@ drew no check at all."""
 
 from shapely import affinity
 from validator_helpers import check, fixture, rectangle, select, shape, status
+from validator_low_helpers import unmodelled_below
 
 from siteplan.contracts.common import Status
 from siteplan.contracts.resolved_rules import ALL, MIXED_HEIGHT_SPACING, STILT_IN_RULE_HEIGHT
@@ -38,11 +39,14 @@ def test_a_club_house_closer_than_the_gap_fails_where_the_taller_block_governs()
 
 
 def test_where_each_block_keeps_its_own_gap_a_club_house_between_the_halves_is_unverified():
-    """The club house's own gap is Table III's, which is not modelled: only the tower's half is
-    the least that can be asked, so 7.1 m between 4.5 and 9 m is not settled either way."""
+    """Where the club house's band is not modelled only the tower's half is the least that can be
+    asked, so 7.1 m between 4.5 and 9 m is not settled either way. On Table III's band (A2: row
+    11 up to 7 m, 5 m) the club house keeps 2.5 m and T1 4.5 m, so 7.1 m passes."""
     inputs = fixture("rectangle").with_rules(_spacing("each_own")).edited(
         lambda c: _club_west_by(c, 1.92))
-    assert status(inputs.report(), GAP) is Z.UNVERIFIED
+    assert status(unmodelled_below(inputs).report(), GAP) is Z.UNVERIFIED
+    c = check(inputs.report(), GAP)
+    assert c.finding.status is Z.PASS and c.finding.required.startswith("counted: >= 7.00 m")
 
 
 def test_a_club_house_closer_than_half_the_towers_gap_fails_under_every_reading():
@@ -72,7 +76,9 @@ def test_no_gap_is_asked_of_a_club_house_inside_a_residential_block():
 
 
 def test_a_low_rise_club_houses_setback_is_said_to_be_not_modelled():
-    c = check(fixture("rectangle").report(), "Club house: setback")
+    """Where its band is not modelled; on Table III's band test_validator_low_blocks_site judges
+    it."""
+    c = check(unmodelled_below(fixture("rectangle")).report(), "Club house: setback")
     assert c.finding.status is Z.NOT_CHECKED and "Table III" in c.finding.note
 
 

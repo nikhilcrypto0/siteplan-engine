@@ -4,6 +4,7 @@ Made-up land only."""
 
 from shapely.geometry import Polygon, box
 from validator_helpers import check, fixture, set_floors, status
+from validator_low_helpers import unmodelled_below
 
 from siteplan.contracts.common import Status
 from siteplan.contracts.design_brief import DesignMargins
@@ -31,11 +32,21 @@ def test_a_high_rise_where_the_site_may_take_none_fails_and_nothing_lower_passes
     assert inputs.rules.height.high_rise.eligibility is Eligibility.PROHIBITED
     c = check(inputs.report(), ELIGIBILITY)
     assert c.finding.status is Z.FAIL and "road_width" in c.finding.measured
-    low = inputs.edited(lambda c: [set_floors(c, t.name, 4) for t in c.towers])  # 15 m blocks
+    def fifteen_m(candidate):
+        for t in candidate.towers:
+            set_floors(candidate, t.name, 4)
+    low = inputs.edited(fifteen_m)
     report = low.report()
     assert ELIGIBILITY not in {x.finding.rule for x in report.legal}  # no high-rise to judge
-    for tower in low.candidate.towers:  # Table III is not encoded: never a PASS
-        assert status(report, f"All-round setback: {tower.name}") is Z.NOT_CHECKED
+    # The prohibition decides nothing lower: each block is judged on its own Table III band (A2)
+    # exactly as where a high-rise may stand, and in a band not modelled it is never a PASS.
+    open_site = fixture("rectangle").edited(fifteen_m).report()
+    unmodelled = unmodelled_below(low).report()
+    for tower in low.candidate.towers:
+        rule = f"All-round setback: {tower.name}"
+        assert check(report, rule).finding == check(open_site, rule).finding
+        assert "Table III" in check(report, rule).finding.clause
+        assert status(unmodelled, rule) is Z.NOT_CHECKED
 
 
 def test_an_unsettled_eligibility_leaves_a_high_rise_unverified():

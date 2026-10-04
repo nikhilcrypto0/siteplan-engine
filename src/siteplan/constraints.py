@@ -22,6 +22,7 @@ a 45 degree test) cannot be caught that way; the ones that shape a result are li
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from itertools import groupby
 
@@ -69,6 +70,31 @@ _setback_rows = ", ".join(f"{b.min_open_space_m:g} m up to {b.up_to_m:g} m" if b
                           for b in rules.TABLE_IV)
 _road_rows = ", ".join(f"{b.min_road_m:g} m up to {b.up_to_m:g} m" if b.up_to_m < 1000
                        else f"{b.min_road_m:g} m above {b.above_m:g} m" for b in rules.TABLE_IV)
+def _table_iii_by_row(describe) -> str:
+    """Table III a row at a time, `describe` saying what one row's lines give."""
+    rows = []
+    for row in sorted({line.row for line in rules.TABLE_III}):
+        lines = [line for line in rules.TABLE_III if line.row == row]
+        first = lines[0]
+        size = (f"above {first.above_sqm:,.0f} m²" if math.isinf(first.up_to_sqm)
+                else f"under {first.up_to_sqm:,.0f} m²" if first.above_sqm == 0
+                else f"{first.above_sqm:,.0f}-{first.up_to_sqm:,.0f} m²")
+        rows.append(f"row {row} ({size}): {describe(lines)}")
+    return "; ".join(rows)
+
+
+_table_iii_heights = _table_iii_by_row(
+    lambda lines: ", ".join(f"{t.up_to_m:g}{'**' if t.below else ''}" for t in lines) + " m")
+_table_iii_sides = _table_iii_by_row(
+    lambda lines: ", ".join("none" if t.side_m is None else f"{t.side_m:g}" for t in lines) + " m")
+_front_edges = rules.TABLE_III_ROAD_UP_TO_M
+_front_rows = ", ".join(
+    f"{front:g} m for a road {where}" for front, where in zip(
+        rules.TABLE_III[-1].front_m,
+        [f"up to {_front_edges[0]:g} m",
+         *(f"above {a:g} and up to {b:g} m" for a, b in zip(_front_edges, _front_edges[1:],
+                                                           strict=False)),
+         f"above {_front_edges[-1]:g} m"], strict=True))
 _lr = layout.LayoutRequest.model_fields
 _ws = intake.WorkspaceDefaults.model_fields
 _fl = library.FlatLibrary.model_fields
@@ -100,7 +126,10 @@ REGISTRY: tuple[Constraint, ...] = (
         "stilt + floors x floor height", Basis.UNRESOLVED_INTERPRETATION,
         "G.O.168 rule 2(e); rule 5(c) excludes the stilt for Table III only",
         note="The stricter reading; the firm's own Dhulapally drawing behaves as if the stilt is "
-             "not counted. The floors calculator gives both answers. A test profile may set "
+             "not counted. Rule 5's heading calls the buildings below the class 'below 18m in "
+             "height inclusive of Stilt / Parking Floor' (p.9), which leans to counting it, "
+             "while rule 5(c) leaves the stilt out of Table III's own heights (not open). The "
+             "floors calculator gives both answers. A test profile may set "
              "stilt_in_rule_height false; NBC's fire height (the 30 m dead-end limit) counts the "
              "stilt either way.",
         settles="A sanctioned stilt + N high-rise whose approved setback fits one reading only.",
@@ -108,9 +137,14 @@ REGISTRY: tuple[Constraint, ...] = (
     Constraint(
         "Setbacks", "The Table IV figure is kept on every side, the front included.",
         "column 4 all round", Basis.LEGAL_RULE, rules.FRONT_SETBACK_CLAUSE,
-        note="Read on 2026-10-01: 'The Front setback shall be as per Table-III of rule-5 & "
-             "Table-IV of rule-7 for Non High Rise & High Rise buildings respectively.' The "
-             "Table III building line applies to buildings below high-rise only.",
+        note="Read on 2026-10-01 from p.17, clause (b), 'The Front setback shall be as per "
+             "Table-III of rule-5 & Table-IV of rule-7 for Non High Rise & High Rise buildings "
+             "respectively'; corrected on 2026-10-03 (A2): that sentence is rule 12(b), for "
+             "'U' type commercial buildings with a central courtyard. The high-rise front is "
+             "rule 7(a)(xi), p.14 (the clause now cited): the higher of column 4 and the Table "
+             "III Building Line, which differs only for exactly 21 m on a road above 30 m "
+             "(7.5 m, not 7 m); the legacy layout and checker keep column 4, and the bands "
+             "carry the front.",
     ),
     Constraint(
         "Setbacks", "Whether internal roads, driveways and fire lanes may run inside the Table "
@@ -130,8 +164,154 @@ REGISTRY: tuple[Constraint, ...] = (
                     "figure.", "the larger of the two", Basis.UNRESOLVED_INTERPRETATION,
         rules.BLOCK_SPACING_CLAUSE,
         note="The text asks for 'the open space mentioned in Col. 4' without saying which block "
-             "sets it. The club house keeps the same gap from every tower.",
+             "sets it. The club house keeps the same gap from every tower. Two blocks below "
+             "21 m are not open: rule 5(f)(xiii) says the tallest block's side setback. What "
+             "a block below 21 m and a high-rise keep between them is open here too (rule "
+             "8(j): Table III column 10 or Table IV column 4, 'as the case may be').",
         settles="A sanctioned plan with two blocks of different heights.",
+    ),
+    Constraint(
+        "Height", "The tallest a building below high-rise may be, by plot size (Table III "
+                  "column 4), the stilt left out.", _table_iii_heights, Basis.LEGAL_RULE,
+        rules.TABLE_III_CLAUSE, ("rules.TABLE_III",),
+        note="'**' is above 15 m and below 18 m, and needs a road of 12 m (rule 5(e)). Above a "
+             "row's last height, and between 18 and 21 m, the orders read give no line: "
+             "G.O.Ms.No.95 of 2026 allows 18-21 m on plots of 750-2,000 m² through TDR and gives "
+             "no setback. Read from the page images of pp.9-10 on 2026-10-03.",
+    ),
+    Constraint(
+        "Setbacks", "The Building Line, the front setback of a block below high-rise, by the "
+                    "abutting road's legal width (Table III columns 5-9).", _front_rows,
+        Basis.LEGAL_RULE, rules.TABLE_III_CLAUSE, ("rules.TABLE_III_ROAD_UP_TO_M",),
+        note="The figures from 300 m² up; smaller plots have their own (1.5 and 3 m, or 2 to 6 m "
+             "on rows 1 to 4). A high-rise's front is the higher of Table IV column 4 and this "
+             f"line ({rules.BUILDING_LINE_HIGH_RISE_CLAUSE}).",
+    ),
+    Constraint(
+        "Setbacks", "The setback on the other sides of a block below high-rise, and the gap "
+                    "between two such blocks, by plot size and height (Table III column 10).",
+        _table_iii_sides, Basis.LEGAL_RULE,
+        f"{rules.TABLE_III_CLAUSE}; {rules.NON_HIGH_RISE_SPACING_CLAUSE}",
+        note="Measured on the net plot (rule 5(f)(ii)). The gap is the taller block's figure.",
+    ),
+    Constraint(
+        "Road", "A road width given in feet is reckoned as the order's round metres.",
+        ", ".join(f"{feet} ft = {metres:g} m" for metres, feet in rules.ROAD_WIDTH_FEET),
+        Basis.LEGAL_RULE, rules.ROAD_WIDTH_CONVERSION_CLAUSE, ("rules.ROAD_WIDTH_FEET",),
+        note="Rule 5(f)(xvii) reckons these 'for the road widths only'. The order's conversion is "
+             "0.3 m a foot; the engine's own is 0.3048.",
+    ),
+    Constraint(
+        "Road", "How close a road width has to be to a listed number of feet to be reckoned as "
+                "the order's metres.", _m(rules.ROAD_FEET_TOLERANCE_M),
+        Basis.ENGINE_DESIGN_ASSUMPTION, "none (the engine's own)",
+        ("rules.ROAD_FEET_TOLERANCE_M",),
+        note="So that a road the architect gave as 60 ft (18.288 m) is the order's 18 m, and one "
+             "typed as 18.3 m stays above it.",
+        settles="The project's own record of the unit the architect gave the width in.",
+    ),
+    Constraint(
+        "Height", "A stilt floor's least height, and a mechanical parking floor's (rule 5(c)).",
+        f"{_m(rules.STILT_MIN_HEIGHT_M)}; {_m(rules.MECHANICAL_PARKING_FLOOR_MIN_HEIGHT_M)}",
+        Basis.LEGAL_RULE, rules.TABLE_III_STILT_CLAUSE,
+        ("rules.STILT_MIN_HEIGHT_M", "rules.MECHANICAL_PARKING_FLOOR_MIN_HEIGHT_M"),
+        note="Written for non-high-rise buildings; the stilt itself is left out of Table III's "
+             "height. Not applied by generation or the checker.",
+    ),
+    Constraint(
+        "Road", "Above 15 m and below 18 m, the road a block needs (the '**' lines of Table "
+                "III).", _m(rules.TABLE_III_TOP_TIER_MIN_ROAD_M), Basis.LEGAL_RULE,
+        rules.TABLE_III_TOP_TIER_CLAUSE, ("rules.TABLE_III_TOP_TIER_MIN_ROAD_M",),
+    ),
+    Constraint(
+        "Road", "The road a block below high-rise needs by its use (Table II, category B), and "
+                "a Group Development Scheme's (rule 8(b)).",
+        f"{_m(rules.TABLE_II_B1_ROAD_M)} up to {rules.TABLE_II_B1_MAX_FLOORS} floors; "
+        f"{_m(rules.TABLE_II_B2_ROAD_M)} for six floors, more than "
+        f"{rules.TABLE_II_B2_UNITS_OVER} units, a group development scheme or up to 18 m; "
+        f"{_m(rules.GROUP_DEVELOPMENT_MIN_ROAD_M)} for a Group Development Scheme",
+        Basis.LEGAL_RULE, f"{rules.TABLE_II_CLAUSE}; {rules.GROUP_DEVELOPMENT_ROAD_CLAUSE}",
+        ("rules.TABLE_II_B1_ROAD_M", "rules.TABLE_II_B1_MAX_FLOORS", "rules.TABLE_II_B2_ROAD_M",
+         "rules.TABLE_II_B2_UNITS_OVER", "rules.GROUP_DEVELOPMENT_MIN_ROAD_M"),
+        note="Table II counts floors and units, which ResolvedRules never holds: the resolver "
+             "reads 'up to 5 floors' as up to 15 m, the line Table III draws. A scheme of more "
+             "than 100 units needs 12 m whatever its height.",
+    ),
+    Constraint(
+        "Road", "A 6 m pathway serves a block up to 12 m high (rule 8(l)); a sub-divided plot's "
+                "independent access is 3.6 m, or 6 m for non-high-rise group housing "
+                "(rule 4(f)).",
+        f"{_m(rules.PATHWAY_WIDTH_M)}; {_m(rules.SUBDIVISION_PATHWAY_M[0])} and "
+        f"{_m(rules.SUBDIVISION_PATHWAY_M[1])}", Basis.LEGAL_RULE,
+        f"{rules.PATHWAY_CLAUSE}; {rules.SUBDIVISION_PATHWAY_CLAUSE}",
+        ("rules.PATHWAY_WIDTH_M", "rules.SUBDIVISION_PATHWAY_M"),
+    ),
+    Constraint(
+        "Setbacks", "The planting strips of a block below high-rise: along the frontage within "
+                    "the front setback, and on a plot above 300 m² on the remaining sides.",
+        f"{_m(rules.NON_HIGH_RISE_FRONTAGE_STRIP_M)} along the frontage; "
+        f"{_m(rules.NON_HIGH_RISE_PERIPHERY_STRIP_M)} on the other sides above "
+        f"{rules.NON_HIGH_RISE_PERIPHERY_STRIP_ABOVE_SQM:g} m²", Basis.LEGAL_RULE,
+        rules.NON_HIGH_RISE_GREEN_STRIP_CLAUSE,
+        ("rules.NON_HIGH_RISE_FRONTAGE_STRIP_M", "rules.NON_HIGH_RISE_PERIPHERY_STRIP_M",
+         "rules.NON_HIGH_RISE_PERIPHERY_STRIP_ABOVE_SQM"),
+        note="Within the setback, never added to it. A high-rise's strip is rule 7(viii)'s 2 m "
+             "where the setback is 9 m or more. Not applied by generation or the checker.",
+    ),
+    Constraint(
+        "Open space", "Organised open space on a residential plot above 750 m² (rule 5(f)(vi)).",
+        f"{_pct(rules.NON_HIGH_RISE_OPEN_SPACE_FRACTION)} of the site above "
+        f"{rules.NON_HIGH_RISE_OPEN_SPACE_ABOVE_SQM:g} m²; pockets "
+        f"{_m(rules.NON_HIGH_RISE_OPEN_SPACE_MIN_WIDTH_M)} wide and "
+        f"{rules.NON_HIGH_RISE_OPEN_SPACE_MIN_POCKET_SQM:g} m²", Basis.LEGAL_RULE,
+        rules.NON_HIGH_RISE_OPEN_SPACE_CLAUSE,
+        ("rules.NON_HIGH_RISE_OPEN_SPACE_FRACTION", "rules.NON_HIGH_RISE_OPEN_SPACE_ABOVE_SQM",
+         "rules.NON_HIGH_RISE_OPEN_SPACE_MIN_WIDTH_M",
+         "rules.NON_HIGH_RISE_OPEN_SPACE_MIN_POCKET_SQM"),
+        note="A group development scheme and a high-rise site keep 10%. Not applied by "
+             "generation or the checker.",
+    ),
+    Constraint(
+        "Plot", "The corner of a plot of 750 m² and above earmarked for public utilities.",
+        f"{rules.PUBLIC_UTILITY_AREA_M[0]:g} x {_m(rules.PUBLIC_UTILITY_AREA_M[1])}, from "
+        f"{rules.PUBLIC_UTILITY_AREA_FROM_SQM:g} m²", Basis.LEGAL_RULE,
+        rules.PUBLIC_UTILITY_AREA_CLAUSE,
+        ("rules.PUBLIC_UTILITY_AREA_M", "rules.PUBLIC_UTILITY_AREA_FROM_SQM"),
+        note="Not applied by generation or the checker.",
+    ),
+    Constraint(
+        "Setbacks", "Setback a block below high-rise may move from one side to another (a design "
+                    "option), and what a narrow plot may compensate in its front and rear.",
+        f"{_m(rules.SETBACK_TRANSFER_300_TO_750_M)} on 300-750 m², "
+        f"{_m(rules.SETBACK_TRANSFER_ABOVE_750_M)} above, keeping "
+        f"{_m(rules.SETBACK_TRANSFER_MIN_OTHER_SIDE_M)}; narrow plots up to "
+        f"{rules.NARROW_PLOT_MAX_SQM:g} m² four times as long as wide keep "
+        f"{_m(rules.NARROW_PLOT_MIN_SIDE_M[0][1])} of side up to "
+        f"{_m(rules.NARROW_PLOT_MIN_SIDE_M[0][0])}, {_m(rules.NARROW_PLOT_MIN_SIDE_M[1][1])} up to "
+        f"{_m(rules.NARROW_PLOT_MIN_SIDE_M[1][0])}", Basis.LEGAL_RULE,
+        f"{rules.SETBACK_TRANSFER_CLAUSE}; {rules.NARROW_PLOT_CLAUSE}",
+        ("rules.SETBACK_TRANSFER_300_TO_750_M", "rules.SETBACK_TRANSFER_ABOVE_750_M",
+         "rules.SETBACK_TRANSFER_MIN_OTHER_SIDE_M", "rules.NARROW_PLOT_MAX_SQM",
+         "rules.NARROW_PLOT_LENGTH_TO_WIDTH", "rules.NARROW_PLOT_MIN_SIDE_M"),
+        note="Never from the front. Not applied: every side keeps its full Table III figure.",
+    ),
+    Constraint(
+        "Setbacks", "The concessions a block below high-rise may take when its owner surrenders "
+                    "land for road widening, and the minimums TDR relaxation keeps.",
+        "building line 6, 3 or 2 m for a road of 30 m or more, 18 m to under 30 m, under 18 m; "
+        "side and rear 2, 2.5 or 3 m up to 12, 15 or 18 m", Basis.LEGAL_RULE,
+        f"{rules.ROAD_WIDENING_NON_HIGH_RISE_CLAUSE}; {rules.TDR_NON_HIGH_RISE_SETBACK_CLAUSE}",
+        ("rules.ROAD_WIDENING_NON_HIGH_RISE_BUILDING_LINE_M",
+         "rules.ROAD_WIDENING_NON_HIGH_RISE_SIDE_REAR_M"),
+        note="An option the owner takes in place of TDR or extra floors. Not applied.",
+    ),
+    Constraint(
+        "Fire", "Residential buildings above this height need the Fire Services Department's "
+                "prior clearance.", _m(rules.FIRE_CLEARANCE_RESIDENTIAL_ABOVE_M),
+        Basis.LEGAL_RULE, rules.FIRE_CLEARANCE_CLAUSE,
+        ("rules.FIRE_CLEARANCE_RESIDENTIAL_ABOVE_M",),
+        note="The only figure the order gives for fire below 21 m. Rule 15(a)(i) gives none "
+             f"({rules.NON_HIGH_RISE_NBC_CLAUSE}).",
     ),
     Constraint(
         "Setbacks", "Setbacks and cellars are measured from the net plot line, after the "
