@@ -33,11 +33,14 @@ LOW_GAP_CLAUSE = ("G.O.168 rule 5(xiii) (the space between 2 blocks: the tallest
 
 HIGH_RISE_FRONT_NOTE = ("The front of a high-rise keeps the Table IV figure too, measured on the "
                         "net plot.")
-# INTERIM (contracts 1.2): a band carries one setback, all round. Table III gives the Building Line
-# at the front apart from the setback on the other sides, which ResolvedRules cannot say yet.
-ALL_ROUND_NOTE = ("Held to the band's all-round figure, measured on the net plot. Table III's "
-                  "Building Line at the front is a separate figure that ResolvedRules does not "
-                  "carry apart from it, so the front is not judged on its own.")
+LOW_ALL_ROUND_NOTE = ("The band gives no separate front figure, so its setback is held all round, "
+                      "measured on the net plot.")
+FRONT_NOTE = ("The front is the stretch of the plot line facing the side the access road runs on: "
+              "the band asks its own figure there and its setback on the other sides, measured "
+              "on the net plot.")
+FRONT_UNKNOWN_NOTE = ("The access road's side is not known, so which stretch of the plot line is "
+                      "the front is not: the block passes only if it clears the larger figure "
+                      "everywhere and fails only if it misses the smaller one somewhere.")
 UNCONFIRMED_NOTE = ("The rules mark this band UNVERIFIED: its values settle nothing either way.")
 
 
@@ -161,13 +164,10 @@ class HeightClass:
         return self.band.clause if self.band is not None else ""
 
     @property
-    def setback_note(self) -> str:
-        """What a check of this band's setback says about the front.
-
-        INTERIM (contracts 1.2): a band carries one setback, all round, so the front of a block
-        below the high-rise height is not judged apart from its other sides. This note and
-        `setback_m` are the one place that changes when a band carries the Building Line."""
-        return HIGH_RISE_FRONT_NOTE if self.high_rise else ALL_ROUND_NOTE
+    def all_round_note(self) -> str:
+        """What a check says of a setback held all round (the band gives no front figure of its
+        own, or the same one): the front of a high-rise is Table IV's, a low band has none apart."""
+        return HIGH_RISE_FRONT_NOTE if self.high_rise else LOW_ALL_ROUND_NOTE
 
     @property
     def height_text(self) -> str:
@@ -192,7 +192,15 @@ class HeightClass:
 
     @property
     def setback_m(self) -> float | None:
+        """The setback on every side but the front where the band gives a front figure, all round
+        where it does not."""
         return self._usable.setback_m if self._usable else None
+
+    @property
+    def front_m(self) -> float | None:
+        """The setback on the stretches of the plot line facing the access road: the band's front
+        figure, or its setback where it gives none."""
+        return self._usable.front_m if self._usable else None
 
     @property
     def gap_m(self) -> float | None:

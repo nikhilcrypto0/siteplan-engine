@@ -54,6 +54,7 @@ from siteplan.validator.readings import (
     unknown_reading,
     verdict,
 )
+from siteplan.validator.setbacks import plot_line_distances, setback_cell
 
 UNVERIFIED_DRAWING = "UNVERIFIED_DRAWING_VALUE"  # a road's width as drawn, never confirmed
 TABLE_III_NOTE = ("Below the high-rise threshold Table III (rule 5) applies and is not modelled "
@@ -389,12 +390,12 @@ def eligibility_check(ctx: Context) -> Check | None:
 
 def setback_checks(ctx: Context) -> list[Check]:
     """Each block's setback from the net plot line, on the band its height falls in under each
-    reading of the stilt: Table IV for a high-rise, Table III's own row below it. A band the rules
-    do not model is NOT_CHECKED, one they mark UNVERIFIED settles nothing either way."""
+    reading of the stilt: Table IV for a high-rise, Table III's own row below it. Where the band
+    gives a front figure it is held on the stretches facing the access road (setbacks.py). A band
+    the rules do not model is NOT_CHECKED, one they mark UNVERIFIED settles nothing either way."""
     out = []
     for t in ctx.towers:
-        gap = setback_of(ctx.net, t.footprint)
-        outside = not ctx.net.contains(t.footprint)
+        d = plot_line_distances(ctx, t.footprint)
         high = any(classes[t.name].high_rise for classes in ctx.classes.values()
                    if t.name in classes)
         front = [ctx.rules.setbacks.front.clause] if high else []  # a high-rise's is Table IV's
@@ -402,23 +403,15 @@ def setback_checks(ctx: Context) -> list[Check]:
             [_tables(ctx, [t]) or _table_clause(ctx.rules), *front,
              ctx.rules.setbacks.measured_on.clause]))
 
-        def cell(a: Assignment, t=t, gap=gap, outside=outside) -> Cell:
+        def cell(a: Assignment, t=t, d=d) -> Cell:
             reading = a[STILT_IN_RULE_HEIGHT]
             cls = (_classes(ctx, reading) or {}).get(t.name)
             if cls is None:
                 return unknown_reading(STILT_IN_RULE_HEIGHT, reading)
             stopped = _stopped(cls, "setback")
             if stopped is not None:
-                return Cell(stopped.status, f"{gap:.2f} m", stopped.required, stopped.note)
-            need = cls.setback_m
-            required = f">= {need:.2f} m to the net plot line"
-            if outside:  # no row of any table is met by a block that is not on the plot
-                return Cell(Status.FAIL, f"{gap:.2f} m: not wholly inside the net plot", required)
-            note = cls.setback_note
-            if not cls.confirmed:
-                return Cell(Status.UNVERIFIED, f"{gap:.2f} m", required,
-                            f"{note} {UNCONFIRMED_NOTE}")
-            return Cell(verdict(gap + TOL_M >= need), f"{gap:.2f} m", required, note)
+                return Cell(stopped.status, f"{d.nearest_m:.2f} m", stopped.required, stopped.note)
+            return setback_cell(ctx, t.footprint, d, cls)
 
         out.append(check_from(run(ctx.rules, [STILT_IN_RULE_HEIGHT], cell), family=Family.SETBACK,
                               rule=f"All-round setback: {t.name}", clause=clause, subject=t.name))
@@ -503,8 +496,8 @@ def tower_measures(ctx: Context) -> list[TowerMeasure]:
             if cls is None:
                 continue
             heights[reading], labels[reading] = cls.height_m, cls.label
-            if cls.setback_m is not None:
-                needs[reading] = cls.setback_m
+            if cls.setback_m is not None:  # the larger of a band's front and other-sides figures
+                needs[reading] = max(cls.setback_m, cls.front_m)
         out.append(TowerMeasure(
             name=t.name, physical_height_m=t.physical_height_m,
             rule_height_m_by_reading=heights, band_by_reading=labels,
