@@ -1,5 +1,5 @@
-"""Command line: survey, check, area-statement, layout, rules, inventory, constraints, floors,
-cases, assist."""
+"""Command line: survey, check, area-statement, layout, envelope, rules, inventory, constraints,
+floors, cases, assist."""
 
 from __future__ import annotations
 
@@ -203,7 +203,8 @@ def _cmd_acceptance(args: argparse.Namespace) -> int:
     profile = load_profile(args.profile) if args.profile else None
     generated = generate(Path(args.survey), json.loads(Path(args.answers).read_text()), out,
                          Path(args.workspace) if args.workspace else None,
-                         conservative_parking=args.conservative_parking, profile=profile)
+                         conservative_parking=args.conservative_parking, profile=profile,
+                         mode="debug" if args.debug else "blind")
     rows = []
     if generated.options:
         case = Case.model_validate_json(Path(args.firm_case).read_text())  # read only now
@@ -269,6 +270,42 @@ def _cmd_constraints(args: argparse.Namespace) -> int:
 
     only = Basis(args.basis) if args.basis else None
     print(render_markdown() if args.markdown else render_text(only=only))
+    return 0
+
+
+def _cmd_schema(args: argparse.Namespace) -> int:
+    from siteplan.contracts import export_schemas
+
+    for path in export_schemas(args.out):
+        print(path)
+    return 0
+
+
+def _cmd_envelope(args: argparse.Namespace) -> int:
+    """The legal envelope: what the law asks of the site and the land it leaves, before any tower
+    or road. Stops, naming what to give, when the net plot cannot be placed."""
+    from siteplan.contracts.common import Status
+    from siteplan.legal.debug_drawing import notes, write_debug_dxf, write_debug_svg
+    from siteplan.legal.envelope import envelope
+    from siteplan.legal.resolve import resolve
+    from siteplan.legal.site import readings_of, site_from_project
+
+    project = _load_project(args.project)
+    site = site_from_project(project, args.survey)
+    selections, when_open = readings_of(project)
+    resolved = resolve(site, selections=selections, when_open=when_open)
+    found = envelope(site, resolved)
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "rules.json").write_text(resolved.model_dump_json(indent=1) + "\n")
+    (out / "envelope.json").write_text(found.model_dump_json(indent=1) + "\n")
+    write_debug_dxf(site, resolved, found, out / "envelope.dxf")
+    write_debug_svg(site, resolved, found, out / "envelope.svg")
+    print("\n".join(notes(site, resolved, found)))
+    open_ = [f"{f.rule}: {f.measured}" for f in found.facts
+             if f.status in (Status.UNVERIFIED, Status.NOT_CHECKED, Status.FAIL)]
+    print("\nStill open or not checked:\n" + "\n".join(f"  - {item}" for item in open_))
+    print(f"\nWrote rules.json, envelope.json, envelope.dxf and envelope.svg to {out}/")
     return 0
 
 
@@ -487,6 +524,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--conservative-parking", action="store_true", help=_CONSERVATIVE_HELP)
     p.add_argument("--profile", help="A site's temporary test assumptions (JSON, kept in "
                    "fixtures/): each value it sets is ASSUMED_FOR_TEST and listed in the report")
+    p.add_argument("--debug", action="store_true", help="A debug run, which may use the "
+                   "firm's finished plan (a debug profile, a value taken from it); a blind run, "
+                   "the default, refuses them")
     p.set_defaults(run=_cmd_acceptance)
 
     p = sub.add_parser("layout", help="Generate tower layout options for a project.")
@@ -523,6 +563,11 @@ def main(argv: list[str] | None = None) -> int:
                    help="Only this class")
     p.set_defaults(run=_cmd_constraints)
 
+    p = sub.add_parser("schema", help="Write the JSON Schema of every permanent contract "
+                       "(src/siteplan/contracts) into a folder.")
+    p.add_argument("--out", default="docs/contracts")
+    p.set_defaults(run=_cmd_schema)
+
     p = sub.add_parser("floors", help="The most floors a plot can take, from its area and road.")
     plot = p.add_mutually_exclusive_group(required=True)
     plot.add_argument("--plot-sqm", type=float, help="Net plot area in m²")
@@ -538,6 +583,15 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--dead-end", choices=("yes", "no"),
                    help="Does the access road end at the plot? Above 30 m it must not")
     p.set_defaults(run=_cmd_floors)
+
+    p = sub.add_parser("envelope", help="The legal envelope of a site: the rules resolved for it "
+                       "and the land they leave per height band, with widths and rule layers. "
+                       "No towers, no roads.")
+    p.add_argument("project")
+    p.add_argument("--survey", help="The survey that draws the plot and any water body (PDF or "
+                   "DXF); needed when the project states no net_plot_m")
+    p.add_argument("--out", default="out/envelope")
+    p.set_defaults(run=_cmd_envelope)
 
     p = sub.add_parser("cases", help="Check the rules against real schemes (sanctioned plans).")
     p.add_argument("folder", nargs="?", default="fixtures/cases", help="Folder of *.case.json")

@@ -1,0 +1,152 @@
+{
+ "schema_version": "1.1",
+ "site_id": "l_plot_with_arm",
+ "name": "Made-up l plot with arm",
+ "survey_file": null,
+ "frame": "survey metres, as drawn",
+ "boundary": {
+  "outer": [
+   [
+    0.0,
+    0.0
+   ],
+   [
+    150.0,
+    0.0
+   ],
+   [
+    150.0,
+    100.0
+   ],
+   [
+    24.0,
+    100.0
+   ],
+   [
+    24.0,
+    160.0
+   ],
+   [
+    0.0,
+    160.0
+   ]
+  ],
+  "holes": []
+ },
+ "written_area_sqm": null,
+ "ownership": {
+  "gross_sqm": {
+   "value": 16440.0,
+   "status": "EXTRACTED",
+   "source_kind": "SURVEY",
+   "source": "survey: made-up fixture"
+  },
+  "written_as": null,
+  "deductions": [],
+  "net_sqm": {
+   "value": 16440.0,
+   "status": "USER_CONFIRMED",
+   "source_kind": "ARCHITECT",
+   "source": "architect: made-up fixture"
+  },
+  "tolerance": 0.02
+ },
+ "net_plot": {
+  "value": {
+   "outer": [
+    [
+     0.0,
+     0.0
+    ],
+    [
+     150.0,
+     0.0
+    ],
+    [
+     150.0,
+     100.0
+    ],
+    [
+     24.0,
+     100.0
+    ],
+    [
+     24.0,
+     160.0
+    ],
+    [
+     0.0,
+     160.0
+    ]
+   ],
+   "holes": []
+  },
+  "status": "USER_CONFIRMED",
+  "source_kind": "ARCHITECT",
+  "source": "architect: made-up fixture"
+ },
+ "roads": [
+  {
+   "id": 1,
+   "side": "S",
+   "drawn_width_m": null,
+   "divided": false,
+   "distance_m": null,
+   "legal_row_m": {
+    "value": 18.288,
+    "status": "USER_CONFIRMED",
+    "source_kind": "ARCHITECT",
+    "source": "architect: made-up fixture"
+   },
+   "row_status": "DECLARED_ON_SITE_PLAN",
+   "master_plan_row_m": null
+  }
+ ],
+ "access": {
+  "road_id": {
+   "value": 1,
+   "status": "EXTRACTED",
+   "source_kind": "SURVEY",
+   "source": "survey: road 1"
+  },
+  "side": {
+   "value": "S",
+   "status": "EXTRACTED",
+   "source_kind": "SURVEY",
+   "source": "survey: road 1"
+  },
+  "dead_end": {
+   "value": null,
+   "status": "UNVERIFIED",
+   "source_kind": "ARCHITECT",
+   "source": "architect: unknown"
+  },
+  "joins_12m_street": {
+   "value": null,
+   "status": "UNVERIFIED",
+   "source_kind": "ARCHITECT",
+   "source": "architect: unknown"
+  }
+ },
+ "water": [],
+ "features": [],
+ "spot_levels": 0,
+ "place": null,
+ "jurisdiction": {
+  "authority": {
+   "value": "HMDA",
+   "status": "USER_CONFIRMED",
+   "source_kind": "ARCHITECT",
+   "source": "architect: made-up fixture"
+  },
+  "inside_cure": {
+   "value": false,
+   "status": "USER_CONFIRMED",
+   "source_kind": "ARCHITECT",
+   "source": "architect: made-up fixture"
+  }
+ },
+ "coordinates": null,
+ "proposed_floors": null,
+ "sanctioned_floors": null
+}

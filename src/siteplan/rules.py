@@ -173,6 +173,10 @@ DEAD_END_CLAUSE = (
     "residential building above 30 m)"
 )
 FIRE_TENDER_MIN_WIDTH_M = 6.0
+# The 45 t is the tender's loading in the same sub-clause, as read from the page images on
+# 2026-09-30 and recorded in AGENTS.md. It is a specification of the paving, which no drawing
+# shows, so the engine never checks it: ResolvedRules carries it UNVERIFIED.
+FIRE_TENDER_LOAD_T = 45.0
 GATE_MIN_WIDTH_M = 6.0
 GATE_CLAUSE = (
     "G.O.168 rule 15(b)(iv), bringing in NBC 2016 Part 3 4.6(d) (entrance at least 6 m wide)"
@@ -238,6 +242,19 @@ WATER_BUFFER_CLAUSE = (
     "3(a)(iii)(3)"
 )
 
+# Rule 3(c)(i), read from the 2012 text (pp.4-5) on 2026-10-03: "In case of sites in the vicinity
+# of High Tension Electricity Transmission Lines besides taking other safety precautions, a
+# minimum safety distance (both vertical and horizontal) of 3m shall be maintained between the
+# building and the High Tension Electricity Lines and 1.5m shall be maintained between the
+# building and the Low Tension Electricity Lines." Rule 3(c)(ii), a green belt as wide as the
+# tower base under a tower line with 10 m roads either side, is not modelled.
+ELECTRICAL_HT_CLEARANCE_M = 3.0
+ELECTRICAL_LT_CLEARANCE_M = 1.5
+ELECTRICAL_CLAUSE = (
+    "G.O.168 rule 3(c)(i), pp.4-5 (3 m from a high-tension line and 1.5 m from a low-tension "
+    "line, vertical and horizontal)"
+)
+
 # Rule 15(a)(x) is the group-housing one: 3% of built-up area, in a block of its own. (Rule 9(o)
 # asks 5% of site area but sits in the row-housing section, so it is not used as the check here.)
 # G.O.Ms.No.7 of 2016, Amendment 15, rewrote it as "upto 3% of the total built up area (or)
@@ -252,6 +269,23 @@ AMENITY_CLAUSE = (
     "G.O.168 rule 15(a)(x) as substituted by G.O.Ms.No.7 of 2016 (group housing of 100 units "
     "or more: 'upto 3% of the total built up area (or) 50,000 Sft. whichever is lower', in a "
     "block that is not part of the residential blocks)"
+)
+
+# A second amenities rule, read from the 2012 text on 2026-10-03 (p.16): "In case of very large
+# projects more than 5 acres, common amenities and facilities like shopping center, community
+# hall/club house etc. are required to be provided in minimum 5 % of the site area." It stands
+# twice, as rule 9(o) under ROW TYPE HOUSING and as rule 10(i) under CLUSTER HOUSING. It is not
+# rule 8(o): in the 2012 text rule 8, Group Development Schemes, runs (a) to (n) with no such
+# clause (the 2016 order substitutes 8(k) and 8(n), as noted at rule 8(m) below, and is not known
+# to add an (o)), and a group scheme's amenities are rule 15(a)(x)'s 3% of the built-up area
+# above. So it is recorded here and never applied to the apartment schemes this engine plans;
+# whether the authority holds a very large group scheme to it is an open reading
+# (legal/readings.py).
+LARGE_PROJECT_FROM_ACRES = 5.0
+LARGE_PROJECT_AMENITY_SHARE_OF_SITE = 0.05
+LARGE_PROJECT_AMENITY_CLAUSE = (
+    "G.O.168 rule 9(o) (row type housing) and rule 10(i) (cluster housing), p.16 (projects of "
+    "more than 5 acres: common amenities in minimum 5% of the site area); not in rule 8"
 )
 
 # Table V row 4 covers Residential Apartment Complexes: 30% inside GHMC, 20% in every other
@@ -269,6 +303,7 @@ RAMP_SINGLE_MIN_WIDTH_M = 5.4
 RAMP_PAIR_MIN_WIDTH_M = 3.6
 RAMP_MAX_GRADIENT = 1 / 8
 RAMP_CLAUSE = "G.O.168 rule 13(c)(vii) (ramps: one of 5.4 m or two of 3.6 m, 1 in 8)"
+RAMP_FIRE_CLEARANCE_M = 7.0  # what a ramp in a side or rear setback leaves for fire vehicles
 # (x): "Cellar shall be with a setback of at least 1.5m in the sites of extent of up to 1000sq.m,
 # 2m ... more than 1000sq.m and up to 2000sq.m, and 3m in the sites of extent of more than
 # 2000sq.m from the property line. In case of more than one cellar, 0.5m additional setback for

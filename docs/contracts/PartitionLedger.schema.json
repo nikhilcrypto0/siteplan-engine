@@ -1,0 +1,167 @@
+{
+  "$defs": {
+    "PartitionEntry": {
+      "additionalProperties": false,
+      "properties": {
+        "area_sqm": {
+          "minimum": 0,
+          "title": "Area Sqm",
+          "type": "number"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason"
+        },
+        "ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ref"
+        },
+        "shapes": {
+          "items": {
+            "$ref": "#/$defs/Shape"
+          },
+          "minItems": 1,
+          "title": "Shapes",
+          "type": "array"
+        },
+        "tags": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Tags",
+          "type": "array"
+        },
+        "use": {
+          "$ref": "#/$defs/PhysicalUse"
+        }
+      },
+      "required": [
+        "use",
+        "shapes",
+        "area_sqm"
+      ],
+      "title": "PartitionEntry",
+      "type": "object"
+    },
+    "PhysicalUse": {
+      "enum": [
+        "TOWER",
+        "CLUB_HOUSE",
+        "OTHER_BUILT",
+        "ROAD",
+        "FIRE_HARDSTANDING",
+        "SURFACE_PARKING",
+        "RAMP",
+        "SOFT_OPEN_SPACE",
+        "GREEN_STRIP",
+        "HARD_AMENITY",
+        "BUFFER_LAND",
+        "UNALLOCATED"
+      ],
+      "title": "PhysicalUse",
+      "type": "string"
+    },
+    "Shape": {
+      "additionalProperties": false,
+      "description": "A polygon: its outer ring and any holes, metres, survey frame, not closed (the first\npoint is not repeated). Every ring has at least three points and only finite coordinates.",
+      "properties": {
+        "holes": {
+          "default": [],
+          "items": {
+            "items": {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "type": "array"
+            },
+            "type": "array"
+          },
+          "title": "Holes",
+          "type": "array"
+        },
+        "outer": {
+          "items": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "type": "array"
+          },
+          "minItems": 3,
+          "title": "Outer",
+          "type": "array"
+        }
+      },
+      "required": [
+        "outer"
+      ],
+      "title": "Shape",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "The net site, every square metre once, by what it physically is.",
+  "properties": {
+    "entries": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/PartitionEntry"
+      },
+      "title": "Entries",
+      "type": "array"
+    },
+    "net_area_sqm": {
+      "exclusiveMinimum": 0,
+      "title": "Net Area Sqm",
+      "type": "number"
+    },
+    "schema_version": {
+      "const": "1.1",
+      "default": "1.1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "tolerance": {
+      "default": 0.005,
+      "maximum": 0.05,
+      "minimum": 0,
+      "title": "Tolerance",
+      "type": "number"
+    }
+  },
+  "required": [
+    "net_area_sqm"
+  ],
+  "title": "PartitionLedger",
+  "type": "object"
+}

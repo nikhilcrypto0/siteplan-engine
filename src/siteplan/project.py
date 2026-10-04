@@ -15,6 +15,7 @@ from shapely.geometry import Polygon
 from siteplan import rules
 from siteplan.area_statement import AreaStatement
 from siteplan.checks import Building, Site
+from siteplan.contracts.common import SourceKind
 from siteplan.layout import LayoutRequest
 from siteplan.provenance import Provenance
 from siteplan.units import ft_to_m, parse_acre_gunta, sqft_to_sqm, sqyd_to_sqm
@@ -187,6 +188,10 @@ class Project(BaseModel):
         "architect's answer")
     status: dict[str, Provenance] = Field(
         default_factory=dict, description="How far each value can be trusted, keyed as sources")
+    source_kinds: dict[str, SourceKind] = Field(
+        default_factory=dict, description="What kind of source each value came from, keyed as "
+        "sources, where it is said rather than read off the source text; a blind acceptance run "
+        "refuses any FIRM_FINISHED_PLAN value")
 
     def to_site(self) -> Site:
         s = self.site

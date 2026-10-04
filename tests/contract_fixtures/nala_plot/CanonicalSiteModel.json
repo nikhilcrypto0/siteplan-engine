@@ -1,0 +1,162 @@
+{
+ "schema_version": "1.1",
+ "site_id": "nala_plot",
+ "name": "Made-up nala plot",
+ "survey_file": null,
+ "frame": "survey metres, as drawn",
+ "boundary": {
+  "outer": [
+   [
+    150.0,
+    0.0
+   ],
+   [
+    150.0,
+    120.0
+   ],
+   [
+    0.0,
+    120.0
+   ],
+   [
+    0.0,
+    0.0
+   ]
+  ],
+  "holes": []
+ },
+ "written_area_sqm": null,
+ "ownership": {
+  "gross_sqm": {
+   "value": 18000.0,
+   "status": "EXTRACTED",
+   "source_kind": "SURVEY",
+   "source": "survey: made-up fixture"
+  },
+  "written_as": null,
+  "deductions": [],
+  "net_sqm": {
+   "value": 18000.0,
+   "status": "USER_CONFIRMED",
+   "source_kind": "ARCHITECT",
+   "source": "architect: made-up fixture"
+  },
+  "tolerance": 0.02
+ },
+ "net_plot": {
+  "value": {
+   "outer": [
+    [
+     150.0,
+     0.0
+    ],
+    [
+     150.0,
+     120.0
+    ],
+    [
+     0.0,
+     120.0
+    ],
+    [
+     0.0,
+     0.0
+    ]
+   ],
+   "holes": []
+  },
+  "status": "USER_CONFIRMED",
+  "source_kind": "ARCHITECT",
+  "source": "architect: made-up fixture"
+ },
+ "roads": [
+  {
+   "id": 1,
+   "side": "W",
+   "drawn_width_m": null,
+   "divided": false,
+   "distance_m": null,
+   "legal_row_m": {
+    "value": 18.288,
+    "status": "USER_CONFIRMED",
+    "source_kind": "ARCHITECT",
+    "source": "architect: made-up fixture"
+   },
+   "row_status": "DECLARED_ON_SITE_PLAN",
+   "master_plan_row_m": null
+  }
+ ],
+ "access": {
+  "road_id": {
+   "value": 1,
+   "status": "EXTRACTED",
+   "source_kind": "SURVEY",
+   "source": "survey: road 1"
+  },
+  "side": {
+   "value": "W",
+   "status": "EXTRACTED",
+   "source_kind": "SURVEY",
+   "source": "survey: road 1"
+  },
+  "dead_end": {
+   "value": false,
+   "status": "USER_CONFIRMED",
+   "source_kind": "ARCHITECT",
+   "source": "architect: made-up fixture"
+  },
+  "joins_12m_street": {
+   "value": null,
+   "status": "UNVERIFIED",
+   "source_kind": "ARCHITECT",
+   "source": "architect: unknown"
+  }
+ },
+ "water": [
+  {
+   "id": "water-1",
+   "water_class": {
+    "value": "nala_over_10m",
+    "status": "USER_CONFIRMED",
+    "source_kind": "ARCHITECT",
+    "source": "architect: made-up fixture"
+   },
+   "drawn_as": "#00FFFF",
+   "lines": [
+    {
+     "points": [
+      [
+       75.0,
+       -5.0
+      ],
+      [
+       75.0,
+       125.0
+      ]
+     ]
+    }
+   ],
+   "channel": []
+  }
+ ],
+ "features": [],
+ "spot_levels": 0,
+ "place": null,
+ "jurisdiction": {
+  "authority": {
+   "value": "HMDA",
+   "status": "USER_CONFIRMED",
+   "source_kind": "ARCHITECT",
+   "source": "architect: made-up fixture"
+  },
+  "inside_cure": {
+   "value": false,
+   "status": "USER_CONFIRMED",
+   "source_kind": "ARCHITECT",
+   "source": "architect: made-up fixture"
+  }
+ },
+ "coordinates": null,
+ "proposed_floors": null,
+ "sanctioned_floors": null
+}

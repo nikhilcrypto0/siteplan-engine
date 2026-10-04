@@ -1,5 +1,6 @@
 import pytest
 
+from siteplan import rules
 from siteplan.rules import TABLE_IV, band_for_height
 
 
@@ -28,3 +29,34 @@ def test_the_2019_bands_above_55_m_are_encoded(height, road, setback):
 def test_table_iv_has_no_gaps_or_overlaps():
     for lower, upper in zip(TABLE_IV, TABLE_IV[1:], strict=False):
         assert lower.up_to_m == upper.above_m
+
+
+def test_the_five_percent_amenity_share_is_rule_9_o_and_10_i_and_is_not_rule_8():
+    """Read on p.16 of the 2012 text: the clause stands under row housing and cluster housing.
+    A brief once called it rule 8(o); rule 8 (group development) has no such clause."""
+    assert rules.LARGE_PROJECT_FROM_ACRES == 5.0
+    assert rules.LARGE_PROJECT_AMENITY_SHARE_OF_SITE == 0.05
+    clause = rules.LARGE_PROJECT_AMENITY_CLAUSE
+    assert "rule 9(o)" in clause and "rule 10(i)" in clause and "p.16" in clause
+    assert "8(o)" not in clause
+
+
+def test_the_fire_tender_loading_is_pinned():
+    """NBC 2016 Part 3 4.6(c), as recorded in AGENTS.md; a paving specification the engine
+    carries but never checks."""
+    assert rules.FIRE_TENDER_LOAD_T == 45.0
+
+
+def test_the_distance_from_an_electricity_line_is_as_rule_3c_gives_it():
+    """Rule 3(c)(i), pp.4-5 of the 2012 order: 3 m from a high-tension line, 1.5 m from a
+    low-tension line, 'both vertical and horizontal'."""
+    assert rules.ELECTRICAL_HT_CLEARANCE_M == 3.0
+    assert rules.ELECTRICAL_LT_CLEARANCE_M == 1.5
+    assert "3(c)(i)" in rules.ELECTRICAL_CLAUSE
+
+
+def test_a_ramp_in_a_side_or_rear_setback_leaves_7_m_for_fire_vehicles():
+    """Rule 13(c)(vii): 'after leaving minimum 7m of setback for movement of fire-fighting
+    vehicles'."""
+    assert rules.RAMP_FIRE_CLEARANCE_M == 7.0
+    assert "13(c)(vii)" in rules.RAMP_CLAUSE

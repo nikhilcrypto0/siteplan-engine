@@ -1,55 +1,71 @@
 {
-  "note": "EXAMPLE amenity sizes, chosen from ordinary court and pool dimensions and from the labels on the Suchitra master plan. Every firm has its own list: replace this file per project or per client.",
+  "note": "EXAMPLE amenity sizes, chosen from ordinary court and pool dimensions and from the labels on the Suchitra master plan. Every firm has its own list: replace this file per project or per client. Each item states what it is for (use) and what its ground is made of (surface: SOFT, HARD or BUILT); these are this example's own statements and a firm states its own. The engine never reads a surface off an item's name, and an item that states neither is left out of the organized open space as UNVERIFIED.",
   "items": [
     {
       "name": "SWIMMING POOL",
       "width_m": 25.0,
       "depth_m": 12.5,
-      "near": "club"
+      "near": "club",
+      "use": "POOL",
+      "surface": "HARD"
     },
     {
       "name": "KIDS POOL",
       "width_m": 8.0,
       "depth_m": 5.0,
-      "near": "club"
+      "near": "club",
+      "use": "POOL",
+      "surface": "HARD"
     },
     {
       "name": "BADMINTON COURT",
       "width_m": 13.4,
       "depth_m": 6.1,
-      "near": "club"
+      "near": "club",
+      "use": "SPORT_COURT",
+      "surface": "HARD"
     },
     {
       "name": "CRICKET PRACTICE NET",
       "width_m": 25.0,
       "depth_m": 4.0,
-      "near": "edge"
+      "near": "edge",
+      "use": "SPORT_COURT",
+      "surface": "HARD"
     },
     {
       "name": "CHILDRENS PLAY",
       "width_m": 12.0,
       "depth_m": 10.0,
       "near": "open space",
-      "counts_as_open_space": true
+      "counts_as_open_space": true,
+      "use": "TOT_LOT",
+      "surface": "SOFT"
     },
     {
       "name": "FITNESS DECK",
       "width_m": 9.0,
       "depth_m": 6.0,
-      "near": "club"
+      "near": "club",
+      "use": "PAVED_DECK",
+      "surface": "HARD"
     },
     {
       "name": "SENIORS SEATING",
       "width_m": 8.0,
       "depth_m": 6.0,
       "near": "open space",
-      "counts_as_open_space": true
+      "counts_as_open_space": true,
+      "use": "SOFT_LANDSCAPE",
+      "surface": "SOFT"
     },
     {
       "name": "SECURITY CABIN",
       "width_m": 3.5,
       "depth_m": 3.0,
-      "near": "gate"
+      "near": "gate",
+      "use": "BUILT_SERVICE",
+      "surface": "BUILT"
     }
   ]
 }

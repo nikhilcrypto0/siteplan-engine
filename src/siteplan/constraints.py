@@ -23,7 +23,6 @@ a 45 degree test) cannot be caught that way; the ones that shape a result are li
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import StrEnum
 from itertools import groupby
 
 from siteplan import (
@@ -42,14 +41,7 @@ from siteplan import (
     site_amenities,
     towers,
 )
-
-
-class Basis(StrEnum):
-    LEGAL_RULE = "LEGAL_RULE"
-    FIRM_STANDARD = "FIRM_STANDARD"
-    ENGINE_DESIGN_ASSUMPTION = "ENGINE_DESIGN_ASSUMPTION"
-    UNRESOLVED_INTERPRETATION = "UNRESOLVED_INTERPRETATION"
-    SITE_INPUT = "SITE_INPUT"
+from siteplan.basis import Basis  # lives in basis.py so the contracts need not import this module
 
 
 @dataclass(frozen=True)
@@ -214,6 +206,15 @@ REGISTRY: tuple[Constraint, ...] = (
         Basis.LEGAL_RULE, rules.WATER_BUFFER_CLAUSE, ("rules.WATER_BUFFER_M",),
     ),
     Constraint(
+        "Open space", "The distance, vertical and horizontal, a building keeps from an "
+                      "electricity line.",
+        f"{rules.ELECTRICAL_HT_CLEARANCE_M:g} m high-tension, "
+        f"{rules.ELECTRICAL_LT_CLEARANCE_M:g} m low-tension", Basis.LEGAL_RULE,
+        rules.ELECTRICAL_CLAUSE,
+        ("rules.ELECTRICAL_HT_CLEARANCE_M", "rules.ELECTRICAL_LT_CLEARANCE_M"),
+        note="Carried in ResolvedRules; the prototype's layout does not model it.",
+    ),
+    Constraint(
         "Open space", "The water buffer is measured from the lines the surveyor drew for the "
                       "water body, which stand in for its Full Tank Level or defined boundary.",
         "from the drawn lines", Basis.ENGINE_DESIGN_ASSUMPTION, "none (runner.load_water)",
@@ -341,10 +342,12 @@ REGISTRY: tuple[Constraint, ...] = (
         f"{rules.FIRE_TENDER_MIN_WIDTH_M:g} m on all sides; {rules.FIRE_TURNING_RADIUS_M:g} m "
         f"turning radius; entrance {rules.GATE_MIN_WIDTH_M:g} m wide and "
         f"{rules.ENTRANCE_CLEAR_HEIGHT_M:g} m clear; the street joins one of "
-        f"{rules.FIRE_STREET_JOIN_M:g} m; no dead end above {rules.DEAD_END_MAX_HEIGHT_M:g} m",
+        f"{rules.FIRE_STREET_JOIN_M:g} m; no dead end above {rules.DEAD_END_MAX_HEIGHT_M:g} m; "
+        f"a {rules.FIRE_TENDER_LOAD_T:g} t surface (never checked)",
         Basis.LEGAL_RULE, f"{rules.FIRE_ACCESS_CLAUSE}; {rules.GATE_CLAUSE}; "
         f"{rules.FIRE_STREET_CLAUSE}; {rules.DEAD_END_CLAUSE}",
-        ("rules.FIRE_TENDER_MIN_WIDTH_M", "rules.FIRE_TURNING_RADIUS_M", "rules.GATE_MIN_WIDTH_M",
+        ("rules.FIRE_TENDER_MIN_WIDTH_M", "rules.FIRE_TENDER_LOAD_T", "rules.FIRE_TURNING_RADIUS_M",
+         "rules.GATE_MIN_WIDTH_M",
          "rules.ENTRANCE_CLEAR_HEIGHT_M", "rules.FIRE_STREET_JOIN_M", "rules.DEAD_END_MAX_HEIGHT_M",
          "access.LANE_M", "access.R_OUT", "access_checks.LANE_M"),
         note="NBC 2016 Part 3 4.6, brought in by rule 15(b)(iv); read from the page images. The "
@@ -481,8 +484,11 @@ REGISTRY: tuple[Constraint, ...] = (
     Constraint(
         "Parking", "Cellar ramps: the single ramp's width, the pair's, and the gradient.",
         f"one of {rules.RAMP_SINGLE_MIN_WIDTH_M:g} m or two of {rules.RAMP_PAIR_MIN_WIDTH_M:g} m "
-        f"at 1 in {round(1 / rules.RAMP_MAX_GRADIENT)}", Basis.LEGAL_RULE, rules.RAMP_CLAUSE,
-        ("rules.RAMP_SINGLE_MIN_WIDTH_M", "rules.RAMP_PAIR_MIN_WIDTH_M", "rules.RAMP_MAX_GRADIENT"),
+        f"at 1 in {round(1 / rules.RAMP_MAX_GRADIENT)}; in a side or rear setback only leaving "
+        f"{rules.RAMP_FIRE_CLEARANCE_M:g} m for fire vehicles", Basis.LEGAL_RULE,
+        rules.RAMP_CLAUSE,
+        ("rules.RAMP_SINGLE_MIN_WIDTH_M", "rules.RAMP_PAIR_MIN_WIDTH_M", "rules.RAMP_MAX_GRADIENT",
+         "rules.RAMP_FIRE_CLEARANCE_M"),
         note="The layout draws the single ramp, outside every setback (stricter than the side "
              "and rear allowance) and out of the fire lanes, with its top on a road.",
     ),
@@ -599,6 +605,19 @@ REGISTRY: tuple[Constraint, ...] = (
         ("layout.EXPLORED_TOWER_LENGTHS_M",),
         note="No order limits a block's length since G.O.Ms.No.65 of 2019; the two shorter caps "
              "explored are the engine's choice of what to try.",
+    ),
+    Constraint(
+        "Towers", "Design margins: what is kept in hand above each legal minimum (setbacks, the "
+                  "gap between blocks, road widths, organised open space, parking), so that a "
+                  "layout is not planned on a legal cliff.",
+        "none set: " + ", ".join(f"{name} {field.default:g}"
+                                 for name, field in intake.WorkspaceMargins.model_fields.items()),
+        Basis.FIRM_STANDARD, f"{_WORKSPACE}, design_margins",
+        tuple(f"intake.WorkspaceMargins.{name}" for name in intake.WorkspaceMargins.model_fields),
+        note="Never law. The optimizer aims at the legal minimum plus the margin; every check "
+             "goes on judging against the legal minimum alone, and a report shows the legal "
+             "minimum, the target and what is provided. A margin the firm leaves out is no "
+             "margin. The prototype generator plans on the legal minimum and applies none.",
     ),
     Constraint(
         "Towers", "The fewest flats per side a tower may have.",
@@ -718,6 +737,17 @@ REGISTRY: tuple[Constraint, ...] = (
          "rules.TDR_EXTRA_FLOORS_ABOVE_PLOT_SQM"),
         note="Shown by the floors calculator beside its answer, never in a layout: an option the "
              "owner buys. The 40, 60 and 80 ft roads are taken as Table IV's 12, 18 and 24 m.",
+    ),
+    Constraint(
+        "Not used by generation", "In a project of more than this many acres, common amenities "
+                                  "take this share of the site area.",
+        f"{rules.LARGE_PROJECT_FROM_ACRES:g} acres; "
+        f"{_pct(rules.LARGE_PROJECT_AMENITY_SHARE_OF_SITE)}",
+        Basis.LEGAL_RULE, rules.LARGE_PROJECT_AMENITY_CLAUSE,
+        ("rules.LARGE_PROJECT_FROM_ACRES", "rules.LARGE_PROJECT_AMENITY_SHARE_OF_SITE"),
+        note="Written for row and cluster housing (rules 9(o) and 10(i)); rule 8, group "
+             "development, has no such clause, so it is not applied to the apartment schemes "
+             "planned here. Carried in ResolvedRules as an open reading, never as a requirement.",
     ),
     Constraint(
         "Not used by generation", "The share of built-up area handed over by affidavit before "

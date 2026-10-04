@@ -1,0 +1,236 @@
+{
+ "schema_version": "1.1",
+ "id": "single-core-small-4",
+ "family": "SINGLE_CORE_SMALL",
+ "source_kind": "ENGINE_DEFAULT",
+ "source": "made-up contract fixture",
+ "footprint": {
+  "outer": [
+   [
+    15.5,
+    -12.065
+   ],
+   [
+    15.5,
+    12.065
+   ],
+   [
+    -15.5,
+    12.065
+   ],
+   [
+    -15.5,
+    -12.065
+   ]
+  ],
+  "holes": []
+ },
+ "length_m": 31.0,
+ "depth_m": 24.13,
+ "cores": 1,
+ "modules": [
+  {
+   "id": "m1",
+   "type_id": "2A",
+   "category": "2BHK",
+   "shape": {
+    "outer": [
+     [
+      -5.5,
+      1.065
+     ],
+     [
+      -5.5,
+      12.065
+     ],
+     [
+      -15.5,
+      12.065
+     ],
+     [
+      -15.5,
+      1.065
+     ]
+    ],
+    "holes": []
+   },
+   "saleable_sqft": 1190.0,
+   "carpet_sqft": null,
+   "built_up_sqft": null
+  },
+  {
+   "id": "m2",
+   "type_id": "3A",
+   "category": "3BHK",
+   "shape": {
+    "outer": [
+     [
+      15.5,
+      1.065
+     ],
+     [
+      15.5,
+      12.065
+     ],
+     [
+      2.0,
+      12.065
+     ],
+     [
+      2.0,
+      1.065
+     ]
+    ],
+    "holes": []
+   },
+   "saleable_sqft": 1690.0,
+   "carpet_sqft": null,
+   "built_up_sqft": null
+  },
+  {
+   "id": "m3",
+   "type_id": "2A",
+   "category": "2BHK",
+   "shape": {
+    "outer": [
+     [
+      -5.5,
+      -12.065
+     ],
+     [
+      -5.5,
+      -1.065
+     ],
+     [
+      -15.5,
+      -1.065
+     ],
+     [
+      -15.5,
+      -12.065
+     ]
+    ],
+    "holes": []
+   },
+   "saleable_sqft": 1190.0,
+   "carpet_sqft": null,
+   "built_up_sqft": null
+  },
+  {
+   "id": "m4",
+   "type_id": "3A",
+   "category": "3BHK",
+   "shape": {
+    "outer": [
+     [
+      15.5,
+      -12.065
+     ],
+     [
+      15.5,
+      -1.065
+     ],
+     [
+      2.0,
+      -1.065
+     ],
+     [
+      2.0,
+      -12.065
+     ]
+    ],
+    "holes": []
+   },
+   "saleable_sqft": 1690.0,
+   "carpet_sqft": null,
+   "built_up_sqft": null
+  }
+ ],
+ "core_zones": [
+  {
+   "shape": {
+    "outer": [
+     [
+      2.0,
+      -12.065
+     ],
+     [
+      2.0,
+      12.065
+     ],
+     [
+      -5.5,
+      12.065
+     ],
+     [
+      -5.5,
+      -12.065
+     ]
+    ],
+    "holes": []
+   },
+   "lifts": 2,
+   "stairs": 1
+  }
+ ],
+ "corridor": [
+  {
+   "outer": [
+    [
+     15.5,
+     -1.065
+    ],
+    [
+     2.0,
+     -1.065
+    ],
+    [
+     2.0,
+     1.065
+    ],
+    [
+     15.5,
+     1.065
+    ]
+   ],
+   "holes": []
+  },
+  {
+   "outer": [
+    [
+     -15.5,
+     1.065
+    ],
+    [
+     -5.5,
+     1.065
+    ],
+    [
+     -5.5,
+     -1.065
+    ],
+    [
+     -15.5,
+     -1.065
+    ]
+   ],
+   "holes": []
+  }
+ ],
+ "per_floor": {
+  "flats": 4,
+  "flats_by_type": {
+   "2BHK": 2,
+   "3BHK": 2
+  },
+  "gross_floor_sqm": 748.03,
+  "flats_own_sqm": 517.0,
+  "common_core_sqm": 231.02999999999997,
+  "saleable_sqft": 5760.0
+ },
+ "heights": {
+  "stilt_height_m": null,
+  "floor_to_floor_m": null
+ },
+ "stretch": null
+}

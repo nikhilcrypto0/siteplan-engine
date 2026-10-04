@@ -1,0 +1,592 @@
+{
+ "schema_version": "1.1",
+ "candidate_id": "small_plot-1",
+ "site_ref": "a3ef41f7ee2c7ea9",
+ "rules_ref": "75ccdbc7b5a1b77e",
+ "brief_ref": "ce0812345ac34130",
+ "envelope_ref": "41dcaed41bebeaa2",
+ "strategy": "hand-made",
+ "seed": null,
+ "interpretation_basis": {
+  "stilt_in_rule_height": "counted",
+  "circulation_in_setback": "not_allowed"
+ },
+ "prototypes_used": [
+  {
+   "schema_version": "1.1",
+   "id": "single-core-small-4",
+   "family": "SINGLE_CORE_SMALL",
+   "source_kind": "ENGINE_DEFAULT",
+   "source": "made-up contract fixture",
+   "footprint": {
+    "outer": [
+     [
+      15.5,
+      -12.065
+     ],
+     [
+      15.5,
+      12.065
+     ],
+     [
+      -15.5,
+      12.065
+     ],
+     [
+      -15.5,
+      -12.065
+     ]
+    ],
+    "holes": []
+   },
+   "length_m": 31.0,
+   "depth_m": 24.13,
+   "cores": 1,
+   "modules": [
+    {
+     "id": "m1",
+     "type_id": "2A",
+     "category": "2BHK",
+     "shape": {
+      "outer": [
+       [
+        -5.5,
+        1.065
+       ],
+       [
+        -5.5,
+        12.065
+       ],
+       [
+        -15.5,
+        12.065
+       ],
+       [
+        -15.5,
+        1.065
+       ]
+      ],
+      "holes": []
+     },
+     "saleable_sqft": 1190.0,
+     "carpet_sqft": null,
+     "built_up_sqft": null
+    },
+    {
+     "id": "m2",
+     "type_id": "3A",
+     "category": "3BHK",
+     "shape": {
+      "outer": [
+       [
+        15.5,
+        1.065
+       ],
+       [
+        15.5,
+        12.065
+       ],
+       [
+        2.0,
+        12.065
+       ],
+       [
+        2.0,
+        1.065
+       ]
+      ],
+      "holes": []
+     },
+     "saleable_sqft": 1690.0,
+     "carpet_sqft": null,
+     "built_up_sqft": null
+    },
+    {
+     "id": "m3",
+     "type_id": "2A",
+     "category": "2BHK",
+     "shape": {
+      "outer": [
+       [
+        -5.5,
+        -12.065
+       ],
+       [
+        -5.5,
+        -1.065
+       ],
+       [
+        -15.5,
+        -1.065
+       ],
+       [
+        -15.5,
+        -12.065
+       ]
+      ],
+      "holes": []
+     },
+     "saleable_sqft": 1190.0,
+     "carpet_sqft": null,
+     "built_up_sqft": null
+    },
+    {
+     "id": "m4",
+     "type_id": "3A",
+     "category": "3BHK",
+     "shape": {
+      "outer": [
+       [
+        15.5,
+        -12.065
+       ],
+       [
+        15.5,
+        -1.065
+       ],
+       [
+        2.0,
+        -1.065
+       ],
+       [
+        2.0,
+        -12.065
+       ]
+      ],
+      "holes": []
+     },
+     "saleable_sqft": 1690.0,
+     "carpet_sqft": null,
+     "built_up_sqft": null
+    }
+   ],
+   "core_zones": [
+    {
+     "shape": {
+      "outer": [
+       [
+        2.0,
+        -12.065
+       ],
+       [
+        2.0,
+        12.065
+       ],
+       [
+        -5.5,
+        12.065
+       ],
+       [
+        -5.5,
+        -12.065
+       ]
+      ],
+      "holes": []
+     },
+     "lifts": 2,
+     "stairs": 1
+    }
+   ],
+   "corridor": [
+    {
+     "outer": [
+      [
+       15.5,
+       -1.065
+      ],
+      [
+       2.0,
+       -1.065
+      ],
+      [
+       2.0,
+       1.065
+      ],
+      [
+       15.5,
+       1.065
+      ]
+     ],
+     "holes": []
+    },
+    {
+     "outer": [
+      [
+       -15.5,
+       1.065
+      ],
+      [
+       -5.5,
+       1.065
+      ],
+      [
+       -5.5,
+       -1.065
+      ],
+      [
+       -15.5,
+       -1.065
+      ]
+     ],
+     "holes": []
+    }
+   ],
+   "per_floor": {
+    "flats": 4,
+    "flats_by_type": {
+     "2BHK": 2,
+     "3BHK": 2
+    },
+    "gross_floor_sqm": 748.03,
+    "flats_own_sqm": 517.0,
+    "common_core_sqm": 231.02999999999997,
+    "saleable_sqft": 5760.0
+   },
+   "heights": {
+    "stilt_height_m": null,
+    "floor_to_floor_m": null
+   },
+   "stretch": null
+  }
+ ],
+ "towers": [
+  {
+   "name": "T1",
+   "prototype_id": "single-core-small-4",
+   "x": 30.0,
+   "y": 25.0,
+   "rotation_deg": 0.0,
+   "mirrored": false,
+   "floors_above_stilt": 5,
+   "has_stilt": true,
+   "footprint": {
+    "outer": [
+     [
+      45.5,
+      12.935
+     ],
+     [
+      45.5,
+      37.065
+     ],
+     [
+      14.5,
+      37.065
+     ],
+     [
+      14.5,
+      12.935
+     ]
+    ],
+    "holes": []
+   }
+  }
+ ],
+ "circulation": {
+  "roads": [
+   {
+    "id": "road-1",
+    "kind": "DRIVEWAY",
+    "shapes": [
+     {
+      "outer": [
+       [
+        29.5,
+        0.0
+       ],
+       [
+        29.5,
+        12.935
+       ],
+       [
+        25.0,
+        12.935
+       ],
+       [
+        25.0,
+        0.0
+       ]
+      ],
+      "holes": []
+     }
+    ],
+    "declared_width_m": 4.5,
+    "tags": []
+   }
+  ],
+  "gates": [
+   {
+    "shape": {
+     "outer": [
+      [
+       29.5,
+       0.0
+      ],
+      [
+       29.5,
+       0.5
+      ],
+      [
+       25.0,
+       0.5
+      ],
+      [
+       25.0,
+       0.0
+      ]
+     ],
+     "holes": []
+    },
+    "side": "S",
+    "width_m": 4.5,
+    "note": ""
+   }
+  ],
+  "fire_hardstanding": []
+ },
+ "program": {
+  "open_space": [
+   {
+    "outer": [
+     [
+      58.0,
+      40.0
+     ],
+     [
+      58.0,
+      48.0
+     ],
+     [
+      2.0,
+      48.0
+     ],
+     [
+      2.0,
+      40.0
+     ]
+    ],
+    "holes": []
+   }
+  ],
+  "green_strip": [],
+  "club_house": null,
+  "amenities": [],
+  "amenities_missed": [],
+  "ramps": [],
+  "cellars": null,
+  "bays": []
+ },
+ "partition": {
+  "schema_version": "1.1",
+  "net_area_sqm": 3000.0,
+  "tolerance": 0.005,
+  "entries": [
+   {
+    "use": "TOWER",
+    "shapes": [
+     {
+      "outer": [
+       [
+        45.5,
+        12.935
+       ],
+       [
+        45.5,
+        37.065
+       ],
+       [
+        14.5,
+        37.065
+       ],
+       [
+        14.5,
+        12.935
+       ]
+      ],
+      "holes": []
+     }
+    ],
+    "area_sqm": 748.0299999999999,
+    "ref": "T1",
+    "tags": [],
+    "reason": null
+   },
+   {
+    "use": "ROAD",
+    "shapes": [
+     {
+      "outer": [
+       [
+        29.5,
+        0.0
+       ],
+       [
+        29.5,
+        12.935
+       ],
+       [
+        25.0,
+        12.935
+       ],
+       [
+        25.0,
+        0.0
+       ]
+      ],
+      "holes": []
+     }
+    ],
+    "area_sqm": 58.2075,
+    "ref": "road-1",
+    "tags": [],
+    "reason": null
+   },
+   {
+    "use": "SOFT_OPEN_SPACE",
+    "shapes": [
+     {
+      "outer": [
+       [
+        58.0,
+        40.0
+       ],
+       [
+        58.0,
+        48.0
+       ],
+       [
+        2.0,
+        48.0
+       ],
+       [
+        2.0,
+        40.0
+       ]
+      ],
+      "holes": []
+     }
+    ],
+    "area_sqm": 448.0,
+    "ref": "tot-lot 1",
+    "tags": [],
+    "reason": null
+   },
+   {
+    "use": "UNALLOCATED",
+    "shapes": [
+     {
+      "outer": [
+       [
+        60.0,
+        50.0
+       ],
+       [
+        60.0,
+        0.0
+       ],
+       [
+        29.5,
+        0.0
+       ],
+       [
+        29.5,
+        12.935
+       ],
+       [
+        45.5,
+        12.935
+       ],
+       [
+        45.5,
+        37.065
+       ],
+       [
+        14.5,
+        37.065
+       ],
+       [
+        14.5,
+        12.935
+       ],
+       [
+        25.0,
+        12.935
+       ],
+       [
+        25.0,
+        0.0
+       ],
+       [
+        0.0,
+        0.0
+       ],
+       [
+        0.0,
+        50.0
+       ]
+      ],
+      "holes": [
+       [
+        [
+         58.0,
+         48.0
+        ],
+        [
+         2.0,
+         48.0
+        ],
+        [
+         2.0,
+         40.0
+        ],
+        [
+         58.0,
+         40.0
+        ]
+       ]
+      ]
+     }
+    ],
+    "area_sqm": 1745.7625000000003,
+    "ref": null,
+    "tags": [],
+    "reason": "made-up fixture: ground left without a use"
+   }
+  ]
+ },
+ "rule_layers": {
+  "schema_version": "1.1",
+  "layers": []
+ },
+ "metrics": {
+  "total_flats": 20,
+  "flats_by_type": {
+   "2BHK": 10,
+   "3BHK": 10
+  },
+  "saleable_sqft": 28800.0,
+  "tower_floor_sqft": 40259.0,
+  "flats_own_sqft": 27825.0,
+  "common_core_sqft": 12434.0,
+  "built_up_sqft": 40259.0,
+  "open_space_sqm": 448.0,
+  "open_space_share_pct": 14.93,
+  "mix_error": 0.19999999999999998,
+  "extra": {}
+ },
+ "generator_claims": [
+  {
+   "rule": "Setbacks (Table III)",
+   "status": "UNVERIFIED",
+   "measured": "14.5 m least",
+   "required": "Table III (rule 5)",
+   "clause": "G.O.168 rule 5",
+   "note": "below 21 m: Table III is not encoded yet"
+  }
+ ],
+ "scores": {},
+ "pareto_tag": null,
+ "caveats": [
+  "made-up fixture: a non-high-rise block on a site under 4,000 m²"
+ ]
+}
