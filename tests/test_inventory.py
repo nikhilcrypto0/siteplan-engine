@@ -22,6 +22,7 @@ SOURCES = {
     ),
     Where.LOOKUP: inspect.getsource(rules.height_rules),
     Where.FLOORS: (SRC / "max_floors.py").read_text(),
+    Where.RESOLVER: "".join(p.read_text() for p in sorted((SRC / "legal").glob("*.py"))),
 }
 
 

@@ -103,8 +103,11 @@ def _bands(rules: ResolvedRules, lands, cap_note: str) -> list[BandEnvelope]:
                 green_strip_applies=band.green_strip_m is not None,
                 note=_band_note(land.buildable.is_empty, cap_note, band, permission)))
         elif band.kind is BandKind.NON_HIGH_RISE:
+            # no land: not permitted, or the land ran out in a shorter band (taller land is
+            # inside a shorter band's, so nothing is left for this one)
+            ran_out = band.setback_m is not None and permission is not Eligibility.PROHIBITED
             out.append(BandEnvelope(**common, setback_m=band.setback_m,
-                                    note=_band_note(False, "", band, permission)))
+                                    note=_band_note(ran_out, "", band, permission)))
     return out
 
 

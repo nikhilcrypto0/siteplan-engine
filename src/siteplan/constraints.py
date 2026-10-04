@@ -137,14 +137,14 @@ REGISTRY: tuple[Constraint, ...] = (
     Constraint(
         "Setbacks", "The Table IV figure is kept on every side, the front included.",
         "column 4 all round", Basis.LEGAL_RULE, rules.FRONT_SETBACK_CLAUSE,
-        note="Read on 2026-10-01: 'The Front setback shall be as per Table-III of rule-5 & "
-             "Table-IV of rule-7 for Non High Rise & High Rise buildings respectively.' The "
-             "Table III building line applies to buildings below high-rise only. Corrected on "
-             "2026-10-03 (A2): that sentence is rule 12(b), p.17, for 'U' type commercial "
-             "buildings with a central courtyard. The high-rise front is rule 7(a)(xi), p.14: "
-             "the higher of column 4 and the Table III Building Line, which differs only for "
-             "exactly 21 m on a road above 30 m (7.5 m, not 7 m); the legacy layout and checker "
-             "keep column 4.",
+        note="Read on 2026-10-01 from p.17, clause (b), 'The Front setback shall be as per "
+             "Table-III of rule-5 & Table-IV of rule-7 for Non High Rise & High Rise buildings "
+             "respectively'; corrected on 2026-10-03 (A2): that sentence is rule 12(b), for "
+             "'U' type commercial buildings with a central courtyard. The high-rise front is "
+             "rule 7(a)(xi), p.14 (the clause now cited): the higher of column 4 and the Table "
+             "III Building Line, which differs only for exactly 21 m on a road above 30 m "
+             "(7.5 m, not 7 m); the legacy layout and checker keep column 4, and the bands "
+             "carry the front.",
     ),
     Constraint(
         "Setbacks", "Whether internal roads, driveways and fire lanes may run inside the Table "
