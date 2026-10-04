@@ -35,7 +35,6 @@ from siteplan.contracts.validation import Check, Family, PairMeasure, TowerMeasu
 from siteplan.provenance import Provenance
 from siteplan.validator.context import Context, is_known
 from siteplan.validator.measure import (
-    ALL_ROUND_NOTE,
     LOW_GAP_CLAUSE,
     LOW_GAP_RULE,
     TOL_M,
@@ -59,8 +58,6 @@ from siteplan.validator.readings import (
 UNVERIFIED_DRAWING = "UNVERIFIED_DRAWING_VALUE"  # a road's width as drawn, never confirmed
 TABLE_III_NOTE = ("Below the high-rise threshold Table III (rule 5) applies and is not modelled "
                   "yet: the validator does not judge it.")
-HIGH_RISE_FRONT_NOTE = ("The front of a high-rise keeps the Table IV figure too, measured on the "
-                        "net plot.")
 
 
 def _below_note(ctx: Context) -> str:
@@ -417,7 +414,7 @@ def setback_checks(ctx: Context) -> list[Check]:
             required = f">= {need:.2f} m to the net plot line"
             if outside:  # no row of any table is met by a block that is not on the plot
                 return Cell(Status.FAIL, f"{gap:.2f} m: not wholly inside the net plot", required)
-            note = HIGH_RISE_FRONT_NOTE if cls.high_rise else ALL_ROUND_NOTE
+            note = cls.setback_note
             if not cls.confirmed:
                 return Cell(Status.UNVERIFIED, f"{gap:.2f} m", required,
                             f"{note} {UNCONFIRMED_NOTE}")
@@ -437,7 +434,7 @@ def _gap_asked(ca: HeightClass, cb: HeightClass) -> str:
 
 
 def gap_cell(ca: HeightClass, cb: HeightClass, ha: float, hb: float, spacing: str,
-              gap: float) -> Cell:
+             gap: float) -> Cell:
     """The gap between two blocks on the figures `gap_sources` names. Two blocks below the
     high-rise height are held to the tallest block's side setback in terms (rule 5(xiii)), which
     the cell quotes; every other pair is judged under the reading of mixed-height spacing."""
@@ -485,7 +482,7 @@ def spacing_checks(ctx: Context) -> list[Check]:
             if classes is None:
                 return unknown_reading(STILT_IN_RULE_HEIGHT, reading)
             return gap_cell(classes[a.name], classes[b.name], a.rule_height_m(reading),
-                             b.rule_height_m(reading), spacing, gap)
+                            b.rule_height_m(reading), spacing, gap)
 
         out.append(check_from(
             run(ctx.rules, [STILT_IN_RULE_HEIGHT, MIXED_HEIGHT_SPACING], cell),

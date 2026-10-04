@@ -56,7 +56,8 @@ Interim behaviours, each one place to change when contracts 1.2 lets ResolvedRul
 tests/test_validator_low_interim.py (flip them there):
 
 1. The front is not judged apart from the other sides (needs `Band.front_setback_m`):
-   `measure.ALL_ROUND_NOTE`, `blocks.setback_checks`, `clubhouse.club_setback_check`.
+   `measure.HeightClass.setback_m` and `setback_note`, which `blocks.setback_checks` and
+   `clubhouse.club_setback_check` both read.
 2. A block up to 12 m on no road is UNVERIFIED (needs `RoadKind.PATHWAY` and a pathway width):
    `roads._pathway_check`.
 3. A low block's band is picked on the reading's own height, so under `counted` it can fall in a taller
