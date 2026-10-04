@@ -185,6 +185,19 @@ def test_a_plot_above_2000_m2_has_no_line_between_18_and_21_m_and_the_order_says
     assert "no order read gives a setback" in open_.note and "TDR" not in open_.note.split(";")[0]
 
 
+def test_a_road_known_to_be_too_narrow_prohibits_even_what_might_be_open_through_tdr():
+    """Above 15 m a road of 12 m is asked (rule 5(e), Table II B2, rule 8(b)): a confirmed road
+    short of it settles the stretch that was only open, and an unconfirmed one does not."""
+    short = _run(1200.0, ((10.0, CONFIRMED),))
+    assert short[-1].permission is PROHIBITED and "falls short" in short[-1].note
+    assert short[-1].clause == rules.TDR_BAND_CLAUSE
+    drawn = _run(1200.0, ((10.0, GUESS),))
+    assert drawn[-1].permission is UNKNOWN
+    scheme = _run(18_000.0, ((11.9, CONFIRMED),))  # a group scheme on 11.9 m: nothing at all
+    assert {s.permission for s in scheme} == {PROHIBITED}
+    assert _run(1200.0, ((12.0, CONFIRMED),))[-1].permission is UNKNOWN
+
+
 def test_exactly_750_m2_is_in_row_7_and_still_through_tdr_above_18_m():
     """The order's 'from 750 sq.m to 2000 sq.m' includes 750; row 7's last line is 15 m."""
     *_, no_line, tdr = _run(750.0)
