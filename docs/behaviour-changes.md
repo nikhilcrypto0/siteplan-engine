@@ -4,6 +4,27 @@ A characterization test (tests/manifest.py) pins what the engine produces today.
 only together with a normative replacement test and an entry here: what changed, why, the
 evidence, and the test that now holds the behaviour. Newest first.
 
+## 2026-10-04: engine fallbacks are the engine's; one reading of the road-widening plot shortfall
+
+No characterization test changed. Two corrections to the hardening pass:
+
+- **A standard the engine fills in is labelled the engine's, never the firm's**
+  (service/standards.py). A value from the approved project file or the workspace is FIRM_STANDARD;
+  a fallback the engine supplies because neither sets one is source kind ENGINE_DEFAULT, basis
+  ENGINE_DESIGN_ASSUMPTION, whatever its status. The DesignBrief, the service's facts (each now
+  says its basis) and the lines the architect approves all carry it.
+  `test_service_standards.py::test_an_engine_fallback_is_never_labelled_the_firms` and the
+  updated assertions beside it.
+- **The validator reads the high-rise plot minimum as the resolver does.** Rule 7(a)(iii) may
+  count a net plot left short of the 2,000 m² minimum by up to 10% when land was given up for
+  road widening; nothing in the engine settles whether it does. The resolver already left such a
+  site's plot-size ground UNVERIFIED; the validator's plot-size check failed it. Both now call
+  `rules.high_rise_plot_met`: at or above the minimum, PASS; inside the allowance after road
+  widening, UNVERIFIED in both, never a FAIL; further short, or short with no land given up, FAIL
+  in both. The resolver's output is unchanged; the legacy checker, the height search and the
+  floors calculator still hold the plain minimum (regression only). tests/test_plot_shortfall.py
+  (each boundary case through the shared reading, the resolver and the validator).
+
 ## 2026-10-04: the service keeps the project's firm standards, writes down every approval, and has a host boundary
 
 No characterization test changed, and contracts stay at 1.2. Nothing the legacy path produces
