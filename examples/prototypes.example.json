@@ -1,6 +1,6 @@
 [
  {
-  "schema_version": "1.1",
+  "schema_version": "1.2",
   "id": "single-core-small-4",
   "family": "SINGLE_CORE_SMALL",
   "source_kind": "ENGINE_DEFAULT",
@@ -140,7 +140,7 @@
   "stretch": null
  },
  {
-  "schema_version": "1.1",
+  "schema_version": "1.2",
   "id": "single-core-6",
   "family": "SINGLE_CORE",
   "source_kind": "ENGINE_DEFAULT",
@@ -314,7 +314,7 @@
   "stretch": null
  },
  {
-  "schema_version": "1.1",
+  "schema_version": "1.2",
   "id": "two-core-medium-8",
   "family": "TWO_CORE_MEDIUM",
   "source_kind": "ENGINE_DEFAULT",
@@ -544,7 +544,7 @@
   "stretch": null
  },
  {
-  "schema_version": "1.1",
+  "schema_version": "1.2",
   "id": "two-core-large-12",
   "family": "TWO_CORE_LARGE",
   "source_kind": "ENGINE_DEFAULT",

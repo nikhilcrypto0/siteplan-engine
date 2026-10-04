@@ -8,17 +8,20 @@ question open, the question is an Interpretation with its readings; `selected` i
 or ALL when every consumer must evaluate every reading and a result that holds under only some
 of them is UNVERIFIED.
 
-Three pieces of meaning live here, as methods, so the optimizer and the validator cannot read
+The pieces of meaning live here, as methods, so the optimizer and the validator cannot read
 them differently: how a height limit judges a height (`HeightLimit.evaluate`), which Table IV or
-Table III row a height falls in (`HeightRules.band_for`), and whether a facility's ground is of a
-kind that counts as organised open space (`OpenSpaceRules.qualifies`).
+Table III row a block falls in (`HeightRules.band_for_block`, the stilt left out of Table III's
+heights by rule 5(c)), whether a band's heights may stand here at all
+(`HeightRules.band_permission`, and `permissible_non_high_rise` for the highest that may), and
+whether a facility's ground is of a kind that counts as organised open space
+(`OpenSpaceRules.qualifies`).
 """
 
 from __future__ import annotations
 
 import math
 from enum import StrEnum
-from typing import Generic, TypeVar
+from typing import Generic, Literal, TypeVar
 
 from pydantic import Field, model_validator
 
@@ -142,6 +145,9 @@ class HeightMeasure(StrEnum):
     RULE_HEIGHT = "RULE_HEIGHT"  # the height that picks the Table IV row and the high-rise class
     PHYSICAL_HEIGHT = "PHYSICAL_HEIGHT"  # ground to the top, stilt included (NBC Part 3 2.10)
     AMSL = "AMSL"  # above mean sea level (airport and Air Force limits)
+    # Ground to the top with the parking stilt left out: the height Table III is read on (rule
+    # 5(c), "Stilt Floor meant for parking is excluded from the permissible height").
+    HEIGHT_ABOVE_STILT = "HEIGHT_ABOVE_STILT"
 
 
 class BandKind(StrEnum):
@@ -149,20 +155,43 @@ class BandKind(StrEnum):
     NON_HIGH_RISE = "NON_HIGH_RISE"
 
 
+class Eligibility(StrEnum):
+    ALLOWED = "ALLOWED"
+    PROHIBITED = "PROHIBITED"
+    UNVERIFIED = "UNVERIFIED"
+
+
+ELIGIBILITY_RANK = {Eligibility.PROHIBITED: 0, Eligibility.UNVERIFIED: 1, Eligibility.ALLOWED: 2}
+BAND_MEASURES = (HeightMeasure.RULE_HEIGHT, HeightMeasure.HEIGHT_ABOVE_STILT)
+
+
 class Band(Part):
     """One row of the height tables: the heights it covers and what it asks of them. Each edge
     says whether it belongs to the band, so every height falls in exactly one band: a building of
-    exactly 21 m is a high-rise (rule 2(f)) and has its own row."""
+    exactly 21 m is a high-rise (rule 2(f)) and has its own row.
+
+    A band's edges are read on its own `measure`: the rule height for Table IV's rows, the height
+    above the stilt for Table III's (rule 5(c)); `HeightRules.band_for_block` finds a block's band
+    either way. `setback_m` is the setback on every side but the front when `front_setback_m` is
+    given, all round when it is not. `permission` says whether a building of these heights may
+    stand on this site at all (plot size, road), with the reason when it may not; a height the
+    tables do not permit is a band of its own, so the bands still cover every height once."""
 
     above_m: float = Field(ge=0)
     up_to_m: float = Field(gt=0)
     above_inclusive: bool = False  # True: a height of exactly above_m is in this band
     up_to_inclusive: bool = True  # False: a height of exactly up_to_m is in the next band
     kind: BandKind
-    modelled: bool = True  # False: the engine does not encode this band yet (Table III)
+    measure: HeightMeasure = HeightMeasure.RULE_HEIGHT  # what the edges are read on
+    modelled: bool = True  # False: the engine does not encode this band yet
     min_road_m: float | None = None
-    setback_m: float | None = None  # all round
+    setback_m: float | None = None  # every side but the front when front_setback_m is given
+    front_setback_m: float | None = Field(None, ge=0)  # on the access road's frontage
     gap_m: float | None = None  # between two blocks
+    permission: Eligibility = Eligibility.ALLOWED
+    permission_note: str = ""  # why, whenever permission is not ALLOWED
+    green_strip_m: float | None = Field(None, ge=0)  # the planting strip this band asks, if any
+    green_strip_sides: Literal["ALL", "FRONTAGE"] = "ALL"
     clause: str
     status: Provenance = Provenance.VERIFIED
 
@@ -172,7 +201,20 @@ class Band(Part):
             raise ValueError("a band's upper edge is below its lower edge")
         if self.up_to_m == self.above_m and not (self.above_inclusive and self.up_to_inclusive):
             raise ValueError("a band for one exact height includes both its edges")
+        if self.measure not in BAND_MEASURES:
+            raise ValueError(f"a band is read on the rule height or the height above the stilt, "
+                             f"not {self.measure}")
+        if (self.measure is HeightMeasure.HEIGHT_ABOVE_STILT
+                and self.kind is not BandKind.NON_HIGH_RISE):
+            raise ValueError("only a non-high-rise band is read on the height above the stilt")
+        if self.permission is not Eligibility.ALLOWED and not self.permission_note:
+            raise ValueError("a band that is not ALLOWED says why (permission_note)")
         return self
+
+    @property
+    def front_m(self) -> float | None:
+        """The setback at the front: the front figure when the band gives one, else setback_m."""
+        return self.front_setback_m if self.front_setback_m is not None else self.setback_m
 
     def contains(self, height_m: float, tol_m: float = HEIGHT_TOL_M) -> bool:
         low = (height_m >= self.above_m - tol_m if self.above_inclusive
@@ -268,12 +310,6 @@ class HeightLimit(Part):
                 and self.within(height_m, tol_m) is False)
 
 
-class Eligibility(StrEnum):
-    ALLOWED = "ALLOWED"
-    PROHIBITED = "PROHIBITED"
-    UNVERIFIED = "UNVERIFIED"
-
-
 class EligibilityGround(Part):
     """One thing a high-rise needs of the site (its road, its plot), and whether the site has
     it. `met` is None when it cannot be told."""
@@ -337,14 +373,53 @@ class HeightRules(Part):
             if b.above_m != a.up_to_m or a.up_to_inclusive == b.above_inclusive:
                 raise ValueError(f"the bands at {a.up_to_m:g} m leave a gap or overlap: each "
                                  "height must fall in exactly one band")
+        start = self.high_rise_from_m.value
+        if any(b.measure is HeightMeasure.HEIGHT_ABOVE_STILT
+               and (b.up_to_m > start or (b.up_to_m == start and b.up_to_inclusive))
+               for b in self.bands):
+            raise ValueError("a band read on the height above the stilt ends at the high-rise "
+                             "height, which it leaves out (a building of exactly that height is "
+                             "a high-rise)")
         ids = [limit.id for limit in self.limits]
         if len(ids) != len(set(ids)):
             raise ValueError("height limit ids must be unique")
         return self
 
     def band_for(self, height_m: float, tol_m: float = HEIGHT_TOL_M) -> Band | None:
-        """The band a height falls in; None above the last band or at 0 m."""
+        """The band a bare height falls in, read on that band's own measure; None above the last
+        band or at 0 m. For a building, use band_for_block."""
         return next((b for b in self.bands if b.contains(height_m, tol_m)), None)
+
+    def band_for_block(self, above_stilt_m: float, stilt_m: float, *, stilt_counted: bool,
+                       tol_m: float = HEIGHT_TOL_M) -> Band | None:
+        """The band a block falls in: its class (high-rise or not) from its rule height under
+        the reading of the stilt, then, for a block below the high-rise height, its row on the
+        height above the stilt where the band is read on that (rule 5(c)). Under 'counted' a
+        block below 21 m is never found on its rule height, which would shift its Table III row
+        by the stilt."""
+        rule = above_stilt_m + (stilt_m if stilt_counted else 0.0)
+        band = self.band_for(rule, tol_m)
+        if band is None or band.measure is not HeightMeasure.HEIGHT_ABOVE_STILT:
+            return band
+        return next((b for b in self.bands if b.measure is HeightMeasure.HEIGHT_ABOVE_STILT
+                     and b.contains(above_stilt_m, tol_m)), None)
+
+    def band_permission(self, band: Band) -> Eligibility:
+        """Whether a building of a band's heights may stand here: the band's own permission, and
+        for a high-rise band the site's high-rise eligibility too, whichever is weaker."""
+        if band.kind is BandKind.HIGH_RISE:
+            return min(band.permission, self.high_rise.eligibility, key=ELIGIBILITY_RANK.get)
+        return band.permission
+
+    def permissible_non_high_rise(self, *, include_unverified: bool = False) -> Band | None:
+        """The highest band below the high-rise height a building may take here (ALLOWED, or
+        also UNVERIFIED when asked): the actual permissible non-high-rise height is its upper
+        edge. None while the non-high-rise bands are not modelled."""
+        allowed = {Eligibility.ALLOWED} | ({Eligibility.UNVERIFIED} if include_unverified
+                                          else set())
+        bands = [b for b in self.bands if b.kind is BandKind.NON_HIGH_RISE and b.modelled
+                 and self.band_permission(b) in allowed]
+        return max(bands, key=lambda b: (b.up_to_m, b.up_to_inclusive), default=None)
 
 
 # --- The rest of the law ---------------------------------------------------------------------
@@ -421,8 +496,16 @@ class OpenSpaceRules(Part):
 
 
 class GreenStripRules(Part):
+    """The planting strips. The high-rise strip: width_m where the setback is where_setback_from_m
+    or more (rule 7(a)(viii)). Table III's (rule 5(f)): frontage_m along the frontage within the
+    front setback, and periphery_m on the remaining sides on plots above periphery_above_sqm.
+    What each band asks is on the band (Band.green_strip_m), so no consumer works it out again."""
+
     width_m: RuleValue[float]
     where_setback_from_m: RuleValue[float]
+    frontage_m: RuleValue[float] | None = None
+    periphery_m: RuleValue[float] | None = None
+    periphery_above_sqm: RuleValue[float] | None = None
 
 
 class CirculationRules(Part):
@@ -434,6 +517,7 @@ class CirculationRules(Part):
     cul_de_sac_length_m: RuleValue[tuple[float, float]]
     cul_de_sac_head_radius_m: RuleValue[float]
     pathway_max_block_height_m: RuleValue[float]
+    pathway_width_m: RuleValue[float] | None = None  # rule 8(l)'s pathway, for such a block
     driveway_min_m: RuleValue[float]
     driveway_is_road: RuleValue[bool]
     block_over_12m_on_road: RuleValue[bool]
