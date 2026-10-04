@@ -1,7 +1,7 @@
 {
  "schema_version": "1.2",
  "site_ref": "0578e5ca84b81bb1",
- "rules_ref": "24ab56e8dfab5900",
+ "rules_ref": "b6b308f95ea81b4d",
  "exclusions": [
   {
    "id": "buffer-water-1",

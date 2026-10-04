@@ -2,9 +2,9 @@
  "schema_version": "1.2",
  "candidate_id": "small_plot-1",
  "site_ref": "fa33ddc081d84bb0",
- "rules_ref": "0bcf0bafdde683dd",
+ "rules_ref": "a48a5919c4061e63",
  "brief_ref": "53e640cea44f2082",
- "envelope_ref": "2ca6a06a60bb016b",
+ "envelope_ref": "cae0d864fc664ab6",
  "strategy": "hand-made",
  "seed": null,
  "interpretation_basis": {

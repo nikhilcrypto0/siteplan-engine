@@ -1,10 +1,10 @@
 {
  "schema_version": "1.2",
- "candidate_ref": "1aa06551535c0544",
+ "candidate_ref": "e051da836b5c956f",
  "site_ref": "0578e5ca84b81bb1",
- "rules_ref": "24ab56e8dfab5900",
+ "rules_ref": "b6b308f95ea81b4d",
  "brief_ref": "a9a931c836ffcd5d",
- "envelope_ref": "27d9a4fc0aa73087",
+ "envelope_ref": "c7cf5678e5651a3a",
  "validator_version": "fixture: the generator's own findings restated, not an independent validation",
  "recomputed": {
   "towers": [],
@@ -60,7 +60,7 @@
     "status": "PASS",
     "measured": "11.01 m",
     "required": ">= 9.00 m to the net plot line",
-    "clause": "G.O.168 rule 7(a)(x), Table IV as substituted by G.O.Ms.No.50 of 2019; G.O.168 p.17, clause (b) (the front setback of a high-rise is as per Table IV of rule 7); G.O.168 rule 7(a)(iii) (setbacks of a high-rise on the net plot left after road widening); rule 5(f)(ii) for Table III",
+    "clause": "G.O.168 rule 7(a)(x), Table IV as substituted by G.O.Ms.No.50 of 2019; G.O.168 rule 7(a)(xi), p.14 (a high-rise's front open space is the higher of Table IV column 4 and the Building Line of Table III, on the basis of the abutting road width); G.O.168 rule 7(a)(iii) (setbacks of a high-rise on the net plot left after road widening); rule 5(f)(ii) for Table III",
     "note": "The front of a high-rise keeps the Table IV figure too, measured on the net plot."
    },
    "by_reading": {}
