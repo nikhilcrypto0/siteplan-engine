@@ -113,8 +113,9 @@ differently.
    Eligibility is ALLOWED, PROHIBITED or UNVERIFIED and follows from its grounds (the road, the
    plot size). PROHIBITED says only that no building of the high-rise height or more may stand
    here. What may be built below it (the permissible height, Table III setbacks, road
-   conditions, spacing) is A2's to resolve and D2's to validate; until then that band is not
-   modelled and no stream treats "below 21 m" as passing.
+   conditions, spacing) is A2's to resolve and D2's to validate, each band with its own
+   permission (`HeightRules.band_permission`); a band the rules do not model (18-21 m on most
+   plots gives no setback) is never passed. The optimizer offers no count below 21 m until C3.
 3. **Every height falls in exactly one band** (`HeightRules.band_for`). Band edges say whether
    they are included: a building of exactly 21 m is a high-rise (rule 2(f)) with a band of its
    own, on Table IV's first row. An envelope band is matched to its rules band by its edges
