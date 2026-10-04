@@ -121,7 +121,7 @@ def qualifying(ctx: Context, reading: str, spacing: str, take_out: frozenset[int
     bands = union_of_all([clear_band(t.footprint, lane) for t in ctx.high_rise(reading)])
     remaining = _take_out(remaining, bands, "in a fire lane's clear ground", removed)
     other_uses = union_of_all([
-        *(t.footprint for t in ctx.towers), d.club, d.road_land, d.fire_hardstanding,
+        *(t.footprint for t in ctx.towers), d.club, d.paved_land, d.fire_hardstanding,
         *d.bays, *d.ramps])
     remaining = _take_out(remaining, other_uses, "under a building, road, lane, bay or ramp",
                           removed)

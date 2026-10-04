@@ -18,6 +18,7 @@ from siteplan.validator.context import Context
 from siteplan.validator.ground import Ground
 from siteplan.validator.open_space import expected_requirement
 from siteplan.validator.readings import plain
+from siteplan.validator.setbacks import setback_margins
 
 MARGIN_CLAUSE = "the brief's design margins (the firm's standard, never law)"
 
@@ -25,16 +26,16 @@ MARGIN_CLAUSE = "the brief's design margins (the firm's standard, never law)"
 def design_targets(ctx: Context, ground: Ground, found: dict[str, float]) -> list[TargetCheck]:
     margins = ctx.brief.design_margins
     rows: list[TargetCheck] = []
-    towers = blocks.tower_measures(ctx)
+    held = setback_margins(ctx)
     for reading in ctx.stilt_readings:
-        held = [t for t in towers if reading in t.required_setback_m_by_reading]
-        if held:
-            t = min(held, key=lambda t: t.setback_m - t.required_setback_m_by_reading[reading])
-            need = t.required_setback_m_by_reading[reading]
+        mine = [m for m in held if m.reading == reading]
+        if mine:
+            m = min(mine, key=lambda m: m.provided - m.need)
             rows.append(TargetCheck(
-                item=TargetItem.SETBACK, subject=t.name, readings={STILT_IN_RULE_HEIGHT: reading},
-                unit="m", legal_minimum=need, target=margins.setback_target_m(need),
-                provided=t.setback_m, basis=margins.basis("setback_extra_m")))
+                item=TargetItem.SETBACK, subject=f"{m.tower} {m.where}".strip(),
+                readings={STILT_IN_RULE_HEIGHT: reading}, unit="m", legal_minimum=m.need,
+                target=margins.setback_target_m(m.need), provided=m.provided,
+                basis=margins.basis("setback_extra_m")))
     pairs = [p for p in blocks.pair_measures(ctx) if p.required_m is not None]
     if pairs:
         p = min(pairs, key=lambda p: p.gap_m - p.required_m)

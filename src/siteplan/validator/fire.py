@@ -8,6 +8,10 @@ radii in the rules; the generator's fire lanes are only ground the candidate say
 
 What a drawing cannot show stays UNVERIFIED: where the street leads, whether the road ends at
 the plot, and the 45 t loading, which is a paving specification.
+
+A block below the high-rise height is not held to any of this. Rule 15(a)(i) holds it to the
+National Building Code's requirements other than heights and setbacks, which the resolved rules
+give no figure for: `low_block_check` says so, as NOT_CHECKED, and judges nothing numeric.
 """
 
 from __future__ import annotations
@@ -42,8 +46,15 @@ from siteplan.validator.shapes import (
 from siteplan.validator.turning import road_bends, round_block, turning_for
 from siteplan.validator.zones import bearings_near, compass_name, faces
 
-NON_HIGH_RISE_NOTE = ("Below the high-rise threshold the fire rules of rule 15(a)(i) apply and "
-                      "are not modelled yet.")
+# Rule 15(a)(i), read on page 20 of fixtures/rules/go168-2012.pdf (the 2012 text). Rule 15(b)(iv)
+# brings NBC's fire protection requirements to a high-rise alone; a building below that height is
+# held to the Code's requirements other than heights and setbacks, and the rule gives no figure
+# for what those ask of a fire vehicle's access.
+LOW_FIRE_RULE = ("G.O.168 rule 15(a)(i), p.20: \"The building requirements and standards other "
+                 "than heights and setbacks specified in the National Building Code - 2005 shall "
+                 "be complied with.\"")
+LOW_FIRE_CLAUSE = ("G.O.168 rule 15(a)(i) (a building below the high-rise height: the National "
+                   "Building Code's requirements and standards other than heights and setbacks)")
 REACH_MIN_SQM = 1.0  # a lane that only touches a block's band at a point does not reach it
 GATE_SLACK_M = 0.05  # a gate may measure this much under the width it declares
 
@@ -63,6 +74,14 @@ def reached(ctx: Context) -> BaseGeometry:
     passable = opening(ctx.drawn.motorable, lane)
     return union_of_all([p for p in getattr(passable, "geoms", [passable])
                          if not p.is_empty and p.intersects(start)])
+
+
+def _below_note(ctx: Context) -> str:
+    """Said where a high-rise fire check meets a block that is not one under a reading."""
+    return (f"Below {ctx.rules.height.high_rise_from_m.value:g} m the high-rise fire lanes do not "
+            f"apply (they are rule 15(b)(iv)'s, for high-rise buildings). {LOW_FIRE_RULE} The "
+            "rule gives no figure for what that asks of a fire vehicle's access, so nothing "
+            "numeric is judged here.")
 
 
 def _no_layout(ctx: Context) -> Check:
@@ -86,7 +105,7 @@ def _tower_cell(ctx: Context, ground: Ground, t: TowerGeometry, a: Assignment) -
                 f"{ctx.rules.fire.turning_radius_m.value:g} m turn at every corner")
     if t.name not in {x.name for x in ctx.high_rise(reading)}:
         return Cell(Status.NOT_CHECKED, "not high-rise under this reading", required,
-                    NON_HIGH_RISE_NOTE)
+                    _below_note(ctx))
     turning = turning_for(ctx.rules, a[FIRE_TURNING_RADIUS])
     if turning is None:
         return unknown_reading(FIRE_TURNING_RADIUS, a[FIRE_TURNING_RADIUS])
@@ -134,7 +153,7 @@ def loop_turns_check(ctx: Context, ground: Ground) -> Check:
             return unknown_reading(STILT_IN_RULE_HEIGHT, a[STILT_IN_RULE_HEIGHT])
         if not ctx.high_rise(a[STILT_IN_RULE_HEIGHT]):
             return Cell(Status.NOT_CHECKED, "no high-rise under this reading",
-                        f"a {radius:g} m turn at every bend", NON_HIGH_RISE_NOTE)
+                        f"a {radius:g} m turn at every bend", _below_note(ctx))
         turning = turning_for(ctx.rules, a[FIRE_TURNING_RADIUS])
         if turning is None:
             return unknown_reading(FIRE_TURNING_RADIUS, a[FIRE_TURNING_RADIUS])
@@ -159,7 +178,7 @@ def reach_check(ctx: Context) -> Check:
         towers = ctx.high_rise(a[STILT_IN_RULE_HEIGHT])
         if not towers:
             return Cell(Status.NOT_CHECKED, "no high-rise under this reading",
-                        "a continuous way in for a fire tender", NON_HIGH_RISE_NOTE)
+                        "a continuous way in for a fire tender", _below_note(ctx))
         missing = [t.name for t in towers if network.is_empty or
                    clear_band(t.footprint, lane).intersection(network).area < REACH_MIN_SQM]
         measured = (f"cut off: {', '.join(missing)}" if missing
@@ -307,15 +326,48 @@ def loading_check(ctx: Context) -> Check:
         "The paving, and any cellar roof under a road or fire lane, must be designed for it.")
 
 
+def low_block_check(ctx: Context) -> Check | None:
+    """What a block below the high-rise height is held to, said for each block that is below it
+    under any reading of the stilt: not the high-rise lanes, but rule 15(a)(i)'s National Building
+    Code requirements other than heights and setbacks. The rule gives no figure for what those ask
+    of fire access, so nothing numeric is judged: NOT_CHECKED, listed beside the verdict, never
+    PASS. Where the block stands is judged by its band, and how it is reached by rule 8(l). Were a
+    figure ever carried, this is the one check that would change."""
+    below = ctx.low_rise_anywhere()
+    if not below:
+        return None
+    fire, threshold = ctx.rules.fire, ctx.rules.height.high_rise_from_m.value
+    names = []
+    for t in below:
+        readings = [r for r in ctx.stilt_readings
+                    if t.name in {x.name for x in ctx.low_rise(r)}]
+        names.append(t.name if len(readings) == len(ctx.stilt_readings)
+                     else f"{t.name} (only if the stilt is {', '.join(readings)})")
+    return plain(
+        Family.FIRE, f"Fire access below {threshold:g} m (rule 15(a)(i))", Status.NOT_CHECKED,
+        f"{', '.join(names)}: below {threshold:g} m, so not held to the high-rise lanes "
+        f"({fire.clear_width_m.value:g} m clear and motorable on all sides, a "
+        f"{fire.turning_radius_m.value:g} m turning radius, a {fire.entrance_width_m.value:g} m "
+        "entrance)",
+        "the National Building Code's requirements and standards other than heights and "
+        "setbacks", LOW_FIRE_CLAUSE,
+        f"{LOW_FIRE_RULE} The rule gives no figure for what that asks of a fire vehicle's "
+        "access, so nothing numeric is judged here. Where the block stands is judged by its "
+        "band's setback and gap, and how it is reached by rule 8(l).")
+
+
 def fire_checks(ctx: Context, ground: Ground) -> list[Check]:
-    """Fire access for every high-rise under any reading of the stilt; none when there is none."""
+    """Fire access for every high-rise under any reading of the stilt, and what a block below the
+    high-rise height is held to instead."""
+    low = low_block_check(ctx)
+    below = [low] if low is not None else []
     if not ctx.high_rise_anywhere():
         return [plain(Family.FIRE, "Fire access", Status.INFO, "no high-rise block",
-                      "NBC 4.6 for high-rise", ctx.rules.fire.clear_width_m.clause)]
+                      "NBC 4.6 for high-rise", ctx.rules.fire.clear_width_m.clause), *below]
     out = [street_check(ctx), dead_end_check(ctx)]
     if not ctx.drawn.has_circulation:
-        return [*out, _no_layout(ctx), loading_check(ctx)]
+        return [*out, _no_layout(ctx), loading_check(ctx), *below]
     out += tower_checks(ctx, ground)
     out += [loop_turns_check(ctx, ground), reach_check(ctx), entrance_check(ctx, ground),
             obstruction_check(ctx), loading_check(ctx)]
-    return out
+    return [*out, *below]
