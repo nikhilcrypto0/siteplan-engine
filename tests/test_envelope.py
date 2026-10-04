@@ -73,6 +73,20 @@ def _modelled(env: BuildableEnvelope):
     return [b for b in env.bands if b.modelled]
 
 
+def _high(env: BuildableEnvelope):
+    return [b for b in env.bands if b.kind is BandKind.HIGH_RISE]
+
+
+def _low(env: BuildableEnvelope):
+    return [b for b in env.bands if b.kind is BandKind.NON_HIGH_RISE]
+
+
+def _landed(env: BuildableEnvelope):
+    """The bands the envelope cuts land for: a setback to plan on, and not prohibited."""
+    return [b for b in env.bands
+            if b.setback_m is not None and b.permission is not Eligibility.PROHIBITED]
+
+
 # --- Criterion 1: nothing here is the generator -----------------------------------------------
 
 
@@ -148,22 +162,29 @@ def test_rules_resolved_for_another_site_are_refused():
         envelope(make_site(box(0, 0, 160, 100)), rules)
 
 
-# --- The bands: Table IV rows up to the legal height ------------------------------------------
+# --- The bands: Table III's lines, then Table IV rows up to the legal height ------------------
 
 
-def test_the_bands_are_the_high_rise_rows_up_to_the_height_the_road_allows():
+def test_the_bands_are_table_iiis_lines_then_the_high_rise_rows_up_to_the_height_the_road_allows():
+    """RECTANGLE is a group development scheme on a 60 ft road: Table III's row for a plot above
+    2,500 m² (lines at 7, 15 and below 18 m, sides of 5, 6 and 7 m) with a front of 4 m, because
+    60 ft is reckoned as 18 m; 18 to 21 m is open; then Table IV's rows."""
     rules, env = _run(make_site(RECTANGLE, road_m=18.288))
-    below, *high = env.bands
-    assert (below.kind, below.modelled, below.above_m, below.up_to_m) == (
-        BandKind.NON_HIGH_RISE, False, 0.0, 21.0)
-    assert not below.buildable and not below.setback_envelope and below.area_sqm == 0
-    assert "Table III" in below.note
+    *lines, open_ = _low(env)
+    assert [(b.above_m, b.up_to_m, b.setback_m, b.front_setback_m) for b in lines] == [
+        (0.0, 7.0, 5.0, 4.0), (7.0, 15.0, 6.0, 4.0), (15.0, 18.0, 7.0, 4.0)]
+    assert all(b.modelled and b.permission is Eligibility.ALLOWED and b.buildable
+               for b in lines)
+    assert (open_.above_m, open_.up_to_m, open_.permission) == (18.0, 21.0, Eligibility.UNVERIFIED)
+    assert not open_.buildable and not open_.setback_envelope and open_.area_sqm == 0
+    assert "Table III" in open_.note and open_.setback_m is None
     # a building of exactly 21 m is a high-rise on Table IV's first row (7 m): its own band
-    assert [(b.above_m, b.up_to_m, b.setback_m) for b in high] == [
+    assert [(b.above_m, b.up_to_m, b.setback_m) for b in _high(env)] == [
         (21.0, 21.0, 7.0), (21.0, 24.0, 8.0), (24.0, 27.0, 9.0), (27.0, 30.0, 10.0)]
-    assert [b.green_strip_applies for b in high] == [False, False, True, True]
+    assert [b.green_strip_applies for b in _high(env)] == [False, False, True, True]
+    assert all(b.green_strip_applies for b in lines)  # rule 5(f): 1 m along the boundary
     taller = _run(make_site(RECTANGLE, road_m=24.0))[1]
-    assert [b.up_to_m for b in _modelled(taller)] == [21.0, 24.0, 27.0, 30.0, 35.0, 40.0, 45.0]
+    assert [b.up_to_m for b in _high(taller)] == [21.0, 24.0, 27.0, 30.0, 35.0, 40.0, 45.0]
 
 
 def test_the_setback_is_the_net_plot_inset_all_round_square_to_each_wall():
@@ -183,7 +204,7 @@ def test_the_setback_is_the_net_plot_inset_all_round_square_to_each_wall():
     ids=["a nala across the plot", "an L plot", "an irregular plot"])
 def test_a_taller_bands_land_lies_inside_a_shorter_bands(site):
     env = _run(site)[1]
-    bands = _modelled(env)
+    bands = _landed(env)
     assert len(bands) >= 3
     for shorter, taller in zip(bands, bands[1:], strict=False):
         assert _land(taller.buildable).difference(_land(shorter.buildable)).area < 1e-6
@@ -196,35 +217,62 @@ def test_a_taller_bands_land_lies_inside_a_shorter_bands(site):
 def test_a_road_that_sets_no_limit_gives_bands_until_the_land_runs_out():
     plot = box(0, 0, 60, 34)  # 2,040 m²: setbacks eat it at 17 m, which is the 55-70 m band
     rules, env = _run(make_site(plot, road_m=30.0))
-    bands = _modelled(env)
+    bands = _high(env)
     assert bands[-1].up_to_m == 70.0 and not bands[-1].buildable and bands[-1].area_sqm == 0
     assert all(b.buildable for b in bands[:-1])
     assert "no land" in bands[-1].note
     assert not any(b.above_m > 55.0 for b in bands)  # nothing after the first empty band
 
 
-def test_a_plot_under_2000_m2_has_only_the_unmodelled_band_and_no_high_rise_eligibility():
+def test_a_plot_under_2000_m2_has_only_the_bands_below_21_m_and_no_high_rise_eligibility():
+    """1,600 m²: Table III's row for 1,500-2,500 m² (lines at 7, 15 and below 18 m) and the stretch
+    to 21 m that only TDR could open; no high-rise band and no land for one."""
     rules, env = _run(make_site(box(0, 0, 40, 40)))
-    assert [b.modelled for b in env.bands] == [False]
+    assert [b.kind for b in env.bands] == [BandKind.NON_HIGH_RISE] * 4
+    assert all(b.modelled for b in env.bands)
     eligibility = next(f for f in env.facts if f.rule == "High-rise eligibility")
     assert eligibility.status is Status.FAIL and eligibility.measured == "PROHIBITED"
     assert "permits nothing below it" in eligibility.note  # no license for a lower building
-    assert not env.bands[0].buildable
-    assert [p.applies_to for p in env.width_profiles] == ["net plot"]
+    *lines, open_ = env.bands
+    assert all(b.buildable and b.permission is Eligibility.ALLOWED for b in lines)
+    assert not open_.buildable and open_.permission is Eligibility.UNVERIFIED
+    assert [p.applies_to for p in env.width_profiles] == ["net plot", "0-7 m", "7-15 m", "15-18 m"]
     fire_lanes = next(o for o in env.circulation.obligations if o.id == "fire lanes")
     assert fire_lanes.applies is False
 
 
-def test_a_road_too_narrow_for_a_high_rise_draws_no_band_and_passes_nothing_lower():
+def test_a_road_too_narrow_for_a_group_scheme_has_no_land_below_21_m_either():
+    """9 m is under the 12 m rule 8(b) asks of a group development scheme at every height: every
+    band below 21 m is prohibited and none has land, and no high-rise band is drawn."""
     rules, env = _run(make_site(RECTANGLE, road_m=9.0))
     assert rules.height.high_rise.eligibility is Eligibility.PROHIBITED
-    assert [b.modelled for b in env.bands] == [False]
+    assert [b.kind for b in env.bands] == [BandKind.NON_HIGH_RISE] * 4
+    assert {b.permission for b in env.bands} == {Eligibility.PROHIBITED}
+    assert not any(b.buildable or b.setback_envelope for b in env.bands)
+    assert all("prohibited" in b.note for b in env.bands)
+    assert rules.height.permissible_non_high_rise(include_unverified=True) is None
+    fact = next(f for f in env.facts if f.rule == "Non-high-rise height")
+    assert fact.status is Status.FAIL and fact.measured == "none permitted"
+
+
+def test_a_road_too_narrow_for_a_high_rise_still_takes_a_small_plots_low_blocks():
+    """A plot of 3,000 m² is not a group development scheme: 9 m of road is Table II's B1, enough
+    up to 15 m; above 15 m a block needs 12 m."""
+    rules, env = _run(make_site(box(0, 0, 60, 50), road_m=9.5))
+    lines = _low(env)[:3]
+    assert [(b.up_to_m, b.permission) for b in lines] == [
+        (7.0, Eligibility.ALLOWED), (15.0, Eligibility.ALLOWED), (18.0, Eligibility.PROHIBITED)]
+    assert lines[0].buildable and lines[1].buildable and not lines[2].buildable
+    assert rules.height.permissible_non_high_rise().up_to_m == 15.0
+    assert next(f for f in env.facts if f.rule == "Non-high-rise height").measured == "15 m"
 
 
 def test_an_unknown_road_width_gives_the_bands_the_land_holds_and_says_the_limit_is_open():
     rules, env = _run(make_site(RECTANGLE, road_m=None))
-    assert len(_modelled(env)) > 3
-    assert all("no height limit is known from the road" in b.note for b in _modelled(env))
+    assert len(_high(env)) > 3
+    assert all("no height limit is known from the road" in b.note for b in _high(env))
+    assert {b.permission for b in _low(env)} == {Eligibility.UNVERIFIED}  # nothing is allowed
+    assert all(b.buildable for b in _low(env)[:3])
     eligibility = next(f for f in env.facts if f.rule == "High-rise eligibility")
     assert eligibility.status is Status.UNVERIFIED
 
@@ -252,7 +300,7 @@ def test_a_water_buffer_is_an_exclusion_recomputed_from_the_lines_and_the_rules(
     assert water.kind is ExclusionKind.WATER_BUFFER and water.source_ref == "water-1"
     assert water.clause == rules.water.buffer_m_by_class.clause
     assert _same(_land(water.shapes), box(66, 0, 84, 100))  # 9 m each side, clipped to the plot
-    for band in _modelled(env):
+    for band in _landed(env):
         assert _land(band.buildable).intersection(_land(water.shapes)).area < 1e-6
         assert not _land(band.setback_envelope).difference(_land(water.shapes)).is_empty
     assert _band(env, 21.0).area_sqm == pytest.approx(11_256 - 18 * 84)
@@ -312,9 +360,10 @@ def test_a_net_plot_taken_from_the_firms_finished_plan_is_flagged_debug_only():
 def test_the_narrow_arm_is_in_the_width_profile_with_its_area_and_width_in_every_band():
     rules, env = _run(make_site(L_PLOT))
     profiles = {p.applies_to: p for p in env.width_profiles}
-    assert list(profiles) == ["net plot", "21 m", "21-24 m", "24-27 m", "27-30 m"]
-    for name, setback in (("net plot", 0), ("21 m", 7), ("21-24 m", 8), ("24-27 m", 9),
-                          ("27-30 m", 10)):
+    assert list(profiles) == ["net plot", "0-7 m", "7-15 m", "15-18 m", "21 m", "21-24 m",
+                              "24-27 m", "27-30 m"]
+    for name, setback in (("net plot", 0), ("0-7 m", 5), ("7-15 m", 6), ("15-18 m", 7),
+                          ("21 m", 7), ("21-24 m", 8), ("24-27 m", 9), ("27-30 m", 10)):
         arm = min(profiles[name].regions, key=lambda r: r.max_inscribed_width_m)
         width = 24 - 2 * setback
         assert arm.max_inscribed_width_m == pytest.approx(width, abs=0.1), name
@@ -350,7 +399,7 @@ def test_no_land_is_classed_unusable_reserved_or_too_narrow(name):
         areas = [a for _, a in profile.area_narrower_than]
         assert widths == sorted(widths) and areas == sorted(areas)  # more land is narrower
         assert all(a >= 0 for a in areas)
-    land = [site.net_plot.value.to_shapely(), *(_land(b.buildable) for b in _modelled(env))]
+    land = [site.net_plot.value.to_shapely(), *(_land(b.buildable) for b in _landed(env))]
     for profile, whole in zip(env.width_profiles, land, strict=True):
         assert sum(r.area_sqm for r in profile.regions) == pytest.approx(whole.area, rel=0.01)
 
@@ -436,8 +485,9 @@ def _permits(layer) -> dict:
 def test_every_setback_layer_forbids_towers_and_makes_roads_and_fire_lanes_conditional():
     rules, env = _run(make_site(RECTANGLE))
     setbacks = env.rule_layers.of(LayerKind.SETBACK)
-    assert [layer.applies_to for layer in setbacks] == ["21 m", "21-24 m", "24-27 m", "27-30 m"]
-    for layer, band in zip(setbacks, _modelled(env), strict=True):
+    assert [layer.applies_to for layer in setbacks] == ["0-7 m", "7-15 m", "15-18 m", "21 m",
+                                                        "21-24 m", "24-27 m", "27-30 m"]
+    for layer, band in zip(setbacks, _landed(env), strict=True):
         assert layer.interpretation_ref == CIRCULATION_IN_SETBACK
         assert layer.area_sqm == pytest.approx(RECTANGLE.area - _land(band.setback_envelope).area)
         permits = _permits(layer)
@@ -464,12 +514,16 @@ def test_a_bay_in_a_setback_rests_on_the_reading_of_rule_13_c_xii_not_on_a_flat_
     assert "never the front setback" in parking.condition
 
 
-def test_the_green_strip_is_a_layer_only_where_the_setback_is_9_m_or_more():
+def test_the_green_strip_is_a_layer_where_a_band_asks_one():
+    """Rule 7(a)(viii): 2 m where a high-rise's setback is 9 m or more; rule 5(f): 1 m round a
+    block below 21 m on a plot above 300 m²."""
     rules, env = _run(make_site(RECTANGLE))
     strips = env.rule_layers.of(LayerKind.GREEN_STRIP_ZONE)
-    assert [s.applies_to for s in strips] == ["24-27 m", "27-30 m"]
-    strip = rules.green_strip.width_m.value
+    assert [s.applies_to for s in strips] == ["0-7 m", "7-15 m", "15-18 m", "24-27 m", "27-30 m"]
     for layer in strips:
+        strip = (rules.green_strip.frontage_m.value if layer.applies_to in ("0-7 m", "7-15 m",
+                                                                            "15-18 m")
+                 else rules.green_strip.width_m.value)
         assert _same(_land(layer.shapes), RECTANGLE.difference(RECTANGLE.buffer(
             -strip, join_style="mitre")))
         assert _permits(layer)[PhysicalUse.GREEN_STRIP].permit is Permit.ALLOWED
@@ -479,19 +533,26 @@ def test_the_green_strip_is_a_layer_only_where_the_setback_is_9_m_or_more():
 def test_no_ramp_in_the_front_setback_and_the_front_is_where_the_access_road_runs():
     rules, env = _run(make_site(RECTANGLE, side="S"))
     layers = env.rule_layers.of(LayerKind.RAMP_FORBIDDEN)
-    assert [layer.applies_to for layer in layers] == ["21 m", "21-24 m", "24-27 m", "27-30 m"]
-    assert _same(_land(layers[0].shapes), box(0, 0, 150, 7))  # the south strip, setback deep
-    assert _same(_land(layers[1].shapes), box(0, 0, 150, 8))
-    assert _same(_land(layers[3].shapes), box(0, 0, 150, 10))
-    assert layers[0].permits[0].permit is Permit.FORBIDDEN
-    assert layers[0].permits[0].use is PhysicalUse.RAMP
-    assert layers[0].clause == rules.parking.ramp_in_setbacks.clause
+    assert [layer.applies_to for layer in layers] == ["0-7 m", "7-15 m", "15-18 m", "21 m",
+                                                      "21-24 m", "24-27 m", "27-30 m"]
+    # the south strip, the front setback deep: Table III's Building Line (4 m on a 60 ft road)
+    # for a block below 21 m, Table IV's figure for a high-rise
+    assert _same(_land(layers[0].shapes), box(0, 0, 150, 4))
+    assert _same(_land(layers[2].shapes), box(0, 0, 150, 4))
+    assert _same(_land(layers[3].shapes), box(0, 0, 150, 7))
+    assert _same(_land(layers[4].shapes), box(0, 0, 150, 8))
+    assert _same(_land(layers[6].shapes), box(0, 0, 150, 10))
+    assert layers[3].permits[0].permit is Permit.FORBIDDEN
+    assert layers[3].permits[0].use is PhysicalUse.RAMP
+    assert layers[3].clause == rules.parking.ramp_in_setbacks.clause
 
 
 def test_with_no_access_side_every_side_is_treated_as_the_front_and_the_layer_says_so():
-    layer = _run(make_site(RECTANGLE, side=None))[1].rule_layers.of(LayerKind.RAMP_FORBIDDEN)[0]
+    layers = _run(make_site(RECTANGLE, side=None))[1].rule_layers.of(LayerKind.RAMP_FORBIDDEN)
+    layer = layers[3]  # the 21 m band's
     assert layer.status.value == "UNVERIFIED"
-    assert layer.area_sqm == pytest.approx(RECTANGLE.area - 136 * 86)  # the 21 m band's 7 m
+    assert layer.area_sqm == pytest.approx(RECTANGLE.area - 136 * 86)  # its 7 m
+    assert layers[0].area_sqm == pytest.approx(RECTANGLE.area - 140 * 90)  # (0, 7] m: 5 m
     assert "every side" in layer.permits[0].condition
 
 
@@ -599,7 +660,8 @@ def test_the_dxf_text_block_carries_the_open_space_under_each_reading_and_the_he
     assert "rule_height: 30 m [USER_CONFIRMED]" in text
     assert "physical_height: 30 m, only if the access road ends at the plot" in text
     assert "amsl: not evaluated [UNVERIFIED]" in text
-    assert "0-21 m: not modelled" in text and "21-24 m: 8 m, 11,256 m2" in text
+    assert "0-7 m: 5 m, front 4 m, 12,600 m2, allowed" in text
+    assert "18-21 m: unverified" in text and "21-24 m: 8 m, 11,256 m2, allowed" in text
     assert "stilt_in_rule_height = ALL" in text
     assert "DEBUG ONLY" not in text  # nothing from the firm's finished plan here
 
@@ -796,7 +858,7 @@ def test_the_real_envelope_agrees_with_the_p0_fixtures_on_the_land_of_each_band(
         assert _land(mine.buildable).difference(_land(fixture.buildable)).area < 1e-6
         if convex:
             assert mine.area_sqm == pytest.approx(fixture.area_sqm)
-        elif mine.modelled:
+        elif mine.modelled and mine.buildable:
             corner = _land(fixture.buildable).difference(_land(mine.buildable))
             # the square at a reflex corner less its quarter circle, (1 - pi/4) d squared
             assert 0 < corner.area < 0.25 * mine.setback_m**2
