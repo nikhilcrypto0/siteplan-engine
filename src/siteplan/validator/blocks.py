@@ -387,8 +387,12 @@ def setback_checks(ctx: Context) -> list[Check]:
     for t in ctx.towers:
         gap = setback_of(ctx.net, t.footprint)
         outside = not ctx.net.contains(t.footprint)
-        clause = "; ".join((_tables(ctx, [t]), ctx.rules.setbacks.front.clause,
-                            ctx.rules.setbacks.measured_on.clause))
+        high = any(c.high_rise for classes in ctx.classes.values()
+                   if (c := classes.get(t.name)) is not None)
+        front = [ctx.rules.setbacks.front.clause] if high else []  # a high-rise's is Table IV's
+        clause = "; ".join(dict.fromkeys(
+            [_tables(ctx, [t]) or _table_clause(ctx.rules), *front,
+             ctx.rules.setbacks.measured_on.clause]))
 
         def cell(a: Assignment, t=t, gap=gap, outside=outside) -> Cell:
             reading = a[STILT_IN_RULE_HEIGHT]
