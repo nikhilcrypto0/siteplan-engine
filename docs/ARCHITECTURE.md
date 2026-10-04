@@ -115,7 +115,8 @@ differently.
    here. What may be built below it (the permissible height, Table III setbacks, road
    conditions, spacing) is A2's to resolve and D2's to validate, each band with its own
    permission (`HeightRules.band_permission`); a band the rules do not model (18-21 m on most
-   plots gives no setback) is never passed. The optimizer offers no count below 21 m until C3.
+   plots gives no setback) is never passed. The optimizer offers a count below 21 m on its own
+   band's permission (C3), never on the site's high-rise eligibility.
 3. **Every height falls in exactly one band** (`HeightRules.band_for`). Band edges say whether
    they are included: a building of exactly 21 m is a high-rise (rule 2(f)) with a band of its
    own, on Table IV's first row. An envelope band is matched to its rules band by its edges
@@ -305,7 +306,7 @@ known-FAIL list. **D2** adds the non-high-rise checks after A2.
    `access.entrance`): legacy strategy only.
 7. One height for every tower (`LayoutRequest.floors`, `SiteFacts`, the inset in
    `grounds.frame`): needs per-band envelopes and per-tower floors.
-8. Table III is unread: A2, gating C3.
+8. Table III was unread: A2 read it, and C3 places blocks below 21 m.
 9. Dhulapally's blind acceptance waits on the strip's location, which only the architect has;
    the debug baseline carries the regression meanwhile.
 10. Shapely objects inside dataclasses: the contracts carry coordinates; the adapters convert.
