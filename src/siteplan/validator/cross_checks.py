@@ -13,7 +13,7 @@ from siteplan.contracts.candidate import CandidateLayout
 from siteplan.contracts.common import Shape, Status, digest
 from siteplan.contracts.design_brief import DesignBrief
 from siteplan.contracts.envelope import BuildableEnvelope
-from siteplan.contracts.resolved_rules import ResolvedRules
+from siteplan.contracts.resolved_rules import ELIGIBILITY_RANK, ResolvedRules
 from siteplan.contracts.site_model import CanonicalSiteModel
 from siteplan.contracts.validation import Check, Discrepancy
 from siteplan.units import sqm_to_sqft
@@ -198,13 +198,27 @@ def envelope_checks(ctx: Context, envelope: BuildableEnvelope) -> list[Discrepan
     for band in envelope.bands:
         mine = next((b for b in ctx.rules.height.bands if abs(b.above_m - band.above_m) < 1e-6
                      and abs(b.up_to_m - band.up_to_m) < 1e-6), None)
-        if mine is None or mine.setback_m is None:
+        if mine is None:
             continue
         label = f"{band.above_m:g}-{band.up_to_m:g} m"
-        if band.setback_m is not None and abs(band.setback_m - mine.setback_m) > BAND_SLACK_M:
+        ours_permission = ctx.rules.height.band_permission(mine)
+        if band.permission is not ours_permission:  # more lenient than the law blocks a pass
+            out.append(_d(f"envelope permission, band {label}", "envelope",
+                          band.permission.value, ours_permission.value,
+                          ELIGIBILITY_RANK[band.permission] > ELIGIBILITY_RANK[ours_permission]))
+        if mine.setback_m is None:
+            continue
+        theirs_front = band.front_setback_m if band.front_setback_m is not None else band.setback_m
+        if (band.setback_m is not None
+                and abs(band.setback_m - mine.setback_m) > BAND_SLACK_M):
             out.append(_d(f"envelope setback, band {label}", "envelope", f"{band.setback_m:g} m",
                           f"{mine.setback_m:g} m", band.setback_m < mine.setback_m))
-        land = ctx.net.buffer(-mine.setback_m).difference(keep_out)
+        if theirs_front is not None and abs(theirs_front - mine.front_m) > BAND_SLACK_M:
+            out.append(_d(f"envelope front setback, band {label}", "envelope",
+                          f"{theirs_front:g} m", f"{mine.front_m:g} m",
+                          theirs_front < mine.front_m))
+        # Until an edge-wise inset exists the land is inset all round by the larger figure.
+        land = ctx.net.buffer(-max(mine.setback_m, mine.front_m)).difference(keep_out)
         stated = union_of_all([polygon_of(s)[0] for s in band.buildable]).area
         if abs(stated - land.area) > METRIC_SHARE * max(land.area, 1.0):
             out.append(_d(f"envelope buildable land, band {label}", "envelope",
