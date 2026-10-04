@@ -41,7 +41,7 @@
     },
     "Band": {
       "additionalProperties": false,
-      "description": "One row of the height tables: the heights it covers and what it asks of them. Each edge\nsays whether it belongs to the band, so every height falls in exactly one band: a building of\nexactly 21 m is a high-rise (rule 2(f)) and has its own row.",
+      "description": "One row of the height tables: the heights it covers and what it asks of them. Each edge\nsays whether it belongs to the band, so every height falls in exactly one band: a building of\nexactly 21 m is a high-rise (rule 2(f)) and has its own row.\n\nA band's edges are read on its own `measure`: the rule height for Table IV's rows, the height\nabove the stilt for Table III's (rule 5(c)); `HeightRules.band_for_block` finds a block's band\neither way. `setback_m` is the setback on every side but the front when `front_setback_m` is\ngiven, all round when it is not. `permission` says whether a building of these heights may\nstand on this site at all (plot size, road), with the reason when it may not; a height the\ntables do not permit is a band of its own, so the bands still cover every height once.",
       "properties": {
         "above_inclusive": {
           "default": false,
@@ -57,6 +57,19 @@
           "title": "Clause",
           "type": "string"
         },
+        "front_setback_m": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Front Setback M"
+        },
         "gap_m": {
           "anyOf": [
             {
@@ -69,8 +82,34 @@
           "default": null,
           "title": "Gap M"
         },
+        "green_strip_m": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Green Strip M"
+        },
+        "green_strip_sides": {
+          "default": "ALL",
+          "enum": [
+            "ALL",
+            "FRONTAGE"
+          ],
+          "title": "Green Strip Sides",
+          "type": "string"
+        },
         "kind": {
           "$ref": "#/$defs/BandKind"
+        },
+        "measure": {
+          "$ref": "#/$defs/HeightMeasure",
+          "default": "RULE_HEIGHT"
         },
         "min_road_m": {
           "anyOf": [
@@ -88,6 +127,15 @@
           "default": true,
           "title": "Modelled",
           "type": "boolean"
+        },
+        "permission": {
+          "$ref": "#/$defs/Eligibility",
+          "default": "ALLOWED"
+        },
+        "permission_note": {
+          "default": "",
+          "title": "Permission Note",
+          "type": "string"
         },
         "setback_m": {
           "anyOf": [
@@ -203,6 +251,17 @@
         },
         "pathway_max_block_height_m": {
           "$ref": "#/$defs/RuleValue_float_"
+        },
+        "pathway_width_m": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RuleValue_float_"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "required": [
@@ -356,7 +415,41 @@
     },
     "GreenStripRules": {
       "additionalProperties": false,
+      "description": "The planting strips. The high-rise strip: width_m where the setback is where_setback_from_m\nor more (rule 7(a)(viii)). Table III's (rule 5(f)): frontage_m along the frontage within the\nfront setback, and periphery_m on the remaining sides on plots above periphery_above_sqm.\nWhat each band asks is on the band (Band.green_strip_m), so no consumer works it out again.",
       "properties": {
+        "frontage_m": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RuleValue_float_"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "periphery_above_sqm": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RuleValue_float_"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "periphery_m": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RuleValue_float_"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "where_setback_from_m": {
           "$ref": "#/$defs/RuleValue_float_"
         },
@@ -444,7 +537,8 @@
       "enum": [
         "RULE_HEIGHT",
         "PHYSICAL_HEIGHT",
-        "AMSL"
+        "AMSL",
+        "HEIGHT_ABOVE_STILT"
       ],
       "title": "HeightMeasure",
       "type": "string"
@@ -1335,8 +1429,8 @@
       "type": "string"
     },
     "schema_version": {
-      "const": "1.1",
-      "default": "1.1",
+      "const": "1.2",
+      "default": "1.2",
       "title": "Schema Version",
       "type": "string"
     },

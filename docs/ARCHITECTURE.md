@@ -144,6 +144,29 @@ project gave no status (its status follows `abutting_road_status`, and is unveri
 nothing says); the brief and the placed facilities carry the use and surface the firm's
 amenity library states, and nothing its names suggest.
 
+### Contracts 1.2 (2026-10-04)
+
+Made so Table III (rule 5) can be held, on A2's reading of the order and D2's needs. All
+additions; a 1.1 document is refused like any older one.
+
+1. **A band is read on its own measure.** Table IV's bands on the rule height; Table III's on
+   the height above the stilt (`HeightMeasure.HEIGHT_ABOVE_STILT`), because rule 5(c) leaves the
+   parking stilt out of Table III's heights whatever the reading of `stilt_in_rule_height`.
+   `HeightRules.band_for_block` finds a block's band: its class from its rule height under the
+   reading, then, below 21 m, its row on its height above the stilt.
+2. **The front is held apart.** `Band.front_setback_m` is the setback on the access road's
+   frontage (Table III's Building Line by road width; for a high-rise, rule 7(a)(xi)'s higher of
+   Table IV and that line); `setback_m` is then every other side.
+3. **A band says whether its heights may stand here** (`permission`, with a note when not
+   ALLOWED); a height the tables do not permit is a band of its own, so the bands still cover
+   every height once. `HeightRules.band_permission` adds the site's high-rise eligibility to a
+   high-rise band; `permissible_non_high_rise` gives the highest band below 21 m that may stand.
+4. **Table III's planting** (rule 5(f): 1 m along the frontage, 1 m round the rest above 300 m²)
+   is carried in `GreenStripRules`, and what each band asks in `Band.green_strip_m`.
+5. **Rule 8(l)'s pathways:** `RoadKind.PATHWAY` and `CirculationRules.pathway_width_m`.
+
+The new legal values are optional fields the resolver fills; the contract holds none of them.
+
 ### Shared types and adapters
 
 `common.py`: `Shape` (coordinates in the survey's metres), `Sourced`, `SourceKind` (SURVEY,

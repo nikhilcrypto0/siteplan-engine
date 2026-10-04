@@ -1,7 +1,7 @@
 {
- "schema_version": "1.1",
- "site_ref": "893b70a2a61ad1b5",
- "rules_ref": "a2c225e89c11f5a9",
+ "schema_version": "1.2",
+ "site_ref": "0578e5ca84b81bb1",
+ "rules_ref": "0409023b0ee86f79",
  "exclusions": [
   {
    "id": "buffer-water-1",
@@ -40,6 +40,8 @@
    "kind": "NON_HIGH_RISE",
    "modelled": false,
    "setback_m": null,
+   "front_setback_m": null,
+   "permission": "ALLOWED",
    "setback_envelope": [],
    "buildable": [],
    "area_sqm": 0.0,
@@ -52,6 +54,8 @@
    "kind": "HIGH_RISE",
    "modelled": true,
    "setback_m": 7.0,
+   "front_setback_m": null,
+   "permission": "ALLOWED",
    "setback_envelope": [
     {
      "outer": [
@@ -129,6 +133,8 @@
    "kind": "HIGH_RISE",
    "modelled": true,
    "setback_m": 8.0,
+   "front_setback_m": null,
+   "permission": "ALLOWED",
    "setback_envelope": [
     {
      "outer": [
@@ -206,6 +212,8 @@
    "kind": "HIGH_RISE",
    "modelled": true,
    "setback_m": 9.0,
+   "front_setback_m": null,
+   "permission": "ALLOWED",
    "setback_envelope": [
     {
      "outer": [
@@ -283,6 +291,8 @@
    "kind": "HIGH_RISE",
    "modelled": true,
    "setback_m": 10.0,
+   "front_setback_m": null,
+   "permission": "ALLOWED",
    "setback_envelope": [
     {
      "outer": [
@@ -492,7 +502,7 @@
   }
  ],
  "rule_layers": {
-  "schema_version": "1.1",
+  "schema_version": "1.2",
   "layers": [
    {
     "id": "setback 21 m",

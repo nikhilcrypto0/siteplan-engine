@@ -87,6 +87,19 @@
           "title": "Buildable",
           "type": "array"
         },
+        "front_setback_m": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Front Setback M"
+        },
         "green_strip_applies": {
           "anyOf": [
             {
@@ -111,6 +124,10 @@
           "default": "",
           "title": "Note",
           "type": "string"
+        },
+        "permission": {
+          "$ref": "#/$defs/Eligibility",
+          "default": "ALLOWED"
         },
         "setback_envelope": {
           "default": [],
@@ -187,6 +204,15 @@
       },
       "title": "CirculationRequirements",
       "type": "object"
+    },
+    "Eligibility": {
+      "enum": [
+        "ALLOWED",
+        "PROHIBITED",
+        "UNVERIFIED"
+      ],
+      "title": "Eligibility",
+      "type": "string"
     },
     "Exclusion": {
       "additionalProperties": false,
@@ -522,8 +548,8 @@
           "type": "array"
         },
         "schema_version": {
-          "const": "1.1",
-          "default": "1.1",
+          "const": "1.2",
+          "default": "1.2",
           "title": "Schema Version",
           "type": "string"
         }
@@ -710,7 +736,7 @@
       "$ref": "#/$defs/RuleLayers",
       "default": {
         "layers": [],
-        "schema_version": "1.1"
+        "schema_version": "1.2"
       }
     },
     "rules_ref": {
@@ -718,8 +744,8 @@
       "type": "string"
     },
     "schema_version": {
-      "const": "1.1",
-      "default": "1.1",
+      "const": "1.2",
+      "default": "1.2",
       "title": "Schema Version",
       "type": "string"
     },
