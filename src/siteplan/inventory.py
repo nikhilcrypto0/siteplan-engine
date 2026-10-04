@@ -479,8 +479,9 @@ INVENTORY: tuple[Entry, ...] = (
         rules.NARROW_PLOT_CLAUSE, Reading.NOT_MODELLED,
         uses=("NARROW_PLOT_MAX_SQM", "NARROW_PLOT_LENGTH_TO_WIDTH", "NARROW_PLOT_MIN_SIDE_M",
               "NARROW_PLOT_CLAUSE"),
-        choice="Rule 5(f)(xi), pp.10-11, not for made-up plots. The engine plans sites of "
-               "thousands of square metres, so it never meets one.",
+        choice="Rule 5(f)(xi), pp.10-11, for narrow plots only (it does not apply to 'made-up "
+               "plots'). The engine plans sites of thousands of square metres, so it never "
+               "meets one.",
     ),
     Entry(
         "Setbacks", "An owner who surrenders land for road widening may take concessions in a "
