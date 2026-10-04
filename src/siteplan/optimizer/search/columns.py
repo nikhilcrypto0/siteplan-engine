@@ -133,7 +133,7 @@ def plan_column(stretches: Mapping[float, Sequence[tuple[float, float]]],
     gap_slots = {(a, b): math.ceil((gap(cls_of[a], cls_of[b]) + GAP_SLACK_M) / step_m - EPS)
                  for a in classes for b in classes}
 
-    valid: dict[tuple, list[bool]] = {}
+    valid: dict[int, list[bool]] = {}  # by choice: two choices may share a prototype and class
     for choice in usable:
         ok = [False] * starts
         for a, b in stretches[ground_key(choice.cls)]:
@@ -141,7 +141,7 @@ def plan_column(stretches: Mapping[float, Sequence[tuple[float, float]]],
             last = min(starts - 1, math.floor((b - choice.length_m - lo) / step_m + EPS))
             for j in range(first, last + 1):
                 ok[j] = True
-        valid[choice.key] = ok
+        valid[id(choice)] = ok
 
     nothing = (-math.inf, -1)  # prefix maximum: value and the end slot it was reached at
     best_end: dict[tuple, list[tuple[float, tuple | None, Choice | None, int] | None]] = {
@@ -155,7 +155,7 @@ def plan_column(stretches: Mapping[float, Sequence[tuple[float, float]]],
         if j >= starts:
             continue
         for choice in usable:
-            if not valid[choice.key][j]:
+            if not valid[id(choice)][j]:
                 continue
             c = class_key(choice.cls)
             value, pred = choice.value, None
