@@ -115,14 +115,16 @@ def stretches(*, plot_sqm: float, plot_status: Provenance, gross_sqm: float,
             note=_road_note(widths, need, met, why),
             clause=f"{rules.TABLE_III_CLAUSE}; row {line.row}, up to {line.up_to_m:g} m{below}"))
         above, above_inclusive = line.up_to_m, line.below
-    return [*out, *_above_the_row(lines[-1], plot_sqm, plot_status, high_rise_from_m)]
+    return [*out, *_above_the_row(lines[-1], plot_sqm, plot_status, widths, high_rise_from_m)]
 
 
 def _above_the_row(last: rules.TableIIILine, plot_sqm: float, plot_status: Provenance,
-                   high_rise_from_m: float) -> list[Stretch]:
+                   widths: tuple[Width, ...], high_rise_from_m: float) -> list[Stretch]:
     """What lies between the row's last line and the high-rise height. Table III permits nothing
     above its last line; the only order read that gives anything is G.O.Ms.No.95 of 2026, which
-    lets a plot of 750 to 2,000 m² build 18 to 21 m through TDR and gives no setback for it."""
+    lets a plot of 750 to 2,000 m² build 18 to 21 m through TDR and gives no setback for it. A
+    road known to fall short of the 12 m anything above 15 m asks (rule 5(e), Table II, and a group
+    scheme's rule 8(b)) prohibits even that."""
     tdr_low, tdr_high = rules.TDR_BAND_M
     small, large = rules.TDR_PLOT_RANGE_SQM
     through_tdr = small <= plot_sqm <= large
@@ -151,8 +153,18 @@ def _above_the_row(last: rules.TableIIILine, plot_sqm: float, plot_status: Prove
             note = (f"Table III stops below {tdr_low:g} m and a high-rise starts at "
                     f"{high_rise_from_m:g} m: no order read gives a setback between them on a "
                     f"plot above {large:,.0f} m²")
-        found.append(stretch(high_rise_from_m, Eligibility.UNVERIFIED, note,
-                             Provenance.UNVERIFIED, rules.TDR_BAND_CLAUSE))
+        need = rules.TABLE_III_TOP_TIER_MIN_ROAD_M
+        met, settled = _meets(widths, need)
+        if met is False and settled:
+            found.append(stretch(
+                high_rise_from_m, Eligibility.PROHIBITED,
+                f"{note}; the road falls short of the {need:g} m a height above 15 m asks "
+                f"({rules.TABLE_III_TOP_TIER_CLAUSE})",
+                weakest(Provenance.VERIFIED, plot_status, *(s for _, s in widths)),
+                rules.TDR_BAND_CLAUSE))
+        else:
+            found.append(stretch(high_rise_from_m, Eligibility.UNVERIFIED, note,
+                                 Provenance.UNVERIFIED, rules.TDR_BAND_CLAUSE))
     return found
 
 
