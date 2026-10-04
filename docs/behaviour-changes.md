@@ -4,6 +4,41 @@ A characterization test (tests/manifest.py) pins what the engine produces today.
 only together with a normative replacement test and an entry here: what changed, why, the
 evidence, and the test that now holds the behaviour. Newest first.
 
+## 2026-10-04: the number audit covers the new stages
+
+No value, layout or verdict changed, and no characterization test changed. `constraints.py`
+classified the prototype's modules only: `tests/test_constraints.py` scanned fifteen named modules,
+so the numbers of `legal/`, `optimizer/`, `validator/`, `prototypes/`, `adapters/` and `contracts/`
+went unclassified. Now, held by `tests/test_constraints.py` (normative):
+
+- **Every module under `src/siteplan` is audited or exempt with its reason** (`AUDITED_PACKAGES`,
+  `AUDITED_MODULES`, `EXEMPT`). A module in an audited package, `service/` included before it
+  exists, is audited without being named; a new module anywhere else fails until it is audited
+  or exempted. Class-level constants, ranges of numbers and the defaults of every model in an
+  audited module (but 0, 1 or -1 on a record) are scanned too; eleven named numbers that are no
+  domain number (an ordering, a unit, a bearing, a message length) are set aside by name
+  (`NOT_DOMAIN`).
+- **154 more numbers are classified**, in 17 new entries and 13 extended ones: 151
+  ENGINE_DESIGN_ASSUMPTION (tolerances and slacks, search bounds, the full search's roads and
+  reserve, the prototype families, the validator's cross-checks and refusals, the contracts'
+  tolerances, the flat importer's figures), 2 FIRM_STANDARD (the area statement's and the
+  assistant's copies of the workspace defaults) and 1 UNRESOLVED_INTERPRETATION
+  (`quantities.QUARTER_TURN`, the square corner the 6.88 m fire band is derived for). No symbol
+  changed basis. `siteplan constraints` and the acceptance report's section 3 list the new
+  entries; the note on the road-widening shortfall now says the resolved rules call a near miss
+  UNVERIFIED.
+- **Three legal figures copied outside `rules.py` now read it**, the same numbers:
+  `optimizer/floors.py` `CEILING_M` (Table IV's 120 m), `optimizer/search/network.py`
+  `GATE_DEPTH_M` (rule 7(a)(viii)'s 2 m strip) and `MIN_STREET_LENGTH_M` (rule 8(m)'s 9 m road).
+- **Inline literals that can change a result are named constants**, the same values:
+  `fit.TRIM_WIDE_SHARE` (0.98), `build.ON_POCKET_SHARE` (0.5), `strategy.EVALUATE_SHARE` (0.35),
+  `LAY_OUT_SHARE` (0.75) and `PITCH_GAP_M` (10 m) and `search.layout.CLUB_FLOORS` (2) in the full
+  search; `fire.GATE_TOUCH_M` (0.5 m), `roads.HEAD_SLACK_M` (0.05 m), `roads.HEAD_CUT_M` (0.1 m),
+  `open_space.AGREEMENT_SHARE` (0.005), `shapes.HEAL_M` and `shapes.CENTRE_TOLERANCE_M` (0.05 m)
+  in the validator; `legacy_layout.ON_GROUND_SHARE` (0.5) in the adapter.
+- **Copies of one number are held to one value** (`COPIES`): an entry that lists the
+  validator's or the full search's own copy prints one of them, so the test fails if they part.
+
 ## 2026-10-04: C3, blocks below 21 m in the full search
 
 No characterization test changed, and contracts stay at 1.2. LEGACY keeps to the high-rise counts it
