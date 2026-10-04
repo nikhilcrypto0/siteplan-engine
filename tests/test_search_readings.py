@@ -2,8 +2,9 @@
 
 On a 60 ft road Table IV allows 30 m of rule height; with a 3.0 m stilt and 3.0 m floors that is 9
 floors if the stilt counts and 10 if it does not, and a block is a high-rise from 21 m, which is 6
-floors if the stilt counts and 7 if it does not. A layout built to hold under every reading may
-only use a floor count both readings leave open.
+floors if the stilt counts and 7 if it does not. Below that a block is Table III's (C3): 1 to 5
+floors, 3 to 15 m above the stilt whatever the reading. A layout built to hold under every reading
+may only use a floor count both readings leave open.
 """
 
 from search_support import made_up, rectangle
@@ -26,9 +27,11 @@ def test_a_floor_count_is_open_to_every_reading_only_where_each_reading_leaves_i
     counted = _floors(made, Profile("counted", ALL))
     not_counted = _floors(made, Profile("not_counted", ALL))
     every = _floors(made, Profile(ALL, ALL))
-    assert counted == {6, 7, 8, 9}  # 21 m to 30 m with the stilt counted
-    assert not_counted == {7, 8, 9, 10}  # 21 m to 30 m without it
-    assert every == counted & not_counted == {7, 8, 9}
+    low = {1, 2, 3, 4, 5}  # Table III's, the same under both readings (rule 5(c))
+    assert counted == low | {6, 7, 8, 9}  # 21 m to 30 m with the stilt counted
+    # without it 21 m to 30 m; 6 floors are then 18 m, where no order gives a setback
+    assert not_counted == low | {7, 8, 9, 10}
+    assert every == counted & not_counted == low | {7, 8, 9}
 
 
 def test_a_profile_asks_the_stricter_setback_and_gap_of_its_readings():
@@ -82,7 +85,8 @@ def test_the_brief_may_ask_for_one_floor_count_and_only_that_one_is_open():
 
 def test_where_the_road_is_too_narrow_for_a_high_rise_no_floor_count_is_open():
     """A road under Table IV's 12 m cannot serve a high-rise, and that permits nothing lower: the
-    blocks below 21 m are Table III's, which this strategy does not lay out."""
+    blocks below 21 m stand on their own Table III bands, and a group development scheme on a road
+    under 12 m may take none of them either (rule 8(b))."""
     narrow = made_up(box(0, 0, 200, 120), road_ft=30)
     assert _floors(narrow, Profile(ALL, ALL)) == set()
     assert profiles(narrow.rules, narrow.brief, list(narrow.kit))[0].key == "ALL-ALL"

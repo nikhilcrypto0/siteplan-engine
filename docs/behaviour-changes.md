@@ -4,6 +4,82 @@ A characterization test (tests/manifest.py) pins what the engine produces today.
 only together with a normative replacement test and an entry here: what changed, why, the
 evidence, and the test that now holds the behaviour. Newest first.
 
+## 2026-10-04: C3, blocks below 21 m in the full search
+
+No characterization test changed, and contracts stay at 1.2. LEGACY keeps to the high-rise counts it
+always laid out (legacy.py filters them), so its options and notes are as they were. What now
+behaves differently, each held by a normative test:
+
+- **A floor count below 21 m stands on its own band's permission** (`optimizer/floors.py`,
+  `FloorOption.permission`, read from `HeightRules.band_permission`), as a high-rise count stands on
+  the site's eligibility: ALLOWED is offered; UNVERIFIED is offered and labelled UNVERIFIED (its
+  reason among `open_items`); PROHIBITED is never offered and is FAIL, but no longer ends the scan,
+  which now stops only where a height limit or the high-rise eligibility holds a count back (those
+  only grow with the height; a taller band may be permitted where a lower one is not); a band the
+  rules give no setback (18-21 m on most plots) is never offered. Such a count was NOT_CHECKED and
+  never offered "until C3". test_optimizer_floors.py:
+  `test_a_count_below_the_high_rise_height_is_offered_on_its_own_bands_permission` replaces
+  `test_a_count_below_the_high_rise_height_is_assessed_but_not_offered_yet`;
+  `test_where_a_high_rise_is_prohibited_no_high_rise_count_is_offered_and_lower_ones_stand_alone`
+  replaces `test_where_a_high_rise_is_prohibited_no_count_is_offered_and_nothing_lower_either` (a
+  prohibited high-rise still permits nothing lower: each lower count stands on its own band);
+  `test_a_count_whose_band_is_prohibited_is_never_offered_and_does_not_stop_the_scan`,
+  `test_a_count_whose_bands_permission_is_open_is_offered_labelled_unverified` and
+  `test_a_band_with_no_setback_is_never_offered` are new; the counts expected by
+  `test_every_feasible_count_is_returned_not_only_the_most`,
+  `test_without_a_stilt_the_stilt_reading_cannot_matter`, `test_a_small_plots_road_gives_a_lower_limit`
+  and `test_an_unsettled_eligibility_offers_high_rise_counts_labelled_unverified` now include the
+  Table III counts (1 to 5 floors on a 3 m stilt).
+- **The full search places blocks below 21 m wherever their band's land allows**
+  (tests/test_search_low_blocks.py). A floor count carries its Table III figures (`FloorClass`: the
+  side setback, the Building Line on the access road's frontage, the gap, the 1 m planting strip,
+  whether it is a high-rise under any reading). In the columns such a block is one more choice. On
+  the ground the ring road leaves (`optimizer/search/fringe.py`) it stands on its own land, the front
+  held apart as the validator measures it (`land.setback_land`; which stretches face the access road
+  is the engine's reading, classified in constraints.py), off the ring and its turns, out of
+  the water buffer and the ground kept for the open space, a gap from every block: rule
+  5(f)(xiii)'s taller side setback between two low blocks, the greater gap beside a high-rise (which
+  holds under every reading of `mixed_height_spacing`), never less than a high-rise's 6 m lane and
+  the room its tender turns in at a corner. It opens onto the ring road or, up to 12 m (physical,
+  as the validator measures it), is reached by a 6 m `RoadKind.PATHWAY` branching out of it (rule
+  8(l)); a taller block no road reaches is not placed. A fringe block is placed only while the free
+  ground stays above what the club house, ramp, open space and facilities are expected to need (the
+  search's own estimate, `Run.reserve_target_sqm`, never law). No fire lane or turning room is laid
+  round a block that is not a high-rise (rule 15(a)(i) gives no figure: the validator lists it
+  NOT_CHECKED), the strip Table III asks is drawn whenever such a block may stand, and the club
+  house keeps the gap its own band asks. Any prototype of the kit may stand on the fringe, whatever
+  its depth. `test_the_counts_below_21_m_carry_their_table_iii_figures`,
+  `test_a_low_blocks_land_keeps_the_building_line_in_front_and_the_side_setback_elsewhere`,
+  `test_two_low_blocks_keep_the_taller_ones_side_setback_and_a_high_rise_its_own_gap`,
+  `test_low_blocks_on_the_fringe_keep_their_own_setbacks_and_the_front_is_held_apart`,
+  `test_a_pathway_branches_out_of_the_ring_road_to_a_block_up_to_12_m`,
+  `test_a_block_on_the_fringe_above_12_m_stands_against_a_road`,
+  `test_a_low_block_never_stands_in_a_high_rises_fire_lane_or_turning_ground`,
+  `test_a_layout_of_blocks_below_21_m_lays_no_fire_lane_and_draws_table_iii_planting`,
+  `test_no_layout_with_a_low_block_is_offered_that_the_validator_fails`.
+- **Every profile is searched with blocks below 21 m and without**, each kind on its own lay-out
+  quota, the configurations without them evaluated first in C2's own order and their reserve
+  variants made as before (a high-rise configuration with no room also tries its ends with blocks
+  below 21 m, never the other way), so with no time budget cutting the run short the high-rise
+  layouts C2 laid out are still laid out; the objective decides between the two kinds when they are
+  judged, so the candidates proposed, and their numbering, may differ.
+  `test_a_profile_with_counts_on_both_sides_of_21_m_is_searched_with_low_blocks_and_without`.
+- **The acceptance criterion (ARCHITECTURE.md section 6, C3): each narrow part of the plot is tried
+  for a block below 21 m and the notes say what came of it.** On the made-up L-plot the 24 m arm
+  leaves 14 m between Table III's 5 m side setbacks, less than the kit's 24.13 m deep blocks, and
+  the note says so with the numbers; with a made-up 13.13 m deep block in the kit a two-floor block
+  fits there, some of the layouts proposed stand one there and others do not, and the note counts
+  them. `test_the_arm_is_tried_for_a_low_block_and_says_why_none_stands_there`,
+  `test_where_a_block_fits_the_arm_the_objective_decides_and_the_layouts_say_which_did`.
+- **C2 tests whose meaning moved.** test_search_readings.py: the floor counts a profile leaves open
+  now include 1 to 5 floors; test_search_strategy.py: with no floor count open at all the note says
+  neither a high-rise nor a block below 21 m may stand, and the helper that finds a tower's deepest
+  setback uses `HeightRules.band_for_block` (the bare-height lookup found no setback for a low block).
+
+Not settled by the text, and left as it was read: a block above 12 m on the fringe needs a road and
+the search draws no cul-de-sac or branch road to one, so it stands only against the ring; the
+fringe's blocks run the columns' way (the other direction is another configuration).
+
 ## 2026-10-04: Wave 2 integrated (A2, D2 and C2 on contracts 1.2)
 
 No characterization test changed. C2 adds the full search, strategy FULL beside LEGACY, held by

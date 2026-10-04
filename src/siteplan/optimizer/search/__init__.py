@@ -7,10 +7,12 @@ It plugs into the optimizer core through the Strategy interface, beside the lega
 strategy.py for how a run is staged; the modules beside it each hold one decision:
 
 - readings.py: the profiles a layout is built for (every reading, or one) and the floor counts
-  each leaves open;
+  each leaves open, those below the high-rise height with their Table III figures (C3);
 - land.py: the setback zone, the planted strip, the roadable ground and the ground the blocks may
-  stand on;
+  stand on, the front held apart where a band gives its own;
 - columns.py: blocks in columns, solved exactly (prototype, floors and position of each);
+- fringe.py: blocks below 21 m on the ground the ring road leaves, each reached by the ring or a
+  rule 8(l) pathway, and the narrow parts of the plot tried for one (C3);
 - network.py: the streets, the ring road, the entrance and the fire lanes, drawn from the blocks;
 - ground.py, fit.py, parking_plan.py: the club house, the ramp, the open space, the facilities and
   the cellars, on the ground the blocks and roads leave;

@@ -1,19 +1,25 @@
 """One configuration, laid out: the blocks first, then the circulation they call for, then the rest.
 
 A configuration is a profile (the readings it is built for), a direction for the blocks, where the
-columns start across the plot, the tallest floor count it allows and, when the plot has no room to
-spare, the end of the plot kept for the open space. `evaluate` is the cheap half: it places the
-blocks in columns (columns.py) on the ground their heights allow and says what they add. `lay_out`
-is the exact half: it draws the streets and the ring road from the blocks that stand, finds the
-entrance, and gives the club house, the ramp, the open space and the facilities their ground, the
-cellars their levels. A configuration whose ground cannot give one of them what the rules ask is
-not laid: it returns why, and nothing is built over the shortfall.
+columns start across the plot, the tallest floor count it allows, whether blocks below the
+high-rise height may stand (C3) and, when the plot has no room to spare, the end of the plot kept
+for the open space. `evaluate` is the cheap half: it places the blocks in columns (columns.py) on
+the ground their heights allow, then, where blocks below 21 m may stand, on the ground the ring
+road leaves (fringe.py), and says what they add. `lay_out` is the exact half: it draws the streets
+and the ring road from the blocks that stand, finds the entrance, and gives the club house, the
+ramp, the open space and the facilities their ground, the cellars their levels. A configuration
+whose ground cannot give one of them what the rules ask is not laid: it returns why, and nothing is
+built over the shortfall.
+
+A block below 21 m is not a high-rise: no fire lane or turning room is laid round it (rule
+15(a)(i) gives no figure for it), it keeps the gap and the setback of its Table III band, and the
+planting strip that band asks is drawn round the plot whenever such a block may stand.
 """
 
 from __future__ import annotations
 
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from shapely import affinity
 from shapely.geometry import Point, Polygon
@@ -28,13 +34,14 @@ from siteplan.contracts import (
     TowerPrototype,
 )
 from siteplan.contracts.design_brief import ClubSize
-from siteplan.optimizer.search import ground, network
+from siteplan.optimizer.search import fringe, ground, network
 from siteplan.optimizer.search.build import Laid, Placement, named_placements
 from siteplan.optimizer.search.columns import (
     Choice,
     Standing,
     choices_for,
     free_stretches,
+    ground_key,
     plan_column,
 )
 from siteplan.optimizer.search.frame import Frame
@@ -71,17 +78,19 @@ class Config:
     max_floors: int
     reserve: str | None = None  # an end of the plot kept for the open space: N, S, E or W
     reserve_scale: float = 1.0
+    low_blocks: bool = False  # blocks below the high-rise height may stand (Table III)
 
     @property
     def key(self) -> tuple:
         return (self.profile.key, round(self.angle_deg, 3), round(self.offset_m, 3),
-                self.max_floors, self.reserve or "", self.reserve_scale)
+                self.max_floors, self.reserve or "", self.reserve_scale, self.low_blocks)
 
 
 @dataclass(frozen=True)
 class Run:
     """What does not change over a search: the inputs, the numbers read from them, the prototypes
-    and the floor counts each profile leaves open."""
+    and the floor counts each profile leaves open. The columns take the prototypes of one depth
+    (`kit`); a block on the ground the ring road leaves may be any of them (`fringe_kit`)."""
 
     site: CanonicalSiteModel
     rules: ResolvedRules
@@ -93,6 +102,15 @@ class Run:
     depth_m: float
     classes: dict[str, dict[str, list[FloorClass]]]  # profile key -> prototype id -> floor counts
     profiles: tuple[Profile, ...] = ()
+    fringe_kit: tuple[TowerPrototype, ...] = ()
+    own_lands: dict[tuple[float, float], BaseGeometry] = field(default_factory=dict)
+
+    def has_low(self, profile: Profile) -> bool:
+        """Whether the profile leaves a floor count below the high-rise height open."""
+        return any(not c.high_rise for found in self.classes[profile.key].values() for c in found)
+
+    def has_high(self, profile: Profile) -> bool:
+        return any(c.high_rise for found in self.classes[profile.key].values() for c in found)
 
     @property
     def reserve_target_sqm(self) -> float:
@@ -110,10 +128,12 @@ def make_run(site: CanonicalSiteModel, rules: ResolvedRules, brief: DesignBrief,
     for prototype in kit:
         depths.setdefault(round(prototype.depth_m, 2), []).append(prototype)
     depth, used = max(depths.items(), key=lambda item: (len(item[1]), item[0]))
-    classes = {profile.key: {p.id: floor_classes(rules, brief, p, profile) for p in used}
+    classes = {profile.key: {p.id: floor_classes(rules, brief, p, profile) for p in kit}
                for profile in profiles}
-    return Run(site, rules, brief, envelope, plot_of(site, envelope), q, tuple(used), depth,
-               classes, tuple(profiles))
+    plot = plot_of(site, envelope)
+    every = [c for found in classes.values() for counts in found.values() for c in counts]
+    return Run(site, rules, brief, envelope, plot, q, tuple(used), depth, classes,
+               tuple(profiles), tuple(kit), fringe.own_lands(plot, q, every))
 
 
 # --- The cheap half: blocks in columns -----------------------------------------------------------
@@ -137,23 +157,28 @@ class Evaluation:
     cluster: network.Cluster
     value: float  # saleable sqft of the blocks that stand
     kept_clear: BaseGeometry | None  # the end of the plot reserved, in the survey's frame
+    fringe: tuple[fringe.Fringed, ...] = ()  # blocks below 21 m on the ground the ring leaves
 
 
-def _gap(margin: float):
+def _gap(q: Quantities):
     def between(a: FloorClass, b: FloorClass) -> float:
-        return max(a.gap_m, b.gap_m) + margin
+        return fringe.need_m(q, a, b)
     return between
 
 
 def evaluate(run: Run, config: Config) -> Evaluation | Failure:
     q, plot = run.q, run.plot
-    classes = {pid: [c for c in found if c.floors <= config.max_floors]
+    classes = {pid: [c for c in found if c.floors <= config.max_floors
+                     and (c.high_rise or config.low_blocks)]
                for pid, found in run.classes[config.profile.key].items()}
     choices = choices_for(run.kit, classes)
     if not choices:
         return Failure("no floor count is left open")
-    zone_depth = max(c.cls.setback_m for c in choices)
-    strip_width = q.strip_width_m if zone_depth >= q.strip_from_setback_m - 1e-9 else 0.0
+    beyond = fringe.options(run.fringe_kit, classes, config.max_floors, q) \
+        if config.low_blocks else []
+    asked = [c.cls for c in [*choices, *beyond]]
+    zone_depth = max(cls.zone_m for cls in asked)
+    strip_width = max(cls.strip_m for cls in asked)
     street = max(q.road_m, max(c.cls.gap_m for c in choices) + q.gap_margin_m)
     frame = Frame(config.angle_deg)
     kept_clear = None
@@ -178,8 +203,17 @@ def evaluate(run: Run, config: Config) -> Evaluation | Failure:
         [s.choice.value for s in standing])
     if cluster is None:
         return Failure(why)
+    if not run.brief.height_intent.mixed_heights_allowed:  # the fringe keeps the columns' height
+        beyond = [c for c in beyond if c.cls.floors == fitted[0].choice.cls.floors]
+    extra = fringe.place(plot, q, frame, land, cluster, fitted, beyond, own=run.own_lands,
+                         kept_clear=kept_clear,
+                         roads_in_setback=config.profile.roads_may_use_setback,
+                         eps_m=EPS_LAND_M, room_sqm=run.reserve_target_sqm) if beyond else []
+    if config.low_blocks and not extra and all(s.choice.cls.high_rise for s in fitted):
+        return Failure("no block below 21 m stands in this configuration")
     return Evaluation(config, frame, land, street, tuple(fitted), tuple(streets), cluster,
-                      sum(s.choice.value for s in fitted), kept_clear)
+                      sum(s.choice.value for s in fitted)
+                      + sum(f.standing.choice.value for f in extra), kept_clear, tuple(extra))
 
 
 def _columns(run: Run, config: Config, frame: Frame, land: Land, choices: list[Choice],
@@ -188,7 +222,7 @@ def _columns(run: Run, config: Config, frame: Frame, land: Land, choices: list[C
     base = frame.to_turned(land.cluster_land)
     net = frame.to_turned(run.plot.net)
     lands = {}
-    for setback in sorted({c.cls.setback_m for c in choices}):
+    for setback in sorted({ground_key(c.cls) for c in choices}):
         own = base.intersection(erode(net, setback + q.setback_margin_m))
         lands[setback] = erode(own, EPS_LAND_M)
     minx, _, maxx, _ = base.bounds
@@ -205,7 +239,7 @@ def _columns(run: Run, config: Config, frame: Frame, land: Land, choices: list[C
         column = 0
         while x + run.depth_m <= maxx + 1e-9:
             stretches = {s: free_stretches(land_s, x, run.depth_m) for s, land_s in lands.items()}
-            planned = plan_column(stretches, allowed, _gap(q.gap_margin_m), column, x)
+            planned = plan_column(stretches, allowed, _gap(q), column, x)
             found += planned.standing
             total += planned.value
             x += pitch
@@ -221,9 +255,11 @@ def _columns(run: Run, config: Config, frame: Frame, land: Land, choices: list[C
 def lay_out(run: Run, ev: Evaluation) -> tuple[Laid | None, str]:
     q, plot, rules, brief = run.q, run.plot, run.rules, run.brief
     frame, land, streets, cluster = ev.frame, ev.land, list(ev.streets), ev.cluster
-    placements = named_placements(ev.standing, frame)
+    placements = named_placements(ev.standing, frame, [f.standing for f in ev.fringe])
     footprints = [p.footprint for p in placements]
     gaps = [p.standing.choice.cls.gap_m for p in placements]
+    high = [p.standing.choice.cls.high_rise for p in placements]
+    pathways = [f.pathway for f in ev.fringe if not f.pathway.is_empty]
     blocks = unary_union(footprints)
     blocked = unary_union([blocks, ev.kept_clear]) if ev.kept_clear is not None else blocks
     entrance, why = network.find_entrance(plot, cluster, blocked, q.approach_m,
@@ -231,11 +267,14 @@ def lay_out(run: Run, ev: Evaluation) -> tuple[Laid | None, str]:
     if entrance is None:
         return None, why
     roads = unary_union([cluster.ring, *streets, entrance.approach])
-    lanes = network.fire_lanes(footprints, roads, plot.net, q.lane_m)
+    lanes = network.fire_lanes([f for f, tall in zip(footprints, high, strict=True) if tall],
+                               roads, plot.net, q.lane_m, blocks)
     reason = _lanes_misplaced(lanes, land)
     if reason:
         return None, reason
-    unserved = [p.name for p in placements if p.footprint.distance(roads) > TOUCH_M]
+    ways = [EMPTY] * len(ev.standing) + [f.pathway for f in ev.fringe]
+    unserved = [p.name for p, way in zip(placements, ways, strict=True)
+                if not _served(p, roads, way)]
     if unserved:
         return None, f"no road touches {', '.join(unserved)}"
     turns = loop_turns(cluster.ring, [Turning(*t) for t in q.turnings])
@@ -244,7 +283,12 @@ def lay_out(run: Run, ev: Evaluation) -> tuple[Laid | None, str]:
     if off > network.RING_CLIP_SQM:
         return None, (f"a turn of the ring road lies off the plot, on the strip or in the water "
                       f"({off:,.0f} m²)")
-    zones = ground.zones_of(footprints, gaps, roads, lanes, q.reach_m, turns)
+    on_turns = [p.name for p in placements[len(ev.standing):]
+                if p.footprint.intersection(turns).area > network.RING_CLIP_SQM]
+    if on_turns:
+        return None, f"{', '.join(on_turns)} stands where the tender turns on the ring road"
+    zones = ground.zones_of(footprints, gaps, roads, lanes, q.reach_m, turns, high,
+                            unary_union(pathways) if pathways else EMPTY)
     open_land = ground.open_ground(plot, land, zones)
     buildable = ground.buildable_ground(plot, open_land)
 
@@ -292,8 +336,17 @@ def lay_out(run: Run, ev: Evaluation) -> tuple[Laid | None, str]:
         lanes=lanes, pockets=pockets, strip=strip, club=club, club_floors=club_floors,
         facilities=facilities, facilities_missed=missed, ramps=ramps,
         ring_clipped=cluster.clipped, cellars=plan.cellars,
-        cars=_cars(plan), zones=zones, land=land)
+        cars=_cars(plan), zones=zones, land=land, pathways=pathways)
     return laid, ""
+
+
+def _served(placement: Placement, roads: BaseGeometry, pathway: BaseGeometry) -> bool:
+    """A block opens onto a road, or a pathway that branches out of one reaches it (rule 8(l):
+    fringe.py draws one only to a block it may serve)."""
+    if placement.footprint.distance(roads) <= TOUCH_M:
+        return True
+    return (not pathway.is_empty and pathway.distance(roads) <= TOUCH_M
+            and placement.footprint.distance(pathway) <= TOUCH_M)
 
 
 def land_strip(land: Land, q: Quantities) -> float:
@@ -318,14 +371,26 @@ def _club(run: Run, buildable: BaseGeometry, zones: ground.Zones, placements: li
         size = max(size, asked.sqm)
     if size <= 0:
         return None, floors, ""
-    keep = unary_union([grow(p.footprint, max(p.standing.choice.cls.gap_m, run.q.reach_m))
-                        for p in placements])
+    own = _club_gap_m(run.rules, floors * run.q.floor_m)
+    keep = unary_union([grow(p.footprint, max(
+        p.standing.choice.cls.gap_m, own,
+        run.q.reach_m if p.standing.choice.cls.high_rise else 0.0)) for p in placements])
     room = buildable.difference(keep)
     club = ground.place_club(room, size / floors, turns, anchor)
     if club is None:
         return None, floors, (f"no room for a {size:,.0f} m² club house (rule 15(a)(x)) a block "
                               "gap from every block, outside the roads and the clear ground")
     return club, floors, ""
+
+
+def _club_gap_m(rules: ResolvedRules, height_m: float) -> float:
+    """The gap the club house's own band asks of a block beside it (it has no stilt): between two
+    blocks below 21 m the taller one's side setback governs (rule 5(f)(xiii)), so a block lower
+    than the club house keeps the club house's. Nothing where the rules model no band for it."""
+    band = rules.height.band_for_block(height_m, 0.0, stilt_counted=False)
+    if band is None or not band.modelled or band.setback_m is None:
+        return 0.0
+    return band.gap_m if band.gap_m is not None else band.setback_m
 
 
 def _cores(placements: Sequence[Placement]) -> list[BaseGeometry]:

@@ -276,12 +276,14 @@ def _depth_to_ring(net: Polygon, at, along, inward, half: float, ring: BaseGeome
 
 
 def fire_lanes(footprints: Sequence[Polygon], roads: BaseGeometry, net: Polygon,
-               lane_width_m: float) -> BaseGeometry:
+               lane_width_m: float, blocks: BaseGeometry | None = None) -> BaseGeometry:
     """The ground within a lane's width of a block that no road covers: it is motorable and kept
-    clear, whatever else the plot holds."""
+    clear, whatever else the plot holds. `footprints` are the blocks that ask for it (the
+    high-rises: below 21 m rule 15(a)(i) asks no lane); `blocks`, every block, which no lane
+    covers (the footprints themselves when not given)."""
     if not footprints:
         return EMPTY
-    blocks = unary_union(list(footprints))
+    blocks = unary_union(list(footprints)) if blocks is None else blocks
     bands = unary_union([grow(f, lane_width_m) for f in footprints]).difference(blocks)
     lanes = bands.difference(roads).intersection(net)
     return unary_union(polygons(lanes, FILL_SLIVER_SQM)) if not lanes.is_empty else EMPTY
