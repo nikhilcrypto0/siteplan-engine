@@ -17,9 +17,13 @@ back whether or not its inputs are confirmed (it is UNVERIFIED, not FAIL, when t
 one whose condition is unsettled (the dead end nobody has answered) lets the height through,
 labelled UNVERIFIED. The band of a block is `HeightRules.band_for_block`: for a high-rise count
 the band of its rule height, for a count below 21 m Table III's row on the height above the
-stilt (rule 5(c)), which C3 will need. Where a high-rise is prohibited no count of the high-rise
-height or more is offered, and that permits nothing lower: below it the band is Table III's, not
-modelled, so no count there is offered or passed.
+stilt (rule 5(c)). Where a high-rise is prohibited no count of the high-rise height or more is
+offered, and that permits nothing lower.
+
+A count below the high-rise height is assessed on its Table III band (A2) but is neither offered
+nor passed: the search lays out low blocks only from C3, and a Table III band carries its own
+permission (`HeightRules.band_permission`), which nothing here reads yet. Until then such a count
+is NOT_CHECKED, whatever its band says.
 """
 
 from __future__ import annotations
@@ -105,8 +109,13 @@ class FloorOption:
 
     @property
     def modelled(self) -> bool:
-        """Whether the engine knows this band's setback and gap (Table III is not encoded)."""
+        """Whether the engine knows this band's setback and gap."""
         return bool(self.band and self.band.modelled and self.band.setback_m is not None)
+
+    @property
+    def below_high_rise(self) -> bool:
+        """A count under the high-rise height: Table III's, laid out only from C3."""
+        return self.high_rise is None
 
     @property
     def limits_status(self) -> Status:
@@ -122,7 +131,7 @@ class FloorOption:
     def status(self) -> Status:
         if self.limits_status is not Status.PASS:
             return self.limits_status
-        return Status.PASS if self.modelled else Status.NOT_CHECKED
+        return Status.PASS if self.modelled and not self.below_high_rise else Status.NOT_CHECKED
 
     @property
     def open_items(self) -> tuple[str, ...]:
@@ -233,10 +242,11 @@ def assess_floors(rules: ResolvedRules, brief: DesignBrief, prototype: TowerProt
 def feasible_floors(rules: ResolvedRules, brief: DesignBrief, prototype: TowerPrototype | None,
                     reading: str) -> list[FloorOption]:
     """The floor counts a tower may take, lowest first: nothing holds them back, the band's
-    setback and gap are modelled (below the high-rise height they are not yet), and the brief's
-    height intent allows them. It is the whole set, never only the most."""
+    setback and gap are modelled, the count is a high-rise's (below it a block is Table III's,
+    which the search lays out only from C3), and the brief's height intent allows them. It is the
+    whole set, never only the most."""
     return [option for option in assess_floors(rules, brief, prototype, reading)
-            if option.feasible and option.modelled
+            if option.feasible and option.modelled and not option.below_high_rise
             and _wanted(option.floors, brief.height_intent)]
 
 

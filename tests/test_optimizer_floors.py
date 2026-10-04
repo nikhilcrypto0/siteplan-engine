@@ -53,8 +53,8 @@ def test_a_30_m_limit_gives_nine_floors_when_the_stilt_counts_and_ten_when_it_do
 def test_every_feasible_count_is_returned_not_only_the_most():
     site, rules = rules_with_dead_end(None)
     brief = max_legal(fixture()[2])
-    # Below 21 m the band's setback is not encoded (Table III), so those counts are not offered;
-    # exactly 21 m (6 floors on the stilt, or 7 with the stilt left out) is a high-rise.
+    # Below 21 m a count is Table III's, which the search lays out only from C3, so those counts
+    # are not offered; exactly 21 m (6 floors on the stilt, or 7 without) is a high-rise.
     assert _counts(feasible_floors(rules, brief, None, STILT_COUNTED)) == [6, 7, 8, 9]
     assert _counts(feasible_floors(rules, brief, None, STILT_NOT_COUNTED)) == [7, 8, 9, 10]
     by_reading = floors_by_reading(rules, brief, None)
@@ -134,12 +134,19 @@ def test_each_option_names_its_band_its_setback_and_its_gap():
 
 
 def test_a_count_below_the_high_rise_height_is_assessed_but_not_offered_yet():
+    """Table III is encoded (A2), so a low count has its band, read on the height above the stilt
+    (rule 5(c)); the search lays out low blocks only from C3, so it is neither offered nor
+    passed."""
     _, rules = rules_with_dead_end(None)
     brief = max_legal(fixture()[2])
     three = assess_floor_count(rules, brief, None, STILT_COUNTED, 3)  # 12 m: Table III
-    assert three.feasible and not three.modelled and three.status is Status.UNVERIFIED
-    assert three.setback_m is None
+    assert three.feasible and three.modelled and three.below_high_rise
+    assert three.band.measure is HeightMeasure.HEIGHT_ABOVE_STILT and three.band.contains(9.0)
+    assert three.setback_m == three.band.setback_m is not None
+    assert three.status is Status.UNVERIFIED  # the limits' own verdict; never a PASS
     assert 3 not in _counts(feasible_floors(rules, brief, None, STILT_COUNTED))
+    assert not any(o.below_high_rise for reading in floors_by_reading(rules, brief, None).values()
+                   for o in reading)
 
 
 def test_a_limit_with_no_value_is_reported_and_never_passed():
@@ -239,8 +246,11 @@ def test_where_a_high_rise_is_prohibited_no_count_is_offered_and_nothing_lower_e
     assert six.high_rise.status is Status.FAIL and not six.feasible
     assert "road_width" in six.high_rise.reason
     five = assess_floor_count(prohibited, brief, None, STILT_COUNTED, 5)  # 18 m: Table III
-    assert five.high_rise is None and not five.modelled
+    assert five.high_rise is None and five.modelled  # 15 m above the stilt: its own row
     assert five.status is not Status.PASS  # a prohibited high-rise passes nothing lower
+    # ...and decides nothing about it: the low band keeps its own permission, either way.
+    assert prohibited.height.band_permission(five.band) is five.band.permission
+    assert rules.height.band_permission(five.band) is five.band.permission
 
 
 def test_an_unsettled_eligibility_offers_high_rise_counts_labelled_unverified():

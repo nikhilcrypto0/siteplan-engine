@@ -109,7 +109,8 @@ class LegacyStrategy:
         if not heights:
             return LegacyRun(Proposal(NAME, notes=(
                 "no height to try: the generator lays out high-rise blocks only, from "
-                f"{law.HIGH_RISE_THRESHOLD_M:g} m (Table III is not encoded)",)), None, request)
+                f"{law.HIGH_RISE_THRESHOLD_M:g} m (blocks below it are Table III's, which the "
+                "prototype generator does not lay out)",)), None, request)
         plot, _ = load_plot(project, None)
         keep_out = water_keep_out(site, rules)
         found = search_heights(plot, self.library, request, site_facts(project, keep_out),
