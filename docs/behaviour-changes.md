@@ -4,6 +4,31 @@ A characterization test (tests/manifest.py) pins what the engine produces today.
 only together with a normative replacement test and an entry here: what changed, why, the
 evidence, and the test that now holds the behaviour. Newest first.
 
+## 2026-10-03: Wave 1 integrated on contracts 1.1; the independent validator guards the optimizer
+
+No characterization test changed here. What now behaves differently, each held by a normative
+test:
+
+- **The optimizer's validator is stream D's** (`siteplan.validator`, the default in
+  `optimize`); the interim validator, which restated the generator's own claims, is deleted.
+  Made-up blocks with no roads or open space are now refused as the illegal layouts they are;
+  the tests of the optimizer's mechanics give their made-up candidates a labelled test validator
+  (`optimizer_support.Claims`) instead. `test_the_independent_validator_is_the_default_and_a_validator_can_be_given`,
+  `test_the_guard_refuses_what_the_independent_validator_fails_with_no_claim_needed`,
+  `test_every_reading_of_the_stilt_is_run_and_the_pool_keeps_them_apart` (the generator's own
+  layouts through the real validator: UNVERIFIED, none FAIL).
+- **A1 (legal envelope):** the dead-end limit is always listed, UNKNOWN while nobody has said
+  where the road leads and DOES_NOT_APPLY when it runs on; a road or plot too small for a
+  high-rise gives eligibility PROHIBITED, never a "21 m" limit, and no band is drawn; a road
+  that meets every row is UNBOUNDED; a block of exactly 21 m has its own band (7 m) in the
+  envelope; the five-acre fields are gone. tests/test_resolve.py, tests/test_envelope.py.
+- **C1 (optimizer core):** a block of exactly 21 m is offered (6 floors on a 3 m stilt when it
+  counts, 7 when not); a count beyond a limit on unconfirmed inputs is still not offered and is
+  labelled UNVERIFIED, not FAIL; where the road runs on, the dead-end limit is INFO; eligibility
+  is checked on every count of 21 m or more; the legacy generator says when design margins were
+  asked for and not applied. tests/test_optimizer_floors.py, tests/test_optimizer_legacy.py.
+- **B (prototypes):** none; the prototypes carry schema 1.1.
+
 ## 2026-10-03: D (the validator) on contracts 1.1
 
 One characterization test changed, with its normative replacement:

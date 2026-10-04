@@ -5,8 +5,10 @@ import random
 from itertools import combinations
 
 import pytest
+from contract_fixtures import load
 from optimizer_support import (
     LIBRARY,
+    Claims,
     Clock,
     Fixed,
     Scripted,
@@ -17,6 +19,7 @@ from optimizer_support import (
     tower,
 )
 
+from siteplan import validator as independent
 from siteplan.contracts import digest
 from siteplan.contracts.common import Status
 from siteplan.contracts.design_brief import (
@@ -28,15 +31,23 @@ from siteplan.contracts.design_brief import (
 )
 from siteplan.contracts.validation import LegalVerdict
 from siteplan.optimizer import (
-    InterimValidator,
     LegacyStrategy,
     Proposal,
     SearchContext,
-    optimize,
 )
+from siteplan.optimizer import optimize as real_optimize
 from siteplan.optimizer.pareto import same_idea
+from siteplan.validator import VALIDATOR_VERSION
 
 TEST_CLASS = "normative"
+
+
+def optimize(*args, **kwargs):
+    """The optimizer, judged by the made-up candidates' own claims unless a test gives a
+    validator: these tests are of the core's mechanics, not of the law (see Claims). The tests
+    of the real validator in the loop call real_optimize."""
+    kwargs.setdefault("validator", Claims())
+    return real_optimize(*args, **kwargs)
 
 P1, P2 = module_prototype(1), module_prototype(2)
 SITE, RULES, BRIEF = fixture()
@@ -199,12 +210,16 @@ def test_a_validator_that_contradicts_itself_gets_nothing_returned():
     assert [r.candidate_id for r in result.rejected] == ["flaky"]
 
 
-def test_the_interim_validator_is_the_default_and_a_validator_can_be_given():
-    pool = [_made("a", 9, 300)]
-    default = optimize(SITE, RULES, BRIEF, [Fixed(pool)])
-    explicit = optimize(SITE, RULES, BRIEF, [Fixed(pool)], validator=InterimValidator())
-    assert default == explicit
-    scripted = optimize(SITE, RULES, BRIEF, [Fixed(pool)], validator=Scripted())
+def test_the_independent_validator_is_the_default_and_a_validator_can_be_given():
+    drawn = [load("rectangle", "CandidateLayout")]  # the generator's layout, roads and all
+    default = real_optimize(SITE, RULES, BRIEF, [Fixed(drawn)])
+    explicit = real_optimize(SITE, RULES, BRIEF, [Fixed(drawn)], validator=independent)
+    assert default == explicit and default.alternatives
+    assert default.alternatives[0].report.validator_version == VALIDATOR_VERSION
+    blocks_only = real_optimize(SITE, RULES, BRIEF, [Fixed([_made("a", 9, 300)])])
+    assert not blocks_only.alternatives  # made-up blocks with no roads are not a legal layout
+    scripted = real_optimize(SITE, RULES, BRIEF, [Fixed([_made("a", 9, 300)])],
+                             validator=Scripted())
     assert scripted.alternatives[0].report.validator_version == "scripted test validator"
 
 
@@ -239,7 +254,7 @@ def test_a_unit_target_the_objective_does_not_use_yet_is_said():
 
 def test_every_reading_of_the_stilt_is_run_and_the_pool_keeps_them_apart():
     strategies = LegacyStrategy.for_readings(RULES, LIBRARY)
-    result = optimize(SITE, RULES, BRIEF, strategies)
+    result = real_optimize(SITE, RULES, BRIEF, strategies)  # the independent validator decides
     assert result.considered >= 4 and result.alternatives
     basis = {(a.candidate.interpretation_basis["stilt_in_rule_height"],
               a.candidate.interpretation_basis["circulation_in_setback"])
@@ -248,4 +263,5 @@ def test_every_reading_of_the_stilt_is_run_and_the_pool_keeps_them_apart():
                      ("not_counted", "allowed"), ("not_counted", "not_allowed")}
     for a in result.alternatives:
         assert a.candidate.candidate_id.startswith("legacy-")
-        assert a.report.verdict.legal is LegalVerdict.UNVERIFIED  # interim: never a PASS
+        # never a PASS: the 45 t loading and the open readings stay open on made-up land
+        assert a.report.verdict.legal is LegalVerdict.UNVERIFIED
