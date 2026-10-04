@@ -17,6 +17,8 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
+from siteplan.units import M_PER_FT
+
 RULES_SOURCE = "Telangana Building Rules 2012, G.O.Ms.No.168 (HMDA consolidated text)"
 
 
@@ -223,6 +225,7 @@ INTERNAL_ROAD_CLAUSE = (
     "other and looped roads 9 m, cul-de-sacs 8 m for 50-100 m with a 9 m radius head)"
 )
 PATHWAY_MAX_BLOCK_HEIGHT_M = 12.0
+PATHWAY_WIDTH_M = 6.0  # "pathways of 6m width", p.15, the same sentence as the 12 m
 PATHWAY_CLAUSE = "G.O.168 rule 8(l) (6 m pathways only for blocks up to 12 m high)"
 
 # Rule 3(a)(ii): no building within these distances of a water body, measured from a lake's Full
@@ -381,13 +384,258 @@ def tdr_extra_floors(plot_sqm: float, road_m: float) -> int:
     return next((n for width, n in TDR_EXTRA_FLOORS_BY_ROAD_M if road_m >= width), 0)
 
 
-def height_rules(height_m: float, plot_sqm: float | None = None) -> dict:
-    """What the rules require of a building of this height, with the clause for each value."""
+# --- Non-high-rise buildings: Table III of rule 5 (stream A2) ---------------------------------
+#
+# Read on 2026-10-03 from the page images of the 2012 order (pp.9-10) and checked against its text
+# layer. Rule 5 is "PERMISSIBLE SETBACKS & HEIGHT STIPULATIONS FOR ALL TYPES OF NON-HIGH RISE
+# BUILDINGS (Buildings below 18m in height inclusive of Stilt / Parking Floor)". Table III has a
+# line for every permissible height (column 4) in a plot-size class (column 2). A line gives the
+# Building Line, or minimum front setback, by the width of the abutting road (columns 5 to 9) and
+# the minimum setback on the remaining sides (column 10). G.O.Ms.No.7 of 2016, Amendment 6 (p.3),
+# put 'Stilt floor' in column 3 of rows 1 to 3. No order read after 2012 changes a figure.
+
+
+@dataclass(frozen=True)
+class TableIIILine:
+    """One line of Table III: a plot-size class and one permissible height in it."""
+
+    row: int  # Sl.No., column 1
+    above_sqm: float  # plot size above this ...
+    up_to_sqm: float  # ... and up to this, column 2 (row 1 is 'Less than 50')
+    parking: str  # column 3: the parking provision the row is written for
+    up_to_m: float  # column 4: permissible height up to this, the stilt left out (rule 5(c))
+    below: bool  # the '18**' lines: above 15 m and below 18 m, so 18 m itself is not reached
+    front_m: tuple[float, float, float, float, float]  # columns 5-9: Building Line by road width
+    side_m: float | None  # column 10: setback on the remaining sides; None where the order has '-'
+
+    def covers(self, height_m: float, tol_m: float = 1e-6) -> bool:
+        """Whether a height, the stilt left out, is within this line's permissible height."""
+        return height_m < self.up_to_m - tol_m if self.below else height_m <= self.up_to_m + tol_m
+
+
+TABLE_III = (
+    TableIIILine(1, 0, 50, "Stilt floor", 7, False, (1.5, 1.5, 3, 3, 3), None),
+    TableIIILine(2, 50, 100, "Stilt floor", 7, False, (1.5, 1.5, 3, 3, 3), None),
+    TableIIILine(2, 50, 100, "Stilt floor", 10, False, (1.5, 1.5, 3, 3, 3), 0.5),
+    TableIIILine(3, 100, 200, "Stilt floor", 10, False, (1.5, 1.5, 3, 3, 3), 1.0),
+    TableIIILine(4, 200, 300, "Stilt floor", 7, False, (2, 3, 3, 4, 5), 1.0),
+    TableIIILine(4, 200, 300, "Stilt floor", 10, False, (2, 3, 3, 5, 6), 1.5),
+    TableIIILine(5, 300, 400, "Stilt floor", 7, False, (3, 4, 5, 6, 7.5), 1.5),
+    TableIIILine(5, 300, 400, "Stilt floor", 12, False, (3, 4, 5, 6, 7.5), 2.0),
+    TableIIILine(6, 400, 500, "Stilt floor", 7, False, (3, 4, 5, 6, 7.5), 2.0),
+    TableIIILine(6, 400, 500, "Stilt floor", 12, False, (3, 4, 5, 6, 7.5), 2.5),
+    TableIIILine(7, 500, 750, "Stilt floor", 7, False, (3, 4, 5, 6, 7.5), 2.5),
+    TableIIILine(7, 500, 750, "Stilt floor", 12, False, (3, 4, 5, 6, 7.5), 3.0),
+    TableIIILine(7, 500, 750, "Stilt floor", 15, False, (3, 4, 5, 6, 7.5), 3.5),
+    TableIIILine(8, 750, 1000, "Stilt + One Cellar floor", 7, False, (3, 4, 5, 6, 7.5), 3.0),
+    TableIIILine(8, 750, 1000, "Stilt + One Cellar floor", 12, False, (3, 4, 5, 6, 7.5), 3.5),
+    TableIIILine(8, 750, 1000, "Stilt + One Cellar floor", 15, False, (3, 4, 5, 6, 7.5), 4.0),
+    TableIIILine(9, 1000, 1500, "Stilt + 2 Cellar floors", 7, False, (3, 4, 5, 6, 7.5), 3.5),
+    TableIIILine(9, 1000, 1500, "Stilt + 2 Cellar floors", 12, False, (3, 4, 5, 6, 7.5), 4.0),
+    TableIIILine(9, 1000, 1500, "Stilt + 2 Cellar floors", 15, False, (3, 4, 5, 6, 7.5), 5.0),
+    TableIIILine(9, 1000, 1500, "Stilt + 2 Cellar floors", 18, True, (3, 4, 5, 6, 7.5), 6.0),
+    TableIIILine(10, 1500, 2500, "Stilt + 2 Cellar floors", 7, False, (3, 4, 5, 6, 7.5), 4.0),
+    TableIIILine(10, 1500, 2500, "Stilt + 2 Cellar floors", 15, False, (3, 4, 5, 6, 7.5), 5.0),
+    TableIIILine(10, 1500, 2500, "Stilt + 2 Cellar floors", 18, True, (3, 4, 5, 6, 7.5), 6.0),
+    TableIIILine(11, 2500, math.inf, "Stilt + 2 or more Cellar floors", 7, False,
+                 (3, 4, 5, 6, 7.5), 5.0),
+    TableIIILine(11, 2500, math.inf, "Stilt + 2 or more Cellar floors", 15, False,
+                 (3, 4, 5, 6, 7.5), 6.0),
+    TableIIILine(11, 2500, math.inf, "Stilt + 2 or more Cellar floors", 18, True,
+                 (3, 4, 5, 6, 7.5), 7.0),
+)
+# Columns 5 to 9 are by the abutting road's width: up to 12 m, above 12 and up to 18, above 18 and
+# up to 24, above 24 and up to 30, above 30. These are the upper edges of the first four.
+TABLE_III_ROAD_UP_TO_M = (12.0, 18.0, 24.0, 30.0)
+TABLE_III_CLAUSE = (
+    "G.O.168 rule 5, Table III, pp.9-10 (non-high-rise setbacks and permissible height, by plot "
+    "size and abutting road); parking column as amended by G.O.Ms.No.7 of 2016, Amendment 6"
+)
+
+# Rule 5(c), p.10: "Stilt Floor meant for parking is excluded from the permissible height in the
+# above Table. Height of stilt floor shall not be less than 2.5m. In case of parking floors where
+# mechanical system and lift are provided, height of such parking floor shall not be less than
+# 4.5m." G.O.Ms.No.7 of 2016, Amendment 7 (p.3), adds that a stilt floor is used for parking only.
+# So Table III's height is read with the stilt left out, whatever the open reading of the stilt
+# for Table IV and the high-rise class says: rule 5's own heading calls the buildings it governs
+# "below 18m in height inclusive of Stilt / Parking Floor", which leans the other way for the class.
+STILT_MIN_HEIGHT_M = 2.5
+MECHANICAL_PARKING_FLOOR_MIN_HEIGHT_M = 4.5
+TABLE_III_STILT_CLAUSE = (
+    "G.O.168 rule 5(c), p.10, with G.O.Ms.No.7 of 2016, Amendment 7 (a stilt floor meant for "
+    "parking is left out of Table III's permissible height; not under 2.5 m high, 4.5 m where a "
+    "mechanical parking system and lift are provided)"
+)
+# Rule 5(e), p.10: "**Buildings of height above 15m and below 18m in Sl.Nos.9, 10 and 11 above,
+# shall be permitted only if such plots abut minimum 12m wide roads only."
+TABLE_III_TOP_TIER_MIN_ROAD_M = 12.0
+TABLE_III_TOP_TIER_CLAUSE = (
+    "G.O.168 rule 5(e), p.10 (above 15 m and below 18 m, in rows 9, 10 and 11 only, if the plot "
+    "abuts a road at least 12 m wide)"
+)
+# Rule 5(f)(iii), p.10: "Where a site abuts more than one road, then the front setback should be
+# insisted towards the bigger road width and for the remaining side or sides, the setback as at
+# Column-10 shall be insisted."
+TABLE_III_BIGGER_ROAD_CLAUSE = (
+    "G.O.168 rule 5(f)(iii), p.10 (a site on more than one road keeps the front setback towards "
+    "the bigger road and Column 10 on the other sides)"
+)
+# Rule 5(f)(xiii), p.11: "The space between 2 blocks shall not be less than the side setback of the
+# tallest block as mentioned in Table - III and this shall not be considered for organised open
+# space (tot lot)." And rule 8(j), p.15, for a Group Development Scheme: "The open space to be left
+# between two blocks also shall be equivalent to the setback mentioned in Column -10 of Table-III of
+# rule-5 and Column - 4 of Table- IV of rule-7 as the case may be." Neither says what a block below
+# 21 m and a high-rise keep between them: that is the open reading MIXED_HEIGHT_SPACING.
+NON_HIGH_RISE_SPACING_CLAUSE = (
+    "G.O.168 rule 5(f)(xiii), p.11 (the space between two blocks is at least the side setback of "
+    "the tallest block in Table III, and is not counted as organised open space)"
+)
+GROUP_SCHEME_SPACING_CLAUSE = (
+    "G.O.168 rule 8(j), p.15 (in a Group Development Scheme the space between two blocks equals "
+    "Column 10 of Table III or Column 4 of Table IV, as the case may be)"
+)
+# Rule 7(a)(xi), p.14: "The front open space shall be on the basis of the abutting road width and
+# shall be either as given in Col. 4 of above Table - IV or the Building Line given in Table - III
+# of rule-5 whichever is higher." The 2012 order's rule 12(b), p.17, which says the front setback is
+# "as per Table-III of rule-5 & Table-IV of rule-7 for Non High Rise & High Rise buildings
+# respectively", is written for 'U' type commercial buildings with a central courtyard, so it is
+# not the front rule for apartments (FRONT_SETBACK_CLAUSE above cites it as if it were).
+BUILDING_LINE_HIGH_RISE_CLAUSE = (
+    "G.O.168 rule 7(a)(xi), p.14 (a high-rise's front open space is the higher of Table IV "
+    "column 4 and the Building Line of Table III, on the basis of the abutting road width)"
+)
+# Rule 5(f)(xvii), the second paragraph so numbered, p.11: "For the purpose of these Rules, the
+# following conversion from M.K.S. and F.P.S. system shall be reckoned for the road widths only".
+# The pairs are the order's own (metres, feet); a width the engine converted from feet (units.py,
+# 0.3048 m a foot) is reckoned as the metre figure, so a 60 ft road is 18 m, not 18.288 m. The
+# tolerance only says how close to the conversion a width has to be to be taken as one given in
+# feet; it is the engine's, not the order's.
+ROAD_WIDTH_FEET = ((3.0, 10), (6.0, 20), (7.5, 25), (9.0, 30), (12.0, 40), (15.0, 50),
+                   (18.0, 60), (24.0, 80), (30.0, 100), (45.0, 150), (60.0, 200))
+ROAD_FEET_TOLERANCE_M = 0.005
+ROAD_WIDTH_CONVERSION_CLAUSE = (
+    "G.O.168 rule 5(f)(xvii), the second so numbered, p.11 (road widths in feet are reckoned as "
+    "3 m = 10 ft, 6 m = 20 ft, 7.5 m = 25 ft, 9 m = 30 ft, 12 m = 40 ft, 15 m = 50 ft, 18 m = 60 "
+    "ft, 24 m = 80 ft, 30 m = 100 ft, 45 m = 150 ft, 60 m = 200 ft)"
+)
+
+# Rule 4(a), Table II, pp.7-8: the least abutting existing road a use needs. The engine's sites lie
+# in category B (new areas, approved layouts); category A (old built-up areas) takes B1's rows for
+# group housing, so the figures are the same. B1: non-high-rise residential buildings, group
+# housing included, "Cellar and/or Stilt as permissible + maximum up to 5 floors": 9 m. B2: "Non
+# High Rise Group Housing (Cellars as applicable + 6 floors), Group Housing with more than 100
+# units, Group Development Scheme ... Others not specified in the Table and all Non High-Rise
+# buildings up to 18m height": 12 m. B3 and B4 are high-rise rows and agree with Table IV.
+# Rule 8(b), p.14: "The minimum abutting existing road width shall be 12m and black topped."
+TABLE_II_B1_ROAD_M = 9.0
+TABLE_II_B1_MAX_FLOORS = 5
+TABLE_II_B2_ROAD_M = 12.0
+TABLE_II_B2_UNITS_OVER = 100
+TABLE_II_CLAUSE = (
+    "G.O.168 rule 4(a), Table II, pp.7-8, category B (new areas and approved layouts): B1, "
+    "non-high-rise residential with stilt or cellar and up to 5 floors, 9 m; B2, six floors, "
+    "group housing of more than 100 units, a Group Development Scheme, other non-high-rise up "
+    "to 18 m, 12 m"
+)
+GROUP_DEVELOPMENT_MIN_ROAD_M = 12.0
+GROUP_DEVELOPMENT_ROAD_CLAUSE = (
+    "G.O.168 rule 8(b), p.14 (a Group Development Scheme needs an existing black-topped abutting "
+    "road at least 12 m wide), with Table II row B2"
+)
+# Rule 4(f), p.8: "In case of single plot sub-division approved by the competent authority, a means
+# of independent access of minimum 3.6m pathway may be considered for Individual Residential
+# Building and 6m for Non-High-Rise Group Housing Building."
+SUBDIVISION_PATHWAY_M = (3.6, 6.0)
+SUBDIVISION_PATHWAY_CLAUSE = (
+    "G.O.168 rule 4(f), p.8 (single plot sub-division: independent access of at least 3.6 m for "
+    "an individual residential building, 6 m for non-high-rise group housing)"
+)
+
+# Rule 5(f)(xvi), p.11: "As per the provisions of the Andhra Pradesh Fire Service Act, 1999,
+# Residential buildings of height more than 18 m, Commercial buildings of height 15m and above and
+# buildings of public congregation ... are required to obtain prior clearance from Andhra Pradesh
+# State Disasters Response & Fire Services Department from fire safety point of view." The only
+# number the order gives for fire below 21 m. Rule 15(a)(i), as substituted by G.O.Ms.No.50 of
+# 2019 (p.1, Amendment-1), holds a non-high-rise building to "the building requirements and
+# standards other than heights and setbacks specified in the National Building Code 2016": it
+# gives no figure itself, and leaves out the NBC's open spaces, which are setbacks.
+FIRE_CLEARANCE_RESIDENTIAL_ABOVE_M = 18.0
+FIRE_CLEARANCE_CLAUSE = (
+    "G.O.168 rule 5(f)(xvi), p.11 (residential buildings above 18 m need the prior clearance of "
+    "the State Disasters Response & Fire Services Department)"
+)
+NON_HIGH_RISE_NBC_CLAUSE = (
+    "G.O.168 rule 15(a)(i) as substituted by G.O.Ms.No.50 of 2019, Amendment-1 (a non-high-rise "
+    "building keeps the National Building Code 2016's requirements other than heights and "
+    "setbacks; IGBC Green Homes norms for the ventilation of rooms)"
+)
+
+
+def table_iii_lines(plot_sqm: float) -> tuple[TableIIILine, ...]:
+    """The lines of the Table III row a plot falls in. Column 2 reads 'Above - Up to', so a plot is
+    in the row it is above the lower edge of and up to the upper edge of. Row 1 is 'Less than 50'
+    and row 2 starts at 50, so a plot of exactly 50 m² is between them by the labels: row 2."""
+    first = TABLE_III[0].row
+    if plot_sqm < TABLE_III[0].up_to_sqm:
+        row = first
+    else:
+        row = next(line.row for line in TABLE_III
+                   if line.row > first and plot_sqm <= line.up_to_sqm)
+    return tuple(line for line in TABLE_III if line.row == row)
+
+
+def table_iii_line(plot_sqm: float, height_m: float) -> TableIIILine | None:
+    """The line a building takes its setbacks from: the lowest permissible height of the plot's
+    row that reaches the building's height, the stilt left out (rule 5(c)); None above the last."""
+    return next((line for line in table_iii_lines(plot_sqm) if line.covers(height_m)), None)
+
+
+def reckoned_road_width_m(width_m: float) -> float:
+    """A road width as the order reckons it: one that is a listed number of feet (rule 5(f)(xvii))
+    is the listed metres, so a 60 ft road, 18.288 m, is 18 m."""
+    return next((metres for metres, feet in ROAD_WIDTH_FEET
+                 if abs(width_m - feet * M_PER_FT) <= ROAD_FEET_TOLERANCE_M), width_m)
+
+
+def building_line_m(line: TableIIILine, road_m: float) -> float:
+    """Table III's Building Line, or minimum front setback, for the abutting road's legal width."""
+    reckoned = reckoned_road_width_m(road_m)
+    return float(line.front_m[sum(reckoned > edge for edge in TABLE_III_ROAD_UP_TO_M)])
+
+
+def height_rules(height_m: float, plot_sqm: float | None = None,
+                 road_m: float | None = None) -> dict:
+    """What the rules require of a building of this height, with the clause for each value. Below
+    the high-rise height Table III answers, given the plot (its row) and the road (the front)."""
     if height_m < HIGH_RISE_THRESHOLD_M:
-        answer = (f"Below {HIGH_RISE_THRESHOLD_M:g} m the Table III setbacks of rule 5 apply, "
-                  "and those are not encoded here yet.")
+        answer = (f"Below {HIGH_RISE_THRESHOLD_M:g} m the Table III setbacks of rule 5 apply: they "
+                  "go by the plot size and the abutting road, which were not given, so they are "
+                  "not encoded here without them.")
         out = {"height_m": height_m, "class": "not high-rise", "answer": answer,
                "clause": HIGH_RISE_CLAUSE}
+        if plot_sqm is not None:
+            line = table_iii_line(plot_sqm, height_m)
+            out["clause"] = TABLE_III_CLAUSE
+            out["also"] = [TABLE_III_STILT_CLAUSE]
+            if line is None:
+                top = table_iii_lines(plot_sqm)[-1]
+                out["answer"] = (
+                    f"Table III permits no building of {height_m:g} m (the stilt left out) on a "
+                    f"plot of {plot_sqm:,.0f} m²: its row {top.row} stops at {top.up_to_m:g} m"
+                    f"{' (below it)' if top.below else ''}.")
+            else:
+                out["answer"] = (
+                    f"Table III row {line.row}, up to {line.up_to_m:g} m"
+                    f"{' (below it)' if line.below else ''}, the stilt left out.")
+                out["table_iii_row"] = line.row
+                out["min_side_setback_m"] = line.side_m or 0.0
+                out["min_gap_between_blocks_m"] = line.side_m or 0.0
+                out["also"].append(NON_HIGH_RISE_SPACING_CLAUSE)
+                if line.below:
+                    out["min_abutting_road_m"] = TABLE_III_TOP_TIER_MIN_ROAD_M
+                    out["also"].append(TABLE_III_TOP_TIER_CLAUSE)
+                if road_m is not None:
+                    out["building_line_m"] = building_line_m(line, road_m)
         low, high = TDR_BAND_M
         small, large = TDR_PLOT_RANGE_SQM
         if low <= height_m < high and (plot_sqm is None or small <= plot_sqm <= large):
@@ -395,7 +643,7 @@ def height_rules(height_m: float, plot_sqm: float | None = None) -> dict:
                 f"A building of {low:g} to {high:g} m is permitted only through TDR on a plot of "
                 f"{small:g} to {large:g} m². Confirm the plot extent and the TDR."
             )
-            out["also"] = [TDR_BAND_CLAUSE]
+            out["also"] = [*out.get("also", []), TDR_BAND_CLAUSE]
         return out
     band = band_for_height(height_m)
     return {

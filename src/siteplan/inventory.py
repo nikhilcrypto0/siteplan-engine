@@ -10,6 +10,7 @@ be wrong, and each names the evidence that would settle it: usually a sanctioned
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from enum import StrEnum
 from itertools import groupby
@@ -57,6 +58,23 @@ def _setbacks() -> str:
     return ", ".join([*parts, f"{top.min_open_space_m:g} m above {top.above_m:g} m"])
 
 
+def _plot_class(first: rules.TableIIILine) -> str:
+    if math.isinf(first.up_to_sqm):
+        return f"above {first.above_sqm:,.0f} m²"
+    return (f"under {first.up_to_sqm:,.0f} m²" if first.above_sqm == 0
+            else f"{first.above_sqm:,.0f}-{first.up_to_sqm:,.0f} m²")
+
+
+def _table_iii_heights() -> str:
+    """Table III's permissible heights, a row at a time (** is above 15 m and below 18 m)."""
+    rows = []
+    for row in sorted({line.row for line in rules.TABLE_III}):
+        lines = [line for line in rules.TABLE_III if line.row == row]
+        heights = ", ".join(f"{line.up_to_m:g}{'**' if line.below else ''}" for line in lines)
+        rows.append(f"row {row} ({_plot_class(lines[0])}): {heights} m")
+    return "; ".join(rows)
+
+
 _BOTH = (Where.CHECKER, Where.LAYOUT)
 _TDR_LOW, _TDR_HIGH = rules.TDR_BAND_M
 _TDR_SMALL, _TDR_LARGE = rules.TDR_PLOT_RANGE_SQM
@@ -76,7 +94,10 @@ INVENTORY: tuple[Entry, ...] = (
         choice="The stilt counts. Rule 2(e) leaves out only the parapet, staircase head room, "
                "lift room and water tank; the one stilt exclusion, rule 5(c), covers the Table III "
                "buildings below high-rise; rule 7(xvi) of 2016 leaves out only parking floors "
-               "above the ground floor. The floors calculator gives the answer both ways.",
+               "above the ground floor. Rule 5's own heading calls the buildings it governs "
+               "'below 18m in height inclusive of Stilt / Parking Floor' (p.9), which leans to "
+               "counting the stilt for the class. The floors calculator gives the answer both "
+               "ways.",
         settles="A sanctioned stilt + N floors high-rise whose approved setback or road width "
                 "fits one reading and not the other. The firm's own Dhulapally drawing (not "
                 "sanctioned) keeps the setbacks of its blocks without their stilt.",
@@ -91,10 +112,42 @@ INVENTORY: tuple[Entry, ...] = (
                "out. Needed once a scheme parks on a podium or upper floors.",
     ),
     Entry(
-        "Height", "Buildings below high-rise take their setbacks from Table III, by plot size "
-                  "and road width.",
-        "not encoded", "G.O.168 rule 5, Table III", Reading.NOT_MODELLED,
-        choice="The layout refuses a building below 21 m and the checker reports it NOT_CHECKED.",
+        "Height", "A building below high-rise stands at most as tall as its plot size lets it, "
+                  "and takes its setbacks from the Table III line of its height.",
+        _table_iii_heights(), rules.TABLE_III_CLAUSE, Reading.AS_WRITTEN, (Where.LOOKUP,),
+        ("TABLE_III", "TABLE_III_CLAUSE", "TABLE_III_ROAD_UP_TO_M", "table_iii_line",
+         "table_iii_lines"),
+        choice="Read on 2026-10-03 from the page images of the 2012 order (pp.9-10), the parking "
+               "column of rows 1 to 3 as G.O.Ms.No.7 of 2016 amended it; no later order read "
+               "changes a figure. The lookup (`siteplan rules`, the rules_for_height tool) "
+               "answers for a plot and a road; the legacy layout still refuses a building below "
+               "21 m and the legacy checker reports it NOT_CHECKED. A height is read with the "
+               "stilt left out (rule 5(c)); the plot is the net plot (rule 5(f)(ii)); a height "
+               "above the last line of the plot's row is not permitted, and between 18 and 21 m "
+               "no order read gives a line at all: G.O.Ms.No.95 of 2026 allows 18-21 m on "
+               "750-2,000 m² through TDR and says nothing of the setback, so that range is a "
+               "question, never a pass. A plot of exactly 50 m² falls between rows 1 and 2 by the "
+               "labels and is taken in row 2.",
+    ),
+    Entry(
+        "Height", "The stilt floor is left out of the height Table III is read on.",
+        "left out; not under 2.5 m high (4.5 m with a mechanical parking system and lift)",
+        rules.TABLE_III_STILT_CLAUSE, Reading.AS_WRITTEN, (Where.LOOKUP,),
+        ("TABLE_III_STILT_CLAUSE",),
+        choice="Rule 5(c), p.10, says so without a reading to choose. It is the opposite of the "
+               "open reading for Table IV and the high-rise class (stilt_in_rule_height), where "
+               "rule 5's own heading, 'Buildings below 18m in height inclusive of Stilt / Parking "
+               "Floor', leans to counting the stilt for the class. A block is judged by both: "
+               "the class on the reading, the Table III line without the stilt.",
+    ),
+    Entry(
+        "Height", "A stilt floor is at least this high, a parking floor with a mechanical "
+                  "system and lift more.",
+        f"{rules.STILT_MIN_HEIGHT_M:g} m; {rules.MECHANICAL_PARKING_FLOOR_MIN_HEIGHT_M:g} m",
+        rules.TABLE_III_STILT_CLAUSE, Reading.NOT_MODELLED,
+        uses=("STILT_MIN_HEIGHT_M", "MECHANICAL_PARKING_FLOOR_MIN_HEIGHT_M"),
+        choice="The stilt's height is the firm's standard (the brief); nothing holds it to 2.5 m "
+               "yet. The 4.5 m is rule 5(c)'s, written for non-high-rise buildings.",
     ),
     Entry(
         "Height", "On a mid-sized plot, a building just below high-rise is allowed only through "
@@ -126,7 +179,9 @@ INVENTORY: tuple[Entry, ...] = (
     Entry(
         "Road", "A campus of 4,000 m² or more needs an existing black-topped road at least 12 m "
                 "wide.",
-        "12 m, existing", "G.O.168 rule 8(a), 8(b); Table II row B2", Reading.NOT_MODELLED,
+        f"{rules.GROUP_DEVELOPMENT_MIN_ROAD_M:g} m, existing", rules.GROUP_DEVELOPMENT_ROAD_CLAUSE,
+        Reading.NOT_MODELLED,
+        uses=("GROUP_DEVELOPMENT_MIN_ROAD_M", "GROUP_DEVELOPMENT_ROAD_CLAUSE"),
         choice="Not checked on its own; the Table IV road check asks 12 m or more anyway, though "
                "of the master-plan width when one is given.",
     ),
@@ -169,9 +224,10 @@ INVENTORY: tuple[Entry, ...] = (
     Entry(
         "Road", "A block above 12 m takes its access from an internal road; 6 m pathways serve "
                 "only lower blocks.",
-        f"blocks above {rules.PATHWAY_MAX_BLOCK_HEIGHT_M:g} m on a road", rules.PATHWAY_CLAUSE,
+        f"blocks above {rules.PATHWAY_MAX_BLOCK_HEIGHT_M:g} m on a road; a pathway is "
+        f"{rules.PATHWAY_WIDTH_M:g} m wide", rules.PATHWAY_CLAUSE,
         Reading.AS_WRITTEN, (Where.CHECKER,),
-        ("PATHWAY_MAX_BLOCK_HEIGHT_M", "PATHWAY_CLAUSE"),
+        ("PATHWAY_MAX_BLOCK_HEIGHT_M", "PATHWAY_WIDTH_M", "PATHWAY_CLAUSE"),
         choice="Rule 8(l), read on 2026-10-01: 'In case of blocks up to 12m height, access "
                "through pathways of 6m width branching out from the internal roads / loop road "
                "would be allowed.' The permission stops at 12 m, so a taller block opens onto an "
@@ -197,6 +253,50 @@ INVENTORY: tuple[Entry, ...] = (
         (Where.CHECKER,), ("FIRE_STREET_JOIN_M", "FIRE_STREET_CLAUSE"),
         choice="Where a road leads is not on a survey, so the architect answers yes, no or "
                "unknown; unknown is reported UNVERIFIED, never PASS.",
+    ),
+    Entry(
+        "Road", "Above 15 m and below 18 m a block needs a road at least this wide, on plots "
+                "of 1,000 m² and more.",
+        f"{rules.TABLE_III_TOP_TIER_MIN_ROAD_M:g} m", rules.TABLE_III_TOP_TIER_CLAUSE,
+        Reading.AS_WRITTEN, (Where.LOOKUP,),
+        ("TABLE_III_TOP_TIER_MIN_ROAD_M", "TABLE_III_TOP_TIER_CLAUSE"),
+        choice="Rule 5(e), p.10, for the '18**' lines of rows 9, 10 and 11.",
+    ),
+    Entry(
+        "Road", "The road a block below high-rise needs by its use (Table II, category B).",
+        f"{rules.TABLE_II_B1_ROAD_M:g} m for stilt or cellar and up to "
+        f"{rules.TABLE_II_B1_MAX_FLOORS} floors; {rules.TABLE_II_B2_ROAD_M:g} m for six "
+        f"floors, more than "
+        f"{rules.TABLE_II_B2_UNITS_OVER} units, a group development scheme, or up to 18 m "
+        "otherwise", rules.TABLE_II_CLAUSE, Reading.NOT_MODELLED,
+        uses=("TABLE_II_B1_ROAD_M", "TABLE_II_B1_MAX_FLOORS", "TABLE_II_B2_ROAD_M",
+              "TABLE_II_B2_UNITS_OVER", "TABLE_II_CLAUSE"),
+        choice="Not applied by the lookup, the layout or the checker. Table II counts floors and "
+               "units, which ResolvedRules never holds (heights are metres), so where it is "
+               "carried a block up to 15 m is to be read as 'up to 5 floors' (9 m) and one "
+               "above it as six floors (12 m), the line Table III's own 15 m draws and rule "
+               "5(e) confirms with its 12 m above 15 m. A scheme of more than 100 units needs "
+               "12 m whatever its height, which the checker knows (the units), not the rules.",
+        settles="A sanctioned non-high-rise group scheme on a 9 m road with six floors or more "
+                "than 100 units, or one refused for them.",
+    ),
+    Entry(
+        "Road", "A single plot sub-division's independent access.",
+        f"{rules.SUBDIVISION_PATHWAY_M[0]:g} m for an individual residential building, "
+        f"{rules.SUBDIVISION_PATHWAY_M[1]:g} m for non-high-rise group housing",
+        rules.SUBDIVISION_PATHWAY_CLAUSE, Reading.NOT_MODELLED,
+        uses=("SUBDIVISION_PATHWAY_M", "SUBDIVISION_PATHWAY_CLAUSE"),
+        choice="Rule 4(f), p.8: a plot cut out of a larger holding by a sub-division the "
+               "authority approved. The engine plans a whole site, so it never meets one.",
+    ),
+    Entry(
+        "Road", "A site on more than one road keeps the front setback towards the bigger road.",
+        "front on the bigger road, column 10 on the other sides",
+        rules.TABLE_III_BIGGER_ROAD_CLAUSE, Reading.NOT_MODELLED,
+        uses=("TABLE_III_BIGGER_ROAD_CLAUSE",),
+        choice="The site model knows the access road, not which of the roads drawn beside the "
+               "plot abut it. An individual residential building may choose its front; a "
+               "group scheme does not.",
     ),
     # Plot
     Entry(
@@ -278,7 +378,45 @@ INVENTORY: tuple[Entry, ...] = (
         ("FRONT_SETBACK_CLAUSE",),
         choice="Read on 2026-10-01: 'The Front setback shall be as per Table-III of rule-5 & "
                "Table-IV of rule-7 for Non High Rise & High Rise buildings respectively.' The "
-               "Table III building line is for buildings below high-rise.",
+               "Table III building line is for buildings below high-rise. Corrected on "
+               "2026-10-03 (A2): that sentence is rule 12(b), p.17, written for 'U' type "
+               "commercial buildings with a central courtyard, not for apartments. The "
+               "high-rise front is rule 7(a)(xi), p.14: the higher of this column and the "
+               "Table III Building Line, which differs only for exactly 21 m on a road above "
+               "30 m (see the entry below); the legacy layout and checker keep column 4.",
+    ),
+    Entry(
+        "Setbacks", "The front of a block below high-rise is the Building Line of its Table III "
+                    "line, by the abutting road's width; the other sides keep column 10.",
+        "front 3, 4, 5, 6 or 7.5 m for a road up to 12, 18, 24, 30 m or wider (plots from "
+        "300 m²); other sides by plot size and height", rules.TABLE_III_CLAUSE,
+        Reading.AS_WRITTEN, (Where.LOOKUP,),
+        ("TABLE_III", "TABLE_III_ROAD_UP_TO_M", "building_line_m"),
+        choice="Where a site abuts more than one road the front goes towards the bigger road "
+               "(rule 5(f)(iii)); the engine knows the access road, not which others abut, so "
+               "it takes the front off the access road.",
+    ),
+    Entry(
+        "Setbacks", "A road width given in feet is reckoned as the order's round metres.",
+        "60 ft is 18 m, 40 ft 12 m, 80 ft 24 m, 100 ft 30 m", rules.ROAD_WIDTH_CONVERSION_CLAUSE,
+        Reading.AS_WRITTEN, (Where.LOOKUP,),
+        ("ROAD_WIDTH_FEET", "ROAD_FEET_TOLERANCE_M", "ROAD_WIDTH_CONVERSION_CLAUSE",
+         "reckoned_road_width_m", "building_line_m"),
+        choice="Rule 5(f)(xvii), p.11, says the conversion 'shall be reckoned for the road widths "
+               "only'. The engine keeps 60 ft as 18.288 m, which Table III's 'above 18 m' would "
+               "put a column too far (a 5 m front for 4 m), so a width within 5 mm of a listed "
+               "number of feet counts as the listed metres. A width typed in metres (18.3 m) is "
+               "taken as it stands. Table IV's road test is 'at least', so it is not affected.",
+    ),
+    Entry(
+        "Setbacks", "A high-rise's front is the higher of Table IV column 4 and the Building Line "
+                    "of Table III.",
+        "differs from column 4 only for exactly 21 m on a road above 30 m: 7.5 m, not 7 m",
+        rules.BUILDING_LINE_HIGH_RISE_CLAUSE, Reading.NOT_MODELLED,
+        uses=("BUILDING_LINE_HIGH_RISE_CLAUSE",),
+        choice="Rule 7(a)(xi), p.14. Every Table IV figure above 21 m (8 m and up) is already "
+               "above the largest Building Line, 7.5 m; the first row, 7 m, is not. The legacy "
+               "layout and checker keep column 4 on the front.",
     ),
     Entry(
         "Setbacks", "Balconies may project into the open space from 6 m height up.",
@@ -332,6 +470,19 @@ INVENTORY: tuple[Entry, ...] = (
                "sets it when their heights differ. The engine takes the larger.",
         settles="A sanctioned plan with two blocks of different heights. Dhulapally spaces its "
                 "blocks 8 m apart, the table figure for its blocks without their stilt.",
+    ),
+    Entry(
+        "Spacing", "Two blocks below high-rise stand at least the side setback of the taller "
+                   "apart, which is Table III column 10; the gap is not counted as tot-lot.",
+        "the taller block's column 10", f"{rules.NON_HIGH_RISE_SPACING_CLAUSE}; "
+        f"{rules.GROUP_SCHEME_SPACING_CLAUSE}", Reading.AS_WRITTEN, (Where.LOOKUP,),
+        ("NON_HIGH_RISE_SPACING_CLAUSE", "GROUP_SCHEME_SPACING_CLAUSE", "table_iii_line"),
+        choice="Rule 5(f)(xiii) says 'the tallest block', so two blocks below 21 m need no open "
+               "reading. What a block below 21 m and a high-rise keep between them is open: "
+               "rule 8(j) says Column 10 of Table III or Column 4 of Table IV 'as the case may "
+               "be' and never which; the same reading as two high-rise blocks of different "
+               "heights (mixed_height_spacing).",
+        settles="A sanctioned Group Development plan with a block below 21 m beside a high-rise.",
     ),
     # Open space
     Entry(
@@ -405,6 +556,29 @@ INVENTORY: tuple[Entry, ...] = (
                "surface is a specification and is reported UNVERIFIED.",
         settles="The fire NOC of a sanctioned high-rise, or the layout agreed with the Chief "
                 "Fire Officer, which 4.6(c) asks for.",
+    ),
+    Entry(
+        "Access", "A residential building above this height needs the prior clearance of the "
+                "Fire Services Department.",
+        f"{rules.FIRE_CLEARANCE_RESIDENTIAL_ABOVE_M:g} m", rules.FIRE_CLEARANCE_CLAUSE,
+        Reading.NOT_MODELLED,
+        uses=("FIRE_CLEARANCE_RESIDENTIAL_ABOVE_M", "FIRE_CLEARANCE_CLAUSE"),
+        choice="Rule 5(f)(xvi), p.11, the only figure the order gives for fire below 21 m. A "
+               "clearance is a document, not a drawing, so it is the architect's to confirm.",
+    ),
+    Entry(
+        "Access", "A block below high-rise keeps the National Building Code's requirements other "
+                "than heights and setbacks.",
+        "no figure in the order", rules.NON_HIGH_RISE_NBC_CLAUSE, Reading.NOT_MODELLED,
+        uses=("NON_HIGH_RISE_NBC_CLAUSE",),
+        choice="Rule 15(a)(i) as G.O.Ms.No.50 of 2019 substituted it (NBC 2016; the 2012 text said "
+               "2005). It gives no number, and carves out 'heights and setbacks': whether the "
+               "NBC's fire-vehicle open space round a building of 15 m or more is a setback "
+               "that the carve-out leaves out is not said, so no fire lane is asked of a "
+               "block below 21 m and none is judged. High-rise fire access is rule 15(b)(iv), "
+               "which cites NBC 2005 in the 2012 text and which no order read substitutes.",
+        settles="The fire NOC of a sanctioned block of 15-21 m, or the Fire Services Department's "
+                "reading.",
     ),
     # Parking
     Entry(
