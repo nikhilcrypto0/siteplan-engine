@@ -5,11 +5,15 @@ real Table III; none of it is a value of the order, and none may stand in for on
 The contract fixtures ship the band below 21 m as not modelled (stream A1). `with_bands_below`
 replaces it with bands that are, in the shape the contract gives a band (`Band`): the heights it
 covers, whether it is modelled, its road, its all-round setback and its gap between blocks.
+
+A low block here normally has no stilt (`flat`), so every reading of the stilt gives it one rule
+height and a test says nothing about which band the stilt puts it in: that open question is
+pinned alone, in tests/test_validator_low_interim.py.
 """
 
 from __future__ import annotations
 
-from validator_helpers import Inputs, set_floors
+from validator_helpers import Inputs, set_floors, tower
 
 from siteplan.contracts import CandidateLayout, ResolvedRules
 from siteplan.contracts.common import Provenance
@@ -28,8 +32,8 @@ def low_band(above: float, up_to: float, *, setback: float | None, road: float |
                 gap_m=gap, clause=f"{MADE_UP}: {above:g}-{up_to:g} m", status=status)
 
 
-# Heights are rule heights (the stilt read under the reading in force). Made-up figures, chosen
-# apart from each other and from the order's so a mix-up cannot pass by luck.
+# Heights are rule heights. Made-up figures, chosen apart from each other and from the order's so a
+# mix-up cannot pass by luck.
 LOW_A = low_band(0, 12, setback=2.3, gap=3.1, road=0.0)  # asks no road
 LOW_B = low_band(12, 18, setback=3.7, gap=4.3, road=8.4)
 LOW_C = low_band(18, 21, setback=4.9, gap=5.7, road=11.6, up_to_inclusive=False)
@@ -52,17 +56,26 @@ def with_low_bands(inputs: Inputs) -> Inputs:
 
 
 def floors_of(inputs: Inputs, **floors: int) -> Inputs:
-    """The named towers at the given number of floors above the stilt."""
+    """The named towers at the given number of floors above the stilt (the stilt kept)."""
     def edit(candidate: CandidateLayout) -> None:
         for name, n in floors.items():
             set_floors(candidate, name, n)
     return inputs.edited(edit)
 
 
-def all_low(inputs: Inputs, floors: int = 4) -> Inputs:
-    """Every tower below the high-rise height: 4 floors on a 3 m stilt is 15 m with the stilt and
-    12 m without, so band B or band A of the made-up bands, by the reading."""
-    return inputs.edited(lambda c: [set_floors(c, t.name, floors) for t in c.towers])
+def flat(inputs: Inputs, **floors: int) -> Inputs:
+    """The named towers with no stilt and the given number of 3 m floors: every reading of the
+    stilt gives each the same height (5 floors: 15 m, band B; 4: 12 m, band A; 7: exactly 21 m)."""
+    def edit(candidate: CandidateLayout) -> None:
+        for name, n in floors.items():
+            tower(candidate, name).has_stilt = False
+            set_floors(candidate, name, n)
+    return inputs.edited(edit)
+
+
+def all_low(inputs: Inputs, floors: int = 5) -> Inputs:
+    """Every tower below the high-rise height, flat (15 m, band B, by default)."""
+    return flat(inputs, **{t.name: floors for t in inputs.candidate.towers})
 
 
 def spacing_open(inputs: Inputs) -> Inputs:
