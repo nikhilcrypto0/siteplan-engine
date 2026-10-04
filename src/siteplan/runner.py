@@ -162,6 +162,8 @@ def stop_reason(project: Project, plot: Polygon, request: LayoutRequest,
 def run_search(project: Project, library: FlatLibrary, plot: Polygon, request: LayoutRequest,
                amenities: AmenityLibrary | None = None,
                keep_out: Polygon | None = None) -> HeightSearch:
+    """The legacy height search for a project. LEGACY, not for production generation by a
+    language model: kept for regression comparison; production is `siteplan.service`."""
     return search_heights(plot, library, request, site_facts(project, keep_out), amenities)
 
 
@@ -174,6 +176,8 @@ def run_layout(
     amenities: AmenityLibrary | None = None,
     keep_out: Polygon | None = None,
 ) -> list[dict]:
+    """The legacy layouts, written as files. LEGACY, not for production generation by a
+    language model: kept for regression comparison; production is `siteplan.service`."""
     found = run_search(project, library, plot, request, amenities, keep_out)
     if not found.options:
         raise NoLayout(why_none(found))
