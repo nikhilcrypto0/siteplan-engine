@@ -2,17 +2,16 @@
 chat tool gives Hermes.
 
 Each tower becomes a LEGACY_RECTANGLE prototype (its own flats, cores and corridor, in its own
-frame) placed where it stood. The ground is split into one PartitionLedger, every square metre
-once: where two of the generator's shapes overlap, the earlier use in PARTITION_ORDER keeps the
-ground, and the rest of the net plot is UNALLOCATED with its reason. The generator's own
-findings travel as claims, never as a verdict.
+frame, made by prototypes.legacy) placed where it stood. The ground is split into one
+PartitionLedger, every square metre once: where two of the generator's shapes overlap, the
+earlier use in PARTITION_ORDER keeps the ground, and the rest of the net plot is UNALLOCATED with
+its reason. The generator's own findings travel as claims, never as a verdict.
 """
 
 from __future__ import annotations
 
 import math
 
-from shapely import affinity
 from shapely.geometry import Polygon
 from shapely.ops import unary_union
 
@@ -23,14 +22,14 @@ from siteplan.contracts.accounting import (
     PhysicalUse,
 )
 from siteplan.contracts.candidate import CandidateLayout, RoadKind
-from siteplan.contracts.common import Basis, Provenance, Shape, SourceKind, Surface, shapes_from
-from siteplan.contracts.prototype import PrototypeFamily
+from siteplan.contracts.common import Basis, Provenance, Shape, Surface, shapes_from
 from siteplan.contracts.resolved_rules import (
     CIRCULATION_IN_SETBACK,
     FIRE_TURNING_RADIUS,
     OPEN_SPACE_BASIS,
 )
 from siteplan.layout import LayoutOption, mix_error
+from siteplan.prototypes.legacy import legacy_tower
 from siteplan.runner import LAYOUT_CAVEAT
 from siteplan.site_amenities import AmenityItem, AmenityLibrary
 from siteplan.units import sqm_to_sqft
@@ -63,8 +62,8 @@ def candidate_from_option(option: LayoutOption, plot: Polygon, *, candidate_id: 
     stated = _stated(amenities)
     prototypes, towers = [], []
     for tower in option.towers:
-        prototype, placed = _tower(tower, option.floors, f"{candidate_id}-{tower.name}",
-                                   library_note)
+        prototype, placed = legacy_tower(tower, option.floors,
+                                         f"{candidate_id}-{tower.name}", library_note)
         prototypes.append(prototype)
         towers.append(placed)
     summary = option.summary()
@@ -107,55 +106,6 @@ def candidate_from_option(option: LayoutOption, plot: Polygon, *, candidate_id: 
                     "orientation_deg", "towers_dropped_because", "fire_lanes_sqm")}},
         generator_claims=list(option.findings), scores={"score": option.score},
         pareto_tag=option.strategy or None, caveats=[LAYOUT_CAVEAT])
-
-
-def _tower(tower, floors: int, prototype_id: str, library_note: str):
-    """A legacy tower as its own prototype, and its placement."""
-    cx, cy, angle = _frame(tower.footprint)
-
-    def local(shape: Polygon) -> Shape:
-        moved = affinity.translate(shape, -cx, -cy)
-        return Shape.from_shapely(affinity.rotate(moved, -angle, origin=(0, 0)))
-
-    outlines = tower.flat_outlines
-    if len(outlines) != 2 * len(tower.flats_per_side):
-        raise ValueError(f"{tower.name}: {len(outlines)} flat outlines for "
-                         f"{len(tower.flats_per_side)} flats a side")
-    modules = [{"id": f"{tower.name}-{i + 1}", "type_id": flat.name, "category": flat.bhk,
-                "shape": local(outlines[i]), "saleable_sqft": flat.saleable_sqft}
-               for i, flat in ((i, tower.flats_per_side[i // 2]) for i in range(len(outlines)))]
-    corridor = tower.footprint.difference(unary_union([*outlines, *tower.cores]))
-    own = sum(o.area for o in outlines)
-    by_type: dict[str, int] = {}
-    for module in modules:
-        by_type[module["category"]] = by_type.get(module["category"], 0) + 1
-    prototype = {
-        "id": prototype_id, "family": PrototypeFamily.LEGACY_RECTANGLE,
-        "source_kind": SourceKind.ENGINE_DEFAULT,
-        "source": f"prototype generator; flats from the library ({library_note})".strip(),
-        "footprint": local(tower.footprint), "length_m": tower.length_m,
-        "depth_m": tower.width_m, "cores": len(tower.cores), "modules": modules,
-        "core_zones": [{"shape": local(c)} for c in tower.cores],
-        "corridor": [local(p) for p in _polygons(corridor)],
-        "per_floor": {"flats": len(modules), "flats_by_type": by_type,
-                      "gross_floor_sqm": tower.footprint.area, "flats_own_sqm": own,
-                      "common_core_sqm": tower.footprint.area - own,
-                      "saleable_sqft": tower.saleable_sqft_per_floor()}}
-    placed = {"name": tower.name, "prototype_id": prototype_id, "x": cx, "y": cy,
-              "rotation_deg": angle, "floors_above_stilt": floors,
-              "footprint": Shape.from_shapely(tower.footprint)}
-    return prototype, placed
-
-
-def _frame(footprint: Polygon) -> tuple[float, float, float]:
-    """The centre of a rectangular footprint and the direction of its long side, degrees."""
-    corners = [c[:2] for c in footprint.exterior.coords]
-    (x0, y0), (x1, y1), (x2, y2) = corners[0], corners[1], corners[2]
-    if math.dist((x0, y0), (x1, y1)) >= math.dist((x1, y1), (x2, y2)):
-        angle = math.degrees(math.atan2(y1 - y0, x1 - x0))
-    else:
-        angle = math.degrees(math.atan2(y2 - y1, x2 - x1))
-    return footprint.centroid.x, footprint.centroid.y, angle
 
 
 def _polygons(geometry) -> list[Polygon]:

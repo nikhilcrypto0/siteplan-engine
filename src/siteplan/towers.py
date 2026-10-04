@@ -18,6 +18,7 @@ from shapely.geometry import Polygon, box
 from siteplan.access import ROAD_M, RoadPiece
 from siteplan.geometry import angle_gap, straight_runs
 from siteplan.library import FlatLibrary, FlatType
+from siteplan.prototypes.compose import MixTracker  # the mix rule moved with the composer
 
 EPS_M = 0.01
 TOUCH_M = 0.5  # a tower this close to a road opens onto it
@@ -109,26 +110,6 @@ def free_stretches(envelope, x0: float, width: float) -> list[tuple[float, float
     if y < maxy + 1:
         stretches.append((y, maxy + 1))
     return [(a, b) for a, b in stretches if b - a > 0]
-
-
-class MixTracker:
-    def __init__(self, target: dict[str, float]):
-        self.target = target
-        self.counts = {k: 0 for k in target}
-
-    def next_choices(self, library: FlatLibrary, pending: dict[str, int]) -> list[FlatType]:
-        """Flats in the order to try: most under-represented category first, then the flat
-        that sells the most area per metre of corridor."""
-        counts = {k: self.counts.get(k, 0) + pending.get(k, 0) for k in self.target}
-        total = sum(counts.values()) + 2
-        wanted = [f for f in library.flats if self.target.get(f.bhk, 0) > 0]
-        return sorted(
-            wanted,
-            key=lambda f: (
-                -(self.target[f.bhk] - counts[f.bhk] / total),
-                -f.saleable_sqft / f.width_m,
-            ),
-        )
 
 
 def tower_length(flats: list[FlatType], library: FlatLibrary) -> float:

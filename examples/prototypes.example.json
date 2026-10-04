@@ -1,0 +1,844 @@
+[
+ {
+  "schema_version": "1.1",
+  "id": "single-core-small-4",
+  "family": "SINGLE_CORE_SMALL",
+  "source_kind": "ENGINE_DEFAULT",
+  "source": "composed from the flat library. EXAMPLE sizes only, chosen to be plausible for Hyderabad 2BHK/3BHK flats. Replace with the firm's own flat blocks before trusting any layout.",
+  "footprint": {
+   "outer": [
+    [-15.5, -12.065],
+    [15.5, -12.065],
+    [15.5, 12.065],
+    [-15.5, 12.065]
+   ],
+   "holes": []
+  },
+  "length_m": 31.0,
+  "depth_m": 24.13,
+  "cores": 1,
+  "modules": [
+   {
+    "id": "m1",
+    "type_id": "2BHK-A",
+    "category": "2BHK",
+    "shape": {
+     "outer": [
+      [-15.5, 1.065],
+      [-5.5, 1.065],
+      [-5.5, 12.065],
+      [-15.5, 12.065]
+     ],
+     "holes": []
+    },
+    "saleable_sqft": 1190.0,
+    "carpet_sqft": null,
+    "built_up_sqft": null
+   },
+   {
+    "id": "m2",
+    "type_id": "2BHK-A",
+    "category": "2BHK",
+    "shape": {
+     "outer": [
+      [-15.5, -12.065],
+      [-5.5, -12.065],
+      [-5.5, -1.065],
+      [-15.5, -1.065]
+     ],
+     "holes": []
+    },
+    "saleable_sqft": 1190.0,
+    "carpet_sqft": null,
+    "built_up_sqft": null
+   },
+   {
+    "id": "m3",
+    "type_id": "3BHK-A",
+    "category": "3BHK",
+    "shape": {
+     "outer": [
+      [2.0, 1.065],
+      [15.5, 1.065],
+      [15.5, 12.065],
+      [2.0, 12.065]
+     ],
+     "holes": []
+    },
+    "saleable_sqft": 1690.0,
+    "carpet_sqft": null,
+    "built_up_sqft": null
+   },
+   {
+    "id": "m4",
+    "type_id": "3BHK-A",
+    "category": "3BHK",
+    "shape": {
+     "outer": [
+      [2.0, -12.065],
+      [15.5, -12.065],
+      [15.5, -1.065],
+      [2.0, -1.065]
+     ],
+     "holes": []
+    },
+    "saleable_sqft": 1690.0,
+    "carpet_sqft": null,
+    "built_up_sqft": null
+   }
+  ],
+  "core_zones": [
+   {
+    "shape": {
+     "outer": [
+      [-5.5, -12.065],
+      [2.0, -12.065],
+      [2.0, 12.065],
+      [-5.5, 12.065]
+     ],
+     "holes": []
+    },
+    "lifts": 2,
+    "stairs": 1
+   }
+  ],
+  "corridor": [
+   {
+    "outer": [
+     [-15.5, -1.065],
+     [-5.5, -1.065],
+     [-5.5, 1.065],
+     [-15.5, 1.065]
+    ],
+    "holes": []
+   },
+   {
+    "outer": [
+     [2.0, -1.065],
+     [15.5, -1.065],
+     [15.5, 1.065],
+     [2.0, 1.065]
+    ],
+    "holes": []
+   }
+  ],
+  "per_floor": {
+   "flats": 4,
+   "flats_by_type": {
+    "2BHK": 2,
+    "3BHK": 2
+   },
+   "gross_floor_sqm": 748.03,
+   "flats_own_sqm": 517.0,
+   "common_core_sqm": 231.03,
+   "saleable_sqft": 5760.0
+  },
+  "heights": {
+   "stilt_height_m": null,
+   "floor_to_floor_m": null
+  },
+  "stretch": null
+ },
+ {
+  "schema_version": "1.1",
+  "id": "single-core-6",
+  "family": "SINGLE_CORE",
+  "source_kind": "ENGINE_DEFAULT",
+  "source": "composed from the flat library. EXAMPLE sizes only, chosen to be plausible for Hyderabad 2BHK/3BHK flats. Replace with the firm's own flat blocks before trusting any layout.",
+  "footprint": {
+   "outer": [
+    [-20.5, -12.065],
+    [20.5, -12.065],
+    [20.5, 12.065],
+    [-20.5, 12.065]
+   ],
+   "holes": []
+  },
+  "length_m": 41.0,
+  "depth_m": 24.13,
+  "cores": 1,
+  "modules": [
+   {
+    "id": "m1",
+    "type_id": "2BHK-A",
+    "category": "2BHK",
+    "shape": {
+     "outer": [
+      [-20.5, 1.065],
+      [-10.5, 1.065],
+      [-10.5, 12.065],
+      [-20.5, 12.065]
+     ],
+     "holes": []
+    },
+    "saleable_sqft": 1190.0,
+    "carpet_sqft": null,
+    "built_up_sqft": null
+   },
+   {
+    "id": "m2",
+    "type_id": "2BHK-A",
+    "category": "2BHK",
+    "shape": {
+     "outer": [
+      [-20.5, -12.065],
+      [-10.5, -12.065],
+      [-10.5, -1.065],
+      [-20.5, -1.065]
+     ],
+     "holes": []
+    },
+    "saleable_sqft": 1190.0,
+    "carpet_sqft": null,
+    "built_up_sqft": null
+   },
+   {
+    "id": "m3",
+    "type_id": "3BHK-A",
+    "category": "3BHK",
+    "shape": {
+     "outer": [
+      [-10.5, 1.065],
+      [3.0, 1.065],
+      [3.0, 12.065],
+      [-10.5, 12.065]
+     ],
+     "holes": []
+    },
+    "saleable_sqft": 1690.0,
+    "carpet_sqft": null,
+    "built_up_sqft": null
+   },
+   {
+    "id": "m4",
+    "type_id": "3BHK-A",
+    "category": "3BHK",
+    "shape": {
+     "outer": [
+      [-10.5, -12.065],
+      [3.0, -12.065],
+      [3.0, -1.065],
+      [-10.5, -1.065]
+     ],
+     "holes": []
+    },
+    "saleable_sqft": 1690.0,
+    "carpet_sqft": null,
+    "built_up_sqft": null
+   },
+   {
+    "id": "m5",
+    "type_id": "2BHK-A",
+    "category": "2BHK",
+    "shape": {
+     "outer": [
+      [10.5, 1.065],
+      [20.5, 1.065],
+      [20.5, 12.065],
+      [10.5, 12.065]
+     ],
+     "holes": []
+    },
+    "saleable_sqft": 1190.0,
+    "carpet_sqft": null,
+    "built_up_sqft": null
+   },
+   {
+    "id": "m6",
+    "type_id": "2BHK-A",
+    "category": "2BHK",
+    "shape": {
+     "outer": [
+      [10.5, -12.065],
+      [20.5, -12.065],
+      [20.5, -1.065],
+      [10.5, -1.065]
+     ],
+     "holes": []
+    },
+    "saleable_sqft": 1190.0,
+    "carpet_sqft": null,
+    "built_up_sqft": null
+   }
+  ],
+  "core_zones": [
+   {
+    "shape": {
+     "outer": [
+      [3.0, -12.065],
+      [10.5, -12.065],
+      [10.5, 12.065],
+      [3.0, 12.065]
+     ],
+     "holes": []
+    },
+    "lifts": 2,
+    "stairs": 1
+   }
+  ],
+  "corridor": [
+   {
+    "outer": [
+     [-20.5, -1.065],
+     [3.0, -1.065],
+     [3.0, 1.065],
+     [-20.5, 1.065]
+    ],
+    "holes": []
+   },
+   {
+    "outer": [
+     [10.5, -1.065],
+     [20.5, -1.065],
+     [20.5, 1.065],
+     [10.5, 1.065]
+    ],
+    "holes": []
+   }
+  ],
+  "per_floor": {
+   "flats": 6,
+   "flats_by_type": {
+    "2BHK": 4,
+    "3BHK": 2
+   },
+   "gross_floor_sqm": 989.33,
+   "flats_own_sqm": 737.0,
+   "common_core_sqm": 252.33,
+   "saleable_sqft": 8140.0
+  },
+  "heights": {
+   "stilt_height_m": null,
+   "floor_to_floor_m": null
+  },
+  "stretch": null
+ },
+ {
+  "schema_version": "1.1",
+  "id": "two-core-medium-8",
+  "family": "TWO_CORE_MEDIUM",
+  "source_kind": "ENGINE_DEFAULT",
+  "source": "composed from the flat library. EXAMPLE sizes only, chosen to be plausible for Hyderabad 2BHK/3BHK flats. Replace with the firm's own flat blocks before trusting any layout.",
+  "footprint": {
+   "outer": [
+    [-29.25, -12.065],
+    [29.25, -12.065],
+    [29.25, 12.065],
+    [-29.25, 12.065]
+   ],
+   "holes": []
+  },
+  "length_m": 58.5,
+  "depth_m": 24.13,
+  "cores": 2,
+  "modules": [
+   {
+    "id": "m1",
+    "type_id": "2BHK-A",
+    "category": "2BHK",
+    "shape": {
+     "outer": [
+      [-29.25, 1.065],
+      [-19.25, 1.065],
+      [-19.25, 12.065],
+      [-29.25, 12.065]
+     ],
+     "holes": []
+    },
+    "saleable_sqft": 1190.0,
+    "carpet_sqft": null,
+    "built_up_sqft": null
+   },
+   {
+    "id": "m2",
+    "type_id": "2BHK-A",
+    "category": "2BHK",
+    "shape": {
+     "outer": [
+      [-29.25, -12.065],
+      [-19.25, -12.065],
+      [-19.25, -1.065],
+      [-29.25, -1.065]
+     ],
+     "holes": []
+    },
+    "saleable_sqft": 1190.0,
+    "carpet_sqft": null,
+    "built_up_sqft": null
+   },
+   {
+    "id": "m3",
+    "type_id": "3BHK-A",
+    "category": "3BHK",
+    "shape": {
+     "outer": [
+      [-11.75, 1.065],
+      [1.75, 1.065],
+      [1.75, 12.065],
+      [-11.75, 12.065]
+     ],
+     "holes": []
+    },
+    "saleable_sqft": 1690.0,
+    "carpet_sqft": null,
+    "built_up_sqft": null
+   },
+   {
+    "id": "m4",
+    "type_id": "3BHK-A",
+    "category": "3BHK",
+    "shape": {
+     "outer": [
+      [-11.75, -12.065],
+      [1.75, -12.065],
+      [1.75, -1.065],
+      [-11.75, -1.065]
+     ],
+     "holes": []
+    },
+    "saleable_sqft": 1690.0,
+    "carpet_sqft": null,
+    "built_up_sqft": null
+   },
+   {
+    "id": "m5",
+    "type_id": "2BHK-A",
+    "category": "2BHK",
+    "shape": {
+     "outer": [
+      [1.75, 1.065],
+      [11.75, 1.065],
+      [11.75, 12.065],
+      [1.75, 12.065]
+     ],
+     "holes": []
+    },
+    "saleable_sqft": 1190.0,
+    "carpet_sqft": null,
+    "built_up_sqft": null
+   },
+   {
+    "id": "m6",
+    "type_id": "2BHK-A",
+    "category": "2BHK",
+    "shape": {
+     "outer": [
+      [1.75, -12.065],
+      [11.75, -12.065],
+      [11.75, -1.065],
+      [1.75, -1.065]
+     ],
+     "holes": []
+    },
+    "saleable_sqft": 1190.0,
+    "carpet_sqft": null,
+    "built_up_sqft": null
+   },
+   {
+    "id": "m7",
+    "type_id": "2BHK-A",
+    "category": "2BHK",
+    "shape": {
+     "outer": [
+      [19.25, 1.065],
+      [29.25, 1.065],
+      [29.25, 12.065],
+      [19.25, 12.065]
+     ],
+     "holes": []
+    },
+    "saleable_sqft": 1190.0,
+    "carpet_sqft": null,
+    "built_up_sqft": null
+   },
+   {
+    "id": "m8",
+    "type_id": "2BHK-A",
+    "category": "2BHK",
+    "shape": {
+     "outer": [
+      [19.25, -12.065],
+      [29.25, -12.065],
+      [29.25, -1.065],
+      [19.25, -1.065]
+     ],
+     "holes": []
+    },
+    "saleable_sqft": 1190.0,
+    "carpet_sqft": null,
+    "built_up_sqft": null
+   }
+  ],
+  "core_zones": [
+   {
+    "shape": {
+     "outer": [
+      [-19.25, -12.065],
+      [-11.75, -12.065],
+      [-11.75, 12.065],
+      [-19.25, 12.065]
+     ],
+     "holes": []
+    },
+    "lifts": 2,
+    "stairs": 1
+   },
+   {
+    "shape": {
+     "outer": [
+      [11.75, -12.065],
+      [19.25, -12.065],
+      [19.25, 12.065],
+      [11.75, 12.065]
+     ],
+     "holes": []
+    },
+    "lifts": 2,
+    "stairs": 1
+   }
+  ],
+  "corridor": [
+   {
+    "outer": [
+     [-29.25, -1.065],
+     [-19.25, -1.065],
+     [-19.25, 1.065],
+     [-29.25, 1.065]
+    ],
+    "holes": []
+   },
+   {
+    "outer": [
+     [-11.75, -1.065],
+     [11.75, -1.065],
+     [11.75, 1.065],
+     [-11.75, 1.065]
+    ],
+    "holes": []
+   },
+   {
+    "outer": [
+     [19.25, -1.065],
+     [29.25, -1.065],
+     [29.25, 1.065],
+     [19.25, 1.065]
+    ],
+    "holes": []
+   }
+  ],
+  "per_floor": {
+   "flats": 8,
+   "flats_by_type": {
+    "2BHK": 6,
+    "3BHK": 2
+   },
+   "gross_floor_sqm": 1411.605,
+   "flats_own_sqm": 957.0,
+   "common_core_sqm": 454.605,
+   "saleable_sqft": 10520.0
+  },
+  "heights": {
+   "stilt_height_m": null,
+   "floor_to_floor_m": null
+  },
+  "stretch": null
+ },
+ {
+  "schema_version": "1.1",
+  "id": "two-core-large-12",
+  "family": "TWO_CORE_LARGE",
+  "source_kind": "ENGINE_DEFAULT",
+  "source": "composed from the flat library. EXAMPLE sizes only, chosen to be plausible for Hyderabad 2BHK/3BHK flats. Replace with the firm's own flat blocks before trusting any layout.",
+  "footprint": {
+   "outer": [
+    [-41.0, -12.065],
+    [41.0, -12.065],
+    [41.0, 12.065],
+    [-41.0, 12.065]
+   ],
+   "holes": []
+  },
+  "length_m": 82.0,
+  "depth_m": 24.13,
+  "cores": 2,
+  "modules": [
+   {
+    "id": "m1",
+    "type_id": "2BHK-A",
+    "category": "2BHK",
+    "shape": {
+     "outer": [
+      [-41.0, 1.065],
+      [-31.0, 1.065],
+      [-31.0, 12.065],
+      [-41.0, 12.065]
+     ],
+     "holes": []
+    },
+    "saleable_sqft": 1190.0,
+    "carpet_sqft": null,
+    "built_up_sqft": null
+   },
+   {
+    "id": "m2",
+    "type_id": "2BHK-A",
+    "category": "2BHK",
+    "shape": {
+     "outer": [
+      [-41.0, -12.065],
+      [-31.0, -12.065],
+      [-31.0, -1.065],
+      [-41.0, -1.065]
+     ],
+     "holes": []
+    },
+    "saleable_sqft": 1190.0,
+    "carpet_sqft": null,
+    "built_up_sqft": null
+   },
+   {
+    "id": "m3",
+    "type_id": "3BHK-A",
+    "category": "3BHK",
+    "shape": {
+     "outer": [
+      [-31.0, 1.065],
+      [-17.5, 1.065],
+      [-17.5, 12.065],
+      [-31.0, 12.065]
+     ],
+     "holes": []
+    },
+    "saleable_sqft": 1690.0,
+    "carpet_sqft": null,
+    "built_up_sqft": null
+   },
+   {
+    "id": "m4",
+    "type_id": "3BHK-A",
+    "category": "3BHK",
+    "shape": {
+     "outer": [
+      [-31.0, -12.065],
+      [-17.5, -12.065],
+      [-17.5, -1.065],
+      [-31.0, -1.065]
+     ],
+     "holes": []
+    },
+    "saleable_sqft": 1690.0,
+    "carpet_sqft": null,
+    "built_up_sqft": null
+   },
+   {
+    "id": "m5",
+    "type_id": "2BHK-A",
+    "category": "2BHK",
+    "shape": {
+     "outer": [
+      [-10.0, 1.065],
+      [0.0, 1.065],
+      [0.0, 12.065],
+      [-10.0, 12.065]
+     ],
+     "holes": []
+    },
+    "saleable_sqft": 1190.0,
+    "carpet_sqft": null,
+    "built_up_sqft": null
+   },
+   {
+    "id": "m6",
+    "type_id": "2BHK-A",
+    "category": "2BHK",
+    "shape": {
+     "outer": [
+      [-10.0, -12.065],
+      [0.0, -12.065],
+      [0.0, -1.065],
+      [-10.0, -1.065]
+     ],
+     "holes": []
+    },
+    "saleable_sqft": 1190.0,
+    "carpet_sqft": null,
+    "built_up_sqft": null
+   },
+   {
+    "id": "m7",
+    "type_id": "2BHK-A",
+    "category": "2BHK",
+    "shape": {
+     "outer": [
+      [0.0, 1.065],
+      [10.0, 1.065],
+      [10.0, 12.065],
+      [0.0, 12.065]
+     ],
+     "holes": []
+    },
+    "saleable_sqft": 1190.0,
+    "carpet_sqft": null,
+    "built_up_sqft": null
+   },
+   {
+    "id": "m8",
+    "type_id": "2BHK-A",
+    "category": "2BHK",
+    "shape": {
+     "outer": [
+      [0.0, -12.065],
+      [10.0, -12.065],
+      [10.0, -1.065],
+      [0.0, -1.065]
+     ],
+     "holes": []
+    },
+    "saleable_sqft": 1190.0,
+    "carpet_sqft": null,
+    "built_up_sqft": null
+   },
+   {
+    "id": "m9",
+    "type_id": "3BHK-A",
+    "category": "3BHK",
+    "shape": {
+     "outer": [
+      [10.0, 1.065],
+      [23.5, 1.065],
+      [23.5, 12.065],
+      [10.0, 12.065]
+     ],
+     "holes": []
+    },
+    "saleable_sqft": 1690.0,
+    "carpet_sqft": null,
+    "built_up_sqft": null
+   },
+   {
+    "id": "m10",
+    "type_id": "3BHK-A",
+    "category": "3BHK",
+    "shape": {
+     "outer": [
+      [10.0, -12.065],
+      [23.5, -12.065],
+      [23.5, -1.065],
+      [10.0, -1.065]
+     ],
+     "holes": []
+    },
+    "saleable_sqft": 1690.0,
+    "carpet_sqft": null,
+    "built_up_sqft": null
+   },
+   {
+    "id": "m11",
+    "type_id": "2BHK-A",
+    "category": "2BHK",
+    "shape": {
+     "outer": [
+      [31.0, 1.065],
+      [41.0, 1.065],
+      [41.0, 12.065],
+      [31.0, 12.065]
+     ],
+     "holes": []
+    },
+    "saleable_sqft": 1190.0,
+    "carpet_sqft": null,
+    "built_up_sqft": null
+   },
+   {
+    "id": "m12",
+    "type_id": "2BHK-A",
+    "category": "2BHK",
+    "shape": {
+     "outer": [
+      [31.0, -12.065],
+      [41.0, -12.065],
+      [41.0, -1.065],
+      [31.0, -1.065]
+     ],
+     "holes": []
+    },
+    "saleable_sqft": 1190.0,
+    "carpet_sqft": null,
+    "built_up_sqft": null
+   }
+  ],
+  "core_zones": [
+   {
+    "shape": {
+     "outer": [
+      [-17.5, -12.065],
+      [-10.0, -12.065],
+      [-10.0, 12.065],
+      [-17.5, 12.065]
+     ],
+     "holes": []
+    },
+    "lifts": 2,
+    "stairs": 1
+   },
+   {
+    "shape": {
+     "outer": [
+      [23.5, -12.065],
+      [31.0, -12.065],
+      [31.0, 12.065],
+      [23.5, 12.065]
+     ],
+     "holes": []
+    },
+    "lifts": 2,
+    "stairs": 1
+   }
+  ],
+  "corridor": [
+   {
+    "outer": [
+     [-41.0, -1.065],
+     [-17.5, -1.065],
+     [-17.5, 1.065],
+     [-41.0, 1.065]
+    ],
+    "holes": []
+   },
+   {
+    "outer": [
+     [-10.0, -1.065],
+     [23.5, -1.065],
+     [23.5, 1.065],
+     [-10.0, 1.065]
+    ],
+    "holes": []
+   },
+   {
+    "outer": [
+     [31.0, -1.065],
+     [41.0, -1.065],
+     [41.0, 1.065],
+     [31.0, 1.065]
+    ],
+    "holes": []
+   }
+  ],
+  "per_floor": {
+   "flats": 12,
+   "flats_by_type": {
+    "2BHK": 8,
+    "3BHK": 4
+   },
+   "gross_floor_sqm": 1978.66,
+   "flats_own_sqm": 1474.0,
+   "common_core_sqm": 504.66,
+   "saleable_sqft": 16280.0
+  },
+  "heights": {
+   "stilt_height_m": null,
+   "floor_to_floor_m": null
+  },
+  "stretch": null
+ }
+]
