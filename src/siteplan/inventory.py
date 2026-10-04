@@ -341,9 +341,10 @@ INVENTORY: tuple[Entry, ...] = (
                "more) keeps its plot-size ground unmet but UNVERIFIED, citing the clause, so the "
                "plot alone never prohibits a high-rise there: the high-rise eligibility is "
                "UNVERIFIED unless the road prohibits it. Otherwise the ground is simply unmet. "
-               "The validator's own plot-size check, the legacy checker, the height search and "
-               "the floors calculator do not use the allowance: they hold the net plot to the "
-               "minimum, so such a site still fails there.",
+               "The independent validator's plot-size check reads it the same way "
+               "(rules.high_rise_plot_met): UNVERIFIED for such a site, never a FAIL. The legacy "
+               "checker, the height search and the floors calculator do not use the allowance: "
+               "they hold the net plot to the minimum, so such a site still fails there.",
         settles="A sanctioned high-rise on a site left under the minimum by road widening: how "
                 "far short it was, and of what the share was taken.",
     ),
