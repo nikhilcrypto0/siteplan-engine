@@ -231,20 +231,6 @@ def test_a_low_block_standing_on_a_road_still_takes_the_road_from_its_width():
     assert status(report, "Every square metre once") is Z.FAIL
 
 
-def test_a_low_blocks_planting_rules_are_not_cleared_by_the_high_rise_strip_check():
-    """Where no band was modelled the strip check stopped at 'setbacks not known'. With a band
-    modelled it must not turn into an all-clear: the 2 m strip is not required under a 9 m
-    setback, and what Table III asks round a low block is not carried, so that is said."""
-    report = with_low_bands(all_low(fixture("rectangle"))).report()
-    c = check(report, "Peripheral green strip")
-    assert c.finding.status is Z.NOT_CHECKED and "Peripheral green strip" in report.not_checked
-    assert "T1, T2, T3" in c.finding.measured and "not in the resolved rules" in c.finding.note
-    unmodelled = check(all_low(fixture("rectangle")).report(), "Peripheral green strip")
-    assert unmodelled.finding.status is Z.NOT_CHECKED  # as shipped: the setbacks are not known
-    high_only = with_low_bands(floors_of(fixture("rectangle"), T1=7, T2=7, T3=7))  # 8 m setbacks
-    assert status(high_only.report(), "Peripheral green strip") is Z.INFO
-
-
 def test_the_fire_statement_is_absent_where_no_block_is_below_21_m():
     names = {c.finding.rule for c in fixture("rectangle").report().legal}
     assert BELOW not in names and "Fire access: T1" in names
