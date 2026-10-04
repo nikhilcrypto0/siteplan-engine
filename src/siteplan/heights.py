@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import math
 from collections import Counter
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from shapely.geometry import Polygon
@@ -147,12 +148,20 @@ def heights_to_try(request: LayoutRequest) -> list[int]:
 
 
 def search_heights(plot: Polygon, library: FlatLibrary, request: LayoutRequest,
-                   facts: SiteFacts, amenities: AmenityLibrary | None = None) -> HeightSearch:
+                   facts: SiteFacts, amenities: AmenityLibrary | None = None, *,
+                   heights: list[int] | None = None,
+                   stop: Callable[[], bool] | None = None) -> HeightSearch:
     """Each height in turn, top down: the law, then the ground; the options are the best
-    distinct layouts that pass, whatever their height."""
+    distinct layouts that pass, whatever their height.
+
+    `heights` and `stop` are for optimizer/legacy.py: the heights to try in place of
+    heights_to_try(request), and a question asked before each one (is the time budget spent?).
+    A height not reached is absent from the results."""
     result = HeightSearch()
     passing: list[LayoutOption] = []
-    for floors in heights_to_try(request):
+    for floors in heights_to_try(request) if heights is None else heights:
+        if stop is not None and stop():
+            break
         at = request.model_copy(update={"floors": floors})
         legal = tuple(legal_findings(floors, at, facts, plot))
         tried = None
