@@ -2,9 +2,6 @@
 lets ResolvedRules and the candidate say more. Each test names the one place in the validator that
 changes and what the test becomes once it does.
 
-  1. The front is not judged apart from the other sides  (validator/measure.py
-     `HeightClass.setback_m` and `setback_note`, read by blocks.setback_checks and the club
-     house). Needs `Band.front_setback_m`.
   2. A block up to 12 m on no road is UNVERIFIED  (validator/roads.py `_pathway_check`). Needs
      `RoadKind.PATHWAY` and `CirculationRules.pathway_width_m`.
   4. Fire access below 21 m is NOT_CHECKED and names rule 15(a)(i)  (validator/fire.py
@@ -28,33 +25,6 @@ PATHWAYS = "Internal roads: blocks up to 12 m (pathways)"
 BELOW = "Fire access below 21 m (rule 15(a)(i))"
 RULE_15_A_I = ('"The building requirements and standards other than heights and setbacks '
                'specified in the National Building Code - 2005 shall be complied with."')
-
-
-# --- 1. the front ------------------------------------------------------------------------------
-
-
-def test_interim_the_front_is_not_judged_apart_from_the_other_sides():
-    """INTERIM (flips with contracts 1.2, `Band.front_setback_m`). Table III gives the Building
-    Line at the front apart from the setback on the other sides, and ResolvedRules carries one
-    all-round figure. So the same block 3.69 m from a boundary is judged the same whether that
-    boundary is the front (the side the access road runs on) or not, and the check says so.
-
-    Once the front has its own figure: a block near the front is held to it and one near a side
-    to the other, so these two findings differ wherever the two figures do, and the note no longer
-    says the front is not judged on its own."""
-    def near_the_south_boundary(candidate):
-        move_tower(candidate, "T2", 0.0, -26.02)  # 29.71 - 26.02 = 3.69 m from the south side
-
-    def road_on(side):
-        return lambda site: setattr(site.access.side, "value", side)
-
-    base = with_low_bands(all_low(fixture("rectangle"))).edited(near_the_south_boundary)
-    on_the_south = check(base.with_site(road_on("S")).report(), "All-round setback: T2")
-    on_the_north = check(base.with_site(road_on("N")).report(), "All-round setback: T2")
-    assert on_the_south.finding.status is Z.FAIL  # 3.69 m is under band B's 3.70 m
-    assert on_the_south.finding == on_the_north.finding
-    assert "Building Line" in on_the_south.finding.note
-    assert "not judged on its own" in on_the_south.finding.note
 
 
 # --- 2. pathways -------------------------------------------------------------------------------

@@ -21,13 +21,7 @@ from siteplan.contracts.validation import Check, Family
 from siteplan.units import sqft_to_sqm
 from siteplan.validator.blocks import gap_cell, gap_clause
 from siteplan.validator.context import Context
-from siteplan.validator.measure import (
-    TOL_M,
-    UNCONFIRMED_NOTE,
-    HeightClass,
-    classify,
-    setback_of,
-)
+from siteplan.validator.measure import TOL_M, HeightClass, classify
 from siteplan.validator.readings import (
     EACH_OWN,
     MINIMUM_SHARE,
@@ -41,6 +35,7 @@ from siteplan.validator.readings import (
     unknown_reading,
     verdict,
 )
+from siteplan.validator.setbacks import plot_line_distances, setback_cell
 from siteplan.validator.shapes import NOISE_SQM, union_of_all
 
 SIZE_SLACK_SQM = 0.5  # a club house this close to the size asked is that size
@@ -134,17 +129,16 @@ def club_setback_check(ctx: Context) -> Check | None:
         return plain(Family.SETBACK, rule, Status.NOT_CHECKED,
                      f"{cls.height_m:g} m high: {cls.label}", "the setback its height asks",
                      clause, TABLE_III_NOTE)
-    gap = setback_of(ctx.net, ctx.drawn.club)
-    required = f">= {cls.setback_m:.2f} m to the net plot line"
+    club = ctx.drawn.club
+    result = setback_cell(ctx, club, plot_line_distances(ctx, club), cls)
     if not cls.high_rise:
-        if not cls.confirmed:
-            return plain(Family.SETBACK, rule, Status.UNVERIFIED, f"{gap:.2f} m", required,
-                         f"{cls.table}; {clause}", f"{cls.setback_note} {UNCONFIRMED_NOTE}")
-        return plain(Family.SETBACK, rule, verdict(gap + TOL_M >= cls.setback_m),
-                     f"{gap:.2f} m", required, f"{cls.table}; {clause}", cls.setback_note)
-    status = verdict(gap + TOL_M >= cls.setback_m)
-    return plain(Family.SETBACK, rule, Status.UNVERIFIED if status is Status.PASS else status,
-                 f"{gap:.2f} m", required, clause, TALL_CLUB_NOTE if status is Status.PASS else "")
+        return plain(Family.SETBACK, rule, result.status, result.measured, result.required,
+                     f"{cls.table}; {clause}", result.note)
+    if result.status is Status.PASS:  # a club house as tall as a high-rise cannot pass
+        return plain(Family.SETBACK, rule, Status.UNVERIFIED, result.measured, result.required,
+                     clause, TALL_CLUB_NOTE)
+    return plain(Family.SETBACK, rule, result.status, result.measured, result.required, clause,
+                 "" if result.status is Status.FAIL else result.note)
 
 
 def club_gap_checks(ctx: Context) -> list[Check]:

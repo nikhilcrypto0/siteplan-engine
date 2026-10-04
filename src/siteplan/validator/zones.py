@@ -29,17 +29,54 @@ FRONT_SECTOR_DEG = 45  # a boundary edge faces a side when its outward normal is
 DIAGONAL_SLOP_DEG = 22.5
 
 
+DEPTH_EPS_M = 1e-9  # two setbacks this close are one figure
+
+
+def setback_depths(ctx: Context, reading: str) -> tuple[float, float] | None:
+    """The deepest setbacks any block needs when the stilt is read as `reading`, as (at the front,
+    on every other side): a band's front figure is its setback where it gives none. None when no
+    block's row is usable."""
+    classes = [c for c in ctx.classes.get(reading, {}).values() if c.setback_m is not None]
+    if not classes:
+        return None
+    return max(c.front_m for c in classes), max(c.setback_m for c in classes)
+
+
 def deepest_setback_m(ctx: Context, reading: str) -> float | None:
-    """The deepest Table IV setback any tower needs when the stilt is read as `reading`; None
-    when no tower's row is usable."""
-    values = [c.setback_m for c in ctx.classes.get(reading, {}).values()
-              if c.setback_m is not None]
-    return max(values) if values else None
+    """The deepest setback any block needs, on any side, when the stilt is read as `reading`;
+    None when no block's row is usable."""
+    depths = setback_depths(ctx, reading)
+    return None if depths is None else max(depths)
+
+
+def edge_groups(ctx: Context) -> tuple[BaseGeometry, BaseGeometry] | None:
+    """The stretches of the plot line that face the side the access road runs on, and the rest;
+    None when that side is not known or no stretch faces it."""
+    side = ctx.site.access.side.value
+    if side is None:
+        return None
+    edges = boundary_edges(ctx.net)
+    front = [e for e, bearing in edges if faces(bearing, side)]
+    if not front:
+        return None
+    return (union_of_all(front),
+            union_of_all([e for e, bearing in edges if not faces(bearing, side)]))
 
 
 def setback_zone(ctx: Context, reading: str) -> BaseGeometry | None:
-    depth = deepest_setback_m(ctx, reading)
-    return None if depth is None else ctx.net.difference(ctx.net.buffer(-depth))
+    """The mandatory setback as ground: the plot's own edge as deep as the deepest setback needs.
+    Where the bands give a front figure of their own, the front stretches are as deep as it and
+    the rest as deep as the setback; where the front cannot be told, all round as deep as the
+    larger, never more lenient."""
+    depths = setback_depths(ctx, reading)
+    if depths is None:
+        return None
+    front, side = depths
+    groups = edge_groups(ctx) if abs(front - side) > DEPTH_EPS_M else None
+    if groups is not None:
+        return union_of_all([groups[0].buffer(front), groups[1].buffer(side)]
+                            ).intersection(ctx.net)
+    return ctx.net.difference(ctx.net.buffer(-max(front, side)))
 
 
 def gap_zones(ctx: Context, reading: str, spacing: str) -> list[tuple[str, BaseGeometry]]:
@@ -137,15 +174,18 @@ def ramp_zones(ctx: Context, reading: str) -> tuple[BaseGeometry, BaseGeometry]:
     any setback that would leave less than 7 m clear. When the access side is not known, the
     rest of the setback is the second shape: a ramp there is allowed in a side or rear setback
     and not in the front."""
-    depth = deepest_setback_m(ctx, reading)
-    if depth is None:
+    depths = setback_depths(ctx, reading)
+    if depths is None:
         return Polygon(), Polygon()
-    zone = ctx.net.difference(ctx.net.buffer(-depth))
+    front_depth, side_depth = depths
+    split = abs(front_depth - side_depth) > DEPTH_EPS_M and edge_groups(ctx) is not None
+    depth = side_depth if split else max(front_depth, side_depth)
+    zone = setback_zone(ctx, reading)
     # Rule 13(c)(vii): a ramp in a side or rear setback leaves this much for fire vehicles.
     leave = ctx.rules.parking.ramp_fire_clearance_m.value
     keep_clear = zone if depth <= leave else zone.intersection(
         ctx.net.buffer(-(depth - leave)))
-    front = front_zone(ctx, depth)
+    front = front_zone(ctx, front_depth if split else depth)
     if front is None:
         return keep_clear, zone.difference(keep_clear)
     return union_of_all([keep_clear, front.intersection(zone)]), Polygon()
