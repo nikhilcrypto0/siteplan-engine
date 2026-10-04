@@ -67,6 +67,7 @@ RESERVE_OPEN_FACTOR = 1.15
 RESERVE_CLUB_FACTOR = 1.6
 RAMP_RESERVE_SQM = 280.0
 CLUB_ASSUMED_SHARE_OF_NET = 0.0375  # built-up area over the plot, times the club's share
+CLUB_FLOORS = 2  # the club house's storeys when the brief gives none
 SIDES = ("N", "S", "E", "W")
 
 
@@ -114,7 +115,7 @@ class Run:
 
     @property
     def reserve_target_sqm(self) -> float:
-        club_floors = self.brief.program.club_house.floors or 2
+        club_floors = self.brief.program.club_house.floors or CLUB_FLOORS
         club = CLUB_ASSUMED_SHARE_OF_NET * self.plot.net.area * 2 / club_floors
         return (RESERVE_OPEN_FACTOR * self.q.open_space_sqm + RESERVE_CLUB_FACTOR * club
                 + RAMP_RESERVE_SQM + FACILITY_ROOM_SQM)
@@ -365,7 +366,7 @@ def _club(run: Run, buildable: BaseGeometry, zones: ground.Zones, placements: li
           tower_sqm: float, units: int, turns: Sequence[float], anchor: Point
           ) -> tuple[Polygon | None, int, str]:
     asked = run.brief.program.club_house
-    floors = asked.floors or 2
+    floors = asked.floors or CLUB_FLOORS
     size = ground.club_size_sqm(run.q, tower_sqm, units)
     if asked.wanted.value and asked.size is ClubSize.STATED and asked.sqm:
         size = max(size, asked.sqm)
