@@ -4,6 +4,73 @@ A characterization test (tests/manifest.py) pins what the engine produces today.
 only together with a normative replacement test and an entry here: what changed, why, the
 evidence, and the test that now holds the behaviour. Newest first.
 
+## 2026-10-04: Wave 2 integrated (A2, D2 and C2 on contracts 1.2)
+
+No characterization test changed. C2 adds the full search, strategy FULL beside LEGACY, held by
+its own normative tests (tests/test_search_*.py; test_search_client.py runs it on the two real
+sites and skips on a clean clone). What the three streams change together:
+
+- **The optimizer offers no floor count below 21 m until C3.** Before A2 such a count had no
+  modelled band, so `feasible_floors` left it out by an accident of the data; with Table III
+  encoded the rule is explicit (`FloorOption.below_high_rise`): the count is assessed on its band,
+  never offered, and NOT_CHECKED, because floors.py does not read a band's permission yet (C3
+  must). `test_optimizer_floors.py::test_a_count_below_the_high_rise_height_is_assessed_but_not_offered_yet`,
+  `::test_where_a_high_rise_is_prohibited_no_count_is_offered_and_nothing_lower_either`.
+- **The contract fixtures' low blocks are judged on Table III.** Sixteen validator tests were
+  written when the fixtures shipped one unmodelled band below 21 m. Those about a band the rules do
+  not model now build it themselves (`unmodelled_below`, tests/validator_low_helpers.py) and assert
+  what they did; those about the fixtures' own blocks assert the Table III verdict: the small
+  plot's 15 m block keeps 6 m on the sides and the 3 m Building Line in front
+  (test_validator_blocks.py), its setback zone is that deep (test_validator_readings.py), the
+  2-floor club house keeps row 11's 5 m (test_validator_low_blocks_site.py,
+  test_validator_club_spacing.py), and a prohibited high-rise leaves every lower block's verdict
+  as on an open site (test_validator_v11.py). The fixtures carry rule 8(l)'s 6 m pathway
+  (test_validator_pathways.py) and a 2 m strip on the high-rise bands from 9 m, which gives the
+  verdict rule 7(a)(viii) gave (test_validator_planting.py). Two tests that still passed but no
+  longer compared what they say (`test_installing_modelled_bands_below_21_m_moves_no_check_of_a_high_rise_layout`,
+  `test_the_high_rise_blocks_of_a_mixed_layout_are_judged_as_before_the_low_one_is_modelled`)
+  compare against the unmodelled band again.
+- **The small plot's hand-made layout is laid to Table III** (tests/contract_fixtures/build.py).
+  It failed the open space (192 of the 300 m² asked counted: its pocket lay in the 6 m setback)
+  and drew no strip. The pocket now stands between the block and the north setback (312 m²), a
+  1 m strip runs round the plot broken at the driveway, and the gate is as deep as the strip.
+  `test_validator_cross_checks.py::test_the_untouched_fixtures_have_no_blocking_discrepancy`.
+
+## 2026-10-04: A2, Table III and the blocks below 21 m
+
+No characterization test changed. What now behaves differently, each held by a normative test:
+
+- **Every height below 21 m has a band** (contracts 1.2); under 1.1 one unmodelled band covered
+  it all. A height above a row's last line is PROHIBITED; 18-21 m is UNVERIFIED with no setback
+  (no order read gives one). tests/test_resolve_non_high_rise.py, tests/test_non_high_rise.py,
+  `test_resolve.py::test_every_height_has_one_band_and_exactly_21_m_is_a_high_rise`.
+- **A road under 12 m** gives the limit "below 21 m" (BOUNDED, upper edge excluded; it was
+  NOT_EVALUATED), and a Group Development Scheme on it is permitted nothing lower.
+  `test_resolve.py::test_a_road_under_the_first_row_prohibits_a_high_rise_and_permits_nothing_lower`,
+  `test_contracts.py::test_a_road_too_narrow_for_a_high_rise_serves_nothing_from_21_m_and_leaves_the_rest_to_bands`,
+  `test_resolve_non_high_rise.py::test_a_group_scheme_on_a_road_under_12_m_has_nothing_below_21_m_and_no_high_rise_either`.
+- **A block of exactly 21 m on a road over 30 m keeps 7.5 m in front** (rule 7(a)(xi): the higher
+  of Table IV and the Building Line), not 7 m.
+  `test_resolve_non_high_rise.py::test_a_block_of_exactly_21_m_on_a_road_over_30_m_keeps_the_building_line_at_the_front`.
+- **A road given in feet is reckoned as the order's round metres** (rule 5(f)(xvii): 60 ft is
+  18 m). `test_rules.py::test_a_road_in_feet_is_reckoned_as_the_orders_metres`.
+- **The envelope draws land for every permitted band below 21 m**, says why a band has none, and
+  draws the planting strips as layers. tests/test_envelope_non_high_rise.py,
+  tests/test_envelope.py, tests/test_envelope_client.py.
+- **The high-rise front setback is cited to rule 7(a)(xi), p.14**, not rule 12(b), p.17 (the
+  U-type commercial rule it had been cited to).
+  `test_rules.py::test_the_high_rise_front_is_rule_7_a_xi_and_not_the_commercial_courtyard_rule_it_was_cited_to`.
+- **`rules.height_rules(height, plot_sqm, road_m)` answers Table III** when given the plot (it said
+  "not encoded"). tests/test_rules.py.
+- **The orders list names what was read for rule 5** and what is still unread (`ORDERS` in
+  legal/resolve.py).
+  `test_resolve.py::test_the_orders_are_listed_with_how_each_was_read_and_the_unread_ones_named`.
+
+Not settled by the text, and left open: a setback for 18-21 m; the gap between a low block and a
+high-rise (8(j) "as the case may be", both readings evaluated); whether the stilt counts toward the
+high-rise class (5(c) leaves it out only for Table III). The prototype's checks.py, layout.py and
+max_floors.py still say Table III is not encoded; they are prototype code, left as they are.
+
 ## 2026-10-04: contracts 1.2
 
 No behaviour changed and no test changed but the version test: every addition is a field or a
