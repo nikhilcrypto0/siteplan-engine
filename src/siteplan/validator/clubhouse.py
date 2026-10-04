@@ -169,8 +169,7 @@ def club_gap_checks(ctx: Context) -> list[Check]:
             if tower_cls is None:
                 return unknown_reading(STILT_IN_RULE_HEIGHT, reading)
             if below:
-                return gap_cell(cls, tower_cls, _club_height_m(ctx), tower.rule_height_m(reading),
-                                spacing, gap)
+                return gap_cell(cls, tower_cls, spacing, gap)
             shown, need = f"{gap:.2f} m", tower_cls.gap_m
             if need is None or cls.state == "ok" or spacing not in (TALLER_GOVERNS, EACH_OWN):
                 return Cell(Status.NOT_CHECKED, shown, "a Table IV gap",

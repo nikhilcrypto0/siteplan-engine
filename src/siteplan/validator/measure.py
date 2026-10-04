@@ -17,7 +17,7 @@ from siteplan.contracts.candidate import CandidateLayout, PlacedTower
 from siteplan.contracts.common import Provenance
 from siteplan.contracts.design_brief import DesignBrief
 from siteplan.contracts.prototype import TowerPrototype
-from siteplan.contracts.resolved_rules import Band, BandKind, ResolvedRules
+from siteplan.contracts.resolved_rules import Band, BandKind, HeightMeasure, ResolvedRules
 from siteplan.validator.readings import COUNTED, EACH_OWN, NOT_COUNTED, TALLER_GOVERNS
 from siteplan.validator.shapes import polygon_of, snapped
 
@@ -56,9 +56,19 @@ class TowerGeometry:
     flaws: tuple[str, ...] = ()  # shapes that crossed themselves and were mended to be measured
 
     @property
+    def above_stilt_m(self) -> float:
+        """Every floor above the stilt: the height Table III is read on (rule 5(c))."""
+        return self.floors * self.floor_height_m
+
+    @property
+    def stilt_built_m(self) -> float:
+        """The stilt this block stands on; nothing when it has none."""
+        return self.stilt_height_m if self.has_stilt else 0.0
+
+    @property
     def physical_height_m(self) -> float:
         """Ground to the top, the stilt included: what NBC's fire rules measure."""
-        return (self.stilt_height_m if self.has_stilt else 0.0) + self.floors * self.floor_height_m
+        return self.stilt_built_m + self.above_stilt_m
 
     def rule_height_m(self, reading: str) -> float | None:
         """The height that picks the Table IV row and the high-rise class, under a reading of
@@ -66,7 +76,7 @@ class TowerGeometry:
         if reading == COUNTED:
             return self.physical_height_m
         if reading == NOT_COUNTED:
-            return self.floors * self.floor_height_m
+            return self.above_stilt_m
         return None
 
     @property
@@ -127,7 +137,8 @@ class HeightClass:
     row). A band the rules do not model (Table III, below it) leaves the height unjudged.
     """
 
-    height_m: float
+    height_m: float  # the rule height under the reading: it decides whether the block is high-rise
+    band_height_m: float  # the height the band was read on: above the stilt for Table III's rows
     high_rise: bool
     band: Band | None  # the band whose values apply; None above the last band
     state: str  # 'ok', or 'unmodelled' (Table III, or beyond the bands)
@@ -159,6 +170,14 @@ class HeightClass:
         return HIGH_RISE_FRONT_NOTE if self.high_rise else ALL_ROUND_NOTE
 
     @property
+    def height_text(self) -> str:
+        """The block's rule height and, where its band is read on another height, that one: for
+        a band of Table III the height above the stilt (rule 5(c))."""
+        if abs(self.band_height_m - self.height_m) <= TOL_M:
+            return f"{self.height_m:.2f} m"
+        return f"{self.height_m:.2f} m, read as {self.band_height_m:.2f} m above the stilt"
+
+    @property
     def label(self) -> str:
         if self.band is None:
             return "beyond the bands in the rules"
@@ -187,12 +206,35 @@ class HeightClass:
         return self._usable.min_road_m if self._usable else None
 
 
-def classify(rules: ResolvedRules, height_m: float) -> HeightClass:
-    high_rise = height_m >= rules.height.high_rise_from_m.value - TOL_M
-    band = rules.height.band_for(height_m)
+def _class_of(rules: ResolvedRules, rule_height_m: float, band: Band | None,
+              band_height_m: float) -> HeightClass:
+    high_rise = rule_height_m >= rules.height.high_rise_from_m.value - TOL_M
     if band is None or not band.modelled or band.setback_m is None:
-        return HeightClass(height_m, high_rise, band, "unmodelled")
-    return HeightClass(height_m, high_rise, band, "ok")
+        return HeightClass(rule_height_m, band_height_m, high_rise, band, "unmodelled")
+    return HeightClass(rule_height_m, band_height_m, high_rise, band, "ok")
+
+
+def classify(rules: ResolvedRules, height_m: float) -> HeightClass:
+    """A building with no stilt (the club house): one height, whichever table it is in."""
+    band = rules.height.band_for_block(height_m, 0.0, stilt_counted=False)
+    return _class_of(rules, height_m, band, height_m)
+
+
+def classify_block(rules: ResolvedRules, tower: TowerGeometry, reading: str
+                   ) -> HeightClass | None:
+    """A tower's band under a reading of the stilt, by the lookup the contract gives
+    (`HeightRules.band_for_block`, the one the optimizer makes): its class from its rule height
+    under the reading, then, below the high-rise height, its row on its height above the stilt,
+    which rule 5(c) leaves the stilt out of whatever the reading says. None for a reading this
+    validator cannot evaluate."""
+    rule_height = tower.rule_height_m(reading)
+    if rule_height is None:
+        return None
+    band = rules.height.band_for_block(tower.above_stilt_m, tower.stilt_built_m,
+                                       stilt_counted=reading == COUNTED)
+    read_on = (tower.above_stilt_m if band is not None
+               and band.measure is HeightMeasure.HEIGHT_ABOVE_STILT else rule_height)
+    return _class_of(rules, rule_height, band, read_on)
 
 
 def setback_of(net: Polygon, footprint: Polygon) -> float:
@@ -203,16 +245,17 @@ def setback_of(net: Polygon, footprint: Polygon) -> float:
     return float(net.boundary.distance(footprint))
 
 
-def gap_sources(a: HeightClass, b: HeightClass, a_height_m: float, b_height_m: float,
-                spacing: str) -> tuple[HeightClass, ...] | None:
+def gap_sources(a: HeightClass, b: HeightClass, spacing: str) -> tuple[HeightClass, ...] | None:
     """The blocks whose own gap figure decides what two blocks need between them under a reading
     of mixed-height spacing; None for a reading this validator cannot evaluate.
 
-    taller_governs: the taller block's, whatever the shorter block is. each_own: each block keeps
-    its own gap on its own half of the space between them, so both. Blocks of the same height
-    need the same gap either way. Two blocks below the high-rise height are not an open question:
-    rule 5(xiii) gives the tallest block's (LOW_GAP_RULE), whatever the reading."""
-    taller = a if a_height_m >= b_height_m else b
+    taller_governs: the taller block's, whatever the shorter block is, the taller being the one
+    whose band is read on the greater height (the height above the stilt for a band of Table III,
+    the rule height for Table IV's). each_own: each block keeps its own gap on its own half of the
+    space between them, so both. Blocks of the same height need the same gap either way. Two
+    blocks below the high-rise height are not an open question: rule 5(xiii) gives the tallest
+    block's side setback (LOW_GAP_RULE), whatever the reading."""
+    taller = a if a.band_height_m >= b.band_height_m else b
     if not (a.high_rise or b.high_rise) or spacing == TALLER_GOVERNS:
         return (taller,)
     if spacing == EACH_OWN:
@@ -220,12 +263,11 @@ def gap_sources(a: HeightClass, b: HeightClass, a_height_m: float, b_height_m: f
     return None
 
 
-def required_gap(a: HeightClass, b: HeightClass, a_height_m: float, b_height_m: float,
-                 spacing: str) -> tuple[float | None, str]:
+def required_gap(a: HeightClass, b: HeightClass, spacing: str) -> tuple[float | None, str]:
     """The gap two blocks need under a reading of mixed-height spacing: 'ok', or None and why
     there is none: 'unmodelled' (a block's own gap is not in the rules) or 'unknown' (a reading
     this validator cannot evaluate). It is the mean of the figures `gap_sources` names."""
-    sources = gap_sources(a, b, a_height_m, b_height_m, spacing)
+    sources = gap_sources(a, b, spacing)
     if sources is None:
         return None, "unknown"
     gaps = [c.gap_m for c in sources]
