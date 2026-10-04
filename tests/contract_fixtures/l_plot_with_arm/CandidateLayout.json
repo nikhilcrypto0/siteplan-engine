@@ -2,9 +2,9 @@
  "schema_version": "1.2",
  "candidate_id": "l_plot_with_arm-1",
  "site_ref": "09d1d39cb3012b0c",
- "rules_ref": "1b739f209c562fc0",
+ "rules_ref": "0a940cca78423547",
  "brief_ref": "68d54d1b6db85c4f",
- "envelope_ref": "079d557d3b33915b",
+ "envelope_ref": "e0356c637a89041b",
  "strategy": "Option A: Maximum yield",
  "seed": null,
  "interpretation_basis": {

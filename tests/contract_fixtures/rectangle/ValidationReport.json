@@ -1,10 +1,10 @@
 {
  "schema_version": "1.2",
- "candidate_ref": "87efcefbed7aa5a1",
+ "candidate_ref": "c6b8b60503c6a32f",
  "site_ref": "4a06f936f6a9cd4c",
- "rules_ref": "0e520d7b110656bf",
+ "rules_ref": "5129172609a9197e",
  "brief_ref": "3198943f7525d942",
- "envelope_ref": "3cfe8dedbe8c4edb",
+ "envelope_ref": "d7bddcc8a816d58a",
  "validator_version": "fixture: the generator's own findings restated, not an independent validation",
  "recomputed": {
   "towers": [],

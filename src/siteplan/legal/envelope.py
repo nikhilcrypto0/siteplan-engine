@@ -20,7 +20,7 @@ from siteplan.contracts.envelope import (
     CirculationRequirements,
     Obligation,
 )
-from siteplan.contracts.resolved_rules import Eligibility, ResolvedRules
+from siteplan.contracts.resolved_rules import Band, BandKind, Eligibility, ResolvedRules
 from siteplan.contracts.site_model import CanonicalSiteModel
 from siteplan.legal.bands import band_key, band_lands, height_cap
 from siteplan.legal.exclusions import exclusions
@@ -29,8 +29,7 @@ from siteplan.legal.frontage import access_zones
 from siteplan.legal.layers import rule_layers
 from siteplan.legal.widths import width_profile
 
-NOT_MODELLED_NOTE = ("Table III (rule 5) is not encoded yet: stream A2 reads it from the order; "
-                     "a block of this height has no envelope here")
+NOT_MODELLED_NOTE = "the engine does not encode this band's rules"
 NET_PLOT = "net plot"
 
 
@@ -85,26 +84,35 @@ def _what_is_missing(site: CanonicalSiteModel) -> str:
 
 
 def _bands(rules: ResolvedRules, lands, cap_note: str) -> list[BandEnvelope]:
-    """Every band the rules carry, in order: the unmodelled ones as such, the others with their
-    land up to the legal height (a band with no land after the first empty one is left out)."""
+    """Every band below the high-rise height, in order, whatever its land (one nothing may stand
+    in says why), then the high-rise bands that have land up to the legal height (a band with no
+    land after the first empty one is left out)."""
     by_key = {land.key: land for land in lands}
     out = []
     for band in rules.height.bands:
-        common = {"above_m": band.above_m, "up_to_m": band.up_to_m, "kind": band.kind}
+        permission = rules.height.band_permission(band)
+        common = {"above_m": band.above_m, "up_to_m": band.up_to_m, "kind": band.kind,
+                  "front_setback_m": band.front_setback_m, "permission": permission}
+        land = by_key.get(band_key(band.above_m, band.up_to_m))
         if not band.modelled:
             out.append(BandEnvelope(**common, modelled=False, note=NOT_MODELLED_NOTE))
-        elif (land := by_key.get(band_key(band.above_m, band.up_to_m))) is not None:
+        elif land is not None:
             out.append(BandEnvelope(
                 **common, setback_m=band.setback_m, setback_envelope=shapes_from(land.inset),
                 buildable=shapes_from(land.buildable), area_sqm=land.buildable.area,
-                green_strip_applies=band.setback_m >= rules.green_strip.where_setback_from_m.value,
-                note=_band_note(land.buildable.is_empty, cap_note)))
+                green_strip_applies=band.green_strip_m is not None,
+                note=_band_note(land.buildable.is_empty, cap_note, band, permission)))
+        elif band.kind is BandKind.NON_HIGH_RISE:
+            out.append(BandEnvelope(**common, setback_m=band.setback_m,
+                                    note=_band_note(False, "", band, permission)))
     return out
 
 
-def _band_note(empty: bool, cap_note: str) -> str:
+def _band_note(empty: bool, cap_note: str, band: Band, permission: Eligibility) -> str:
     notes = ["the setback and the exclusions leave no land at this height" if empty else "",
-             f"no height limit is known from the road: {cap_note}" if cap_note else ""]
+             f"no height limit is known from the road: {cap_note}" if cap_note else "",
+             f"{permission.value.lower()}: {band.permission_note}"
+             if permission is not Eligibility.ALLOWED and band.permission_note else ""]
     return "; ".join(note for note in notes if note)
 
 

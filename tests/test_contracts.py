@@ -27,7 +27,6 @@ from siteplan.contracts.common import (
     Basis,
     FacilityUse,
     Finding,
-    Provenance,
     Shape,
     Status,
     Surface,
@@ -46,6 +45,7 @@ from siteplan.contracts.resolved_rules import (
     BandKind,
     Eligibility,
     HeightLimit,
+    HeightMeasure,
     HeightRules,
     HighRiseEligibility,
     LimitBound,
@@ -362,7 +362,9 @@ def test_a_building_of_exactly_the_high_rise_height_is_a_high_rise_with_its_own_
     height = load("rectangle", "ResolvedRules").height
     start = height.high_rise_from_m.value
     below, at, above = (height.band_for(h) for h in (start - 0.01, start, start + 0.01))
-    assert below.kind is BandKind.NON_HIGH_RISE and below.modelled is False
+    # just under 21 m is a non-high-rise height Table III leaves open: no setback, not permitted
+    assert below.kind is BandKind.NON_HIGH_RISE and below.modelled and below.setback_m is None
+    assert below.permission is Eligibility.UNVERIFIED
     assert at.kind is BandKind.HIGH_RISE and (at.above_m, at.up_to_m) == (start, start)
     assert (at.min_road_m, at.setback_m, at.gap_m) == (12, 7, 7)
     assert above.kind is BandKind.HIGH_RISE and above.setback_m == 8
@@ -397,29 +399,43 @@ def test_the_made_up_sites_may_take_a_high_rise(site):
     ({"road_ft": 30}, "road_width"),
     ({"boundary": box(0, 0, 40, 45), "net": box(0, 0, 40, 45)}, "plot_size"),
 ], ids=["a 30 ft road", "a plot of 1,800 m²"])
-def test_a_prohibited_high_rise_says_nothing_about_lower_heights(changes, failing):
-    """Where the road or the plot rules a high-rise out, nothing here says a lower building is
-    legal: its band is Table III's, not modelled, and no limit passes it."""
+def test_a_prohibited_high_rise_permits_no_high_rise_band_and_leaves_the_rest_to_the_bands_below(
+        changes, failing):
+    """Where the road or the plot rules a high-rise out, no high-rise band may stand and no land is
+    drawn for one. What may stand below 21 m is not read off that prohibition: Table III's own
+    bands say it, each on its own permission, with the stilt left out of their heights."""
     site, rules = _variant("small_plot", **changes)
     height = rules.height
     assert height.high_rise.eligibility is Eligibility.PROHIBITED
     assert [g.id for g in height.high_rise.grounds if g.met is False] == [failing]
-    assert "Table III" in height.high_rise.note
-    low = height.band_for(15.0)
-    assert low.kind is BandKind.NON_HIGH_RISE and low.modelled is False
-    assert low.setback_m is None and low.status is Provenance.UNVERIFIED
-    # no limit stands in for the prohibition by saying "anything under 21 m"
-    assert not [lim for lim in height.limits if lim.max_m == height.high_rise_from_m.value]
+    assert "Table III" in height.high_rise.note and "permits nothing below it" in (
+        height.high_rise.note)
+    high = [b for b in height.bands if b.kind is BandKind.HIGH_RISE]
+    assert {height.band_permission(b) for b in high} == {Eligibility.PROHIBITED}
+    low = [b for b in height.bands if b.kind is BandKind.NON_HIGH_RISE]
+    assert low and all(b.modelled and b.measure is HeightMeasure.HEIGHT_ABOVE_STILT for b in low)
+    permissible = height.permissible_non_high_rise()
+    assert permissible is not None and permissible.up_to_m < height.high_rise_from_m.value
     env = envelope(site, rules)
-    assert [b.kind for b in env.bands] == [BandKind.NON_HIGH_RISE]
-    assert env.bands[0].modelled is False and env.bands[0].buildable == []
+    assert BandKind.HIGH_RISE not in {b.kind for b in env.bands}
+    assert [b.kind for b in env.bands] == [BandKind.NON_HIGH_RISE] * len(low)
 
 
-def test_a_road_too_narrow_for_a_high_rise_passes_no_lower_height_either():
+def test_a_30_ft_road_takes_a_block_of_15_m_and_not_one_above_it_and_a_small_plot_stops_at_18_m():
+    """9.14 m is over Table II's 9 m and under the 12 m that anything above 15 m asks; a plot of
+    1,800 m² on a 12.19 m road meets every line of its row, and 18 m itself is not reached."""
+    _, narrow = _variant("small_plot", road_ft=30)
+    assert narrow.height.permissible_non_high_rise().up_to_m == 15.0
+    _, small = _variant("small_plot", boundary=box(0, 0, 40, 45), net=box(0, 0, 40, 45))
+    top = small.height.permissible_non_high_rise()
+    assert (top.up_to_m, top.up_to_inclusive) == (18.0, False)
+
+
+def test_a_road_too_narrow_for_a_high_rise_serves_nothing_from_21_m_and_leaves_the_rest_to_bands():
     _, rules = _variant("small_plot", road_ft=30)
     road = next(lim for lim in rules.height.limits if lim.id == "table_iv_road")
-    assert road.bound is LimitBound.NOT_EVALUATED and "Table III" in road.reason
-    assert road.evaluate(15.0) is Status.UNVERIFIED
+    assert (road.bound, road.max_m, road.inclusive) == (LimitBound.BOUNDED, 21.0, False)
+    assert road.evaluate(15.0) is Status.PASS and road.evaluate(21.0) is Status.FAIL
 
 
 def test_eligibility_is_unverified_while_a_ground_is_not_settled():
@@ -647,8 +663,11 @@ def test_a_band_says_whether_its_heights_may_stand_here_and_the_highest_that_may
     prohibited = HeightRules.model_validate(data)
     assert prohibited.band_permission(prohibited.band_for(24.0)) is Eligibility.PROHIBITED
     assert prohibited.band_permission(prohibited.band_for(5.0)) is Eligibility.ALLOWED
-    unmodelled = load("rectangle", "ResolvedRules").height  # Table III not encoded there
-    assert unmodelled.permissible_non_high_rise() is None
+    data = height.model_dump(mode="json")  # Table III not encoded: one band, not modelled
+    data["bands"] = [LOW | {"above_m": 0.0, "up_to_m": 21.0, "up_to_inclusive": False,
+                            "modelled": False}] + [b for b in data["bands"]
+                                                   if b["kind"] == "HIGH_RISE"]
+    assert HeightRules.model_validate(data).permissible_non_high_rise() is None
 
 
 @pytest.mark.parametrize(("band", "message"), [
@@ -681,8 +700,9 @@ def test_pathways_and_table_iii_planting_have_a_place():
 
     assert RoadKind.PATHWAY in ROAD_KINDS.values()
     rules = load("rectangle", "ResolvedRules")
-    assert rules.circulation.pathway_width_m is None  # carried once the resolver reads 8(l)
-    assert rules.green_strip.frontage_m is None and rules.green_strip.periphery_m is None
+    assert rules.circulation.pathway_width_m.value == 6.0  # rule 8(l), p.15
+    assert (rules.green_strip.frontage_m.value, rules.green_strip.periphery_m.value) == (1.0, 1.0)
+    assert rules.green_strip.periphery_above_sqm.value == 300.0  # rule 5(f), p.10
     envelope = BandEnvelope(above_m=0.0, up_to_m=7.0, kind="NON_HIGH_RISE", setback_m=3.0,
                             front_setback_m=4.0, permission="UNVERIFIED")
     assert envelope.permission is Eligibility.UNVERIFIED
