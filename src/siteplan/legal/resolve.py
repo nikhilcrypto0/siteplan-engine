@@ -264,10 +264,9 @@ def _plot_ground(site: CanonicalSiteModel) -> EligibilityGround:
     land surrendered is unsettled rather than refused."""
     own = site.ownership
     net, minimum = own.net_sqm, rules.MIN_HIGH_RISE_PLOT_SQM
-    met = net.value >= minimum
     surrendered = any(d.kind is DeductionKind.SURRENDER for d in own.deductions)
-    near = (not met and surrendered
-            and net.value >= minimum * (1 - rules.ROAD_WIDENING_SHORTFALL_ALLOWANCE))
+    found = rules.high_rise_plot_met(net.value, surrendered)  # the validator reads it the same
+    met, near = found is True, found is None
     return EligibilityGround(
         id="plot_size", met=met, measured=f"net plot {net.value:,.0f} m²",
         required=f"at least {minimum:,.0f} m²"
