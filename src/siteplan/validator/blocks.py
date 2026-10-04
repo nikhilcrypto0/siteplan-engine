@@ -97,7 +97,7 @@ def _stopped(cls: HeightClass, what: str) -> Cell | None:
     if cls.state == "unmodelled":
         asked = (f"the {what} its band asks ({cls.table})" if cls.table
                  else f"the {what} its height asks")
-        return Cell(Status.NOT_CHECKED, f"{cls.height_m:.2f} m: {cls.label}", asked,
+        return Cell(Status.NOT_CHECKED, f"{cls.height_text}: {cls.label}", asked,
                     TABLE_III_NOTE)
     return None
 
@@ -112,7 +112,7 @@ def height_class_checks(ctx: Context) -> list[Check]:
         for reading in ctx.stilt_readings:
             cls = (_classes(ctx, reading) or {}).get(t.name)
             if cls is not None:
-                parts.append(f"{cls.height_m:.2f} m, {cls.label}, if the stilt is {reading}")
+                parts.append(f"{cls.height_text}, {cls.label}, if the stilt is {reading}")
         out.append(plain(
             Family.HEIGHT, f"Height class: {t.name}", Status.INFO,
             f"{t.physical_height_m:.2f} m physical (stilt included); rule height "
@@ -433,18 +433,17 @@ def _gap_asked(ca: HeightClass, cb: HeightClass) -> str:
     return f"the gap their bands ask ({tables})" if tables else "the gap their heights ask"
 
 
-def gap_cell(ca: HeightClass, cb: HeightClass, ha: float, hb: float, spacing: str,
-             gap: float) -> Cell:
+def gap_cell(ca: HeightClass, cb: HeightClass, spacing: str, gap: float) -> Cell:
     """The gap between two blocks on the figures `gap_sources` names. Two blocks below the
     high-rise height are held to the tallest block's side setback in terms (rule 5(xiii)), which
     the cell quotes; every other pair is judged under the reading of mixed-height spacing."""
-    need, why = required_gap(ca, cb, ha, hb, spacing)
+    need, why = required_gap(ca, cb, spacing)
     shown = f"{gap:.2f} m"
     if why == "unmodelled":
         return Cell(Status.NOT_CHECKED, shown, _gap_asked(ca, cb), TABLE_III_NOTE)
     if why == "unknown":
         return unknown_reading(MIXED_HEIGHT_SPACING, spacing)
-    sources = gap_sources(ca, cb, ha, hb, spacing)
+    sources = gap_sources(ca, cb, spacing)
     low_low = not (ca.high_rise or cb.high_rise)
     suffix = (" (the tallest block's side setback)" if low_low else
               " (the mean of the two blocks' gaps, each keeping its own half)"
@@ -481,8 +480,7 @@ def spacing_checks(ctx: Context) -> list[Check]:
             classes = _classes(ctx, reading)
             if classes is None:
                 return unknown_reading(STILT_IN_RULE_HEIGHT, reading)
-            return gap_cell(classes[a.name], classes[b.name], a.rule_height_m(reading),
-                            b.rule_height_m(reading), spacing, gap)
+            return gap_cell(classes[a.name], classes[b.name], spacing, gap)
 
         out.append(check_from(
             run(ctx.rules, [STILT_IN_RULE_HEIGHT, MIXED_HEIGHT_SPACING], cell),
@@ -523,9 +521,7 @@ def pair_measures(ctx: Context) -> list[PairMeasure]:
             if classes is None:
                 continue
             for spacing in ctx.rules.readings(MIXED_HEIGHT_SPACING):
-                need, _ = required_gap(classes[a.name], classes[b.name],
-                                       a.rule_height_m(reading), b.rule_height_m(reading),
-                                       spacing)
+                need, _ = required_gap(classes[a.name], classes[b.name], spacing)
                 if need is not None:
                     needs.append(need)
         out.append(PairMeasure(a=a.name, b=b.name, gap_m=pair_gap(a, b),

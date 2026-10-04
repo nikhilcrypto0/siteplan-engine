@@ -17,23 +17,37 @@ from validator_helpers import Inputs, set_floors, tower
 
 from siteplan.contracts import CandidateLayout, ResolvedRules
 from siteplan.contracts.common import Provenance
-from siteplan.contracts.resolved_rules import ALL, MIXED_HEIGHT_SPACING, Band, BandKind
+from siteplan.contracts.resolved_rules import (
+    ALL,
+    MIXED_HEIGHT_SPACING,
+    Band,
+    BandKind,
+    Eligibility,
+    HeightMeasure,
+)
 
 MADE_UP = "MADE-UP band for a test, not Table III"
 
 
 def low_band(above: float, up_to: float, *, setback: float | None, road: float | None,
-             gap: float | None = None, up_to_inclusive: bool = True, modelled: bool = True,
-             status: Provenance = Provenance.ASSUMED_FOR_TEST) -> Band:
-    """A band below the high-rise height. A `gap` left out is left unset: the validator then reads
-    the setback as the gap, as it always has."""
+             gap: float | None = None, front: float | None = None, up_to_inclusive: bool = True,
+             modelled: bool = True, status: Provenance = Provenance.ASSUMED_FOR_TEST,
+             permission: Eligibility = Eligibility.ALLOWED, note: str = "",
+             strip: float | None = None, strip_sides: str = "ALL",
+             measure: HeightMeasure = HeightMeasure.HEIGHT_ABOVE_STILT) -> Band:
+    """A band below the high-rise height, read on the height above the stilt as Table III's are
+    (rule 5(c)). A `gap` left out is left unset: the validator then reads the setback as the gap,
+    as it always has. A `front` left out is the setback: the same all round."""
     return Band(above_m=above, up_to_m=up_to, up_to_inclusive=up_to_inclusive,
-                kind=BandKind.NON_HIGH_RISE, modelled=modelled, min_road_m=road, setback_m=setback,
-                gap_m=gap, clause=f"{MADE_UP}: {above:g}-{up_to:g} m", status=status)
+                kind=BandKind.NON_HIGH_RISE, measure=measure, modelled=modelled,
+                min_road_m=road, setback_m=setback, front_setback_m=front, gap_m=gap,
+                permission=permission, permission_note=note, green_strip_m=strip,
+                green_strip_sides=strip_sides, clause=f"{MADE_UP}: {above:g}-{up_to:g} m",
+                status=status)
 
 
-# Heights are rule heights. Made-up figures, chosen apart from each other and from the order's so a
-# mix-up cannot pass by luck.
+# Heights are heights above the stilt. Made-up figures, chosen apart from each other and from the
+# order's so a mix-up cannot pass by luck.
 LOW_A = low_band(0, 12, setback=2.3, gap=3.1, road=0.0)  # asks no road
 LOW_B = low_band(12, 18, setback=3.7, gap=4.3, road=8.4)
 LOW_C = low_band(18, 21, setback=4.9, gap=5.7, road=11.6, up_to_inclusive=False)

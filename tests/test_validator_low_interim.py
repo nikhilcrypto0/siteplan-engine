@@ -7,8 +7,6 @@ changes and what the test becomes once it does.
      house). Needs `Band.front_setback_m`.
   2. A block up to 12 m on no road is UNVERIFIED  (validator/roads.py `_pathway_check`). Needs
      `RoadKind.PATHWAY` and `CirculationRules.pathway_width_m`.
-  3. A low block's band is picked on the reading's own height  (validator/context.py `build`).
-     Needs a way to say Table III leaves the stilt out always (rule 5(c)), e.g. `Band.stilt_counts`.
   4. Fire access below 21 m is NOT_CHECKED and names rule 15(a)(i)  (validator/fire.py
      `low_block_check`). Needs a figure for what 15(a)(i) asks of a fire vehicle's access.
 
@@ -17,14 +15,11 @@ Every band is MADE UP (tests/validator_low_helpers.py).
 
 from validator_helpers import check, fixture, move_tower, set_floors, status
 from validator_low_helpers import (
-    access_road_of,
     all_low,
-    floors_of,
     with_low_bands,
 )
 
 from siteplan.contracts.common import Status
-from siteplan.contracts.resolved_rules import STILT_IN_RULE_HEIGHT
 
 TEST_CLASS = "normative"
 Z = Status
@@ -80,35 +75,6 @@ def test_interim_a_block_up_to_12_m_on_no_road_is_unverified_because_a_pathway_i
     assert c.finding.status is Z.UNVERIFIED
     assert c.finding.measured == "on no road: T3; a pathway is not drawn"
     assert "cannot show a pathway" in c.finding.note
-
-
-# --- 3. the stilt ------------------------------------------------------------------------------
-
-
-def test_interim_a_low_blocks_band_is_picked_on_the_readings_own_height():
-    """INTERIM (flips with contracts 1.2, a way to say rule 5(c) leaves the stilt out of Table
-    III's height always). 4 floors on a 3 m stilt are 15 m if the stilt counts (band B) and 12 m
-    if not (band A), so the block is judged on a different band under each reading: stricter when
-    the stilt counts, never a false PASS, and UNVERIFIED where the two readings part.
-
-    Once Table III leaves the stilt out: both readings give 12 m, band A, and every result below
-    is the same under both readings (a block 3.51 m from the boundary passes band A's 2.3 m)."""
-    stilted = with_low_bands(floors_of(fixture("rectangle"), T1=4, T2=4, T3=4))
-    report = stilted.report()
-    t1 = next(t for t in report.recomputed.towers if t.name == "T1")
-    assert t1.rule_height_m_by_reading == {COUNTED: 15.0, NOT_COUNTED: 12.0}
-    assert t1.band_by_reading == {COUNTED: "non-high-rise 12-18 m",
-                                  NOT_COUNTED: "non-high-rise 0-12 m"}
-    assert t1.required_setback_m_by_reading == {COUNTED: 3.7, NOT_COUNTED: 2.3}
-
-    near = stilted.edited(lambda c: move_tower(c, "T2", -7.5, 0.0))  # 3.51 m from the boundary
-    setback = check(near.report(), "All-round setback: T2")
-    assert setback.finding.status is Z.UNVERIFIED
-    assert setback.by_reading[STILT_IN_RULE_HEIGHT] == {COUNTED: Z.FAIL, NOT_COUNTED: Z.PASS}
-
-    narrow = check(access_road_of(stilted, 8.0).report(), "Abutting road width (for T1)")
-    assert narrow.finding.status is Z.UNVERIFIED  # band B asks 8.4 m, band A none
-    assert narrow.by_reading[STILT_IN_RULE_HEIGHT] == {COUNTED: Z.FAIL, NOT_COUNTED: Z.PASS}
 
 
 # --- 4. fire access ----------------------------------------------------------------------------

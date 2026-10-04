@@ -174,6 +174,41 @@ def test_a_block_that_is_high_rise_only_if_the_stilt_counts_is_judged_on_both_ta
     assert near.by_reading[STILT_IN_RULE_HEIGHT] == {COUNTED: Z.FAIL, NOT_COUNTED: Z.PASS}
 
 
+def test_table_iii_is_read_on_the_height_above_the_stilt_whatever_the_reading():
+    """Rule 5(c) leaves the stilt out of Table III's heights. 4 floors on a 3 m stilt are 15 m of
+    rule height if the stilt counts and 12 m if not, and either way 12 m above the stilt: band A,
+    2.3 m, which no road need serve. The class (high-rise or not) still follows the reading, and
+    the report says which height the band was read on."""
+    stilted = with_low_bands(floors_of(fixture("rectangle"), T1=4, T2=4, T3=4))
+    report = stilted.report()
+    t1 = next(t for t in report.recomputed.towers if t.name == "T1")
+    assert t1.rule_height_m_by_reading == {COUNTED: 15.0, NOT_COUNTED: 12.0}
+    assert set(t1.band_by_reading.values()) == {"non-high-rise 0-12 m"}
+    assert t1.required_setback_m_by_reading == {COUNTED: 2.3, NOT_COUNTED: 2.3}
+    height_class = check(report, "Height class: T1")
+    assert "15.00 m, read as 12.00 m above the stilt" in height_class.finding.measured
+    near = check(stilted.edited(_t2_to_the_west(7.5)).report(), "All-round setback: T2")
+    assert near.finding.status is Z.PASS  # 3.51 m keeps band A's 2.3 m under both readings
+    assert near.by_reading[STILT_IN_RULE_HEIGHT] == {COUNTED: Z.PASS, NOT_COUNTED: Z.PASS}
+    too_near = check(stilted.edited(_t2_to_the_west(9.5)).report(), "All-round setback: T2")
+    assert too_near.finding.status is Z.FAIL  # 1.51 m, under both
+    narrow = check(access_road_of(stilted, 5.0).report(), "Abutting road width (for T1)")
+    assert narrow.finding.status is Z.PASS and narrow.finding.required == ">= 0 m"
+
+
+def test_a_block_below_21_m_with_the_stilt_counted_is_not_shifted_a_row_by_it():
+    """5 floors on a 3 m stilt: 18 m of rule height when the stilt counts, which would be band B,
+    and 15 m above the stilt, which is band B too; 6 floors are 21 m (a high-rise) when it counts
+    and band B (18 m above the stilt) when it does not. The row follows the height above the
+    stilt, so a block 3 m taller on its stilt is not held to a row 3 m higher."""
+    five = with_low_bands(floors_of(fixture("rectangle"), T2=5))
+    t2 = next(t for t in five.report().recomputed.towers if t.name == "T2")
+    assert set(t2.band_by_reading.values()) == {"non-high-rise 12-18 m"}
+    four = with_low_bands(floors_of(fixture("rectangle"), T2=4))  # 12 m above the stilt
+    t2 = next(t for t in four.report().recomputed.towers if t.name == "T2")
+    assert set(t2.band_by_reading.values()) == {"non-high-rise 0-12 m"}
+
+
 # --- gaps between blocks -----------------------------------------------------------------------
 
 

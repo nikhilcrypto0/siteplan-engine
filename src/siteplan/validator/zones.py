@@ -51,8 +51,7 @@ def gap_zones(ctx: Context, reading: str, spacing: str) -> list[tuple[str, BaseG
     for a, b in combinations(ctx.towers, 2):
         if a.name not in classes or b.name not in classes:
             continue
-        need, why = required_gap(classes[a.name], classes[b.name], a.rule_height_m(reading),
-                                 b.rule_height_m(reading), spacing)
+        need, why = required_gap(classes[a.name], classes[b.name], spacing)
         if need is None:
             continue
         blocks = union_of_all([a.footprint, b.footprint])
