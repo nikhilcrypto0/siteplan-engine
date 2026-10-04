@@ -42,11 +42,12 @@ class Zones:
     """What stands on or is kept off the ground, for one arrangement of blocks and roads."""
 
     blocks: BaseGeometry
-    nogo: BaseGeometry  # within the corner reach of a block
+    nogo: BaseGeometry  # within the corner reach of a high-rise
     roads: BaseGeometry
     lanes: BaseGeometry  # fire hardstanding
     gap_zones: BaseGeometry
     turns: BaseGeometry = EMPTY  # the ground the tender sweeps turning along the ring road
+    pathways: BaseGeometry = EMPTY  # rule 8(l)'s, to blocks below 12 m: paved, never open space
 
 
 def gap_zones(footprints: Sequence[Polygon], gaps_m: Sequence[float]) -> BaseGeometry:
@@ -66,17 +67,22 @@ def gap_zones(footprints: Sequence[Polygon], gaps_m: Sequence[float]) -> BaseGeo
 
 
 def zones_of(footprints: Sequence[Polygon], gaps_m: Sequence[float], roads: BaseGeometry,
-             lanes: BaseGeometry, reach_m: float, turns: BaseGeometry = EMPTY) -> Zones:
+             lanes: BaseGeometry, reach_m: float, turns: BaseGeometry = EMPTY,
+             high_rise: Sequence[bool] | None = None, pathways: BaseGeometry = EMPTY) -> Zones:
+    """`high_rise` says which blocks are high-rises (all of them when not given): only round those
+    does the tender need room to turn at the corners."""
+    high = [f for i, f in enumerate(footprints) if high_rise is None or high_rise[i]]
     return Zones(unary_union(list(footprints)) if footprints else EMPTY,
-                 unary_union([grow(f, reach_m) for f in footprints]) if footprints else EMPTY,
-                 roads, lanes, gap_zones(footprints, gaps_m), turns)
+                 unary_union([grow(f, reach_m) for f in high]) if high else EMPTY,
+                 roads, lanes, gap_zones(footprints, gaps_m), turns, pathways)
 
 
 def open_ground(plot: Plot, land: Land, zones: Zones) -> BaseGeometry:
     """Ground open space may stand on: the plot less the setback zone, the planted strip, the clear
-    ground round the blocks, the roads and lanes, and the gaps between blocks."""
+    ground round the high-rises, the roads, pathways and lanes, and the gaps between blocks."""
     taken = [g for g in (land.zone, land.strip, zones.nogo, zones.roads, zones.lanes,
-                         zones.gap_zones, zones.blocks, zones.turns) if not g.is_empty]
+                         zones.gap_zones, zones.blocks, zones.turns, zones.pathways)
+             if not g.is_empty]
     return plot.net.difference(unary_union(taken)) if taken else plot.net
 
 

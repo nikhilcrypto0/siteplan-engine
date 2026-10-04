@@ -11,7 +11,7 @@ as the claim that lost, not as two uses of one square metre.
 from __future__ import annotations
 
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from shapely import affinity
 from shapely.geometry import Polygon
@@ -87,8 +87,12 @@ def _sorted_standing(standing: Sequence[Standing]) -> list[Standing]:
     return sorted(standing, key=lambda s: (s.column, s.y0))
 
 
-def named_placements(standing: Sequence[Standing], frame: Frame) -> list[Placement]:
-    return [placement_of(s, f"T{i}", frame) for i, s in enumerate(_sorted_standing(standing), 1)]
+def named_placements(standing: Sequence[Standing], frame: Frame,
+                     fringe: Sequence[Standing] = ()) -> list[Placement]:
+    """The blocks of the columns, named T1, T2... column by column, then the blocks on the ground
+    the ring road leaves, in the order they were placed."""
+    ordered = [*_sorted_standing(standing), *fringe]
+    return [placement_of(s, f"T{i}", frame) for i, s in enumerate(ordered, 1)]
 
 
 # --- The ledger -------------------------------------------------------------------------------
@@ -143,6 +147,7 @@ class Laid:
     cars: dict[str, int]
     zones: Zones
     land: Land
+    pathways: list[BaseGeometry] = field(default_factory=list)  # rule 8(l), to blocks up to 12 m
 
 
 def build_candidate(laid: Laid, *, site: CanonicalSiteModel, rules: ResolvedRules,
@@ -203,6 +208,8 @@ def _roads(laid: Laid, q: Quantities) -> list[dict]:
     roads.append({"id": "approach", "kind": "APPROACH",
                   "shapes": shapes_from(laid.entrance.approach),
                   "declared_width_m": laid.entrance.width_m, "tags": ["FIRE_ACCESS"]})
+    roads += [{"id": f"pathway-{i}", "kind": "PATHWAY", "shapes": shapes_from(p),
+               "declared_width_m": q.pathway_m} for i, p in enumerate(laid.pathways, 1)]
     return [r for r in roads if r["shapes"]]
 
 
@@ -221,6 +228,8 @@ def _claims(laid: Laid, plot: Plot, q: Quantities
     for i, street in enumerate(laid.streets, 1):
         claims[PhysicalUse.ROAD].append((f"street-{i} INTERNAL", street, fire))
     claims[PhysicalUse.ROAD].append(("approach APPROACH", laid.entrance.approach, fire))
+    for i, pathway in enumerate(laid.pathways, 1):
+        claims[PhysicalUse.ROAD].append((f"pathway-{i} PATHWAY", pathway, []))
     if not laid.lanes.is_empty:
         claims[PhysicalUse.FIRE_HARDSTANDING].append(("fire lanes", laid.lanes, fire))
     pockets = unary_union(laid.pockets) if laid.pockets else EMPTY
@@ -273,23 +282,25 @@ def counted_open_space(laid: Laid, rules: ResolvedRules, q: Quantities, plot: Pl
     """What of the open space drawn counts under the strictest reading of the stilt the rules carry:
     beyond the setback zone and the gaps between blocks as that reading's heights make them, and
     outside the clear ground round the blocks it calls high-rise. A layout built for one reading
-    claims no more than counts under them all."""
+    claims no more than counts under them all. Each block's band is the contract's lookup
+    (`HeightRules.band_for_block`: Table III's row on the height above the stilt), and the zone is
+    taken all round at the larger of a band's front and side figures, never less than counts."""
     pockets = unary_union(laid.pockets) if laid.pockets else EMPTY
     if pockets.is_empty:
         return 0.0
     footprints = [p.footprint for p in laid.placements]
     built = unary_union([*footprints, *([laid.club] if laid.club is not None else []),
-                         laid.zones.roads, laid.zones.lanes, *laid.ramps])
+                         laid.zones.roads, laid.zones.lanes, *laid.ramps, *laid.pathways])
     least = pockets.area
+    stilt = q.stilt_m if q.has_stilt else 0.0
     for reading in rules.readings(STILT_IN_RULE_HEIGHT):
         setbacks, gaps, high = [], [], []
         for p in laid.placements:
-            floors = p.standing.choice.cls.floors
-            physical = (q.stilt_m if q.has_stilt else 0.0) + floors * q.floor_m
-            height = physical if reading == "counted" else floors * q.floor_m
-            band = rules.height.band_for(height)
+            above = p.standing.choice.cls.floors * q.floor_m
+            height = above + (stilt if reading == "counted" else 0.0)
+            band = rules.height.band_for_block(above, stilt, stilt_counted=reading == "counted")
             usable = band is not None and band.modelled and band.setback_m is not None
-            setbacks.append(band.setback_m if usable else 0.0)
+            setbacks.append(max(band.setback_m, band.front_m) if usable else 0.0)
             gaps.append((band.gap_m if band.gap_m is not None else band.setback_m) if usable
                         else 0.0)
             if height >= rules.height.high_rise_from_m.value - 1e-6:
@@ -329,8 +340,9 @@ def _layers(laid: Laid, rules: ResolvedRules, envelope: BuildableEnvelope, plot:
     taken = {layer["id"] for layer in layers}
     lane = rules.fire.clear_width_m.value
     footprints = [p.footprint for p in laid.placements]
-    bands = unary_union([f.buffer(lane, join_style="mitre") for f in footprints]).difference(
-        unary_union(footprints)) if footprints else EMPTY
+    high = [p.footprint for p in laid.placements if p.standing.choice.cls.high_rise]
+    bands = unary_union([f.buffer(lane, join_style="mitre") for f in high]).difference(
+        unary_union(footprints)) if high else EMPTY
     added = [
         _layer("block gaps", LayerKind.BLOCK_GAP, laid.zones.gap_zones, rules.spacing.clause,
                applies_to="each pair of blocks closer than the gap to both",

@@ -169,15 +169,18 @@ def test_both_readings_of_circulation_inside_the_setback_are_searched():
 
 def _floors_setback(made: Made, candidate, tower) -> float:
     """The deepest setback the tower asks under the readings of the stilt the candidate was built
-    for (what the validator's zone is measured from, under each of them)."""
+    for (what the validator's zone is measured from, under each of them): its band by the
+    contract's own lookup, Table III's row on the height above the stilt for a block below 21 m,
+    and the larger of the band's front and side figures."""
     rule = made.rules.height
     floors = tower.floors_above_stilt
     stilt, floor = (made.brief.firm_standards.stilt_height_m.value,
                     made.brief.firm_standards.floor_to_floor_m.value)
-    heights = {"counted": stilt + floors * floor, "not_counted": floors * floor}
     built_for = candidate.interpretation_basis[STILT_IN_RULE_HEIGHT]
-    chosen = list(heights) if built_for == ALL else [built_for]
-    return max(rule.band_for(heights[reading]).setback_m for reading in chosen)
+    chosen = ["counted", "not_counted"] if built_for == ALL else [built_for]
+    bands = [rule.band_for_block(floors * floor, stilt, stilt_counted=reading == "counted")
+             for reading in chosen]
+    return max(max(band.setback_m, band.front_m) for band in bands)
 
 
 # --- Mixed heights ----------------------------------------------------------------------------
@@ -308,10 +311,13 @@ def test_the_time_budget_stops_the_search_and_says_so():
 
 
 def test_where_no_floor_count_is_open_it_says_so_and_lays_nothing():
+    """A 30 ft road serves no high-rise, and a group development scheme on it may take no block
+    below 21 m either (rule 8(b) asks 12 m): no count is open at all."""
     narrow = made_up(box(0, 0, 200, 120), road_ft=30)
     proposal = strategy().propose(narrow.context())
     assert proposal.candidates == ()
-    assert any("no high-rise floor count open" in n for n in proposal.notes)
+    assert any("no floor count open" in n and "neither a high-rise nor a block below 21 m" in n
+               for n in proposal.notes)
 
 
 def test_a_site_under_the_group_development_size_is_said_to_be_unsupported():

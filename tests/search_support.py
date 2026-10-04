@@ -3,7 +3,8 @@
 Nothing here comes from a client drawing. A site is a polygon with an access road on one side; the
 rules, the envelope and the brief are made from it exactly as the pipeline makes them
 (`siteplan.legal`, `siteplan.adapters`), and the kit is composed from the contract fixtures' own
-flats (`optimizer_support.LIBRARY`): blocks 31 to 82 m long and 24.13 m deep.
+flats (`optimizer_support.LIBRARY`): blocks 31 to 82 m long and 24.13 m deep. A made-up slim block,
+13.13 m deep, may be added to it (`slim_prototype`).
 """
 
 from __future__ import annotations
@@ -11,14 +12,22 @@ from __future__ import annotations
 from dataclasses import dataclass
 from functools import cache
 
+from contract_fixtures.build import L_PLOT
 from contract_fixtures.build import project as fixture_project
 from optimizer_support import LIBRARY
-from shapely.geometry import LineString, Polygon
+from shapely.geometry import LineString, Polygon, box
+from shapely.ops import unary_union
 
 from siteplan.adapters import brief as make_brief
 from siteplan.adapters import site_model
-from siteplan.contracts import BuildableEnvelope, CanonicalSiteModel, DesignBrief, ResolvedRules
-from siteplan.contracts.common import Line, Provenance, Sourced, SourceKind
+from siteplan.contracts import (
+    BuildableEnvelope,
+    CanonicalSiteModel,
+    DesignBrief,
+    ResolvedRules,
+    TowerPrototype,
+)
+from siteplan.contracts.common import Line, Provenance, Shape, Sourced, SourceKind, shapes_from
 from siteplan.contracts.design_brief import DesignMargins, HeightIntent, HeightMode
 from siteplan.legal.envelope import envelope as make_envelope
 from siteplan.legal.resolve import resolve
@@ -85,9 +94,47 @@ def made_up(net: Polygon, *, side: str | None = "S", road_ft: float = 60, nala: 
 @cache
 def rectangle() -> Made:
     """200 x 120 m, the access road along the south side."""
-    from shapely.geometry import box  # noqa: PLC0415
-
     return made_up(box(0, 0, 200, 120))
+
+
+def slim_prototype() -> TowerPrototype:
+    """A made-up single-loaded block: a 2BHK and a 3BHK on one side of a corridor, a core between
+    them, 31 m long and 13.13 m deep, two flats a floor. Made up for the tests, as narrow as a
+    block that a 24 m arm can take between Table III's 5 m side setbacks."""
+    corridor, flat = 2.13, 11.0
+    half = (flat + corridor) / 2
+    x = (-15.5, -5.5, 2.0, 15.5)  # 2BHK, the 7.5 m core, 3BHK along the block
+    flats = [(box(x[0], corridor - half, x[1], half), "2A", "2BHK", 1190),
+             (box(x[2], corridor - half, x[3], half), "3A", "3BHK", 1690)]
+    footprint, core = box(x[0], -half, x[3], half), box(x[1], -half, x[2], half)
+    own = sum(f.area for f, *_ in flats)
+    passage = footprint.difference(core).difference(unary_union([f for f, *_ in flats]))
+    return TowerPrototype(
+        id="slim-2", family="SINGLE_CORE_SMALL", source_kind=SourceKind.ENGINE_DEFAULT,
+        source="made-up test prototype", footprint=Shape.from_shapely(footprint), length_m=31.0,
+        depth_m=2 * half, cores=1,
+        modules=[{"id": f"m{i}", "type_id": t, "category": c, "shape": Shape.from_shapely(f),
+                  "saleable_sqft": s} for i, (f, t, c, s) in enumerate(flats, 1)],
+        core_zones=[{"shape": Shape.from_shapely(core), "lifts": 1, "stairs": 1}],
+        corridor=shapes_from(passage),
+        per_floor={"flats": 2, "flats_by_type": {"2BHK": 1, "3BHK": 1},
+                   "gross_floor_sqm": footprint.area, "flats_own_sqm": own,
+                   "common_core_sqm": footprint.area - own, "saleable_sqft": 1190 + 1690})
+
+
+@cache
+def l_plot(slim: bool = False) -> Made:
+    """The contract fixtures' L-plot (150 x 100 m with a 24 m arm, 60 m long, at its north-west
+    corner), the access road along the south side; with the slim block in the kit when asked."""
+    made = made_up(L_PLOT)
+    return Made(made.site, made.rules, made.brief, made.envelope,
+                (*made.kit, slim_prototype()) if slim else made.kit)
+
+
+@cache
+def proposal_on_the_l_plot(slim: bool = False):
+    """The quick search on the L-plot, once for each kit: the tests that only read it share it."""
+    return strategy().propose(l_plot(slim).context())
 
 
 def strategy(limits: Limits = FAST, **given) -> FullSearchStrategy:
