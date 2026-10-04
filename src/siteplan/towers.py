@@ -5,6 +5,10 @@ towers' land at a pitch of one tower depth plus one corridor. The corridor betwe
 is a 9 m internal road (rule 8(m)) running from the loop road to the loop road, so it is never a
 dead end, and it is at least the Table IV gap between the blocks. Towers in one column are also
 a corridor apart, which keeps the fire band round each of them clear.
+
+The placement here (`place`, `build_tower`, `corridor_roads`) is LEGACY, not for production
+generation by a language model: kept only for regression comparison. Production generation is
+`siteplan.service` (the full search places prototypes itself; it shares only `orientations`).
 """
 
 from __future__ import annotations
