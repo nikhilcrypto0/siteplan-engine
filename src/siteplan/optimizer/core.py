@@ -32,7 +32,7 @@ from siteplan.contracts import (
     ValidationReport,
 )
 from siteplan.contracts.design_brief import ParetoPoint, UnitsMode
-from siteplan.optimizer.guard import Rejection, guard, inputs_of, why_refused
+from siteplan.optimizer.guard import Rejection, Validated, guard, inputs_of, why_refused
 from siteplan.optimizer.interfaces import Budget, SearchContext, Strategy, Validator
 from siteplan.optimizer.objective import measure
 from siteplan.optimizer.pareto import Scored, select
@@ -56,6 +56,9 @@ class OptimizerResult:
     budget_exhausted: bool  # a strategy stopped, or was not started, because the budget ran out
     considered: int  # candidates the strategies proposed
     seed: int
+    # Every proposal the guard passed, as proposed (no scores or tag written), with the report the
+    # guard judged it by, in the order proposed: the pool the alternatives were chosen from.
+    proposed: tuple[Validated, ...] = ()
 
 
 def optimize(site: CanonicalSiteModel, rules: ResolvedRules, brief: DesignBrief,
@@ -105,7 +108,8 @@ def optimize(site: CanonicalSiteModel, rules: ResolvedRules, brief: DesignBrief,
         alternatives=tuple(alternatives),
         front=tuple(s.candidate.candidate_id for s in selection.front),
         rejected=tuple(rejected), unfilled=selection.unfilled, notes=tuple(notes),
-        budget_exhausted=exhausted, considered=len(candidates), seed=seed)
+        budget_exhausted=exhausted, considered=len(candidates), seed=seed,
+        proposed=guarded.passed)
 
 
 def _annotated(scored: Scored, point: ParetoPoint | None) -> CandidateLayout:
