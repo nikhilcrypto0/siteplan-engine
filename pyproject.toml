@@ -17,6 +17,7 @@ dependencies = [
 [project.scripts]
 siteplan = "siteplan.cli:main"
 siteplan-mcp = "siteplan.mcp_server:main"
+siteplan-agent-tools = "siteplan.agent.server:main"
 
 [dependency-groups]
 dev = [
