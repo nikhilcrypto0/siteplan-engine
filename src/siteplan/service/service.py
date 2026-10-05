@@ -6,9 +6,14 @@ What the host sets, and a caller never can: the workspace folder (the only one r
 outside it is refused with one message, the reason going to the log), the folder runs are
 written to, the Approver (asked of the person, never answered by the caller of an operation),
 and the mode (BLIND refuses the firm's finished plans as blind.py does; DEBUG allows them and
-every output says DEBUG RUN). The firm's standards come from the workspace file only
-(`intake.load_defaults`), or are the engine's defaults labelled ASSUMED_FOR_TEST. The readings
-of the law and the project's own test mode are as the project file states them.
+every output says DEBUG RUN). The firm's standards are the approved project file's, else the
+workspace file's, else the engine's defaults labelled ASSUMED_FOR_TEST (standards.py); no request
+carries one, and the search is given only prototypes within the firm's longest block. The
+readings of the law and the project's own test mode are as the project file states them.
+
+Every approval asked of the person is written down before anything it allows runs (audit.py):
+in `out/approvals.jsonl`, refused ones included, and in the run's record; validate_candidate and
+export_candidate return the run's approvals.
 
 What a caller may do, each with one request model and one response model (models.py):
 start_project, open_project, resolve_rules, inspect_envelope, list_prototypes, propose_layouts,
@@ -40,7 +45,9 @@ from siteplan.blind import blind_leaks, finished_values
 from siteplan.contracts import (
     CandidateLayout,
     CanonicalSiteModel,
+    DesignBrief,
     ResolvedRules,
+    TowerPrototype,
     ValidationReport,
     digest,
 )
@@ -56,12 +63,15 @@ from siteplan.optimizer.guard import inputs_of, why_refused
 from siteplan.optimizer.search import FullSearchStrategy
 from siteplan.project import Project
 from siteplan.prototypes import compose_library
-from siteplan.service import brief, judge, render, report, store, summaries
+from siteplan.service import audit, brief, judge, render, report, standards, store, summaries
 from siteplan.service.models import (
     RUN_ID_CHARS,
+    ApprovalRecord,
+    Asked,
     CompareCandidates,
     CompareResult,
     CompareRow,
+    Decision,
     EnvelopeResult,
     ExportCandidate,
     ExportResult,
@@ -85,6 +95,7 @@ from siteplan.service.models import (
     ValidateCandidate,
     ValidationResult,
 )
+from siteplan.service.standards import Standard
 from siteplan.service.store import Inputs, RunRecord, StoreError
 from siteplan.sheet import SheetInfo
 from siteplan.site_amenities import AmenityLibrary
@@ -102,11 +113,15 @@ NEXT_PROPOSED = ("Call validate_candidate for a candidate to see every check; ex
                  "is asked to approve.")
 NOT_APPROVED = ("The architect did not approve, so nothing was run. Do not ask again unless the "
                 "architect asks.")
+NO_PROTOTYPE = ("No prototype of the firm's flat library is within the firm's longest block, so "
+                "there is nothing to search with: the architect or the firm decides which gives.")
 
 
 class Approver(Protocol):
     """Asks the person. The host wires it to a channel only a person can answer; it is never
-    answered by whoever called the operation."""
+    answered by whoever called the operation. A channel that can tell a rejection from no answer
+    also has `decide(title, lines) -> Decision` (approvers.py), which the service asks instead,
+    so the audit records which it was."""
 
     def approve(self, title: str, lines: list[str]) -> bool: ...
 
@@ -114,10 +129,14 @@ class Approver(Protocol):
 @dataclass(frozen=True)
 class _Loaded:
     file: str
-    project: Project  # with the workspace's standards
+    project: Project  # with the firm's standards resolved into it (standards.apply)
     survey: Path | None
     defaults: WorkspaceDefaults
+    standards: tuple[Standard, ...]  # each with where it came from
     finished: tuple[str, ...]  # inputs taken from the firm's finished plan
+
+    def standard(self, key: str) -> Standard:
+        return next(s for s in self.standards if s.key == key)
 
 
 def _expect(request: object, model: type) -> None:
@@ -187,7 +206,7 @@ class Service:
             except NetPlotUnknown as error:
                 stop = str(error)
         facts = summaries.site_facts(site)
-        standards = brief.standard_facts(loaded.project, loaded.defaults)
+        firm = [s.fact() for s in loaded.standards]
         finished = list(dict.fromkeys([*loaded.finished, *_finished_in(site)]))
         return ProjectResult(
             project_name=loaded.project.name, project_file=loaded.file,
@@ -195,8 +214,8 @@ class Service:
             run_kind=Mode.DEBUG if finished else Mode.BLIND,
             finished_plan_inputs=finished, site=facts,
             readings_stated=selections, conservative_parking=when_open is WhenOpen.CONSERVATIVE,
-            firm_standards=standards, brief=brief.brief_facts(loaded.project),
-            unresolved=summaries.unresolved_facts(facts + standards),
+            firm_standards=firm, brief=brief.brief_facts(loaded.project),
+            unresolved=summaries.unresolved_facts(facts + firm),
             net_plot_placed=site.net_plot is not None, stop=stop)
 
     def resolve_rules(self, request: ResolveRules) -> RulesResult:
@@ -221,7 +240,9 @@ class Service:
         return summaries.envelope_result(loaded.project.name, site, env)
 
     def list_prototypes(self, request: ListPrototypes) -> PrototypesResult:
-        """The tower prototypes composed from the firm's flat library for the project's mix."""
+        """The tower prototypes composed from the firm's flat library for the project's mix:
+        those within the firm's longest block, which the search may use, and those it leaves
+        out."""
         _expect(request, ListPrototypes)
         loaded = self._load(ProjectFiles(project_file=request.project_file))
         layout = loaded.project.layout
@@ -229,12 +250,15 @@ class Service:
             raise ServiceError("The project file has no unit mix; start it through the intake "
                                "flow (siteplan start).")
         library = self._library(loaded.defaults)
-        kit = compose_library(library, layout.unit_mix, source_kind=SourceKind.FIRM_STANDARD)
+        longest = loaded.standard("max_tower_length_m")
+        kit, left_out = standards.within_longest_block(
+            compose_library(library, layout.unit_mix, source_kind=SourceKind.FIRM_STANDARD),
+            longest.value, longest.source)
         return PrototypesResult(
             flat_library=loaded.defaults.flat_library,
-            flat_library_status=loaded.defaults.standard_status("flat_library"),
+            flat_library_status=loaded.standard("flat_library").status,
             unit_mix=dict(layout.unit_mix),
-            prototypes=[summaries.prototype_out(p) for p in kit])
+            prototypes=[summaries.prototype_out(p) for p in kit], left_out=left_out)
 
     def propose_layouts(self, request: ProposeLayouts) -> ProposeResult:
         """Ask the architect to approve the interpreted request, then run the full search and
@@ -254,13 +278,20 @@ class Service:
             return ProposeResult(status=ProposeStatus.STOPPED, next=str(error))
         design = brief.design(loaded.project, loaded.defaults, self._amenities(loaded.defaults),
                               request.intent, words)
-        kit = compose_library(library, design.program.unit_mix.value,
-                              source_kind=SourceKind.FIRM_STANDARD)
+        kit, left_out = _kit(library, design)
+        if not kit:
+            return ProposeResult(status=ProposeStatus.STOPPED, notes=left_out, next=NO_PROTOTYPE)
+        title = f"Generate layout options for {loaded.project.name}"
         lines = brief.approval_lines(
             debug=self._mode is Mode.DEBUG, finished=loaded.finished, project_file=loaded.file,
-            survey=loaded.survey, project=loaded.project, defaults=loaded.defaults, site=site,
-            brief=design, intent=request.intent)
-        if not self._ask(f"Generate layout options for {loaded.project.name}", lines):
+            survey=loaded.survey, project=loaded.project, standards=loaded.standards,
+            left_out=left_out, site=site, brief=design, intent=request.intent)
+        run_id = uuid.uuid4().hex[:RUN_ID_CHARS]
+        decision = self._decision(title, lines)
+        approved = decision is Decision.APPROVED
+        asked = self._audit(Asked.PROPOSAL, title, lines, decision,
+                            run_id=run_id if approved else None)
+        if not approved:
             return ProposeResult(status=ProposeStatus.NOT_APPROVED, next=NOT_APPROVED)
         # The full search alone, and no validator handed in: the core judges with
         # siteplan.validator, and every alternative is judged again below.
@@ -269,13 +300,13 @@ class Service:
         inputs = Inputs(site, rules, design, env)
         judged, rejected = _judged_again(inputs, result)
         record = RunRecord(
-            run_id=uuid.uuid4().hex[:RUN_ID_CHARS], mode=self._mode,
+            run_id=run_id, mode=self._mode,
             project_name=loaded.project.name, project_file=loaded.file,
             survey_file=loaded.survey.name if loaded.survey else None,
-            sheet=loaded.project.sheet.model_dump(), approved=lines,
+            sheet=loaded.project.sheet.model_dump(), approved=lines, approvals=(asked,),
             candidates=[store.StoredCandidate(candidate_id=c.candidate_id, digest=digest(c),
                                               point=c.pareto_tag) for c, _ in judged],
-            notes=list(result.notes), rejected=rejected,
+            notes=[*left_out, *result.notes], rejected=rejected,
             unfilled=[f"{point.value}: {why}" for point, why in result.unfilled])
         record = store.write_run(self._out / record.run_id, record, inputs, judged)
         log.info("run %s: approved and run, %d candidates", record.run_id, len(judged))
@@ -305,7 +336,8 @@ class Service:
             program=[summaries.check_out(c) for c in judged.report.program],
             next="It cannot be exported." if refusals else (
                 "export_candidate needs exactly these UNVERIFIED items acknowledged, and the "
-                "architect's approval." if items else "It can be exported as it stands."))
+                "architect's approval." if items else "It can be exported as it stands."),
+            approvals=record.approvals)
 
     def compare_candidates(self, request: CompareCandidates) -> CompareResult:
         """The candidates side by side, from the stored metrics and reports, and what the
@@ -336,7 +368,8 @@ class Service:
                 "debug_run": debug, "legal_verdict": judged.report.verdict.legal}
         reasons = judge.refusals(judged)
         if reasons:
-            return ExportResult(status=ExportStatus.REFUSED, reasons=reasons, **base)
+            return ExportResult(status=ExportStatus.REFUSED, reasons=reasons,
+                                approvals=record.approvals, **base)
         items = judge.unresolved_items(judged.report)
         names = [item.item for item in items]
         given = set(request.acknowledged_unresolved)
@@ -347,20 +380,32 @@ class Service:
                 [f"acknowledged but not UNVERIFIED in the report judged now: "
                  f"{'; '.join(extra)}"] if extra else [])
             return ExportResult(status=ExportStatus.REFUSED, reasons=reasons, unverified=names,
-                                **base)
-        if items and not self._ask(
-                f"Export {request.candidate_id} with {len(items)} unresolved item(s)",
-                [f"Run {record.run_id}, candidate {request.candidate_id}: legal verdict "
-                 f"{judged.report.verdict.legal.value}, judged again now",
-                 *(f"UNVERIFIED {item.item}: {item.measured}" for item in items),
-                 "Every drawing and the report will list these items."]):
-            return ExportResult(status=ExportStatus.NOT_APPROVED, unverified=names,
-                                reasons=["The architect did not approve exporting with these "
-                                         "items unresolved; nothing was drawn."], **base)
+                                approvals=record.approvals, **base)
+        if items:
+            # Asked, and written down, before anything is drawn. What the entry holds is the
+            # stored run's and the fresh report's own: the items as the report names them.
+            candidate_id = judged.candidate.candidate_id
+            title = f"Export {candidate_id} with {len(items)} unresolved item(s)"
+            lines = [f"Run {record.run_id}, candidate {candidate_id}: legal verdict "
+                     f"{judged.report.verdict.legal.value}, judged again now",
+                     *(f"UNVERIFIED {item.item}: {item.measured}" for item in items),
+                     "Every drawing and the report will list these items."]
+            decision = self._decision(title, lines)
+            record = self._append(record, self._audit(
+                Asked.EXPORT, title, lines, decision, run_id=record.run_id,
+                candidate_id=candidate_id, acknowledged=names,
+                report_digest=digest(judged.report)))
+            if decision is not Decision.APPROVED:
+                return ExportResult(
+                    status=ExportStatus.NOT_APPROVED, unverified=names,
+                    reasons=[f"The architect did not approve exporting with these items "
+                             f"unresolved ({decision.value}); nothing was drawn."],
+                    approvals=record.approvals, **base)
         files = _write_outputs(self._out, judged, items, debug)
         log.info("run %s: exported %s", record.run_id, request.candidate_id)
         return ExportResult(status=ExportStatus.EXPORTED, unverified=names,
-                            files=[str(p) for p in files], not_produced=[PDF_GAP], **base)
+                            files=[str(p) for p in files], not_produced=[PDF_GAP],
+                            approvals=record.approvals, **base)
 
     # --- the workspace ---------------------------------------------------------------------
 
@@ -420,8 +465,9 @@ class Service:
         finished += [f"project value '{key}' comes from the firm's finished plan"
                      for key in finished_values(json.loads(text))]
         self._refuse_finished(finished)
-        return _Loaded(request.project_file, _with_standards(project, defaults), survey,
-                       defaults, tuple(finished))
+        resolved = standards.resolve(project, defaults, request.project_file)
+        return _Loaded(request.project_file, standards.apply(project, resolved), survey,
+                       defaults, resolved, tuple(finished))
 
     def _site(self, loaded: _Loaded) -> CanonicalSiteModel:
         try:
@@ -436,12 +482,41 @@ class Service:
         selections, when_open = readings_of(project)
         return resolve(site, selections=selections, when_open=when_open)
 
-    def _ask(self, title: str, lines: list[str]) -> bool:
+    def _decision(self, title: str, lines: list[str]) -> Decision:
+        """The person's answer on the host's channel: what the channel says came back when it
+        can say (`decide`), else its yes or no. Only APPROVED is a yes."""
         try:
-            return self._approver.approve(title, list(lines)) is True
+            decide = getattr(self._approver, "decide", None)
+            if callable(decide):
+                return Decision(decide(title, list(lines)))
+            return (Decision.APPROVED if self._approver.approve(title, list(lines)) is True
+                    else Decision.REJECTED)
         except Exception as error:  # a channel that fails is a no, never a yes
             log.warning("approval could not be asked: %s", error)
-            return False
+            return Decision.CHANNEL_FAILURE
+
+    def _audit(self, asked: Asked, title: str, lines: list[str], decision: Decision,
+               **context) -> ApprovalRecord:
+        """The approval written to the service's log, before anything it allows runs: one that
+        cannot be written down allows nothing."""
+        entry = audit.entry(asked, title, lines, decision, type(self._approver).__name__,
+                            **context)
+        try:
+            audit.append(self._out, entry)
+        except OSError as error:
+            log.warning("the approval could not be logged: %s", error)
+            raise ServiceError("The approval could not be recorded, so nothing was run or "
+                               "drawn.") from None
+        log.info("approval asked (%s): %s", asked.value, decision.value)
+        return entry
+
+    def _append(self, record: RunRecord, entry: ApprovalRecord) -> RunRecord:
+        try:
+            return store.append_approval(self._out, record.run_id, entry)
+        except (StoreError, ValidationError, ValueError, OSError) as error:
+            log.warning("run %s: the approval could not be recorded: %s", record.run_id, error)
+            raise ServiceError(f"The approval could not be recorded in run {record.run_id}; "
+                               "nothing was drawn.") from None
 
     # --- stored runs -----------------------------------------------------------------------
 
@@ -468,27 +543,14 @@ class Service:
         return Mode.DEBUG in (record.mode, self._mode)
 
 
-def _with_standards(project: Project, defaults: WorkspaceDefaults) -> Project:
-    """The project with the firm's standards as the workspace sets them now, each recorded as
-    intake records it: the firm's (its file's status) or the engine's default."""
-    if project.layout is None:
-        return project
-    values = {key: getattr(defaults, key) for key in brief.STANDARDS}
-    try:
-        layout = type(project.layout).model_validate(
-            {**project.layout.model_dump(exclude_unset=True), **values})
-    except ValidationError as error:
-        raise ServiceError(f"The workspace's standards are not valid ({_fields(error)}).") \
-            from None
-    sources, status = dict(project.sources), dict(project.status)
-    kinds = dict(project.source_kinds)
-    for key in brief.STANDARDS:
-        firms = key in defaults.model_fields_set
-        sources[key] = "firm standard (workspace)" if firms else "engine default"
-        status[key] = defaults.standard_status(key)
-        kinds[key] = SourceKind.FIRM_STANDARD if firms else SourceKind.ENGINE_DEFAULT
-    return project.model_copy(update={"layout": layout, "sources": sources, "status": status,
-                                      "source_kinds": kinds})
+def _kit(library: FlatLibrary, design: DesignBrief) -> tuple[list[TowerPrototype], list[str]]:
+    """The prototypes the search is given: the firm's flats composed for the brief's mix, none
+    longer than the firm's longest block the brief holds; and those left out, with why."""
+    composed = compose_library(library, design.program.unit_mix.value,
+                               source_kind=SourceKind.FIRM_STANDARD)
+    longest = design.firm_standards.max_tower_length_m
+    return standards.within_longest_block(composed, longest.value if longest else None,
+                                          longest.source if longest else "")
 
 
 def _judged_again(inputs: Inputs, result: OptimizerResult

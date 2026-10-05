@@ -11,6 +11,7 @@ from shapely import affinity
 from shapely.geometry import Polygon, box
 from validator_helpers import check, fixture, rectangle, select, set_floors, shape, status
 
+from siteplan import geometry
 from siteplan.contracts.accounting import PhysicalUse
 from siteplan.contracts.candidate import SiteProgram
 from siteplan.contracts.common import Shape, Status
@@ -59,9 +60,9 @@ def test_a_bearing_is_the_nearest_of_the_eight_compass_points(bearing, name):
 
 
 def test_the_angle_between_two_bearings_goes_the_short_way_round():
-    assert zones.angle_between(350.0, 10.0) == pytest.approx(20.0)
-    assert zones.angle_between(10.0, 350.0) == pytest.approx(20.0)
-    assert zones.angle_between(0.0, 180.0) == pytest.approx(180.0)
+    assert geometry.angle_between(350.0, 10.0) == pytest.approx(20.0)
+    assert geometry.angle_between(10.0, 350.0) == pytest.approx(20.0)
+    assert geometry.angle_between(0.0, 180.0) == pytest.approx(180.0)
 
 
 def test_every_stretch_of_a_boundary_faces_away_from_the_plot():

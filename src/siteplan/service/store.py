@@ -1,6 +1,6 @@
 """A run on disk: the contracts it was made from, its candidates, and the record that ties them.
 
-    out/<run_id>/run.json               the record: mode, inputs, digests, candidates, approval
+    out/<run_id>/run.json               the record: mode, inputs, digests, candidates, approvals
     out/<run_id>/site.json              CanonicalSiteModel
     out/<run_id>/rules.json             ResolvedRules
     out/<run_id>/brief.json             DesignBrief
@@ -10,12 +10,15 @@
 
 Nothing read back is trusted: `load` parses every contract again and `reference_problems` holds
 each candidate's references (site, rules, brief, envelope) against the digests of the files as
-they are now, and against the digests recorded when the run was made.
+they are now, and against the digests recorded when the run was made. The record's approvals are
+the audit (audit.py): the proposal's entry is written with the run, and an export's is appended
+(`append_approval`); no entry is ever changed or removed.
 """
 
 from __future__ import annotations
 
 import logging
+import os
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -30,7 +33,7 @@ from siteplan.contracts import (
     ValidationReport,
     digest,
 )
-from siteplan.service.models import Mode
+from siteplan.service.models import ApprovalRecord, Mode
 
 log = logging.getLogger("siteplan.service")
 
@@ -61,6 +64,7 @@ class RunRecord(BaseModel):
     survey_file: str | None = None
     sheet: dict[str, str] = {}  # the title block's client, architect ... from the project file
     approved: list[str] = []  # the lines the architect approved
+    approvals: tuple[ApprovalRecord, ...] = ()  # every approval asked on the run, oldest first
     digests: dict[str, str] = {}  # of the stored inputs, written with them
     candidates: list[StoredCandidate] = []
     notes: list[str] = []
@@ -108,6 +112,18 @@ def read_record(out: Path, run_id: str) -> RunRecord:
     if not path.is_file():
         raise StoreError(f"There is no run '{run_id}'.")
     return RunRecord.model_validate_json(path.read_text())
+
+
+def append_approval(out: Path, run_id: str, entry: ApprovalRecord) -> RunRecord:
+    """The run's record as it stands on disk, with one more approval at the end, written whole
+    (a new file put in the old one's place, so a record is never left half written)."""
+    record = read_record(out, run_id)
+    record = record.model_copy(update={"approvals": (*record.approvals, entry)})
+    path = out / run_id / RECORD
+    partial = path.with_name(f".{RECORD}.partial")
+    partial.write_text(record.model_dump_json(indent=1))
+    os.replace(partial, path)
+    return record
 
 
 def _parse(path: Path, model: type[BaseModel]):

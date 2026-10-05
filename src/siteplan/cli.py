@@ -15,6 +15,7 @@ from pydantic import ValidationError
 from siteplan import rules
 from siteplan.area_statement import render
 from siteplan.checks import Status, check_site
+from siteplan.contracts.design_brief import ParetoPoint
 from siteplan.dxf_export import write_survey_dxf
 from siteplan.intake import WORKSPACE_FILE, load_defaults
 from siteplan.library import FlatLibrary
@@ -309,6 +310,85 @@ def _cmd_envelope(args: argparse.Namespace) -> int:
     return 0
 
 
+def _service_for(args: argparse.Namespace):
+    """The production service as the architect runs it by hand: their workspace, the approval
+    channel they chose (the page, or this terminal; no default, no fallback), BLIND unless
+    --debug asks for a regression run on the firm's finished plan."""
+    from siteplan.service import Mode, Service, approver_for
+
+    approver = approver_for(args.approval)
+    mode = Mode.DEBUG if args.debug else Mode.BLIND
+    return Service(Path(args.workspace), Path(args.out), approver, mode=mode), approver
+
+
+def _mix(text: str | None) -> dict[str, float]:
+    """'2BHK=70,3BHK=30' as the percentages the brief writes."""
+    if not text:
+        return {}
+    pairs = [part.split("=", 1) for part in text.split(",") if part.strip()]
+    if any(len(pair) != 2 for pair in pairs):
+        raise ValueError(f"--mix takes CATEGORY=PERCENT pairs, e.g. 2BHK=70,3BHK=30: {text}")
+    return {name.strip(): float(value) for name, value in pairs}
+
+
+def _cmd_propose(args: argparse.Namespace) -> int:
+    """Layout options from the new pipeline: the full search, every option judged by the
+    independent validator, run only once the architect approves the request."""
+    from siteplan.service import HeightChoice, Intent, ProposeLayouts, ProposeStatus
+
+    text = args.brief if args.brief is not None else Path(args.brief_file).read_text()
+    height = (HeightChoice.FLOORS_ABOVE_STILT if args.floors is not None
+              else HeightChoice.MOST_THE_RULES_ALLOW if args.most else None)
+    intent = Intent(height=height, floors_above_stilt=args.floors,
+                    unit_mix_percent=_mix(args.mix), massing=args.massing)
+    service, approver = _service_for(args)
+    try:
+        result = service.propose_layouts(ProposeLayouts(
+            project_file=args.project, survey_file=args.survey, brief=text, intent=intent))
+    finally:
+        approver.close()
+    print(result.status.value + (f": run {result.run_id}" if result.run_id else ""))
+    for c in result.candidates:
+        floors = "/".join(str(f) for f in sorted(set(c.floors)))
+        print(f"  {c.candidate_id}: {c.strategy}, {c.towers} towers, stilt + {floors}, "
+              f"{c.flats} flats, {c.saleable_sqft:,.0f} sft saleable; legal "
+              f"{c.legal_verdict.value}, {len(c.unverified)} UNVERIFIED")
+    for line in [*result.missing, *result.notes]:
+        print(f"  - {line}")
+    if result.next:
+        print(result.next)
+    return 0 if result.status is ProposeStatus.PROPOSED else 1
+
+
+def _cmd_export_candidate(args: argparse.Namespace) -> int:
+    """Draw one candidate of a run once the independent validator, run again, lets it out: a
+    legal FAIL never; UNVERIFIED items only when the architect accepts them on the command line
+    and then approves them on the chosen channel."""
+    from siteplan.service import ExportCandidate, ExportStatus, ValidateCandidate
+
+    service, approver = _service_for(args)
+    try:
+        checked = service.validate_candidate(ValidateCandidate(
+            run_id=args.run_id, candidate_id=args.candidate_id))
+        items = [item.item for item in checked.unverified]
+        print(f"legal {checked.legal_verdict.value}; {len(items)} UNVERIFIED")
+        for line in [*checked.refusals, *items]:
+            print(f"  - {line}")
+        if items and not checked.refusals and not args.accept_unresolved:
+            print("Not exported: these UNVERIFIED items stay open. Rerun with "
+                  "--accept-unresolved to put them to the architect for approval.")
+            return 1
+        result = service.export_candidate(ExportCandidate(
+            run_id=args.run_id, candidate_id=args.candidate_id,
+            acknowledged_unresolved=items if args.accept_unresolved else []))
+    finally:
+        approver.close()
+    print(result.status.value)
+    for line in [*result.reasons, *result.files, *result.not_produced]:
+        print(f"  - {line}")
+    return 0 if result.status is ExportStatus.EXPORTED else 1
+
+
 def _cmd_floors(args: argparse.Namespace) -> int:
     from siteplan.max_floors import describe, max_floors
     from siteplan.roads import roads_near
@@ -596,6 +676,41 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("cases", help="Check the rules against real schemes (sanctioned plans).")
     p.add_argument("folder", nargs="?", default="fixtures/cases", help="Folder of *.case.json")
     p.set_defaults(run=_cmd_cases)
+
+    def service_args(p: argparse.ArgumentParser) -> None:
+        p.add_argument("--workspace", required=True, help="The only folder the service reads: "
+                       "the survey, the project, the firm's libraries, siteplan.workspace.json")
+        p.add_argument("--out", default="out/service", help="Where runs and drawings go")
+        p.add_argument("--approval", required=True, choices=("page", "terminal"),
+                       help="How the architect is asked: the approval page in the browser, or "
+                       "this terminal. Chosen here; one never falls back to the other")
+        p.add_argument("--debug", action="store_true", help="A regression run on the firm's "
+                       "finished plan; every output then says DEBUG RUN")
+
+    p = sub.add_parser("propose", help="Layout options from the new pipeline (the full search, "
+                       "each judged by the independent validator), once the architect approves.")
+    p.add_argument("project", help="The project file in the workspace (`siteplan start` made it)")
+    p.add_argument("--survey", help="The survey in the workspace: roads, water, the strip")
+    brief = p.add_mutually_exclusive_group(required=True)
+    brief.add_argument("--brief", help="The architect's brief, in their own words")
+    brief.add_argument("--brief-file", help="A text file holding the brief")
+    height = p.add_mutually_exclusive_group()
+    height.add_argument("--most", action="store_true", help="The most floors the rules allow")
+    height.add_argument("--floors", type=int, help="Floors above the stilt, as the brief writes")
+    p.add_argument("--mix", help="The unit mix the brief writes, e.g. 2BHK=70,3BHK=30")
+    p.add_argument("--massing", choices=[point.value for point in ParetoPoint],
+                   help="The alternative the architect wants shown first")
+    service_args(p)
+    p.set_defaults(run=_cmd_propose)
+
+    p = sub.add_parser("export-candidate", help="Draw one candidate of a run: judged again by the "
+                       "independent validator; FAIL never, UNVERIFIED only once approved.")
+    p.add_argument("run_id", metavar="RUN", help="The run `siteplan propose` printed")
+    p.add_argument("candidate_id", metavar="CANDIDATE", help="One of the run's candidates")
+    p.add_argument("--accept-unresolved", action="store_true", help="Put the candidate's "
+                   "UNVERIFIED items to the architect for approval")
+    service_args(p)
+    p.set_defaults(run=_cmd_export_candidate)
 
     p = sub.add_parser("assist", help="Plain-English brief -> approved request -> layouts.")
     p.add_argument("project")
