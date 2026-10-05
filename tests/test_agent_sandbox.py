@@ -146,8 +146,8 @@ def test_the_model_process_cannot_write_the_workspace_or_out(toured):
 
 def test_the_model_process_cannot_read_the_workspace_out_or_anything_else(toured):
     _held(toured.probes("read the project file", "list the workspace", "look up the project",
-                        "list out", "read a file elsewhere", "read the approvals log",
-                        "read run "))
+                        "list out", "read a file elsewhere", "look up a file elsewhere",
+                        "read the approvals log", "read run "))
     assert len(toured.probes("read run ")) == 1  # the run the host wrote was tried too
 
 
@@ -157,8 +157,15 @@ def test_the_model_process_cannot_load_or_start_the_engine_the_legacy_server_or_
     assert [Path(p).name for p in programs] == ["siteplan", "siteplan-mcp", "sh"]
     _held(toured.probes(*(f"start {p}" for p in programs)))
     _held(toured.probes(*(f"become {p}" for p in programs)))
-    _held(toured.probes("load siteplan.cli", "load siteplan.mcp_server", "load siteplan.service",
-                        "load siteplan.validator"))
+    # The engine's files are not even looked up inside the sandbox (sandbox.lookups), so Python
+    # finds no such module, although every one of them is there.
+    loads = toured.probes("load siteplan.cli", "load siteplan.mcp_server",
+                          "load siteplan.service", "load siteplan.validator")
+    for probe in loads:
+        assert probe["outcome"] == "not found", probe
+        assert probe["detail"].startswith("ModuleNotFoundError"), probe
+    assert all((sandbox.PACKAGE / f).exists() for f in ("cli.py", "mcp_server.py", "service",
+                                                        "validator"))
     if MAC:  # Seatbelt also forbids any child process: not even another interpreter
         _held(toured.probes("start another interpreter"))
     assert toured.report["finished"]  # no exec replaced the process along the way
@@ -328,6 +335,15 @@ def test_the_seatbelt_profile_is_the_policy(tmp_path):
     assert not [r for r in rules if "process-fork" in r]  # denied by default: no child at all
     writes = [r for r in rules if r.startswith("(allow") and "file-write" in r]
     assert writes == [f'(allow file-read* file-write* (subpath "{policy.scratch}"))']
+    # A path is looked up only on the way to what the agent may read or write, never anywhere.
+    assert "(allow file-read-metadata)" not in rules
+    (lookups,) = [r for r in rules if r.startswith("(allow file-read-metadata")]
+    links = [link for link, _ in sandbox._links(policy.interpreter)]
+    ways = dict.fromkeys([*policy.runtime, policy.package, policy.scratch, *links,
+                          Path(os.path.realpath(sys.executable))])
+    assert lookups == ("(allow file-read-metadata "
+                       + " ".join([*(f'(path-ancestors "{p}")' for p in ways),
+                                   *(f'(literal "{p}")' for p in links)]) + ")")
     assert not [r for r in rules if r.startswith("(allow network")]
     ws, out = policy.hidden
     assert rules[-1].startswith("(deny file-read* file-read-data file-read-metadata")
