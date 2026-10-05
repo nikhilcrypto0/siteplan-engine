@@ -4,6 +4,21 @@ A characterization test (tests/manifest.py) pins what the engine produces today.
 only together with a normative replacement test and an entry here: what changed, why, the
 evidence, and the test that now holds the behaviour. Newest first.
 
+## 2026-10-05: the loop offers each tool's schema with its references written out
+
+No characterization test changed; the host's schemas, its checks and the MCP tool list are
+untouched. In the first real run (Qwen3.8-27B on SGLang, `--tool-call-parser qwen3_coder`) Qwen
+wrote `propose_layouts`'s `intent` as the right object, and the host received it as text and
+refused the call three times: the parser types each parameter by its own schema
+(`infer_type_from_json_schema`) and follows no `$ref`, and `intent` was offered as
+`{"$ref": "#/$defs/Intent"}`, the only object parameter of the nine. The loop now offers each
+schema with its local references replaced by the definitions they name (`loop.written_out`), so
+every parameter carries its own type; a reference it cannot write out (recursive, remote or
+missing) leaves the schema as listed. The loop never turns a model's text into an object itself.
+`test_every_parameter_the_model_is_offered_carries_its_own_type` and
+`test_a_reference_that_cannot_be_written_out_leaves_the_schema_as_listed` hold it, and the
+sandbox run test now compares the offered parameters with the written-out schemas.
+
 ## 2026-10-04: the agent loop: a model drives the nine tools from inside the sandbox
 
 No characterization test changed and nothing the engine computes changed: the engine, the

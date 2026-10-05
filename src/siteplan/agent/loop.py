@@ -8,7 +8,8 @@ stdout are the MCP stream to the host, `--events-fd` is the launcher's pipe for 
 and its settings are the one file the launcher left in the scratch folder (settings.HANDOFF).
 
 Each turn sends the model server the conversation and the host's nine tools as OpenAI function
-tools: each name, description and input schema exactly as the host lists them over MCP. Every tool
+tools: each name, description and input schema as the host lists them over MCP, the schema with
+its local references written out so a server's parser sees every parameter's type. Every tool
 call the model makes goes to the host through the harness, once, and its result goes back to the
 model; the run ends at the model's first answer that calls no tool, or at the first limit it
 reaches (settings.Limits), each a stop with its reason and never a warning.
@@ -61,6 +62,7 @@ TRUNCATED = ("\n[TRUNCATED by the agent loop: this tool result is {total:,} char
              "only the first {kept:,} are shown]")
 UNREADABLE = "The tool's reply could not be read; the reason is in the run's record."
 RETRY_PAUSE_S = 1.0  # between a failed model request and its retry, when retries are on
+LOCAL_REF = "#/$defs/"  # how a host schema names one of its own definitions
 ANSWERED, STOPPED, NOT_STARTED = 0, 1, 2  # exit statuses; a signal's is 128 + its number
 
 
@@ -116,10 +118,45 @@ class Run:
 
 def function_tools(offered: list[dict]) -> list[dict]:
     """The host's tools as OpenAI function tools: each name, description and input schema as
-    listed, nothing added and nothing left out."""
+    listed, the schema with its local references written out (`written_out`); nothing added and
+    nothing left out."""
     return [{"type": "function",
              "function": {"name": t["name"], "description": t["description"],
-                          "parameters": t["input_schema"]}} for t in offered]
+                          "parameters": written_out(t["input_schema"])}} for t in offered]
+
+
+class _Unwritable(Exception):
+    """A reference `written_out` cannot replace: recursive, remote, or naming no definition."""
+
+
+def written_out(schema: dict) -> dict:
+    """`schema` with each local `$ref` replaced by the definition it names (its sibling keys
+    kept), so every parameter carries its own `type`. A model server's tool-call parser may type
+    a parameter by its own schema and follow no reference: SGLang's qwen3_coder parser passed
+    `intent` (`{"$ref": "#/$defs/Intent"}`) on as text in the first real run, and the host
+    refused every proposal that carried one. Nothing else changes, and the host still checks
+    each call against its own schema. A reference that cannot be written out leaves the whole
+    schema as listed."""
+    definitions = schema.get("$defs", {})
+
+    def expand(node: Any, inside: frozenset[str]) -> Any:
+        if isinstance(node, list):
+            return [expand(item, inside) for item in node]
+        if not isinstance(node, dict):
+            return node
+        if "$ref" not in node:
+            return {key: expand(value, inside) for key, value in node.items() if key != "$defs"}
+        ref = node["$ref"]
+        name = ref.removeprefix(LOCAL_REF) if isinstance(ref, str) else ref
+        if name == ref or name not in definitions or name in inside:
+            raise _Unwritable(ref)
+        siblings = {key: expand(value, inside) for key, value in node.items() if key != "$ref"}
+        return {**expand(definitions[name], inside | {name}), **siblings}
+
+    try:
+        return expand(schema, frozenset())
+    except _Unwritable:
+        return schema
 
 
 def assistant_message(message: dict, turn: int) -> dict:
