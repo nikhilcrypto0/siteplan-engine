@@ -41,9 +41,16 @@ class Judged:
 
 
 def judge_again(out: Path, record: RunRecord, candidate_id: str) -> Judged:
+    """An alternative the run showed, or a layout its search proposed that it did not show (only
+    through the run's own record of its proposals), judged again from the stored contracts."""
     inputs = store.load_inputs(out, record)
-    candidate = store.load_candidate(out, record, candidate_id)
-    references = store.reference_problems(record, inputs, candidate)
+    if record.shows(candidate_id):
+        candidate = store.load_candidate(out, record, candidate_id)
+        references = store.reference_problems(record, inputs, candidate,
+                                              record.entry(candidate_id).digest)
+    else:
+        candidate, stored = store.load_proposed(out, record, candidate_id)
+        references = store.proposal_problems(record, inputs, candidate_id, candidate, stored)
     report = validator.validate(inputs.site, inputs.rules, inputs.brief, candidate,
                                 inputs.envelope)
     return Judged(record, inputs, candidate, report, tuple(references))
