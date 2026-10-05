@@ -4,6 +4,46 @@ A characterization test (tests/manifest.py) pins what the engine produces today.
 only together with a normative replacement test and an entry here: what changed, why, the
 evidence, and the test that now holds the behaviour. Newest first.
 
+## 2026-10-04: a transport around the ToolHost, and a sandbox for the model process
+
+No characterization test changed and nothing the engine computes changed: outside the new
+`siteplan/agent/` package only `pyproject.toml` (one console script) and the number audit's
+exemptions moved. No model is connected. Each new behaviour is held by a normative test.
+
+- **`siteplan-agent-tools` serves the `ToolHost` over MCP on stdio** (`agent/server.py`). MCP
+  because agent harnesses speak it and the project already depends on its SDK (`mcp<2`); stdio
+  because it opens no listener. The SDK's low-level server lists exactly `ToolHost.tools()` (the
+  nine names, descriptions, input and output schemas) and sends each call to `ToolHost.call`
+  with its arguments as sent. The SDK's own input check is off: with it on, a refused field came
+  back as "Input validation error: ... ('_status' was unexpected)", telling the caller what to
+  change; now every refusal is the host's own sentence and the reason stays in
+  `<out>/logs/agent-tools.log`. The server answers nothing but tools (prompts, resources and
+  logging are "Method not found") and asks the client nothing, so an approval exists only on the
+  page the host opens in the architect's browser. Calls run one at a time, off the event loop.
+  tests/test_agent_transport.py: all nine called through the transport, the listing equal to
+  `ToolHost.tools()`, unknown tools and extra or invalid fields refused in the host's words, the
+  approval token never in a line the model's side received, a proposal run only after the click
+  and nothing run after a rejection, a tower moved into the setback refused at export without
+  the architect being asked, UNVERIFIED exported only with exactly its items and an approval the
+  audit records, and the agent package importing only the service (in `server.py`), the SDK and
+  the standard library.
+- **The model process runs sandboxed, joined to the host only by the stream** (`agent/launch.py`,
+  `agent/sandbox.py`, the model's side `agent/harness.py`). Writes only in a private scratch
+  folder; no read of the workspace, `out` or the engine; no exec but its own interpreter; no
+  network but one port on this machine; a bare environment. macOS: sandbox-exec with a Seatbelt
+  profile over Apple's `system.sb`, verified on this Mac (macOS 27.0.1) from inside a Claude
+  Code session, where a nested profile applied. Probing showed Seatbelt reads a rule on a named
+  operation before a wildcard's and a filtered rule before an unfiltered one, whatever their
+  order: a closing `(deny file-read* ...)` did not take back an earlier `file-read-metadata`
+  allow, so the closing deny names the operations, and the launcher refuses any overlap between
+  what the model may read and the workspace or `out`. Linux: bubblewrap, mounting only what may
+  be read; written and unit-tested, not yet run. A sandbox that cannot be applied, or one that
+  starts and does not hold (`SandboxLeak`), refuses to start, before the host starts.
+  tests/test_agent_sandbox.py: the scripted stand-in (`agent/standin.py`) reaches the nine tools
+  through the launcher, and every write, read, exec, connection and engine import it tries fails
+  with the workspace byte for byte unchanged; a model endpoint opens its port and no other; and
+  each refusal starts nothing.
+
 ## 2026-10-04: engine fallbacks are the engine's; one reading of the road-widening plot shortfall
 
 No characterization test changed. Two corrections to the hardening pass:

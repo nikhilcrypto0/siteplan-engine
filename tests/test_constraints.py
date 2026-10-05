@@ -66,6 +66,13 @@ EXEMPT = {
     "prototypes/__main__": "command-line plumbing for the prototype kit",
     "prototypes/draw": "rendering only: prototypes as DXF blocks",
     "service/render": "rendering only: a candidate as DXF, sheet notes and SVG",
+    # The model-facing transport and the model process's sandbox: no number of a layout.
+    "agent/__init__": "the model-facing package's marker",
+    "agent/server": "transport plumbing: MCP over stdio around the ToolHost",
+    "agent/harness": "transport plumbing: the model's side of the MCP stream",
+    "agent/launch": "process plumbing: starting the host and the sandboxed agent, and waiting",
+    "agent/sandbox": "sandbox plumbing: the model process's policy, a link limit, a timeout",
+    "agent/standin": "a scripted stand-in model that proves the transport and the sandbox",
 }
 # Named numbers in audited modules that are no domain number: an ordering, a unit, a bearing, a
 # message's length. A new number belongs in constraints.py unless it is plainly one of these.
