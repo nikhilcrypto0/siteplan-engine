@@ -421,7 +421,8 @@ AGENT = Path(siteplan.agent.__file__).parent
 # Never from the model's side: the legacy generator and checker, the command line, the legacy MCP
 # server, the assistant, and the optimizer and validator the service runs behind its gates.
 AGENT_BANNED = LEGACY | {"cli", "mcp_server", "assistant", "runner", "optimizer", "validator"}
-THIRD_PARTY = {"mcp", "anyio"}  # the SDK, and the async library it runs on
+# The SDK, the async library it runs on, and the HTTP client it brings (the loop's, to the model).
+THIRD_PARTY = {"mcp", "anyio", "httpx"}
 
 
 def _agent_offences(module: str, names: tuple[str, ...], file: str) -> list[str]:
