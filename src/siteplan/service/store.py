@@ -7,11 +7,16 @@
     out/<run_id>/envelope.json          BuildableEnvelope
     out/<run_id>/candidates/<id>.json   CandidateLayout
     out/<run_id>/reports/<id>.json      ValidationReport made when the run was (never trusted later)
+    out/<run_id>/proposed/candidates/<id>.json   every layout the search proposed, as proposed
+    out/<run_id>/proposed/reports/<id>.json      the report the optimizer's guard judged it by
 
 Nothing read back is trusted: `load` parses every contract again and `reference_problems` holds
 each candidate's references (site, rules, brief, envelope) against the digests of the files as
-they are now, and against the digests recorded when the run was made. The record's approvals are
-the audit (audit.py): the proposal's entry is written with the run, and an export's is appended
+they are now, and against the digests recorded when the run was made. A layout the run did not
+show is reached only through the record's own list of proposals, in a run whose record holds the
+person's approval of the proposal that made it, and only while it and its report still have the
+digests recorded with them (`proposal_problems`). The record's approvals are the audit
+(audit.py): the proposal's entry is written with the run, and an export's is appended
 (`append_approval`); no entry is ever changed or removed.
 """
 
@@ -19,6 +24,7 @@ from __future__ import annotations
 
 import logging
 import os
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -33,11 +39,12 @@ from siteplan.contracts import (
     ValidationReport,
     digest,
 )
-from siteplan.service.models import ApprovalRecord, Mode
+from siteplan.service.models import ApprovalRecord, Asked, Decision, Mode
 
 log = logging.getLogger("siteplan.service")
 
 RECORD = "run.json"
+PROPOSED = "proposed"
 INPUTS = {"site": ("site.json", CanonicalSiteModel), "rules": ("rules.json", ResolvedRules),
           "brief": ("brief.json", DesignBrief), "envelope": ("envelope.json", BuildableEnvelope)}
 
@@ -54,6 +61,20 @@ class StoredCandidate(BaseModel):
     point: str | None = None
 
 
+class ProposedCandidate(BaseModel):
+    """A layout the search proposed and the optimizer's guard passed, shown or not, with what ties
+    it to its files under proposed/."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    candidate_id: str
+    digest: str  # of the candidate as proposed
+    report_digest: str  # of the report the guard judged it by
+    basis: dict[str, str]  # the readings it was laid out for (its interpretation_basis)
+    holds_under_every_reading: bool  # no UNVERIFIED legal check of the report turns on a reading
+    shown: bool  # one of the alternatives in `candidates`
+
+
 class RunRecord(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -66,7 +87,10 @@ class RunRecord(BaseModel):
     approved: list[str] = []  # the lines the architect approved
     approvals: tuple[ApprovalRecord, ...] = ()  # every approval asked on the run, oldest first
     digests: dict[str, str] = {}  # of the stored inputs, written with them
-    candidates: list[StoredCandidate] = []
+    candidates: list[StoredCandidate] = []  # the alternatives shown
+    # Every layout the search proposed that the guard passed, the alternatives among them; none in
+    # a run made before the proposals were kept.
+    proposed_candidates: list[ProposedCandidate] = []
     notes: list[str] = []
     unfilled: list[str] = []
     rejected: list[str] = []
@@ -75,6 +99,22 @@ class RunRecord(BaseModel):
         found = next((c for c in self.candidates if c.candidate_id == candidate_id), None)
         if found is None:
             raise StoreError(f"Run {self.run_id} has no candidate '{candidate_id}'.")
+        return found
+
+    def shows(self, candidate_id: str) -> bool:
+        return any(c.candidate_id == candidate_id for c in self.candidates)
+
+    def proposal(self, candidate_id: str) -> ProposedCandidate:
+        """A layout this run's search proposed: only one the record lists, and only in a run whose
+        record holds the person's approval of the proposal that made it."""
+        found = next((c for c in self.proposed_candidates if c.candidate_id == candidate_id),
+                     None)
+        if found is None:
+            raise StoreError(f"Run {self.run_id} has no candidate '{candidate_id}'.")
+        if not any(a.asked is Asked.PROPOSAL and a.decision is Decision.APPROVED
+                   and a.run_id == self.run_id for a in self.approvals):
+            raise StoreError(f"Run {self.run_id} holds no approved proposal; its proposals "
+                             "cannot be used.")
         return found
 
 
@@ -87,11 +127,14 @@ class Inputs:
 
 
 def write_run(folder: Path, record: RunRecord, inputs: Inputs,
-              judged: list[tuple[CandidateLayout, ValidationReport]]) -> RunRecord:
-    """Write the contracts, each candidate with the report the service made of it, and the record
-    holding every digest."""
+              judged: list[tuple[CandidateLayout, ValidationReport]],
+              proposed: Sequence[tuple[CandidateLayout, ValidationReport]] = ()) -> RunRecord:
+    """Write the contracts, each candidate shown with the report the service made of it, every
+    proposal with the report the guard judged it by, and the record holding every digest."""
     (folder / "candidates").mkdir(parents=True)
     (folder / "reports").mkdir()
+    (folder / PROPOSED / "candidates").mkdir(parents=True)
+    (folder / PROPOSED / "reports").mkdir()
     digests = {}
     for key, (name, _) in INPUTS.items():
         model = getattr(inputs, key)
@@ -101,6 +144,11 @@ def write_run(folder: Path, record: RunRecord, inputs: Inputs,
         (folder / "candidates" / f"{candidate.candidate_id}.json").write_text(
             candidate.model_dump_json(indent=1))
         (folder / "reports" / f"{candidate.candidate_id}.json").write_text(
+            report.model_dump_json(indent=1))
+    for candidate, report in proposed:
+        (folder / PROPOSED / "candidates" / f"{candidate.candidate_id}.json").write_text(
+            candidate.model_dump_json(indent=1))
+        (folder / PROPOSED / "reports" / f"{candidate.candidate_id}.json").write_text(
             report.model_dump_json(indent=1))
     record = record.model_copy(update={"digests": digests})
     (folder / RECORD).write_text(record.model_dump_json(indent=1))
@@ -150,15 +198,25 @@ def load_report(out: Path, record: RunRecord, candidate_id: str) -> ValidationRe
     return _parse(out / record.run_id / "reports" / f"{candidate_id}.json", ValidationReport)
 
 
-def reference_problems(record: RunRecord, inputs: Inputs, candidate: CandidateLayout
-                       ) -> list[str]:
-    """Every reference that does not hold: a contract changed since the run was made, or a
+def load_proposed(out: Path, record: RunRecord, candidate_id: str
+                  ) -> tuple[CandidateLayout, ValidationReport]:
+    """A layout the search proposed, and the report the guard judged it by: only one the record
+    lists (`RunRecord.proposal`)."""
+    record.proposal(candidate_id)
+    folder = out / record.run_id / PROPOSED
+    return (_parse(folder / "candidates" / f"{candidate_id}.json", CandidateLayout),
+            _parse(folder / "reports" / f"{candidate_id}.json", ValidationReport))
+
+
+def reference_problems(record: RunRecord, inputs: Inputs, candidate: CandidateLayout,
+                       recorded: str) -> list[str]:
+    """Every reference that does not hold: a contract changed since the run was made, a
+    candidate that is not the one recorded for the id asked for (`recorded`, its digest), or a
     candidate (or the rules, or the envelope) made for other inputs than the ones stored."""
     now = {key: digest(getattr(inputs, key)) for key in INPUTS}
     found = [f"the stored {INPUTS[key][0]} changed since the run was made (digest {now[key]}, "
              f"recorded {record.digests.get(key)})" for key in INPUTS
              if now[key] != record.digests.get(key)]
-    recorded = record.entry(candidate.candidate_id).digest
     if digest(candidate) != recorded:
         found.append(f"the stored candidate changed since the run was made (digest "
                      f"{digest(candidate)}, recorded {recorded})")
@@ -171,4 +229,16 @@ def reference_problems(record: RunRecord, inputs: Inputs, candidate: CandidateLa
             ("envelope.rules_ref", inputs.envelope.rules_ref, now["rules"]))
     found += [f"{name} is {theirs}, not the stored file's {ours}" for name, theirs, ours in refs
               if theirs != ours]
+    return found
+
+
+def proposal_problems(record: RunRecord, inputs: Inputs, candidate_id: str,
+                      candidate: CandidateLayout, report: ValidationReport) -> list[str]:
+    """`reference_problems` for a layout the run did not show, and its stored report held to the
+    digest recorded with it."""
+    entry = record.proposal(candidate_id)
+    found = reference_problems(record, inputs, candidate, entry.digest)
+    if digest(report) != entry.report_digest:
+        found.append(f"the stored report of the proposal changed since the run was made (digest "
+                     f"{digest(report)}, recorded {entry.report_digest})")
     return found

@@ -59,8 +59,9 @@ from siteplan.legal.resolve import resolve
 from siteplan.legal.site import readings_of, site_from_project
 from siteplan.library import FlatLibrary
 from siteplan.optimizer.core import OptimizerResult, optimize
-from siteplan.optimizer.guard import inputs_of, why_refused
+from siteplan.optimizer.guard import Validated, inputs_of, why_refused
 from siteplan.optimizer.search import FullSearchStrategy
+from siteplan.optimizer.search.verdicts import rests_on
 from siteplan.project import Project
 from siteplan.prototypes import compose_library
 from siteplan.service import audit, brief, judge, render, report, standards, store, summaries
@@ -299,6 +300,7 @@ class Service:
                           prototypes=kit)
         inputs = Inputs(site, rules, design, env)
         judged, rejected = _judged_again(inputs, result)
+        shown = {c.candidate_id for c, _ in judged}
         record = RunRecord(
             run_id=run_id, mode=self._mode,
             project_name=loaded.project.name, project_file=loaded.file,
@@ -306,9 +308,11 @@ class Service:
             sheet=loaded.project.sheet.model_dump(), approved=lines, approvals=(asked,),
             candidates=[store.StoredCandidate(candidate_id=c.candidate_id, digest=digest(c),
                                               point=c.pareto_tag) for c, _ in judged],
+            proposed_candidates=[_proposed(p, shown) for p in result.proposed],
             notes=[*left_out, *result.notes], rejected=rejected,
             unfilled=[f"{point.value}: {why}" for point, why in result.unfilled])
-        record = store.write_run(self._out / record.run_id, record, inputs, judged)
+        record = store.write_run(self._out / record.run_id, record, inputs, judged,
+                                 [(p.candidate, p.report) for p in result.proposed])
         log.info("run %s: approved and run, %d candidates", record.run_id, len(judged))
         return ProposeResult(
             status=ProposeStatus.PROPOSED if judged else ProposeStatus.NOTHING_PROPOSED,
@@ -551,6 +555,18 @@ def _kit(library: FlatLibrary, design: DesignBrief) -> tuple[list[TowerPrototype
     longest = design.firm_standards.max_tower_length_m
     return standards.within_longest_block(composed, longest.value if longest else None,
                                           longest.source if longest else "")
+
+
+def _proposed(proposal: Validated, shown: set[str]) -> store.ProposedCandidate:
+    """A layout the search proposed, as the run keeps it: the digests of it and of the report the
+    guard judged it by, the readings it was laid out for, whether it holds under every reading
+    (as the summaries say it) and whether it is one of the alternatives shown."""
+    candidate, report = proposal.candidate, proposal.report
+    return store.ProposedCandidate(
+        candidate_id=candidate.candidate_id, digest=digest(candidate),
+        report_digest=digest(report), basis=candidate.interpretation_basis,
+        holds_under_every_reading=rests_on(report).holds_under_every_reading,
+        shown=candidate.candidate_id in shown)
 
 
 def _judged_again(inputs: Inputs, result: OptimizerResult
