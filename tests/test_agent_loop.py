@@ -437,13 +437,14 @@ def test_the_model_cannot_reach_the_workspace_files_the_cli_or_the_legacy_server
         refused, ws, tmp_path):
     ran, probed = refused
     listed = ToolHost(ws, tmp_path / "out", _quiet_page()).tools()
-    for body in ran.model.bodies():  # the nine, exactly as the host lists them, nothing else
+    for body in ran.model.bodies():  # the nine as the host lists them, nothing else
         assert [t["type"] for t in body["tools"]] == ["function"] * len(OPERATIONS)
         assert [t["function"]["name"] for t in body["tools"]] == list(OPERATIONS)
         assert [t["function"]["description"] for t in body["tools"]] == [
             t["description"] for t in listed]
         assert [t["function"]["parameters"] for t in body["tools"]] == [
-            t["input_schema"] for t in listed]
+            loop.written_out(t["input_schema"]) for t in listed]
+        assert "$ref" not in json.dumps(body["tools"])
     if not MAC:
         pytest.skip("asking the kernel what a running process may do is macOS's sandbox_check")
     assert probed["sandboxed"] is True
@@ -788,3 +789,43 @@ def test_the_models_message_goes_back_as_its_text_and_tool_calls_only():
             "name": "open_project", "arguments": '{"project_file": "p"}'}}]}
     parts = {"content": [{"type": "text", "text": "a"}, {"type": "text", "text": "b"}]}
     assert loop.assistant_message(parts, 1) == {"role": "assistant", "content": "ab"}
+
+
+def test_every_parameter_the_model_is_offered_carries_its_own_type(ws, tmp_path):
+    # The first real run: SGLang's qwen3_coder parser types a parameter by its own schema and
+    # follows no $ref, so `intent`, offered as {"$ref": "#/$defs/Intent"}, reached the host as
+    # text, and the host refused every proposal that carried one.
+    listed = ToolHost(ws, tmp_path / "out", _quiet_page()).tools()
+    for tool in listed:
+        offered = loop.written_out(tool["input_schema"])
+        assert "$ref" not in json.dumps(offered) and "$defs" not in offered
+        for name, parameter in offered["properties"].items():
+            kinds = [parameter, *parameter.get("anyOf", [])]
+            assert any("type" in kind for kind in kinds), (tool["name"], name)
+    (propose,) = [t["input_schema"] for t in listed if t["name"] == "propose_layouts"]
+    intent = loop.written_out(propose)["properties"]["intent"]
+    assert (intent["type"], intent["additionalProperties"]) == ("object", False)
+    assert set(intent["properties"]) == {"height", "floors_above_stilt", "unit_mix_percent",
+                                         "massing"}
+    assert intent["default"] == propose["properties"]["intent"]["default"]
+    assert intent["properties"]["massing"]["anyOf"][0]["enum"] == [
+        "MAX_YIELD", "BALANCED", "CONVENTIONAL_OPEN_SPACE"]
+    assert "$defs" in propose  # the host's own schema is left as it is
+
+
+def test_a_reference_that_cannot_be_written_out_leaves_the_schema_as_listed():
+    node = {"type": "object", "properties": {"next": {"$ref": "#/$defs/Node"}}}
+    looped = {"$defs": {"Node": node}, "type": "object",
+              "properties": {"head": {"$ref": "#/$defs/Node"}}}
+    remote = {"type": "object", "properties": {"a": {"$ref": "https://example.com/a.json"}}}
+    missing = {"type": "object", "properties": {"a": {"$ref": "#/$defs/Absent"}}}
+    for schema in (looped, remote, missing):
+        assert loop.written_out(schema) is schema
+    kind = {"enum": ["X", "Y"], "type": "string"}
+    nested = {"$defs": {"Kind": kind, "Box": {"type": "object",
+                                              "properties": {"kind": {"$ref": "#/$defs/Kind"}}}},
+              "type": "object",
+              "properties": {"box": {"$ref": "#/$defs/Box", "default": {}, "title": "the box"}}}
+    assert loop.written_out(nested) == {
+        "type": "object", "properties": {"box": {
+            "type": "object", "properties": {"kind": kind}, "default": {}, "title": "the box"}}}
