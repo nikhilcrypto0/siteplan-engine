@@ -17,18 +17,10 @@ from shapely.geometry.base import BaseGeometry
 from shapely.geometry.polygon import orient
 
 from siteplan.contracts.common import Side
+from siteplan.geometry import COMPASS_DEG, faces
 from siteplan.validator.context import Context
 from siteplan.validator.measure import required_gap
 from siteplan.validator.shapes import mitred, union_of_all
-
-COMPASS_DEG = {"N": 0, "NE": 45, "E": 90, "SE": 135, "S": 180, "SW": 225, "W": 270, "NW": 315}
-FRONT_SECTOR_DEG = 45  # a boundary edge faces a side when its outward normal is within this
-# A side is a label, the nearest of eight compass points to where the road really lies, so a
-# diagonal label (SW) may stand for a road facing the south or the west edge squarely: those are
-# exactly 45 degrees off it, a knife-edge that a plot turned a hair would fall off. A diagonal
-# label reaches half a compass step further.
-DIAGONAL_SLOP_DEG = 22.5
-
 
 DEPTH_EPS_M = 1e-9  # two setbacks this close are one figure
 
@@ -169,11 +161,6 @@ def compass_name(bearing_deg: float) -> str:
     return list(COMPASS_DEG)[round((bearing_deg % 360) / 45) % 8]
 
 
-def angle_between(a_deg: float, b_deg: float) -> float:
-    """The smaller angle between two bearings, in degrees."""
-    return abs((a_deg - b_deg + 180) % 360 - 180)
-
-
 def boundary_edges(net: Polygon) -> list[tuple[LineString, float]]:
     """Every stretch of the plot's boundary with the bearing its outward normal faces."""
     edges = []
@@ -200,17 +187,12 @@ def bearings_near(net: Polygon, shape: BaseGeometry, within_m: float) -> list[fl
     return [bearing for e, bearing in edges if shape.distance(e) <= nearest + within_m]
 
 
-def faces(bearing_deg: float, side: str) -> bool:
-    """Whether a boundary edge facing `bearing_deg` faces the side a road is labelled with."""
-    centre = COMPASS_DEG[side]
-    reach = FRONT_SECTOR_DEG + (DIAGONAL_SLOP_DEG if centre % 90 else 0.0) + 1e-6
-    return angle_between(bearing_deg, centre) <= reach
-
-
 def front_edges(net, side: Side) -> list[LineString]:
-    """The stretches of the plot's boundary that face the side the access road runs along, within
-    45 degrees either way, so a diagonal side (north-east) takes in both the sides it lies
-    between: a ramp barred from the front is barred from either."""
+    """The stretches of the plot's boundary that face the side the access road runs along, as
+    `geometry.faces` reads a side (the envelope and the search read it the same way): within 45
+    degrees either way, a diagonal side half a compass step more, so a diagonal side (north-east)
+    takes in both the sides it lies between: a ramp barred from the front is barred from
+    either."""
     return [edge for edge, bearing in boundary_edges(net) if faces(bearing, side)]
 
 

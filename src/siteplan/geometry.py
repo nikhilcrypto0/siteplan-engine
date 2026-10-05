@@ -1,4 +1,5 @@
-"""Small geometry helpers shared by the survey readers."""
+"""Small geometry helpers shared by the survey readers, and the one reading of a compass side
+that the envelope, the search and the validator all take (`faces`)."""
 
 from __future__ import annotations
 
@@ -9,6 +10,28 @@ from shapely.geometry import LineString, Point, Polygon
 from shapely.ops import unary_union
 
 COMPASS_DEG = {"N": 0, "NE": 45, "E": 90, "SE": 135, "S": 180, "SW": 225, "W": 270, "NW": 315}
+# A stretch of boundary faces a compass side when its outward normal is within FACING_DEG of the
+# side's bearing, the limit included. A side is a label, the nearest of eight compass points to
+# where the road really lies, so a diagonal label (SW) may stand for a road facing the south or
+# the west edge squarely: those are exactly 45 degrees off it, a knife-edge that a plot turned a
+# hair would fall off. A diagonal label reaches half a compass step further.
+FACING_DEG = 45.0
+DIAGONAL_SLOP_DEG = 22.5
+
+
+def angle_between(a_deg: float, b_deg: float) -> float:
+    """The smaller angle between two bearings, in degrees."""
+    return abs((a_deg - b_deg + 180) % 360 - 180)
+
+
+def faces(bearing_deg: float, side: str) -> bool:
+    """Whether a stretch of boundary whose outward normal faces `bearing_deg` (0 north, 90 east)
+    faces the side a road is labelled with: within FACING_DEG of the side's bearing, a diagonal
+    label DIAGONAL_SLOP_DEG more, the limit included (to a millionth of a degree of float noise).
+    The envelope's frontage, the search's setbacks and the validator's front all read it here."""
+    centre = COMPASS_DEG[side]
+    reach = FACING_DEG + (DIAGONAL_SLOP_DEG if centre % 90 else 0.0)
+    return angle_between(bearing_deg, centre) <= reach + 1e-6
 
 
 @dataclass(frozen=True)
@@ -76,6 +99,8 @@ def strip_along_side(boundary: Polygon, side: str, width_m: float) -> Polygon:
     """The plot left after an even strip of that width comes off every run facing that side
     (within 45 degrees), as the architect describes it. Nothing is inferred: the side and the
     width are given; the caller checks the area that comes off against the stated deduction."""
+    # A strict 45 degrees for every label, not `faces`: the strip places the net plot itself,
+    # which every result after it (the regression's included) rests on.
     runs = [run for run in straight_runs(boundary)
             if abs((facing_deg(boundary, run) - COMPASS_DEG[side] + 180) % 360 - 180) < 45]
     if not runs:

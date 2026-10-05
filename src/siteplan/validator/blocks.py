@@ -130,9 +130,13 @@ def height_class_checks(ctx: Context) -> list[Check]:
 
 
 def plot_size_check(ctx: Context) -> Check | None:
+    """Rule 7(a)(ii) on the net plot, read with rule 7(a)(iii) exactly as the resolver reads it
+    (`rules.high_rise_plot_met`): a site left just short by land it gave up for road widening
+    may be counted, and nothing settles whether it is, so it is UNVERIFIED, never a FAIL."""
     if not ctx.high_rise_anywhere():
         return None
     area, need = ctx.net.area, law.MIN_HIGH_RISE_PLOT_SQM
+    found = law.high_rise_plot_met(area, _surrenders_land(ctx.site), TOL_M)
 
     def cell(a: Assignment) -> Cell:
         if _classes(ctx, a[STILT_IN_RULE_HEIGHT]) is None:
@@ -141,7 +145,14 @@ def plot_size_check(ctx: Context) -> Check | None:
         if not ctx.high_rise(a[STILT_IN_RULE_HEIGHT]):
             return Cell(Status.NOT_CHECKED, f"{area:,.0f} m²; no high-rise under this reading",
                         required, _below_note(ctx))
-        return Cell(verdict(area + TOL_M >= need), f"{area:,.0f} m² (the net plot)", required)
+        if found is None:
+            return Cell(Status.UNVERIFIED,
+                        f"{area:,.0f} m² (the net plot), short by no more than "
+                        f"{law.ROAD_WIDENING_SHORTFALL_ALLOWANCE:.0%} after land given up for "
+                        "road widening", required,
+                        f"{law.ROAD_WIDENING_SHORTFALL_CLAUSE} may count a shortfall left by road "
+                        "widening; whether it does here is not settled")
+        return Cell(verdict(found), f"{area:,.0f} m² (the net plot)", required)
 
     return check_from(run(ctx.rules, [STILT_IN_RULE_HEIGHT], cell), family=Family.HEIGHT,
                       rule="Plot size for high-rise", clause=law.MIN_HIGH_RISE_PLOT_CLAUSE)

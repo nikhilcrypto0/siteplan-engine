@@ -4,6 +4,164 @@ A characterization test (tests/manifest.py) pins what the engine produces today.
 only together with a normative replacement test and an entry here: what changed, why, the
 evidence, and the test that now holds the behaviour. Newest first.
 
+## 2026-10-04: engine fallbacks are the engine's; one reading of the road-widening plot shortfall
+
+No characterization test changed. Two corrections to the hardening pass:
+
+- **A standard the engine fills in is labelled the engine's, never the firm's**
+  (service/standards.py). A value from the approved project file or the workspace is FIRM_STANDARD;
+  a fallback the engine supplies because neither sets one is source kind ENGINE_DEFAULT, basis
+  ENGINE_DESIGN_ASSUMPTION, whatever its status. The DesignBrief, the service's facts (each now
+  says its basis) and the lines the architect approves all carry it.
+  `test_service_standards.py::test_an_engine_fallback_is_never_labelled_the_firms` and the
+  updated assertions beside it.
+- **The validator reads the high-rise plot minimum as the resolver does.** Rule 7(a)(iii) may
+  count a net plot left short of the 2,000 m² minimum by up to 10% when land was given up for
+  road widening; nothing in the engine settles whether it does. The resolver already left such a
+  site's plot-size ground UNVERIFIED; the validator's plot-size check failed it. Both now call
+  `rules.high_rise_plot_met`: at or above the minimum, PASS; inside the allowance after road
+  widening, UNVERIFIED in both, never a FAIL; further short, or short with no land given up, FAIL
+  in both. The resolver's output is unchanged; the legacy checker, the height search and the
+  floors calculator still hold the plain minimum (regression only). tests/test_plot_shortfall.py
+  (each boundary case through the shared reading, the resolver and the validator).
+
+## 2026-10-04: the service keeps the project's firm standards, writes down every approval, and has a host boundary
+
+No characterization test changed, and contracts stay at 1.2. Nothing the legacy path produces
+changed: `approval.ApprovalDesk.ask`, which the MCP server calls, answers exactly as before (it
+now reads `ApprovalDesk.answer`, which tells a rejection from no answer). Each change is held by a
+normative test.
+
+- **The firm's standards are the approved project file's, else the workspace's, else the
+  engine's default** (`service/standards.py`). Before, the service took every standard from the
+  workspace file and wrote it over the project file's own, so a longest block the architect set
+  in the project (Suchitra's 56 m) was dropped. Now the stilt and floor heights, the common-area
+  loading, the cellar storey's height, the cellar utilities share, the deepest cellar and the
+  longest block are each the project file's when the file states it (a value the file records
+  as the engine's default yields to the workspace's own), else the workspace's, else the
+  engine's default labelled ASSUMED_FOR_TEST; the flat and amenity libraries are the
+  workspace's, as the legacy path finds them beside the project. For a project made through
+  intake both pipelines take the same values. Each reaches the DesignBrief with source kind
+  FIRM_STANDARD (an engine default was ENGINE_DEFAULT before), its status and a source naming
+  the project file, the workspace file or the engine's default; the design margins are the
+  workspace's, unchanged. No request carries a standard. The search is given only prototypes
+  whose footprint's longer side is within the longest block; `list_prototypes` (new
+  `left_out`), the proposal's notes and its approval lines name those left out, and with none
+  left `propose_layouts` stops before anyone is asked. Tests: tests/test_service_standards.py
+  (`test_each_standard_is_the_projects_else_the_workspaces_else_the_engines`,
+  `test_the_search_and_the_validator_are_given_those_standards`,
+  `test_no_tower_is_longer_than_the_firms_longest_block`,
+  `test_the_legacy_path_and_the_service_agree_on_a_project_made_through_intake`,
+  `test_no_request_can_carry_a_firm_standard`,
+  `test_a_longest_block_no_prototype_fits_stops_before_anyone_is_asked`) and
+  tests/test_service_client.py `test_the_longest_block_the_project_sets_is_kept_and_honoured`,
+  where Suchitra's project now carries its own 56 m.
+  Evidence, the service run on the two real sites as tests/test_service_client.py runs them,
+  before and after: with no longest block set, Dhulapally (DEBUG) and Suchitra give the same
+  three alternatives, figure for figure. With Suchitra's 56 m the kit loses two-core-large-12
+  (61.34 m). No alternative used it before either (the longest block proposed was 45.61 m), but
+  the full search picks each configuration's blocks from the kit and lays out and judges only
+  the best-ranked configurations of each profile (the counts stay 1,152 evaluated, 112 laid
+  out, 24 judged, 12 proposed), so a smaller kit changes which layouts are proposed, and two of
+  the three alternatives change: MAX_YIELD stays 2 towers at stilt + 7, 98 flats, 117,012 sft;
+  BALANCED goes from 2 towers at stilt + 8, 96 flats, 115,232 sft, to 2 towers at stilt + 7,
+  84 flats, 100,828 sft; CONVENTIONAL_OPEN_SPACE goes from 1 tower, 64 flats, 76,112 sft, to
+  2 towers, 80 flats, 96,736 sft. Every one is still UNVERIFIED with no legal FAIL, and no
+  tower is longer than 45.61 m. The search is not monotone in its kit: taking away a prototype
+  nothing used can still cost a layout it found before.
+- **Every approval the service asks is written down before anything it allows runs**
+  (`service/audit.py`, `models.ApprovalRecord`): the title and lines shown and their sha256, the
+  decision (APPROVED, REJECTED, UNANSWERED or CHANNEL_FAILURE), the approver's class, the UTC
+  time, and for an export the fresh report's UNVERIFIED items as it names them and its digest.
+  Every one goes to `out/approvals.jsonl`, refused ones included, and a run's own to its
+  `run.json` (`RunRecord.approvals`: the proposal, then each export approval asked on it);
+  `validate_candidate` and `export_candidate` return the run's approvals read-only. Nothing in an
+  entry comes from the caller. An approval that cannot be written down allows nothing. The
+  person channels say which answer came (`decide`); `approve` is unchanged. Behaviour that
+  changed: a refused proposal now writes that one line under `out` (before, nothing at all), so
+  `test_nothing_runs_or_is_written_without_the_architects_approval` asserts the log is the only
+  thing there; an export the person does not approve says which decision it was. Tests in
+  tests/test_service.py (`test_the_proposal_is_asked_of_the_person_before_anything_runs`,
+  `test_the_export_is_asked_before_anything_is_drawn`,
+  `test_the_proposal_approval_is_in_the_run_record_and_the_service_log`,
+  `test_an_export_records_the_fresh_reports_items_and_its_digest`,
+  `test_nothing_in_an_entry_comes_from_the_caller`,
+  `test_every_proposal_asked_is_logged_and_a_refusal_runs_nothing`,
+  `test_an_approval_that_cannot_be_written_down_allows_nothing`,
+  `test_an_export_the_person_does_not_approve_is_recorded_in_the_run_and_draws_nothing`; a FAIL
+  is now also shown to be refused without asking anyone) and tests/test_service_approvers.py.
+- **The host boundary** (`service/host.py`, `ToolHost(workspace, out, approver, mode)`): the
+  nine operations as tools (name, description, input and output JSON schema; `call` validates
+  against the request model and returns JSON), nothing else. Construction refuses any approver
+  but the approval page itself (a terminal, any object with an approve method, a subclass) and an
+  `out` inside or around the workspace. It imports only `siteplan.service`. No model or
+  transport is connected. Tests: tests/test_service_host.py.
+- **Test helpers**: `_copy_run` drops a copied run's exports, so a test starts from nothing
+  drawn whatever ran before it; the injected-field and banned-word lists also cover the firm's
+  standards and the approval; the import ban also covers the command line.
+
+## 2026-10-04: one reading of a compass side; the rule inventory scans every module
+
+No rule value changed and no characterization test changed. On the two real sites nothing moved:
+Dhulapally's access side is W and Suchitra's is not known, and every row `tests/search_compare.py`
+prints, LEGACY's and the full search's, is the same before and after. Held by normative tests:
+
+- **One reading of a compass side, `geometry.faces`.** The envelope's frontage (legal/frontage.py:
+  the access zones a gate may open in, the no-ramp front zone, the frontage strip), the full
+  search's setbacks (optimizer/search/land.py) and the validator's front (validator/zones.py) now
+  read a side one way, the validator's: a stretch faces a side when its outward normal is within
+  45 degrees of the side's bearing, a diagonal label (SW) 22.5 degrees more, the limit included.
+  The envelope read a strict 45 degrees for every label, so a diagonal label on a plot set square
+  to the compass faced no stretch at all (no access zone, so the full search had nowhere to put a
+  gate), on a plot turned off the compass it took one of the two stretches the validator holds to
+  the front, and a stretch exactly 45 degrees off a cardinal label was the validator's front and
+  not the envelope's. Only those cases change: the envelope's access zones, no-ramp front zone
+  and frontage strip now run along every stretch the validator holds to the front, and the search
+  may open its gate on any of them. The constants live once (`geometry.FACING_DEG`,
+  `geometry.DIAGONAL_SLOP_DEG`); the copies in legal.frontage, optimizer.search.land and
+  validator.zones are gone, and `angle_between` moved from validator.zones to geometry. The search
+  keeps its own doubt band (`FACING_DOUBT_DEG`): a stretch that would change sides if turned a
+  degree keeps the larger setback. tests/test_compass_side.py, for N, NE, E, SE, S, SW, W and NW
+  on a plot set square and on plots turned 10 and 45 degrees:
+  `test_the_envelopes_frontage_is_the_validators_front`,
+  `test_the_envelopes_access_zones_run_along_the_validators_front`,
+  `test_the_search_holds_the_validators_front_to_the_building_line`,
+  `test_a_diagonal_label_on_a_square_set_plot_takes_both_sides_it_lies_between` and
+  `test_a_stretch_within_a_degree_of_the_limit_keeps_the_larger_setback_in_the_search`. Run
+  against the code before, the envelope's three fail in exactly those 28 cases and the search's
+  two pass: its setbacks already read a side this way.
+- **The legacy readings stay as they were.** The legacy entrance (`access._faces`) and the
+  road-widening strip (`geometry.strip_along_side`, which places the net plot that the legacy
+  runner and the site model both start from) keep a strict 45 degrees for every label: calling
+  `faces` would widen both for a diagonal label and move the regression results and the net plot.
+- **The inventory's scans cover every module.** `test_inventory.py` looked for a rule marked not
+  applied in the top-level modules only, so `legal/`, `optimizer/`, `validator/`, `service/` and
+  any new package escaped it. Now every module under src/siteplan is scanned unless it is exempt
+  with its reason (rules.py, inventory.py, constraints.py), one added later in any package
+  included; every module that imports rules.py is scanned; and every value or clause of rules.py
+  that any module names has an entry.
+  `test_a_rule_marked_not_applied_is_used_nowhere_but_where_it_is_carried`,
+  `test_every_module_is_scanned_or_exempt_with_a_reason`,
+  `test_a_module_added_in_any_package_is_scanned_without_being_named`,
+  `test_the_scan_sees_every_way_of_importing_the_rules`,
+  `test_no_module_that_names_a_rule_escapes_the_inventory`.
+- **What the wider scan found, now said in the inventory as the code does it.** An entry may say
+  that a rule it marks not applied is still carried as data (`Entry.carried_in`; `siteplan
+  inventory` prints "not applied; carried in resolved rules"), and the scan allows the rule's
+  names there and nowhere else. The road-widening shortfall of rule 7(a)(iii) was listed as never
+  applied, but the resolver applies it: a site that surrenders land and falls short of 2,000 m²
+  by no more than 10% of it keeps its plot-size ground unmet but UNVERIFIED, so its high-rise
+  eligibility is UNVERIFIED rather than PROHIBITED (unless the road prohibits it); it is now
+  INTERPRETED and applied in the resolved rules, and the entry says the validator's own
+  plot-size check, the legacy checker, the height search and the floors calculator still hold
+  such a site to 2,000 m². Carried and reported, never applied: the electricity-line distances of
+  rule 3(c)(i) (ResolvedRules.electrical, which the validator reports UNVERIFIED wherever the
+  survey marks a line), the parking-floor clause of rule 7(xvi) (a source of the open stilt
+  reading) and the non-high-rise road-widening and TDR setback concessions
+  (ResolvedRules.setbacks.concessions, with a note that the engine does not apply them). The
+  tally is 24 as written, 14 interpreted, 3 assumed, 26 not modelled (13 interpreted and 27 not
+  modelled before).
+
 ## 2026-10-04: the production service (siteplan.service)
 
 No characterization test changed, and contracts stay at 1.2. Nothing the legacy path produces

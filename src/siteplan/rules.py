@@ -90,6 +90,20 @@ MIN_HIGH_RISE_PLOT_CLAUSE = "G.O.168 rule 7(a)(ii)"
 ROAD_WIDENING_SHORTFALL_ALLOWANCE = 0.10  # rule 7(a)(iii): up to 10% net-plot shortfall
 ROAD_WIDENING_SHORTFALL_CLAUSE = "G.O.168 rule 7(a)(iii)"
 
+
+def high_rise_plot_met(net_sqm: float, surrendered: bool, tol_sqm: float = 0.0) -> bool | None:
+    """Rule 7(a)(ii) on the net plot, read with rule 7(a)(iii): True when the net plot reaches
+    the high-rise minimum; None when it falls short by no more than the allowance and the site
+    gave up land for road widening, so that rule 7(a)(iii) may count the shortfall but nothing
+    settles whether it does here; False otherwise. The resolver and the independent validator
+    both read the minimum this way, so neither turns that open question into a refusal."""
+    if net_sqm + tol_sqm >= MIN_HIGH_RISE_PLOT_SQM:
+        return True
+    if surrendered and net_sqm + tol_sqm >= MIN_HIGH_RISE_PLOT_SQM * (
+            1 - ROAD_WIDENING_SHORTFALL_ALLOWANCE):
+        return None
+    return False
+
 OPEN_SPACE_MIN_FRACTION = 0.10
 OPEN_SPACE_MIN_WIDTH_M = 3.0
 OPEN_SPACE_MIN_POCKET_SQM = 50.0
