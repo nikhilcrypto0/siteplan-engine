@@ -70,9 +70,16 @@ EXEMPT = {
     "agent/__init__": "the model-facing package's marker",
     "agent/server": "transport plumbing: MCP over stdio around the ToolHost",
     "agent/harness": "transport plumbing: the model's side of the MCP stream",
-    "agent/launch": "process plumbing: starting the host and the sandboxed agent, and waiting",
+    "agent/launch": "process plumbing: starting the host and the sandboxed agent, relaying the "
+                    "stream, grace periods on stopping",
     "agent/sandbox": "sandbox plumbing: the model process's policy, a link limit, a timeout",
     "agent/standin": "a scripted stand-in model that proves the transport and the sandbox",
+    # The model loop: its limits bound the agent's run (turns, tool calls, timeouts, sizes) and
+    # are never a number of a layout; the model produces no number the engine uses.
+    "agent/loop": "the agent loop: a model's turns and tool calls, a retry pause",
+    "agent/model": "the model's HTTP client: a connect timeout, a read chunk",
+    "agent/settings": "the agent's run limits and the hand-off of its settings",
+    "agent/transcript": "the run's record and the architect's view: how much a line shows",
 }
 # Named numbers in audited modules that are no domain number: an ordering, a unit, a bearing, a
 # message's length. A new number belongs in constraints.py unless it is plainly one of these.

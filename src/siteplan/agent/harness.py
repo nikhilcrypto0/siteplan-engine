@@ -56,10 +56,16 @@ class Tools:
 
 
 def _own_stdio() -> tuple[BinaryIO, BinaryIO]:
-    """This process's stdin and stdout for the stream; anything else printed goes to stderr."""
+    """This process's stdin and stdout for the stream; anything else printed goes to stderr.
+
+    The stream is read through a buffer of its own on a copy of stdin, never `sys.stdin`: the
+    reading thread may still be blocked in a read when the process ends (the host can outlive
+    the session), and Python's shutdown closes `sys.stdin`, which would wait on that thread's
+    lock and abort the process ("could not acquire lock ... at interpreter shutdown")."""
+    reader = os.fdopen(os.dup(sys.stdin.fileno()), "rb")
     writer = os.fdopen(os.dup(sys.stdout.fileno()), "wb")
     os.dup2(sys.stderr.fileno(), sys.stdout.fileno())
-    return sys.stdin.buffer, writer
+    return reader, writer
 
 
 def _pump(reader: BinaryIO, lines, token) -> None:
