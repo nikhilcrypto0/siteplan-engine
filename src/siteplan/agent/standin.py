@@ -136,6 +136,7 @@ def before(plan: dict) -> list[dict]:
         _try("look up the project file", lambda: os.stat(project)),
         _try("list out", lambda: os.listdir(out)),
         _try("read a file elsewhere", lambda: _read(elsewhere)),
+        _try("look up a file elsewhere", lambda: os.stat(elsewhere)),
         _try("create a file elsewhere", lambda: _create(elsewhere.parent / WAS_HERE)),
     ]
     probes += [_try(f"connect to 127.0.0.1:{port}", lambda port=port: _connect(port))

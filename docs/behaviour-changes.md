@@ -4,6 +4,82 @@ A characterization test (tests/manifest.py) pins what the engine produces today.
 only together with a normative replacement test and an entry here: what changed, why, the
 evidence, and the test that now holds the behaviour. Newest first.
 
+## 2026-10-05: the loop offers each tool's schema with its references written out
+
+No characterization test changed; the host's schemas, its checks and the MCP tool list are
+untouched. In the first real run (Qwen3.8-27B on SGLang, `--tool-call-parser qwen3_coder`) Qwen
+wrote `propose_layouts`'s `intent` as the right object, and the host received it as text and
+refused the call three times: the parser types each parameter by its own schema
+(`infer_type_from_json_schema`) and follows no `$ref`, and `intent` was offered as
+`{"$ref": "#/$defs/Intent"}`, the only object parameter of the nine. The loop now offers each
+schema with its local references replaced by the definitions they name (`loop.written_out`), so
+every parameter carries its own type; a reference it cannot write out (recursive, remote or
+missing) leaves the schema as listed. The loop never turns a model's text into an object itself.
+`test_every_parameter_the_model_is_offered_carries_its_own_type` and
+`test_a_reference_that_cannot_be_written_out_leaves_the_schema_as_listed` hold it, and the
+sandbox run test now compares the offered parameters with the written-out schemas.
+
+## 2026-10-04: the agent loop: a model drives the nine tools from inside the sandbox
+
+No characterization test changed and nothing the engine computes changed: the engine, the
+ToolHost, the service and its contracts, the validator, the optimizer, the legacy path and the
+MCP server's tool surface are untouched. Outside `siteplan/agent/`: `pyproject.toml` (the console
+script `siteplan-agent`), the number audit's exemptions, and three test updates named below. No
+real model was contacted; each behaviour is held by a normative test against a scripted
+OpenAI-compatible server on 127.0.0.1 (`tests/fake_model.py`, `tests/test_agent_loop.py`).
+
+- **The loop** (`agent/loop.py`, run in the sandbox by the launcher): each turn sends the model
+  server (`POST {endpoint}/chat/completions`, `agent/model.py`, httpx with `trust_env=False`) a
+  short factual system message, the brief and the host's nine tools as OpenAI function tools,
+  exactly as the host lists them over MCP; each tool call goes to the host through the harness
+  once, and its result back to the model, until the model answers without a tool call. A name the
+  host does not list, or arguments that are not a JSON object, is refused in the loop and never
+  sent. The endpoint and model id are configuration (`agent/settings.py`: arguments, a JSON file,
+  defaults), so an A/B run against another model is one argument.
+- **Hard limits, each a stop with its reason**: turns (30), tool calls (40), failed tool calls in
+  a row (4), the same tool and arguments (the third is not run), a model request's time (600 s)
+  and the run's (3600 s), a response's body (1 MiB; a larger one stops the run and the record
+  keeps what was read, marked) and a tool result as the model gets it (64,000 characters, cut
+  with a visible marker). A tool call is never retried; model requests are retried only when
+  configured (`model_retries`, default 0), and a retry repeats the request, never a tool call.
+  SIGINT or SIGTERM to the launcher stops the run in order: the agent is asked to stop, closes
+  its MCP session and records why; the host ends with its stream, or is stopped after a grace
+  when an approval it waits on can no longer be answered (nothing runs, nothing is approved).
+- **The record lives outside the sandbox** (`agent/transcript.py`, `<out>/agent/<run>/`). The
+  launcher now relays the MCP stream instead of joining the two processes' pipes directly, and
+  owns every channel out of the sandbox: `mcp.jsonl` is the stream as relayed (the host's side of
+  what the agent asked, which the agent cannot alter); `transcript.jsonl` holds the launcher's
+  steps, the agent's events from a pipe of its own (each model request, with the SHA-256 of the
+  bytes sent and the messages added since the last, so every request can be rebuilt; each
+  response whole; tool calls, results and refusals; the stop; times) and its stderr. The children
+  run in their own sessions so a Ctrl-C reaches the launcher alone. The architect's terminal
+  shows the model's messages and each tool call.
+- **A fault the loop tests found in the harness** (`agent/harness.py`): its reading thread read
+  `sys.stdin` itself. When the agent ended while the host still held the stream open (a model
+  error, a timeout, a stop during an open approval), Python's shutdown closed `sys.stdin`, waited
+  on that thread's lock and aborted the process ("Fatal Python error: _enter_buffered_busy",
+  exit -6): a race, which failed six of the new file's tests on its first run. The stream is now
+  read through a buffer of its own on a copy of stdin; every loop run asserts the agent's stderr
+  is empty and its exit status is its own, and that guard was seen to fail with the old reader.
+- **The Seatbelt profile no longer lets the agent look any path up.** `(allow file-read-metadata)`
+  was global, so the model process could stat anything outside the workspace and `out` (asked of
+  the kernel with `sandbox_check`: `~/.ssh`, `~/Documents`, `/etc/hosts`, `/Applications` and the
+  engine's own `cli.py` were all allowed). It is now `sandbox.lookups`: Seatbelt's
+  `path-ancestors` of the runtime, the package, the scratch folder and the interpreter's links,
+  and those links themselves (the same filter Apple's `system.sb` uses for firmlinks). Every
+  path the agent may read lies in a tree whose `file-read*` allow already covers lookups, so only
+  lookups of unreadable paths went. Seatbelt reports no metadata decision (a deliberately denied
+  stat, and one allowed through `(with report)`, both left the log empty), so the log could not
+  list what a session needs; the evidence is behavioural: the preflight, the stand-in's tour, the
+  transport tests and every loop run pass under it. With the old rule, the new stand-in probe
+  "look up a file elsewhere" succeeds and the engine's modules are visible (an import is refused
+  with PermissionError); with the new one the lookup is denied and an import finds no module.
+  `test_agent_sandbox.py` now pins the rule, the probe and the "not found" engine imports.
+- Test updates beside the new file: `test_agent_transport.py` lets the agent package import
+  httpx (the SDK's own HTTP client); `test_agent_sandbox.py` as above; `test_constraints.py`
+  exempts the new agent modules, whose numbers bound the agent's run and are no number of a
+  layout.
+
 ## 2026-10-04: a transport around the ToolHost, and a sandbox for the model process
 
 No characterization test changed and nothing the engine computes changed: outside the new

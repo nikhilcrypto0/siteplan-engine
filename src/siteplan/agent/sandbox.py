@@ -9,7 +9,8 @@ The policy, on every platform:
 - reads: the interpreter, the virtual environment, and of siteplan only its marker and this
   package. Never the workspace or `out`: client data reaches the model only in tool results. Never
   the engine either, so neither the `siteplan` command line nor the legacy MCP server can be
-  loaded, even in-process;
+  loaded, even in-process. A path is looked up (stat) only on the way to what may be read or
+  written (`lookups`), so the process cannot even tell what exists anywhere else;
 - exec: the agent's own interpreter only, so no shell, no `siteplan`, no `siteplan-mcp`;
 - network: the model's endpoint on this machine when one is configured, else none.
 
@@ -162,6 +163,19 @@ def _filters(kind: str, paths) -> str:
     return " ".join(f"({kind} {_quoted(p)})" for p in paths)
 
 
+def lookups(policy: Policy) -> str:
+    """Where the agent may look a path up without reading it: each folder on the way to what it
+    may read or write (a lookup stats every one, and Python resolves its own paths), and each
+    link on the way to its interpreter (the venv's is a chain of them). Nothing else: not the
+    person's home or another project, not the engine's own files. Inside what it may read,
+    `file-read*` already allows the lookups."""
+    links = [link for link, _ in _links(policy.interpreter)]
+    ways = dict.fromkeys([*policy.runtime, policy.package, policy.scratch, *links,
+                          Path(os.path.realpath(policy.interpreter))])
+    filters = [_filters("path-ancestors", ways), *([_filters("literal", links)] if links else [])]
+    return f"(allow file-read-metadata {' '.join(filters)})"
+
+
 def seatbelt_profile(policy: Policy) -> str:
     package, executables = policy.package, dict.fromkeys(
         [str(policy.interpreter), os.path.realpath(policy.interpreter)])
@@ -171,9 +185,9 @@ def seatbelt_profile(policy: Policy) -> str:
         # Apple's baseline for any process: dyld and the shared cache, the system's libraries
         # and frameworks, the standard devices, a few system services.
         '(import "system.sb")',
-        # Looking a path up stats each folder on the way and follows links (the venv's
-        # interpreter is a chain of them). The workspace and out are taken back at the end.
-        "(allow file-read-metadata)",
+        # Looking a path up stats each folder on the way to it: only those folders, and the
+        # links to the interpreter (lookups). The workspace and out are taken back at the end.
+        lookups(policy),
         f"(allow process-exec {_filters('literal', executables)})",
         f"(allow file-read* file-map-executable {_filters('subpath', policy.runtime)})",
         # Of siteplan, its marker and this package only, wherever it is installed.
