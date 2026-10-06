@@ -4,6 +4,92 @@ A characterization test (tests/manifest.py) pins what the engine produces today.
 only together with a normative replacement test and an entry here: what changed, why, the
 evidence, and the test that now holds the behaviour. Newest first.
 
+## 2026-10-06: contracts 1.3, the access a block below 21 m is held to
+
+Read on 2026-10-06 from the NBC 2016 page images (`fixtures/rules/sources/nbc`), brought in by
+G.O.168 rule 15(a)(i) as G.O.Ms.No.50 of 2019 substituted it (the Code's requirements "other than
+heights and setbacks"). The validator changes; the optimizer's search, `select()` and the
+generator do not, but the guard is the validator, so what the search proposes changes with it.
+
+- **NBC 4.6 for special buildings, as law.** 4.6 is "for high rise buildings and special
+  buildings"; Part 4 1.2(b)(6) makes a special building of one "with two basements or more, or
+  with one basement of area more than 500 m²", at any height. A block standing over such a cellar
+  (`Context.special`) is held to every fire check a high-rise is: the lanes and corner turns, the
+  loop's turns, reach from the gate, the entrance, nothing on the lanes, the street join, the
+  dead end and the 45 t. The generator's cellar is the plot inset by its setback, so on a layout
+  with a cellar every block is held, and the generator does not yet give a block below 21 m the
+  fire band: such layouts now fail and the guard rejects them. A cellar drawn without its outline
+  leaves each block perhaps special: what fails only on that is UNVERIFIED.
+- **NBC's own 15 m line** (Part 4 2.38, the stilt included as 2.6 measures) is the open reading
+  `nbc_fire_height` (`state_line`, `nbc_line`), carried ALL.
+- **A block 4.6 does not hold under a reading has nothing asked of it there: PASS under that
+  reading** (it was NOT_CHECKED, which made a block held under only some readings UNVERIFIED even
+  where it passed wherever it was held). The site-wide fire checks (street join, dead end,
+  entrance, nothing on the lanes, 45 t, no layout drawn) are evaluated under each reading too, so
+  one that fails only where a reading holds a block is UNVERIFIED, never FAIL.
+- **"Opens onto a road"** is the open reading `opens_onto_road` (`touch`, `frontage`), carried
+  ALL, in rule 8(l)'s two checks: a block above 12 m that only touches a road at a corner is
+  UNVERIFIED (on the made-up rectangle, T1 faces the loop road for 1.5 m and the internal road
+  for 73 m).
+- **NBC 4.3.2.2's pathway, no longer than 30 m**, is a new check for every block reached by a
+  pathway (`roads._pathway_length_check`): measured along a straight pathway; bounded between the
+  straight line and half the outline of any other, UNVERIFIED in between.
+- **A stilt counts as parking only where a car can drive in** (`parking.stilt_reached`, the
+  engine's reading): an unbroken 4.5 m (rule 13(c)(viii)'s driveway) of the block faces a road,
+  a fire lane or a rule 8(l) pathway; the parking finding names a stilt it leaves out. The
+  generator still counts every stilt.
+- Bays, the open space, the land ledger and the rule layers keep a special building's fire band
+  as they keep a high-rise's; the egress note covers special buildings (NBC Part 4 applies to
+  them).
+
+Tests that changed:
+
+- Normative, rewritten because the law they held changed:
+  `tests/test_validator_low_blocks_site.py` (a block below 15 m over no cellar is held to nothing
+  in 4.6; over the cellar it is a special building held to all of it; the rest of rule 15(a)(i)
+  stays NOT_CHECKED with what is judged elsewhere named; a 15 m block over no cellar is held
+  under `nbc_line` only, so what it lacks is UNVERIFIED, never FAIL);
+  `tests/test_validator_roads_fire.py` (a block that is a high-rise only if the stilt counts now
+  PASSes where it passes wherever it is held, and is UNVERIFIED where it fails there: it was
+  UNVERIFIED either way; two tests about driveways and rule 8(l) select the `touch` reading, the
+  frontage question being `test_validator_access_law.py`'s), and the 12 m boundary test in
+  `tests/test_validator_edges_roads_fire.py` likewise; `tests/test_resolve.py` (seven readings
+  carried ALL; the audit maps its two new open entries to them); `tests/test_contracts.py`
+  (version 1.3, a 1.2 document refused).
+- `tests/test_search_low_blocks.py`: the six tests of where the search stands blocks below 21 m
+  (their setbacks and front, rule 8(l)'s pathway, a fringe block against the road, the all-low
+  layout's planting, the arm) run under the MADE-UP rule of `search_support.no_special_buildings`
+  (no cellar makes a special building), because under the law the search offers no layout with
+  such a block over its cellar. The test that nothing offered fails the validator runs under
+  both, and a new test holds the law: no layout offers a special building without its fire
+  access.
+- Characterization: `tests/test_service_proposals_baseline.py` re-pinned. On the made-up land the
+  search still proposes 12, the validator now fails five (low blocks over the cellar without the
+  fire band; `full-not_counted-ALL-59` leaves the twelve, `full-not_counted-ALL-61` joins), the
+  same three are shown at the same points, their digests and the model's answer follow the
+  contract, and the approval page is unchanged. `tests/test_validator_client_suchitra.py`
+  compares rule 8(l)'s two checks under the `touch` reading, the one today's checker takes.
+
+New normative tests: `tests/test_validator_access_law.py` (14), and the contract, resolver,
+inventory and number-audit tests for the new values and readings.
+
+On Dhulapally (diagnostic, not a run; Run B prime's exact request on this branch):
+
+Run B prime's exact request through this branch's service steps and full search, seed 0
+(`out/dhulapally-ACCESS-LAW-CHECK-DIAGNOSTIC-20261006/`, client data, never committed):
+1,152 configurations, 112 laid out, 24 judged, as before; 7 proposed where 12 were, and the
+validator fails 11. The three shown: `full-not_counted-allowed-85` (MAX_YIELD) and
+`full-not_counted-allowed-86` (BALANCED) as before, `full-not_counted-ALL-62` (CONVENTIONAL) for
+`-63`; every block in them stands in a road or fire lane on all sides (seen on the drawings), and
+their only access items left UNVERIFIED are the street join, the dead end (33 m) and the 45 t.
+None of the seven holds under every reading (3 of 12 did): the layouts that did were the ones
+with stilt + 5 blocks over the cellar, now special buildings without a fire band. Run C's
+`full-ALL-ALL-1` now FAILs fire access for T2, T3 and T4 (amenities, the tot-lot and the planted
+strip in their 6 m band, no lane round them), is UNVERIFIED on frontage (T2 faces a road for
+3.3 m) and leaves T2's stilt out of the parking (which still passes). The firm's own plan
+(post-blind, DEBUG) keeps its nine FAILs: it draws no cellar, so no special building; its stilt +
+6 block is held under `nbc_line` only and passes.
+
 ## 2026-10-05: the loop offers each tool's schema with its references written out
 
 No characterization test changed; the host's schemas, its checks and the MCP tool list are

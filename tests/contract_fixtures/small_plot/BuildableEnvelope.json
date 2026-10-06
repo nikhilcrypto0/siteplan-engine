@@ -1,7 +1,7 @@
 {
- "schema_version": "1.2",
- "site_ref": "fa33ddc081d84bb0",
- "rules_ref": "a48a5919c4061e63",
+ "schema_version": "1.3",
+ "site_ref": "8dab3747136ef787",
+ "rules_ref": "5704b4fad8ae87f9",
  "exclusions": [],
  "bands": [
   {
@@ -446,7 +446,7 @@
   }
  ],
  "rule_layers": {
-  "schema_version": "1.2",
+  "schema_version": "1.3",
   "layers": [
    {
     "id": "setback 0-7 m",

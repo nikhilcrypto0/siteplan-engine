@@ -1,10 +1,12 @@
 """Parking (rule 13, Table V): what the stilt, the surface and the cellars really provide.
 
 Table V asks a share of the built-up area, which the validator recomputes from the towers and the
-club house as drawn. It is provided in the stilt (each tower's footprint less its cores), in
-surface bays (counted only where a bay may be), and in cellars (the outline under the cellar
-setback, less cores, ramp and the utilities share). The floor area has to meet the need and so
-does what physically fits on it: cars laid out in bays and aisles, counted here by cars.py.
+club house as drawn. It is provided in the stilt (each tower's footprint less its cores, counted
+only where a car can drive in: at least a driveway's width of the block faces a road, a fire
+lane or a pathway), in surface bays (counted only where a bay may be), and in cellars (the
+outline under the cellar setback, less cores, ramp and the utilities share). The floor area has
+to meet the need and so does what physically fits on it: cars laid out in bays and aisles,
+counted here by cars.py.
 
 Where the cellars are not drawn at all, a shortfall is UNVERIFIED (the rest may be underground),
 not a FAIL: a candidate that says it has no cellars (zero levels) and is short, is.
@@ -29,6 +31,8 @@ from siteplan.validator.cars import cars_on_floor
 from siteplan.validator.context import Context
 from siteplan.validator.fire import clear_band
 from siteplan.validator.ground import BAYS, Ground
+from siteplan.validator.measure import TOL_M, TowerGeometry
+from siteplan.validator.network import TOUCH_M
 from siteplan.validator.readings import (
     ANYWHERE,
     AT_GROUND,
@@ -44,6 +48,7 @@ from siteplan.validator.readings import (
 from siteplan.validator.shapes import (
     NOISE_SQM,
     bent,
+    longest_frontage,
     polygons_of,
     sides_of,
     union_of_all,
@@ -137,6 +142,7 @@ class Floors:
     cellar_sqm_per_level: float
     cellar_cars_per_level: int
     sqm_per_car: float
+    stilts_unreached: tuple[str, ...] = ()  # stilts no car can drive into, not counted
 
     @property
     def cellar_sqm(self) -> float:
@@ -152,8 +158,9 @@ def measure_floors(ctx: Context) -> Floors:
     bay, aisle, sqm_per_car = bay_standard(ctx)
     built_up = sum(t.built_up_sqm for t in ctx.towers) + d.club.area * d.club_floors
     cores_all = union_of_all([c for t in ctx.towers for c in t.cores])
+    unreached = tuple(t.name for t in ctx.towers if t.has_stilt and not stilt_reached(ctx, t))
     stilts = [(t, t.footprint.difference(union_of_all(list(t.cores)))) for t in ctx.towers
-              if t.has_stilt]
+              if t.has_stilt and t.name not in unreached]
     stilt_sqm = sum(f.area for _, f in stilts)
     stilt_cars = sum(cars_on_floor(f, [t.placed.rotation_deg], bay, aisle) for t, f in stilts)
     per_level, cars_per_level = 0.0, 0
@@ -164,7 +171,16 @@ def measure_floors(ctx: Context) -> Floors:
         angles = sorted({t.placed.rotation_deg for t in ctx.towers} | {0.0})
         cars_per_level = int(cars_on_floor(floor, angles, bay, aisle) * (1 - utilities))
     return Floors(built_up, stilt_sqm, stilt_cars, d.cellar_levels, d.cellar_drawn, per_level,
-                  cars_per_level, sqm_per_car)
+                  cars_per_level, sqm_per_car, unreached)
+
+
+def stilt_reached(ctx: Context, t: TowerGeometry) -> bool:
+    """Whether a car can drive into a block's stilt: an unbroken stretch of its outline at least
+    a driveway wide (rule 13(c)(viii)) faces a road, a fire lane or a rule 8(l) pathway (6 m, the
+    block's access). The engine's reading: no order says how a stilt is entered."""
+    least = ctx.rules.circulation.driveway_min_m.value
+    way_in = union_of_all([ctx.drawn.motorable, ctx.drawn.pathway_land])
+    return longest_frontage(t.footprint, way_in, TOUCH_M) + TOL_M >= least
 
 
 # --- Surface bays ----------------------------------------------------------------------------
@@ -185,7 +201,7 @@ def surface_bays(ctx: Context, ground: Ground, reading: str) -> Surface:
     long_side, short_side = max(bay), min(bay)
     zone = setback_zone(ctx, reading)
     lane = ctx.rules.fire.clear_width_m.value
-    bands = union_of_all([clear_band(t.footprint, lane) for t in ctx.high_rise(reading)])
+    bands = union_of_all([clear_band(t.footprint, lane) for t in ctx.fire_held(reading)])
     others = union_of_all([g for owner, g in ground.solids if owner != BAYS])
     motorable = d.motorable
     tree = shapely.STRtree(list(d.bays))
@@ -279,6 +295,10 @@ def table_v_check(ctx: Context, ground: Ground, f: Floors) -> Check:
                          f"x {f.cellar_sqm_per_level:,.0f} m²")
         measured = (" + ".join(parts) + f" = {floor:,.0f} m² of parking floor; {cars:,} cars fit "
                     f"in bays and aisles = {laid_out:,.0f} m² laid out")
+        if f.stilts_unreached:
+            measured += (f"; not counted, the stilt of {', '.join(f.stilts_unreached)}: no "
+                         f"{ctx.rules.circulation.driveway_min_m.value:g} m of it faces a road, "
+                         "fire lane or pathway")
         required = (f">= {pct:g}% of built-up {f.built_up_sqm:,.0f} m² = {need:,.0f} m² "
                     f"(Table V column {a[TABLE_V_COLUMN]}), as floor and as bays and aisles that "
                     "fit")

@@ -129,7 +129,7 @@ def _fire_layers(ctx: Context) -> list[RuleLayer]:
     clause = ctx.rules.fire.clear_width_m.clause
     lane = ctx.rules.fire.clear_width_m.value
     out = []
-    for t in ctx.high_rise_anywhere():
+    for t in ctx.fire_held_anywhere():
         out.append(_layer(f"fire band {t.name}", LayerKind.FIRE_CLEAR_BAND,
                           clear_band(t.footprint, lane), clause, applies_to=t.name,
                           permits=_forbid(*FORBID_BUILT, U.SURFACE_PARKING, U.HARD_AMENITY,
@@ -178,7 +178,7 @@ def _ramp_and_bay_layers(ctx: Context) -> list[RuleLayer]:
 
     def bays(reading: str) -> BaseGeometry:
         zone = setback_zone(ctx, reading)
-        bands = [clear_band(t.footprint, lane) for t in ctx.high_rise(reading)]
+        bands = [clear_band(t.footprint, lane) for t in ctx.fire_held(reading)]
         return union_of_all([zone, *bands, ctx.drawn.paved_land, ctx.drawn.fire_hardstanding])
 
     out = _per_stilt(ctx, "ramps forbidden", LayerKind.RAMP_FORBIDDEN,

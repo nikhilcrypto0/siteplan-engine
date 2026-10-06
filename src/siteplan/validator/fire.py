@@ -1,17 +1,24 @@
-"""Fire access (NBC 2016 Part 3 4.6, brought in by G.O.168 rule 15(b)(iv)), measured from the
-drawing.
+"""Fire access (NBC 2016 Part 3 4.6), measured from the drawing.
 
-Every high-rise needs 6 m of clear, motorable ground on all sides, room for the tender to turn
+4.6 is for "high rise buildings and special buildings". G.O.168 rule 15(b)(iv) holds every
+high-rise to it. Rule 15(a)(i) holds a block below the state's high-rise height to the Code's
+requirements other than heights and setbacks, and so to 4.6 when the block is a special building:
+when it stands over a cellar of more than 500 m² or of two levels or more (Part 4 1.2(b)(6), read
+as law). Under the nbc_line reading it holds a block of NBC's own 15 m too (Part 4 2.38, measured
+as Part 4 2.6 does, the stilt included).
+
+Every block held needs 6 m of clear, motorable ground on all sides, room for the tender to turn
 round each corner and each bend of the loop road, a lane from a gate to all of it, and nothing
 parked or built in it. The bands and the swept turns are built here from the lane width and the
 radii in the rules; the generator's fire lanes are only ground the candidate says is motorable.
 
 What a drawing cannot show stays UNVERIFIED: where the street leads, whether the road ends at
-the plot, and the 45 t loading, which is a paving specification.
+the plot, and the 45 t loading, which is a paving specification. So does a block that fails only
+because it might stand over a cellar drawn without its outline.
 
-A block below the high-rise height is not held to any of this. Rule 15(a)(i) holds it to the
-National Building Code's requirements other than heights and setbacks, which the resolved rules
-give no figure for: `low_block_check` says so, as NOT_CHECKED, and judges nothing numeric.
+A block 4.6 does not hold under a reading has nothing asked of it there. What the rest of the
+Code asks of a block below the high-rise height is not on a site plan: `low_block_check` says
+so, as NOT_CHECKED, and judges nothing.
 """
 
 from __future__ import annotations
@@ -22,12 +29,18 @@ from shapely.ops import unary_union
 
 from siteplan.contracts.candidate import RoadKind
 from siteplan.contracts.common import Status
-from siteplan.contracts.resolved_rules import FIRE_TURNING_RADIUS, STILT_IN_RULE_HEIGHT
+from siteplan.contracts.resolved_rules import (
+    FIRE_TURNING_RADIUS,
+    NBC_FIRE_HEIGHT,
+    STILT_IN_RULE_HEIGHT,
+)
 from siteplan.contracts.validation import Check, Discrepancy, Family
 from siteplan.validator.context import GATE_ON_BOUNDARY_M, Context, is_known
 from siteplan.validator.ground import Ground
 from siteplan.validator.measure import TOL_M, TowerGeometry
 from siteplan.validator.readings import (
+    NBC_LINE,
+    STATE_LINE,
     Assignment,
     Cell,
     check_from,
@@ -40,6 +53,7 @@ from siteplan.validator.shapes import (
     NOISE_SQM,
     mitred,
     opening,
+    polygons_of,
     union_of_all,
     width_along_edge,
 )
@@ -58,6 +72,10 @@ LOW_FIRE_CLAUSE = ("G.O.168 rule 15(a)(i) (a building below the high-rise height
 REACH_MIN_SQM = 1.0  # a lane that only touches a block's band at a point does not reach it
 GATE_SLACK_M = 0.05  # a gate may measure this much under the width it declares
 GATE_TOUCH_M = 0.5  # a lane this close to the entrance's ground starts from it
+NOT_ASKED = "nothing: neither a high-rise nor a special building under this reading"
+MAYBE_SPECIAL_NOTE = ("A cellar is drawn without its outline, so which blocks stand over it, and "
+                      "so which are special buildings held to 4.6, is not known: what fails only "
+                      "on that is UNVERIFIED.")
 
 
 def clear_band(footprint: Polygon, lane_m: float) -> BaseGeometry:
@@ -78,11 +96,82 @@ def reached(ctx: Context) -> BaseGeometry:
 
 
 def _below_note(ctx: Context) -> str:
-    """Said where a high-rise fire check meets a block that is not one under a reading."""
-    return (f"Below {ctx.rules.height.high_rise_from_m.value:g} m the high-rise fire lanes do not "
-            f"apply (they are rule 15(b)(iv)'s, for high-rise buildings). {LOW_FIRE_RULE} The "
-            "rule gives no figure for what that asks of a fire vehicle's access, so nothing "
-            "numeric is judged here.")
+    """Said where a fire check meets a block that 4.6 does not hold under a reading."""
+    fire = ctx.rules.fire
+    return (f"Below {ctx.rules.height.high_rise_from_m.value:g} m a block is held to NBC 4.6 only "
+            f"as a special building, over a cellar of more than "
+            f"{fire.special_basement_sqm.value:g} m² or of {fire.special_basement_levels.value} "
+            f"levels or more, or under the nbc_line reading from NBC's own "
+            f"{fire.nbc_high_rise_m.value:g} m (rule 15(a)(i) keeps the Code's requirements "
+            "other than heights and setbacks).")
+
+
+def held_by(ctx: Context, t: TowerGeometry, stilt: str, line: str) -> bool | None:
+    """Whether NBC 4.6 holds a block under a reading of the stilt and of NBC's height line: by
+    law as a high-rise or a special building, and under the nbc_line reading from NBC's own
+    15 m, the stilt included. None when only a cellar drawn without its outline could make it a
+    special building."""
+    if t.name in {x.name for x in ctx.fire_held(stilt)}:
+        return True
+    if line == NBC_LINE and t.physical_height_m >= ctx.rules.fire.nbc_high_rise_m.value - TOL_M:
+        return True
+    return None if ctx.special.get(t.name) is None else False
+
+
+def fire_subjects(ctx: Context) -> list[TowerGeometry]:
+    """Every block NBC 4.6 holds, or may hold, under some reading."""
+    lines = ctx.rules.readings(NBC_FIRE_HEIGHT)
+    return [t for t in ctx.towers
+            if any(held_by(ctx, t, stilt, line) is not False
+                   for stilt in ctx.stilt_readings for line in lines)]
+
+
+def _why_held(ctx: Context, t: TowerGeometry, stilt: str, line: str) -> str:
+    """Why 4.6 holds a block that is not a high-rise under this reading of the stilt."""
+    if t.name in {x.name for x in ctx.high_rise(stilt)}:
+        return ""
+    fire, d = ctx.rules.fire, ctx.drawn
+    special = ctx.special.get(t.name)
+    if special:
+        under = max((p.area for p in polygons_of(d.cellar_outline)
+                     if p.intersection(t.footprint).area > NOISE_SQM), default=0.0)
+        return (f"{t.name} stands over a cellar of {d.cellar_levels} level"
+                f"{'s' if d.cellar_levels > 1 else ''}, {under:,.0f} m² a level: a special "
+                "building (NBC Part 4 1.2(b)(6)), held to 4.6 whatever its height.")
+    if line == NBC_LINE and t.physical_height_m >= fire.nbc_high_rise_m.value - TOL_M:
+        return (f"{t.name} is {t.physical_height_m:g} m to its terrace, the stilt included: at "
+                f"or above NBC's own {fire.nbc_high_rise_m.value:g} m line (the nbc_line "
+                "reading).")
+    return MAYBE_SPECIAL_NOTE if special is None else ""
+
+
+def _held_clause(ctx: Context, t: TowerGeometry) -> str:
+    """The clauses that hold a block to 4.6: rule 15(b)(iv)'s for a high-rise; for a block that
+    is below the high-rise height under some reading, the special building's and NBC's line
+    too, where they could hold it."""
+    fire = ctx.rules.fire
+    parts = [fire.clear_width_m.clause]
+    if any(t.name not in {x.name for x in ctx.high_rise(r)} for r in ctx.stilt_readings):
+        if ctx.special.get(t.name) is not False:
+            parts.append(fire.special_basement_sqm.clause)
+        if _on_nbc_line(ctx, t):
+            parts.append(fire.nbc_high_rise_m.clause)
+    return "; ".join(parts)
+
+
+def _on_nbc_line(ctx: Context, t: TowerGeometry) -> bool:
+    """Whether a block reaches NBC's own high-rise line and the rules evaluate that reading."""
+    return (NBC_LINE in ctx.rules.readings(NBC_FIRE_HEIGHT)
+            and t.physical_height_m >= ctx.rules.fire.nbc_high_rise_m.value - TOL_M)
+
+
+def _readings_known(ctx: Context, a: Assignment) -> Cell | None:
+    """A cell for a reading of the stilt or of NBC's line this validator cannot evaluate."""
+    if a[STILT_IN_RULE_HEIGHT] not in ctx.classes:
+        return unknown_reading(STILT_IN_RULE_HEIGHT, a[STILT_IN_RULE_HEIGHT])
+    if a[NBC_FIRE_HEIGHT] not in (STATE_LINE, NBC_LINE):
+        return unknown_reading(NBC_FIRE_HEIGHT, a[NBC_FIRE_HEIGHT])
+    return None
 
 
 def _no_layout(ctx: Context) -> Check:
@@ -98,14 +187,15 @@ def _no_layout(ctx: Context) -> Check:
 
 
 def _tower_cell(ctx: Context, ground: Ground, t: TowerGeometry, a: Assignment) -> Cell:
-    reading = a[STILT_IN_RULE_HEIGHT]
-    if reading not in ctx.classes:
-        return unknown_reading(STILT_IN_RULE_HEIGHT, reading)
+    unknown = _readings_known(ctx, a)
+    if unknown is not None:
+        return unknown
     lane = ctx.rules.fire.clear_width_m.value
     required = (f">= {lane:g} m motorable on all sides; a "
                 f"{ctx.rules.fire.turning_radius_m.value:g} m turn at every corner")
-    if t.name not in {x.name for x in ctx.high_rise(reading)}:
-        return Cell(Status.NOT_CHECKED, "not high-rise under this reading", required,
+    held = held_by(ctx, t, a[STILT_IN_RULE_HEIGHT], a[NBC_FIRE_HEIGHT])
+    if held is False:
+        return Cell(Status.PASS, "not held to NBC 4.6 under this reading", NOT_ASKED,
                     _below_note(ctx))
     turning = turning_for(ctx.rules, a[FIRE_TURNING_RADIUS])
     if turning is None:
@@ -125,19 +215,23 @@ def _tower_cell(ctx: Context, ground: Ground, t: TowerGeometry, a: Assignment) -
                         f"{ground.blocked_by(unary_union(stuck), t.name)})")
     measured = ("; ".join(problems) if problems else
                 f"{lane:g} m clear on every side; all {len(turns)} corner turns fit")
-    return Cell(verdict(not problems), measured, required,
-                f"The turn at a corner needs {turning.reach_m:.2f} m of ground beside each face "
-                f"under the {turning.reading} reading of the {turning.r_out:g} m radius.")
+    note = " ".join(part for part in (
+        f"The turn at a corner needs {turning.reach_m:.2f} m of ground beside each face under "
+        f"the {turning.reading} reading of the {turning.r_out:g} m radius.",
+        _why_held(ctx, t, a[STILT_IN_RULE_HEIGHT], a[NBC_FIRE_HEIGHT])) if part)
+    if problems and held is None:
+        return Cell(Status.UNVERIFIED, measured, required, note)
+    return Cell(verdict(not problems), measured, required, note)
 
 
 def tower_checks(ctx: Context, ground: Ground) -> list[Check]:
     out = []
-    for t in ctx.high_rise_anywhere():
+    for t in fire_subjects(ctx):
         out.append(check_from(
-            run(ctx.rules, [STILT_IN_RULE_HEIGHT, FIRE_TURNING_RADIUS],
+            run(ctx.rules, [STILT_IN_RULE_HEIGHT, NBC_FIRE_HEIGHT, FIRE_TURNING_RADIUS],
                 lambda a, t=t: _tower_cell(ctx, ground, t, a)),
             family=Family.FIRE, rule=f"Fire access: {t.name}", subject=t.name,
-            clause=ctx.rules.fire.clear_width_m.clause))
+            clause=_held_clause(ctx, t)))
     return out
 
 
@@ -148,13 +242,17 @@ def loop_turns_check(ctx: Context, ground: Ground) -> Check:
     loop = union_of_all([r.shape for r in ctx.drawn.roads_of(RoadKind.LOOP,
                                                               RoadKind.PERIMETER_LANE)])
     radius = ctx.rules.fire.turning_radius_m.value
+    subjects = fire_subjects(ctx)
 
     def cell(a: Assignment) -> Cell:
-        if a[STILT_IN_RULE_HEIGHT] not in ctx.classes:
-            return unknown_reading(STILT_IN_RULE_HEIGHT, a[STILT_IN_RULE_HEIGHT])
-        if not ctx.high_rise(a[STILT_IN_RULE_HEIGHT]):
-            return Cell(Status.NOT_CHECKED, "no high-rise under this reading",
-                        f"a {radius:g} m turn at every bend", _below_note(ctx))
+        unknown = _readings_known(ctx, a)
+        if unknown is not None:
+            return unknown
+        held = [h for h in (held_by(ctx, t, a[STILT_IN_RULE_HEIGHT], a[NBC_FIRE_HEIGHT])
+                            for t in subjects) if h is not False]
+        if not held:
+            return Cell(Status.PASS, "no block held to NBC 4.6 under this reading", NOT_ASKED,
+                        _below_note(ctx))
         turning = turning_for(ctx.rules, a[FIRE_TURNING_RADIUS])
         if turning is None:
             return unknown_reading(FIRE_TURNING_RADIUS, a[FIRE_TURNING_RADIUS])
@@ -162,9 +260,13 @@ def loop_turns_check(ctx: Context, ground: Ground) -> Check:
         stuck = [s for s in bends if ground.blocked_area(s) > NOISE_SQM]
         measured = (f"{len(stuck)} of {len(bends)} bends blocked" if stuck
                     else f"all {len(bends)} bends turn at {radius:g} m")
+        if stuck and True not in held:
+            return Cell(Status.UNVERIFIED, measured, f"a {radius:g} m turn at every bend",
+                        MAYBE_SPECIAL_NOTE)
         return Cell(verdict(not stuck), measured, f"a {radius:g} m turn at every bend")
 
-    return check_from(run(ctx.rules, [STILT_IN_RULE_HEIGHT, FIRE_TURNING_RADIUS], cell),
+    return check_from(run(ctx.rules, [STILT_IN_RULE_HEIGHT, NBC_FIRE_HEIGHT, FIRE_TURNING_RADIUS],
+                          cell),
                       family=Family.FIRE, rule="Fire access: turns along the loop road",
                       clause=ctx.rules.fire.turning_radius_m.clause)
 
@@ -172,21 +274,29 @@ def loop_turns_check(ctx: Context, ground: Ground) -> Check:
 def reach_check(ctx: Context) -> Check:
     lane = ctx.rules.fire.clear_width_m.value
     network = reached(ctx)
+    subjects = fire_subjects(ctx)
 
     def cell(a: Assignment) -> Cell:
-        if a[STILT_IN_RULE_HEIGHT] not in ctx.classes:
-            return unknown_reading(STILT_IN_RULE_HEIGHT, a[STILT_IN_RULE_HEIGHT])
-        towers = ctx.high_rise(a[STILT_IN_RULE_HEIGHT])
-        if not towers:
-            return Cell(Status.NOT_CHECKED, "no high-rise under this reading",
-                        "a continuous way in for a fire tender", _below_note(ctx))
-        missing = [t.name for t in towers if network.is_empty or
+        unknown = _readings_known(ctx, a)
+        if unknown is not None:
+            return unknown
+        held = [(t, h) for t in subjects
+                if (h := held_by(ctx, t, a[STILT_IN_RULE_HEIGHT], a[NBC_FIRE_HEIGHT]))
+                is not False]
+        if not held:
+            return Cell(Status.PASS, "no block held to NBC 4.6 under this reading", NOT_ASKED,
+                        _below_note(ctx))
+        missing = [(t.name, h) for t, h in held if network.is_empty or
                    clear_band(t.footprint, lane).intersection(network).area < REACH_MIN_SQM]
-        measured = (f"cut off: {', '.join(missing)}" if missing
+        measured = (f"cut off: {', '.join(name for name, _ in missing)}" if missing
                     else "every block, by a lane or road from a gate")
+        if missing and all(h is None for _, h in missing):
+            return Cell(Status.UNVERIFIED, measured, "a continuous way in for a fire tender",
+                        MAYBE_SPECIAL_NOTE)
         return Cell(verdict(not missing), measured, "a continuous way in for a fire tender")
 
-    return check_from(run(ctx.rules, [STILT_IN_RULE_HEIGHT], cell), family=Family.FIRE,
+    return check_from(run(ctx.rules, [STILT_IN_RULE_HEIGHT, NBC_FIRE_HEIGHT], cell),
+                      family=Family.FIRE,
                       rule="Fire access: reached from the entrance",
                       clause=ctx.rules.fire.clear_width_m.clause)
 
@@ -303,7 +413,7 @@ def dead_end_check(ctx: Context) -> Check:
     fire = ctx.rules.fire
     limit = fire.dead_end_max_physical_m.value
     required = f"no dead-end road for a residential building above {limit:g} m"
-    tallest = max((t.physical_height_m for t in ctx.high_rise_anywhere()), default=0.0)
+    tallest = max((t.physical_height_m for t in fire_subjects(ctx)), default=0.0)
     rule, clause = "Fire access: dead-end road", fire.dead_end_max_physical_m.clause
     if tallest <= limit + TOL_M:
         return plain(Family.DEAD_END, rule, Status.PASS,
@@ -327,13 +437,25 @@ def loading_check(ctx: Context) -> Check:
         "The paving, and any cellar roof under a road or fire lane, must be designed for it.")
 
 
+def _held_text(ctx: Context, t: TowerGeometry) -> str:
+    """What holds a block below the high-rise height to NBC 4.6, in a few words."""
+    special = ctx.special.get(t.name)
+    if special:
+        return "a special building over the cellar, held to 4.6"
+    if special is None:
+        return "over the cellar or not, which is not drawn"
+    if _on_nbc_line(ctx, t):
+        return f"{t.physical_height_m:g} m, held to 4.6 under the nbc_line reading only"
+    return "not held to 4.6"
+
+
 def low_block_check(ctx: Context) -> Check | None:
     """What a block below the high-rise height is held to, said for each block that is below it
-    under any reading of the stilt: not the high-rise lanes, but rule 15(a)(i)'s National Building
-    Code requirements other than heights and setbacks. The rule gives no figure for what those ask
-    of fire access, so nothing numeric is judged: NOT_CHECKED, listed beside the verdict, never
-    PASS. Where the block stands is judged by its band, and how it is reached by rule 8(l). Were a
-    figure ever carried, this is the one check that would change."""
+    under any reading of the stilt. Rule 15(a)(i) keeps the National Building Code's requirements
+    other than heights and setbacks: 4.6's fire access where the block is a special building, or
+    under one reading from NBC's 15 m, judged in that block's own fire access check, and 4.3.2.2's
+    30 m pathway, judged with the internal roads. The rest of the Code (exits, the fire protection
+    inside a block) is not on a site plan: NOT_CHECKED, listed beside the verdict, never PASS."""
     below = ctx.low_rise_anywhere()
     if not below:
         return None
@@ -342,33 +464,61 @@ def low_block_check(ctx: Context) -> Check | None:
     for t in below:
         readings = [r for r in ctx.stilt_readings
                     if t.name in {x.name for x in ctx.low_rise(r)}]
-        names.append(t.name if len(readings) == len(ctx.stilt_readings)
-                     else f"{t.name} (only if the stilt is {', '.join(readings)})")
+        label = (t.name if len(readings) == len(ctx.stilt_readings)
+                 else f"{t.name} (only if the stilt is {', '.join(readings)})")
+        names.append(f"{label}: {_held_text(ctx, t)}")
     return plain(
         Family.FIRE, f"Fire access below {threshold:g} m (rule 15(a)(i))", Status.NOT_CHECKED,
-        f"{', '.join(names)}: below {threshold:g} m, so not held to the high-rise lanes "
-        f"({fire.clear_width_m.value:g} m clear and motorable on all sides, a "
-        f"{fire.turning_radius_m.value:g} m turning radius, a {fire.entrance_width_m.value:g} m "
-        "entrance)",
+        "; ".join(names),
         "the National Building Code's requirements and standards other than heights and "
         "setbacks", LOW_FIRE_CLAUSE,
-        f"{LOW_FIRE_RULE} The rule gives no figure for what that asks of a fire vehicle's "
-        "access, so nothing numeric is judged here. Where the block stands is judged by its "
-        "band's setback and gap, and how it is reached by rule 8(l).")
+        f"{LOW_FIRE_RULE} NBC 4.6's fire access is for high-rise and special buildings: a block "
+        f"over a cellar of more than {fire.special_basement_sqm.value:g} m² or of "
+        f"{fire.special_basement_levels.value} levels or more is one (Part 4 1.2(b)(6)), and so, "
+        f"under the nbc_line reading, is a block of NBC's own {fire.nbc_high_rise_m.value:g} m; "
+        "each is judged in its own fire access check. The 30 m pathway (Part 3 4.3.2.2) is "
+        "judged with the internal roads. The rest of the Code, exits and the fire protection "
+        "inside a block, is not shown on a site plan and is not judged here.")
+
+
+def _as_held(ctx: Context, subjects: list[TowerGeometry], made: Check) -> Check:
+    """A check of the whole site that 4.6 asks only where it holds a block: under a reading of the
+    stilt and of NBC's line that holds none, nothing is asked (PASS), so a result that holds only
+    where some reading holds a block is UNVERIFIED, never FAIL. Under a reading this validator
+    cannot evaluate, the check stands as made."""
+    f = made.finding
+
+    def cell(a: Assignment) -> Cell:
+        stilt, line = a[STILT_IN_RULE_HEIGHT], a[NBC_FIRE_HEIGHT]
+        known = stilt in ctx.classes and line in (STATE_LINE, NBC_LINE)
+        if known and all(held_by(ctx, t, stilt, line) is False for t in subjects):
+            return Cell(Status.PASS, "no block held to NBC 4.6 under this reading", NOT_ASKED,
+                        _below_note(ctx))
+        return Cell(f.status, f.measured, f.required, f.note)
+
+    return check_from(run(ctx.rules, [STILT_IN_RULE_HEIGHT, NBC_FIRE_HEIGHT], cell),
+                      family=made.family, rule=f.rule, clause=f.clause, subject=made.subject)
 
 
 def fire_checks(ctx: Context, ground: Ground) -> list[Check]:
-    """Fire access for every high-rise under any reading of the stilt, and what a block below the
-    high-rise height is held to instead."""
+    """Fire access for every block NBC 4.6 holds or may hold under any reading, and what a block
+    below the high-rise height is held to."""
     low = low_block_check(ctx)
     below = [low] if low is not None else []
-    if not ctx.high_rise_anywhere():
-        return [plain(Family.FIRE, "Fire access", Status.INFO, "no high-rise block",
-                      "NBC 4.6 for high-rise", ctx.rules.fire.clear_width_m.clause), *below]
-    out = [street_check(ctx), dead_end_check(ctx)]
+    subjects = fire_subjects(ctx)
+    if not subjects:
+        return [plain(Family.FIRE, "Fire access", Status.INFO,
+                      "no high-rise and no special building",
+                      "NBC 4.6 for high-rise and special buildings",
+                      ctx.rules.fire.clear_width_m.clause), *below]
+
+    def held(made: Check) -> Check:
+        return _as_held(ctx, subjects, made)
+
+    out = [held(street_check(ctx)), held(dead_end_check(ctx))]
     if not ctx.drawn.has_circulation:
-        return [*out, _no_layout(ctx), loading_check(ctx), *below]
+        return [*out, held(_no_layout(ctx)), held(loading_check(ctx)), *below]
     out += tower_checks(ctx, ground)
-    out += [loop_turns_check(ctx, ground), reach_check(ctx), entrance_check(ctx, ground),
-            obstruction_check(ctx), loading_check(ctx)]
+    out += [loop_turns_check(ctx, ground), reach_check(ctx), held(entrance_check(ctx, ground)),
+            held(obstruction_check(ctx)), held(loading_check(ctx))]
     return [*out, *below]

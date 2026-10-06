@@ -169,6 +169,29 @@ additions; a 1.1 document is refused like any older one.
 
 The new legal values are optional fields the resolver fills; the contract holds none of them.
 
+### Contracts 1.3 (2026-10-06)
+
+Made so the access a block below the state's high-rise line is held to can be judged, on the NBC
+2016 page images read on 2026-10-06. A 1.2 document is refused like any older one.
+
+1. **NBC 4.6 for special buildings, as law.** `FireRules.special_basement_sqm` (500 m²) and
+   `special_basement_levels` (2): Part 3 4.6 is "for high rise buildings and special buildings",
+   Part 4 1.2(b)(6) makes a special building of one with two basements or more, or one of more
+   than 500 m², and rule 15(a)(i) brings 4.6 to a block below 21 m (a provision of means of
+   access, neither a height nor a setback). A block over such a cellar is held to every fire
+   check a high-rise is.
+2. **NBC's own 15 m line, open.** `FireRules.nbc_high_rise_m` (Part 4 2.38, the stilt included,
+   2.6) and the required interpretation `nbc_fire_height` (`state_line`, `nbc_line`), carried as
+   ALL: under `nbc_line` 4.6 also holds a block of 15 m or more.
+3. **"Opens onto a road", open.** The required interpretation `opens_onto_road` (`touch`,
+   `frontage`), carried as ALL: a block above 12 m opens onto an internal road when any part of it
+   is within half a metre of one, or only when an unbroken stretch of it as long as rule 8(l)'s
+   pathway is wide faces one.
+4. **The pathway's length.** `CirculationRules.pathway_max_length_m` (30 m, NBC Part 3 4.3.2.2
+   through rule 15(a)(i)).
+
+Unlike 1.2's, the new legal values are required: every producer carries them.
+
 ### Shared types and adapters
 
 `common.py`: `Shape` (coordinates in the survey's metres), `Sourced`, `SourceKind` (SURVEY,

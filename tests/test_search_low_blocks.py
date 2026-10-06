@@ -1,6 +1,12 @@
 """Blocks below 21 m in the full search (stream C3): wherever the envelope allows, each held to its
 own Table III band, and every layout still judged by the independent validator.
 
+Under the law (contracts 1.3) a block over the cellar the search plans is a special building held
+to NBC 4.6's fire access, which the search does not yet lay for a block below 21 m, so on this
+land it offers no layout with one. Where a test is about where the search stands such a block, it
+runs under the MADE-UP rule of `search_support.no_special_buildings`, which says so; what the law
+asks is held by the test of special buildings below.
+
 Everything runs on made-up land (search_support.py). The acceptance criterion of
 docs/ARCHITECTURE.md section 6, "C3 Below 21 m", has its test here: on the made-up L-plot the 24 m
 arm is tried for a block below 21 m and the reason it is or is not used is said, and where a block
@@ -13,6 +19,7 @@ III asks.
 from search_support import (
     l_plot,
     made_up,
+    no_special_buildings,
     proposal_on_the_l_plot,
     rectangle,
     strategy,
@@ -121,7 +128,7 @@ def test_low_blocks_on_the_fringe_keep_their_own_setbacks_and_the_front_is_held_
     """The slim block stands on the fringe at Table III's Building Line (4 m) from the access
     road's side, nearer than its 6 m side setback, which no high-rise could; the validator holds it
     to both and passes it."""
-    made, proposal = l_plot(True), proposal_on_the_l_plot(True)
+    made, proposal = l_plot(True, False), proposal_on_the_l_plot(True, False)
     net = made.site.net_plot.value.to_shapely()
     front = net.boundary.intersection(box(-1, -1, 151, 0.5))  # the south edge, y = 0
     at_front = []
@@ -145,7 +152,7 @@ def test_low_blocks_on_the_fringe_keep_their_own_setbacks_and_the_front_is_held_
 
 
 def test_a_pathway_branches_out_of_the_ring_road_to_a_block_up_to_12_m():
-    made, proposal = l_plot(), proposal_on_the_l_plot()
+    made, proposal = l_plot(False, False), proposal_on_the_l_plot(False, False)
     served = 0
     for candidate in proposal.candidates:
         paths = [r for r in candidate.circulation.roads if r.kind.value == "PATHWAY"]
@@ -172,7 +179,7 @@ def test_a_pathway_branches_out_of_the_ring_road_to_a_block_up_to_12_m():
 def test_a_block_on_the_fringe_above_12_m_stands_against_a_road():
     """The slim block stands only on the fringe (the columns take the deeper blocks); above 12 m
     rule 8(l) gives it no pathway, so it opens onto the ring road itself."""
-    made, proposal = l_plot(True), proposal_on_the_l_plot(True)
+    made, proposal = l_plot(True, False), proposal_on_the_l_plot(True, False)
     tall = 0
     for candidate in proposal.candidates:
         roads = _shapes(candidate, *ROADS)
@@ -207,16 +214,18 @@ def test_a_low_block_never_stands_in_a_high_rises_fire_lane_or_turning_ground():
 
 def _all_low():
     """A made-up plot whose brief asks for one to five floors above the stilt: every block is
-    below 21 m."""
+    below 21 m. Under the made-up rule of `no_special_buildings`."""
     notation = rectangle().brief.height_intent.notation
-    return made_up(box(0, 0, 160, 100), floors=HeightIntent(
-        notation=notation, mode=HeightMode.RANGE, floors_range=(1, 5)))
+    return no_special_buildings(made_up(box(0, 0, 160, 100), floors=HeightIntent(
+        notation=notation, mode=HeightMode.RANGE, floors_range=(1, 5))))
 
 
 def test_a_layout_of_blocks_below_21_m_lays_no_fire_lane_and_draws_table_iii_planting():
-    """Rule 15(a)(i) gives no figure for fire access below 21 m, so no hardstanding is laid round
-    such a block (the validator lists the rule as NOT_CHECKED), and the 1 m strip Table III asks
-    (rule 5(f)) runs round the plot, broken only at the gate."""
+    """Under the state's line NBC 4.6 asks nothing of a block below 21 m that is not a special
+    building (and here, made up, none is), so no hardstanding is laid round such a block; a block
+    of NBC's own 15 m or more is held under the other reading, so what it lacks there is
+    UNVERIFIED, never FAIL. The validator lists the rest of rule 15(a)(i) as NOT_CHECKED, and the
+    1 m strip Table III asks (rule 5(f)) runs round the plot, broken only at the gate."""
     made = _all_low()
     proposal = strategy().propose(made.context())
     assert proposal.candidates
@@ -238,18 +247,33 @@ def test_a_layout_of_blocks_below_21_m_lays_no_fire_lane_and_draws_table_iii_pla
 
 def test_no_layout_with_a_low_block_is_offered_that_the_validator_fails():
     used = 0
-    for slim in (False, True):
-        made, proposal = l_plot(slim), proposal_on_the_l_plot(slim)
+    for slim, special in ((False, True), (True, True), (False, False), (True, False)):
+        made, proposal = l_plot(slim, special), proposal_on_the_l_plot(slim, special)
         for candidate in proposal.candidates:
             report = _judge(made, candidate)
             assert report.verdict.legal is not LegalVerdict.FAIL
             assert [c.finding.rule for c in report.legal if c.finding.status is Status.FAIL] == []
             assert [d.item for d in report.cross_checks if d.blocks_pass] == []
             assert report.accounting.partition_problems == []
-            used += any(_low(made, t) for t in candidate.towers)
+            used += not special and any(_low(made, t) for t in candidate.towers)
             if not rests_on(report).holds_under_every_reading:
                 assert any("holds only if" in c for c in candidate.caveats)
     assert used
+
+
+def test_under_the_law_no_layout_offers_a_special_building_without_its_fire_access():
+    """NBC 4.6 holds a block over a cellar of more than 500 m², or of two levels, to the lanes a
+    high-rise keeps (Part 4 1.2(b)(6), through rule 15(a)(i)). Whatever the search stands over its
+    cellar, no layout it offers fails that block's fire access."""
+    for slim in (False, True):
+        made, proposal = l_plot(slim), proposal_on_the_l_plot(slim)
+        assert proposal.candidates
+        for candidate in proposal.candidates:
+            report = _judge(made, candidate)
+            fire = [c for c in report.legal if c.finding.rule.startswith("Fire access: ")]
+            assert all(c.finding.status is not Status.FAIL for c in fire), [
+                (c.finding.rule, c.finding.measured) for c in fire
+                if c.finding.status is Status.FAIL]
 
 
 # --- The acceptance criterion: the L-plot's arm --------------------------------------------------
@@ -274,7 +298,7 @@ def test_where_a_block_fits_the_arm_the_objective_decides_and_the_layouts_say_wh
     layouts with one and without one are judged side by side, and the note counts the proposals
     that did. A block there is low, served by the ring road or a pathway branching out of it, and
     passes the validator."""
-    made, proposal = l_plot(True), proposal_on_the_l_plot(True)
+    made, proposal = l_plot(True, False), proposal_on_the_l_plot(True, False)
     note = _arm_note(proposal.notes)
     assert "one fits (slim-2 at 2 floors)" in note
     in_arm = [c for c in proposal.candidates

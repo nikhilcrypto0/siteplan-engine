@@ -33,8 +33,10 @@ from siteplan.contracts.resolved_rules import (
     FIRE_TURNING_RADIUS,
     HEIGHT_TOL_M,
     MIXED_HEIGHT_SPACING,
+    NBC_FIRE_HEIGHT,
     OPEN_SPACE_BASIS,
     OPEN_SPACE_OTHER_USES,
+    OPENS_ONTO_ROAD,
     STILT_IN_RULE_HEIGHT,
     TOT_LOT_SURFACE,
     VISITOR_PARKING,
@@ -137,6 +139,18 @@ def interpretations() -> list[dict]:
                                                  "court, a pool, a paved deck)"},
          "sources": [f"{rules.OPEN_SPACE_CLAUSE}: 'greenery, tot lot or soft landscaping, etc.'"],
          "settles": "the organised open space a sanctioned plan's area statement counts"},
+        {"id": NBC_FIRE_HEIGHT, "selected": ALL,
+         "question": "Does NBC 4.6 reach a block of 15 to 21 m the state calls non-high-rise?",
+         "alternatives": {"state_line": "no: only as a special building (over a large or deep "
+                                        "cellar)",
+                          "nbc_line": "yes: NBC's own 15 m line, the stilt included"},
+         "sources": [rules.NBC_HIGH_RISE_CLAUSE, rules.NON_HIGH_RISE_NBC_CLAUSE],
+         "settles": "the fire department's reading"},
+        {"id": OPENS_ONTO_ROAD, "selected": ALL,
+         "question": "Does a block that only touches a road at a corner open onto it?",
+         "alternatives": {"touch": "any part within half a metre of the road",
+                          "frontage": "a pathway's width of its outline faces the road"},
+         "sources": [rules.PATHWAY_CLAUSE], "settles": "the authority's reading of rule 8(l)"},
     ]
 
 
@@ -389,7 +403,9 @@ def _circulation(gds: bool) -> dict:
                                        "basis": Basis.UNRESOLVED_INTERPRETATION,
                                        "status": Provenance.UNVERIFIED,
                                        "note": "rule 8(l) read as every block above 12 m "
-                                               "opening onto a road"}}
+                                               "opening onto a road"},
+            "pathway_max_length_m": {"value": rules.PATHWAY_MAX_LENGTH_M, "unit": "m",
+                                     "clause": rules.PATHWAY_LENGTH_CLAUSE, **LAW}}
 
 
 def _fire() -> dict:
@@ -408,7 +424,14 @@ def _fire() -> dict:
             "street_join_m": {"value": rules.FIRE_STREET_JOIN_M, "unit": "m",
                               "clause": rules.FIRE_STREET_CLAUSE, **LAW},
             "dead_end_max_physical_m": {"value": rules.DEAD_END_MAX_HEIGHT_M, "unit": "m",
-                                        "clause": rules.DEAD_END_CLAUSE, **LAW}}
+                                        "clause": rules.DEAD_END_CLAUSE, **LAW},
+            "special_basement_sqm": {"value": rules.NBC_SPECIAL_BASEMENT_SQM, "unit": "m²",
+                                     "clause": rules.NBC_SPECIAL_BUILDING_CLAUSE, **LAW},
+            "special_basement_levels": {"value": rules.NBC_SPECIAL_BASEMENT_LEVELS,
+                                        "unit": "levels",
+                                        "clause": rules.NBC_SPECIAL_BUILDING_CLAUSE, **LAW},
+            "nbc_high_rise_m": {"value": rules.NBC_HIGH_RISE_M, "unit": "m",
+                                "clause": rules.NBC_HIGH_RISE_CLAUSE, **LAW}}
 
 
 def _parking(column: TableVColumn, site: CanonicalSiteModel) -> dict:

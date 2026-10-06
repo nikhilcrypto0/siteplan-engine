@@ -295,10 +295,10 @@ def _limit(**fields) -> HeightLimit:
 CONDITION = {"fact": "access.dead_end", "holds_when": True, "text": "the road ends at the plot"}
 
 
-def test_the_contracts_are_version_1_2_and_refuse_an_older_document():
-    assert CONTRACTS_VERSION == "1.2"
+def test_the_contracts_are_version_1_3_and_refuse_an_older_document():
+    assert CONTRACTS_VERSION == "1.3"
     brief = load("rectangle", "DesignBrief").model_dump(mode="json")
-    for older in ("1.0", "1.1"):
+    for older in ("1.0", "1.1", "1.2"):
         with pytest.raises(ValidationError, match="schema_version"):
             ALL_CONTRACTS["DesignBrief"].model_validate(brief | {"schema_version": older})
 

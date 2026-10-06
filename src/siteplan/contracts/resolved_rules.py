@@ -50,6 +50,8 @@ VISITOR_PARKING = "visitor_parking"
 AMENITY_SHARE = "amenity_share"
 TOT_LOT_SURFACE = "tot_lot_surface"
 OPEN_SPACE_OTHER_USES = "open_space_other_uses"
+NBC_FIRE_HEIGHT = "nbc_fire_height"
+OPENS_ONTO_ROAD = "opens_onto_road"
 
 COUNTED, NOT_COUNTED = "counted", "not_counted"
 ALLOWED, NOT_ALLOWED = "allowed", "not_allowed"
@@ -59,6 +61,8 @@ SAME_KIND_ONLY, ANY_OPEN_RECREATION = "same_kind_only", "any_open_recreation"
 GROSS_BEFORE_SURRENDER = "gross_before_surrender"
 GROSS_AFTER_SURRENDER = "gross_after_surrender"
 NET_AFTER_SURRENDER = "net_after_surrender"
+STATE_LINE, NBC_LINE = "state_line", "nbc_line"
+TOUCH, FRONTAGE = "touch", "frontage"
 
 READINGS: dict[str, tuple[str, ...]] = {
     STILT_IN_RULE_HEIGHT: (COUNTED, NOT_COUNTED),
@@ -71,6 +75,8 @@ READINGS: dict[str, tuple[str, ...]] = {
     AMENITY_SHARE: ("minimum_3_percent", "up_to_3_percent_or_cap"),
     TOT_LOT_SURFACE: (ANY_SURFACE, SOFT_ONLY),
     OPEN_SPACE_OTHER_USES: (SAME_KIND_ONLY, ANY_OPEN_RECREATION),
+    NBC_FIRE_HEIGHT: (STATE_LINE, NBC_LINE),
+    OPENS_ONTO_ROAD: (TOUCH, FRONTAGE),
 }
 REQUIRED_INTERPRETATIONS = tuple(READINGS)
 
@@ -522,6 +528,8 @@ class CirculationRules(Part):
     driveway_is_road: RuleValue[bool]
     block_over_12m_on_road: RuleValue[bool]
     in_setback_interpretation: str = CIRCULATION_IN_SETBACK
+    opens_onto_interpretation: str = OPENS_ONTO_ROAD  # a touch, or a pathway's width of frontage
+    pathway_max_length_m: RuleValue[float]  # NBC 4.3.2.2, through rule 15(a)(i)
 
 
 class FireRules(Part):
@@ -534,6 +542,14 @@ class FireRules(Part):
     load_t: RuleValue[float]
     street_join_m: RuleValue[float]
     dead_end_max_physical_m: RuleValue[float]
+    # NBC 4.6 is also for special buildings (Part 4 1.2(b)(6)): a block over a cellar of more than
+    # this area, or over this many cellar levels, is held to all of it whatever its height.
+    special_basement_sqm: RuleValue[float]
+    special_basement_levels: RuleValue[int]
+    # NBC's own high-rise line, on its own height (the stilt included); whether it reaches a block
+    # the state calls non-high-rise is the nbc_fire_height reading.
+    nbc_high_rise_m: RuleValue[float]
+    nbc_height_interpretation: str = NBC_FIRE_HEIGHT
 
 
 class ElectricalRules(Part):

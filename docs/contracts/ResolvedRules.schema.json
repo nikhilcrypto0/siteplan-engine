@@ -249,7 +249,15 @@
         "internal_road_m": {
           "$ref": "#/$defs/RuleValue_float_"
         },
+        "opens_onto_interpretation": {
+          "default": "opens_onto_road",
+          "title": "Opens Onto Interpretation",
+          "type": "string"
+        },
         "pathway_max_block_height_m": {
+          "$ref": "#/$defs/RuleValue_float_"
+        },
+        "pathway_max_length_m": {
           "$ref": "#/$defs/RuleValue_float_"
         },
         "pathway_width_m": {
@@ -274,7 +282,8 @@
         "pathway_max_block_height_m",
         "driveway_min_m",
         "driveway_is_road",
-        "block_over_12m_on_road"
+        "block_over_12m_on_road",
+        "pathway_max_length_m"
       ],
       "title": "CirculationRules",
       "type": "object"
@@ -388,6 +397,20 @@
         "load_t": {
           "$ref": "#/$defs/RuleValue_float_"
         },
+        "nbc_height_interpretation": {
+          "default": "nbc_fire_height",
+          "title": "Nbc Height Interpretation",
+          "type": "string"
+        },
+        "nbc_high_rise_m": {
+          "$ref": "#/$defs/RuleValue_float_"
+        },
+        "special_basement_levels": {
+          "$ref": "#/$defs/RuleValue_int_"
+        },
+        "special_basement_sqm": {
+          "$ref": "#/$defs/RuleValue_float_"
+        },
         "street_join_m": {
           "$ref": "#/$defs/RuleValue_float_"
         },
@@ -408,7 +431,10 @@
         "entrance_clear_height_m",
         "load_t",
         "street_join_m",
-        "dead_end_max_physical_m"
+        "dead_end_max_physical_m",
+        "special_basement_sqm",
+        "special_basement_levels",
+        "nbc_high_rise_m"
       ],
       "title": "FireRules",
       "type": "object"
@@ -1429,8 +1455,8 @@
       "type": "string"
     },
     "schema_version": {
-      "const": "1.2",
-      "default": "1.2",
+      "const": "1.3",
+      "default": "1.3",
       "title": "Schema Version",
       "type": "string"
     },

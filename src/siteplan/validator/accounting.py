@@ -172,7 +172,7 @@ def _zones(ctx: Context) -> list[tuple[str, BaseGeometry]]:
         if zone is not None:
             zones.append((f"inside the setback (stilt {reading})", zone))
         lane = ctx.rules.fire.clear_width_m.value
-        bands = union_of_all([clear_band(t.footprint, lane) for t in ctx.high_rise(reading)])
+        bands = union_of_all([clear_band(t.footprint, lane) for t in ctx.fire_held(reading)])
         zones.append(("a fire lane's clear ground", bands))
         zones.append(("a gap between blocks",
                       union_of_all([z for _, z in gap_zones(ctx, reading, spacing)])))

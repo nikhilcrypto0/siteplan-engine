@@ -36,7 +36,10 @@ __all__ = ["CONTRACTS_VERSION", "Basis", "Contract", "FacilityUse", "Finding", "
 # inclusive band edges, facility use and surface, design margins, bounds on rule values.
 # 1.2 (2026-10-04): Table III (rule 5) can be held: a band's own height measure (the stilt left
 # out, 5(c)), its front setback, its permission and planting strip; rule 8(l)'s pathways.
-CONTRACTS_VERSION = "1.2"
+# 1.3 (2026-10-06): NBC 4.6 for special buildings (a block over a cellar of more than 500 m² or of
+# two levels), NBC's 15 m line as the nbc_fire_height reading, "opens onto a road" as the
+# opens_onto_road reading, NBC 4.3.2.2's 30 m pathway.
+CONTRACTS_VERSION = "1.3"
 
 Point = tuple[float, float]
 Ring = list[Point]
@@ -53,7 +56,7 @@ class Part(BaseModel):
 class Contract(Part):
     """A permanent contract between pipeline stages, versioned."""
 
-    schema_version: Literal["1.2"] = CONTRACTS_VERSION
+    schema_version: Literal["1.3"] = CONTRACTS_VERSION
 
 
 class SourceKind(StrEnum):

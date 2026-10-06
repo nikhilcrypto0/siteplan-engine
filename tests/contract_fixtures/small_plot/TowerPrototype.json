@@ -1,5 +1,5 @@
 {
- "schema_version": "1.2",
+ "schema_version": "1.3",
  "id": "single-core-small-4",
  "family": "SINGLE_CORE_SMALL",
  "source_kind": "ENGINE_DEFAULT",
