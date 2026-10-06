@@ -4,6 +4,32 @@ A characterization test (tests/manifest.py) pins what the engine produces today.
 only together with a normative replacement test and an entry here: what changed, why, the
 evidence, and the test that now holds the behaviour. Newest first.
 
+## 2026-10-06: the search keeps its cellar out from under blocks below 21 m
+
+The full search lays fire lanes round its high-rise blocks only, and its cellar was the whole plot
+inset by the cellar setback, so under contracts 1.3 every block it stood below 21 m was over a
+cellar of more than 500 m², a special building whose fire access the validator failed (the entry
+below). `optimizer.search.parking_plan.plan_parking` now takes the footprints of the blocks laid
+with no fire band (`clear_of`, from `layout.lay_out`) and the cellar outline leaves them out, so
+none of them is a special building. The cellar is smaller by those footprints and may need more
+levels. Not checked, as before: whether every part of a cellar with holes in it is reached from
+its ramp.
+
+- Made-up land (the PR #17 baseline): the twelve proposals, the notes and the model's answer are
+  main's again, and the same three are shown; only the proposals' digests move (contracts 1.3,
+  and the cellars cut round the low blocks). Re-pinned.
+- `tests/test_search_low_blocks.py`: the six tests that ran under the MADE-UP
+  `no_special_buildings` rule run under the law again, and the rule is gone from
+  `search_support.py`; the test of special buildings also holds that no block laid without a fire
+  band stands over the cellar.
+- Dhulapally, Run B prime's request (diagnostic, not a run:
+  `out/dhulapally-CELLAR-FIX-CHECK-DIAGNOSTIC-20261006/`): Run B prime's twelve are proposed again
+  and the same three shown (85, 86, 63). None of the twelve holds under every reading where Run B
+  prime had three: `full-ALL-ALL-1`, `-4` and `-5` stand stilt + 5 blocks with no fire band, which
+  pass under the state's 21 m line and fail under NBC's own 15 m (`nbc_line`), so they rest on
+  that reading. Seen on the drawings: the cellar is cut round those blocks, which still have no
+  road or fire lane round them, the generator's next step.
+
 ## 2026-10-06: contracts 1.3, the access a block below 21 m is held to
 
 Read on 2026-10-06 from the NBC 2016 page images (`fixtures/rules/sources/nbc`), brought in by

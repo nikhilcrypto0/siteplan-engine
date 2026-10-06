@@ -122,36 +122,19 @@ def slim_prototype() -> TowerPrototype:
                    "common_core_sqm": footprint.area - own, "saleable_sqft": 1190 + 1690})
 
 
-def no_special_buildings(made: Made) -> Made:
-    """The same land under a MADE-UP fire rule by which no cellar makes a special building: for
-    the tests of where the search stands blocks below 21 m, apart from NBC 4.6. Under the law a
-    block over the cellar the search plans is a special building held to 4.6's fire access, which
-    the search does not yet lay for a block below 21 m (docs/behaviour-changes.md, 2026-10-06)."""
-    rules = made.rules.model_copy(deep=True)
-    said = {"clause": "MADE-UP (test): no cellar makes a special building"}
-    rules.fire.special_basement_sqm = rules.fire.special_basement_sqm.model_copy(
-        update={"value": 1e12, **said})
-    rules.fire.special_basement_levels = rules.fire.special_basement_levels.model_copy(
-        update={"value": 10**6, **said})
-    return Made(made.site, rules, made.brief, make_envelope(made.site, rules), made.kit)
-
-
 @cache
-def l_plot(slim: bool = False, special: bool = True) -> Made:
+def l_plot(slim: bool = False) -> Made:
     """The contract fixtures' L-plot (150 x 100 m with a 24 m arm, 60 m long, at its north-west
-    corner), the access road along the south side; with the slim block in the kit when asked, and
-    under the made-up rule of `no_special_buildings` when `special` is False."""
+    corner), the access road along the south side; with the slim block in the kit when asked."""
     made = made_up(L_PLOT)
-    made = Made(made.site, made.rules, made.brief, made.envelope,
+    return Made(made.site, made.rules, made.brief, made.envelope,
                 (*made.kit, slim_prototype()) if slim else made.kit)
-    return made if special else no_special_buildings(made)
 
 
 @cache
-def proposal_on_the_l_plot(slim: bool = False, special: bool = True):
-    """The quick search on the L-plot, once for each kit and rule: the tests that only read it
-    share it."""
-    return strategy().propose(l_plot(slim, special).context())
+def proposal_on_the_l_plot(slim: bool = False):
+    """The quick search on the L-plot, once for each kit: the tests that only read it share it."""
+    return strategy().propose(l_plot(slim).context())
 
 
 def strategy(limits: Limits = FAST, **given) -> FullSearchStrategy:

@@ -729,9 +729,8 @@ INVENTORY: tuple[Entry, ...] = (
                "1.2(b)(6) makes a special building of 'buildings with two basements or more, or "
                "with one basement of area more than 500 m²'. Read as law on 2026-10-06 through "
                "rule 15(a)(i). A block standing over a cellar shared with others has it as its "
-               "basement. The generator's cellar is the plot inset by its setback, so on a layout "
-               "with a cellar every block is held to 4.6; the generator does not yet give a block "
-               "below 21 m the fire band, so such layouts fail until it does.",
+               "basement. The generator lays no fire band round a block below 21 m, so it keeps "
+               "its cellar out from under every such block (optimizer.search.parking_plan).",
         settles="The fire NOC of a sanctioned block below 21 m over a cellar, or the Fire Services "
                 "Department's reading of 15(a)(i).",
     ),

@@ -715,8 +715,8 @@ REGISTRY: tuple[Constraint, ...] = (
         note="NBC 2016 Part 4 1.2(b)(6) with Part 3 4.6, brought to a block below 21 m by rule "
              "15(a)(i): read as law on 2026-10-06, 4.6 being a provision of means of access and "
              "neither a height nor a setback. A block over a shared cellar has it as its "
-             "basement. The generator's cellar is the plot inset by its setback, so a layout "
-             "with a cellar holds every block to 4.6.",
+             "basement. The generator lays no fire band round a block below 21 m and keeps its "
+             "cellar out from under every such block (optimizer.search.parking_plan).",
     ),
     Constraint(
         "Fire access", "NBC's own high-rise line, the stilt included: whether 4.6 reaches a block "

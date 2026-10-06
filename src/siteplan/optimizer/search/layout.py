@@ -304,8 +304,10 @@ def lay_out(run: Run, ev: Evaluation) -> tuple[Laid | None, str]:
         return None, why
     club_sqm = club.area * club_floors if club is not None else 0.0
     cores = _cores(placements)
+    # no fire band is laid round a block below the high-rise height, so no cellar runs under one
+    low = unary_union([f for f, tall in zip(footprints, high, strict=True) if not tall])
     plan, why = plan_parking(plot.net, plot.excluded, rules, q, footprints, cores, [],
-                             tower_sqm + club_sqm, frame.angle_deg)
+                             tower_sqm + club_sqm, frame.angle_deg, low)
     if plan is None:
         return None, why
     ramps: list[Polygon] = []
@@ -317,7 +319,7 @@ def lay_out(run: Run, ev: Evaluation) -> tuple[Laid | None, str]:
             return None, "no room beside a road for the cellar ramp outside the clear ground"
         ramps = [ramp]
         plan, why = plan_parking(plot.net, plot.excluded, rules, q, footprints, cores, ramps,
-                                 tower_sqm + club_sqm, frame.angle_deg)
+                                 tower_sqm + club_sqm, frame.angle_deg, low)
         if plan is None:
             return None, why
     keep_off = [g.buffer(ground.CLEARANCE_M, join_style="mitre") for g in [club, *ramps]
