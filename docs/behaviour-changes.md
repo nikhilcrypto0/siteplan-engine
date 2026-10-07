@@ -4,6 +4,28 @@ A characterization test (tests/manifest.py) pins what the engine produces today.
 only together with a normative replacement test and an entry here: what changed, why, the
 evidence, and the test that now holds the behaviour. Newest first.
 
+## 2026-10-07: C4-10, the facilities laid in the order that places the most
+
+The facilities were laid first-fit in the order the firm lists them (since C4-08 what the brief
+requires first), each where the ground nearest the gate holds it, so one large facility laid
+early could leave no room for two others. The order is now searched (`ground.place_facilities`,
+`_orders`): the firm's own, each of its rotations (each facility first in turn) and the largest
+first, always within the classes (required, preferred, optional) in that order; the one that
+places the most required facilities, then preferred, then optional is kept, the firm's between
+equals, and the search stops at an order that places them all. Missed ones are named in the
+firm's order. Measured first over Dhulapally's 126 facility placements: rotations and the
+largest first place 53 more facilities in all than the firm's order (8 random shuffles: 54).
+
+- Made-up land (`tests/test_search_program_classes.py`, normative): in a 34 x 21 m room a 33 x 10
+  m deck listed first leaves no room for two 15 m courts, which side by side both stand: the two
+  courts are kept, the deck named; a required facility is still laid before preferred ones,
+  whatever order would place more. The quick search lays the same layouts; the service's made-up
+  baseline proposes and shows the same, and only the facilities of the most saleable layout move
+  (its digest and the answer re-pinned).
+- Dhulapally, Run B prime's request (the C4 benchmark): the same layouts judged, proposed and
+  shown; their facilities 152 where they were 144 (the 23 judged), 753 m² less ground left
+  unallocated among them; the open-space alternative places 5 of 9 where it placed 4.
+
 ## 2026-10-07: C4-09, the frontier kept, and a robust alternative shown
 
 Two changes to what the search keeps and what the architect sees.

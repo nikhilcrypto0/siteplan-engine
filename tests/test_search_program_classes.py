@@ -40,3 +40,32 @@ def test_a_library_that_says_nothing_leaves_a_facility_preferred_one_that_says_i
     stated = AmenityItem(name="SWIMMING POOL", width_m=12.0, depth_m=25.0,
                          priority=AmenityPriority.REQUIRED)
     assert AmenityRequest(**amenity_request(stated)).priority is AmenityPriority.REQUIRED
+
+
+def test_the_order_that_places_the_most_is_kept_not_the_first_fit_of_the_firms():
+    """C4-10: room 34 x 21 m; the firm lists a 33 x 10 m deck first and two 15 m square courts after
+    it. Laid first, the deck leaves no room for either court; the courts first, side by side, both
+    stand: two facilities where the firm's order placed one."""
+    made = rectangle()
+    deck = _asked("DECK", AmenityPriority.PREFERRED, size=(33.0, 10.0))
+    courts = [_asked(f"COURT {i}", AmenityPriority.PREFERRED, size=(15.0, 15.0)) for i in (1, 2)]
+    room = box(0, 0, 34, 21)
+    first_fit, _ = ground._place_in_order([deck, *courts], made.rules, [], room, None, [0.0],
+                                         Point(0, 0))
+    assert [f.request.name for f in first_fit] == ["DECK"]
+    placed, missed = ground.place_facilities([deck, *courts], made.rules, [], room, None, [0.0],
+                                             Point(0, 0))
+    assert sorted(f.request.name for f in placed) == ["COURT 1", "COURT 2"]
+    assert missed == ["DECK"]
+
+
+def test_no_order_lays_a_preferred_facility_before_a_required_one():
+    """Whatever order is searched, a required facility is laid before the preferred ones: with
+    room for one, the required stands even where a preferred one would leave room for more."""
+    made = rectangle()
+    small = [_asked(f"SEAT {i}", AmenityPriority.PREFERRED, size=(5.0, 5.0)) for i in (1, 2, 3)]
+    big = _asked("GYM YARD", AmenityPriority.REQUIRED, size=(18.0, 18.0))
+    placed, missed = ground.place_facilities([*small, big], made.rules, [], box(0, 0, 19, 19),
+                                             None, [0.0], Point(0, 0))
+    assert [f.request.name for f in placed] == ["GYM YARD"]
+    assert missed == ["SEAT 1", "SEAT 2", "SEAT 3"]

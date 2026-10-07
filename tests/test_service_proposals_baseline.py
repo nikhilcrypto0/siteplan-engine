@@ -35,7 +35,10 @@ profile's judged six are its front and different ideas before copies, and a four
 shown, ROBUST, the layout resting on the fewest open readings: 15 proposed where 10 were; shown
 the 4 x S+10 balanced one again (440,800 sft), and for the open space the S+8 x 4 + S+3 and for
 ROBUST the 3 x S+7, both holding under every reading (ROBUST ranks by the readings and the
-yield, not the front of the other axes, which the 3 x S+7 does not reach).
+yield, not the front of the other axes, which the 3 x S+7 does not reach). Re-pinned on C4-10,
+where the facilities are laid in the order that places the most: the same proposals and the same
+four shown; the facilities of the most saleable one stand elsewhere, so its digest and the answer
+move.
 
 The values pin exact output on the locked dependencies (uv.lock). They move only with a normative
 replacement and an entry in docs/behaviour-changes.md.
@@ -81,16 +84,16 @@ PINNED = {
         "full-ALL-allowed-55",
         "full-ALL-ALL-114",
     ],
-    "proposed_sha256": "6600dfffbef1b234bc3a3b151e6a32f951389799ae846aa5fff142d2f053f3f7",
+    "proposed_sha256": "865651f912d6a0c033240361796b886237a8316f4f5c15915ed606717e5e844b",
     "shown": [
         ["full-not_counted-allowed-87", "BALANCED"],
         ["full-not_counted-allowed-86", "MAX_YIELD"],
         ["full-ALL-ALL-114", "CONVENTIONAL_OPEN_SPACE"],
         ["full-ALL-ALL-1", "ROBUST"],
     ],
-    "shown_digests": ["f221bdd69a4af9be", "159177f104623eb7", "cfae9011d83df020",
+    "shown_digests": ["f221bdd69a4af9be", "e00f13302e0a5d6b", "cfae9011d83df020",
                       "e81bd7dba6563362"],
-    "answer_sha256": "6eda374e1b32925fea8be94d7cf1fcd779bddc2bcfdc6a48564825f361ee97dd",
+    "answer_sha256": "1021534265708c7735aafaf25cf322d4820b9dd51873e671321f50a672845380",
     "approval_page_sha256": "cd3ebee2af46849756df643999df9b16d2cbc91d92c45101983782cff1eb0181",
 }
 PROPOSALS: list = []

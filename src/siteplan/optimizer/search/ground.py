@@ -155,14 +155,49 @@ def place_facilities(requests: Sequence[AmenityRequest], rules: ResolvedRules,
                      open_pockets: Sequence[Polygon], room: BaseGeometry, club: Polygon | None,
                      turns: Sequence[float], anchor: Point | None
                      ) -> tuple[list[PlacedFacility], list[str]]:
-    """The facilities the brief asks for, as many as have room, in the order the firm lists them;
-    one with no room is named and never squeezed in. A facility that is soft planting of a use the
-    rule names counts as open space, so it may stand on the open space; every other stands beside
-    it. A facility meant for the club house stands inside it."""
+    """The facilities the brief asks for, as many as have room; one with no room is named and
+    never squeezed in. What the brief requires is laid before what it prefers, and that before
+    what is optional (C4-08). Within each, the order is searched (C4-10): the firm's own, each of
+    its rotations (each facility first in turn) and the largest first, and the one that places
+    the most of what is required, then of what is preferred, then of what is optional is kept,
+    the firm's between equals. One facility laid first-fit could leave no room for two others.
+    Missed facilities are named in the firm's order."""
+    classes = [[r for r in requests if r.priority is p] for p in PRIORITY_ORDER]
+    best: tuple[tuple[int, ...], list[PlacedFacility], list[str]] | None = None
+    for order in _orders(classes):
+        placed, missed = _place_in_order(order, rules, open_pockets, room, club, turns, anchor)
+        counts = tuple(-sum(1 for f in placed if f.request.priority is p) for p in PRIORITY_ORDER)
+        if best is None or counts < best[0]:
+            best = (counts, placed, missed)
+        if not missed:
+            break
+    if best is None:
+        return [], []
+    wanted = [r.name for r in requests]
+    return best[1], sorted(best[2], key=wanted.index)
+
+
+def _orders(classes: Sequence[Sequence[AmenityRequest]]) -> list[list[AmenityRequest]]:
+    """The orders the facilities are tried in, the classes always in theirs: the firm's, each
+    rotation of it within every class, the largest first within every class."""
+    def area(r: AmenityRequest) -> float:
+        return r.footprint_m[0] * r.footprint_m[1] if r.footprint_m is not None else 0.0
+
+    turns = max((len(c) for c in classes), default=0)
+    orders = [[r for c in classes for r in (c[i % len(c):] + c[:i % len(c)] if c else [])]
+              for i in range(max(turns, 1))]
+    orders.append([r for c in classes for r in sorted(c, key=area, reverse=True)])
+    return orders
+
+
+def _place_in_order(requests: Sequence[AmenityRequest], rules: ResolvedRules,
+                    open_pockets: Sequence[Polygon], room: BaseGeometry, club: Polygon | None,
+                    turns: Sequence[float], anchor: Point | None
+                    ) -> tuple[list[PlacedFacility], list[str]]:
+    """The facilities in this order, each where the ground nearest the anchor holds it. A facility
+    that is soft planting of a use the rule names counts as open space, so it may stand on the open
+    space; every other stands beside it. A facility meant for the club house stands inside it."""
     named = set(rules.open_space.qualifying_uses.value)
-    # C4-08: what the brief requires before what it prefers, and that before what is optional;
-    # the firm's own order within each
-    requests = sorted(requests, key=lambda r: PRIORITY_ORDER.index(r.priority))
     pockets = unary_union(list(open_pockets)) if open_pockets else EMPTY
     outside = room.difference(pockets) if not pockets.is_empty else room
     inside_club = club
