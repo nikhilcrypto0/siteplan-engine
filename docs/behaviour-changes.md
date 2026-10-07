@@ -4,6 +4,45 @@ A characterization test (tests/manifest.py) pins what the engine produces today.
 only together with a normative replacement test and an entry here: what changed, why, the
 evidence, and the test that now holds the behaviour. Newest first.
 
+## 2026-10-07: C4-12, the open space taken where it is usable
+
+The open space was taken biggest pocket first (`fit.choose_pockets`), so on Dhulapally it was
+most often the far arm of the plot or a long wedge (the open-space option's: one strip of 3,580 m²,
+64% of it within 30 m of a block), and the objective counted every square metre of it alike. One
+measure now (`objective.usable_open_sqm`): the part of the open space at least 12 m across
+(`OPEN_WIDE_M`: a lawn, a court or a play area fits) and within 30 m of a block (`OPEN_REACH_M`:
+its residents see and reach it), both engine design assumptions in constraints.py, never rules:
+the law's open space (rule 15's pockets 3 m wide and 50 m²) is the validator's and unchanged.
+
+- The generator takes the most usable pockets first, the biggest between equals, and cuts the
+  last from its more usable end (`choose_pockets`, `_trim`; given no value they work as before).
+- The objective's open-space axis scores the usable part (`Scores.open_space_usable_sqm`); the
+  whole area stays beside it, reported, and the hand-made scores of the pareto tests carry both.
+- The trade-off: far ground the open space used to take is left to the facilities or, beyond
+  them, unallocated. On the same Dhulapally layouts 0 to 416 m² more is unallocated; that ground
+  was open space in name, not ground residents reach.
+
+Tests: `tests/test_search_open_space.py` (normative: the measure, wide and near, a narrow strip and
+a far square none; the generator taking a pocket beside the blocks before a bigger far one; the
+last pocket cut from its usable end; the axis scoring the usable part and keeping the whole);
+`tests/test_optimizer_pareto.py` (its one test whose tower stood 50 m from the open space the
+helper draws at the origin stands it beside it). Characterization re-pinned: the service's made-up
+baseline (maximum yield `-86`, the 3 x S+10, 570 of its 1,836 m² of open space usable; balanced the
+4 x S+10 `-88`, 1,341 m² usable; the open-space option S+9, S+9 and five S+5 of 311,940 sft, 1,605
+m² usable, where it was S+9, S+9, S+5, S+5; the robust one the same); the road ground (two, two and
+four of the plots' proposals others, two road sets new).
+
+- Dhulapally, Run B prime's request (the C4 benchmark, 12-open-space): maximum yield the same 3 x
+  S+10 of 432,120 sft, 5 of 9 facilities where 4, 96 m² more unallocated; balanced 5 blocks (S+9 x
+  4, S+5) of 383,302 sft and 318 flats where it was 350,852 and 292, all its open space usable, 8 of
+  9 facilities where 3, 5,077 m² unallocated where 4,366, every block on a road along 26 m or more;
+  the open-space option 3 x S+10, two blocks of one core and one of two, 239,180 sft and 200 flats,
+  all of its 2,026 m² of open space usable, 7 of 9 facilities, where it was S+8 x 3 and S+5 of
+  302,484 sft and 252 flats, open space the far strip above; this one leaves 8,094 m² unallocated
+  (5,674 before), the most of the options shown, the price of single-core blocks; robust unchanged
+  (287,016 sft, holding under every reading); one legal FAIL, the validator's 9.00 m gap read as
+  8.9999989, unchanged.
+
 ## 2026-10-07: C4-11, site use and the quality of a scheme scored
 
 The objective (`optimizer/objective.py`) scores two more numbers, both the search's, never rules

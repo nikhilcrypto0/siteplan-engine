@@ -9,7 +9,7 @@ cuts ground into the pieces the open-space rule counts: at least `min_width_m` a
 from __future__ import annotations
 
 import math
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 
 import numpy as np
 import shapely
@@ -84,51 +84,74 @@ def pockets_in(room: BaseGeometry, min_width_m: float, min_sqm: float) -> list[P
 
 
 def choose_pockets(room: BaseGeometry, target_sqm: float, min_width_m: float, min_sqm: float,
-                   turn_deg: float = 0.0) -> tuple[list[Polygon], float]:
-    """The biggest pockets first, until the target is met; the last is cut down to what is still
-    needed, so the rest of it stays free for the facilities."""
+                   turn_deg: float = 0.0, value: Callable[[BaseGeometry], float] | None = None
+                   ) -> tuple[list[Polygon], float]:
+    """The most valuable pockets first (`value`; the biggest first without one, and between
+    equals), until the target is met; the last is cut down to what is still needed, from its more
+    valuable end, so the rest of it stays free for the facilities."""
     chosen: list[Polygon] = []
     total = 0.0
-    for pocket in sorted(pockets_in(room, min_width_m, min_sqm), key=lambda p: -p.area):
+    found = pockets_in(room, min_width_m, min_sqm)
+    for pocket in sorted(found, key=lambda p: (-value(p) if value else 0.0, -p.area)):
         if total >= target_sqm:
             break
         still = target_sqm - total
         if pocket.area > still * TRIM_ABOVE:
-            pocket = _trim(pocket, still * TRIM_MARGIN, turn_deg, min_width_m, min_sqm) or pocket
+            pocket = _trim(pocket, still * TRIM_MARGIN, turn_deg, min_width_m, min_sqm,
+                           value) or pocket
         chosen.append(pocket)
         total += pocket.area
     return chosen, total
 
 
-def _trim(pocket: Polygon, area: float, turn_deg: float, min_width_m: float, min_sqm: float
-          ) -> Polygon | None:
+def _trim(pocket: Polygon, area: float, turn_deg: float, min_width_m: float, min_sqm: float,
+          value: Callable[[BaseGeometry], float] | None = None) -> Polygon | None:
     """The end of a pocket holding `area`, cut square to the turn, when that piece is still a
-    pocket the rule counts."""
+    pocket the rule counts: its low end, or with `value` whichever end is worth more (the low one
+    between equals)."""
     if area < min_sqm + EPS_M:
         return None
     turned = rotate(pocket, -turn_deg, origin=(0, 0))
+    ends = (True, False) if value else (True,)
+    pieces = [rotate(piece, turn_deg, origin=(0, 0))
+              for piece in (_end(turned, area, low) for low in ends)
+              if piece is not None and _counts(piece, area, min_width_m, min_sqm)]
+    if not pieces:
+        return None
+    return max(pieces, key=value) if value else pieces[0]
+
+
+def _end(turned: Polygon, area: float, low: bool) -> Polygon | None:
+    """The piece holding `area` at one end of a pocket (in the turn's frame), cut across its long
+    side, never along it."""
     minx, miny, maxx, maxy = turned.bounds
-    along_x = maxx - minx >= maxy - miny  # cut across the long side, never along it
+    along_x = maxx - minx >= maxy - miny
 
     def keep(at: float) -> BaseGeometry:
-        cut = Polygon([(minx - 1, miny - 1), (at, miny - 1), (at, maxy + 1), (minx - 1, maxy + 1)]
-                      ) if along_x else Polygon([(minx - 1, miny - 1), (maxx + 1, miny - 1),
-                                                 (maxx + 1, at), (minx - 1, at)])
+        if low:
+            cut = Polygon([(minx - 1, miny - 1), (at, miny - 1), (at, maxy + 1),
+                           (minx - 1, maxy + 1)]) if along_x else Polygon(
+                [(minx - 1, miny - 1), (maxx + 1, miny - 1), (maxx + 1, at), (minx - 1, at)])
+        else:
+            cut = Polygon([(at, miny - 1), (maxx + 1, miny - 1), (maxx + 1, maxy + 1),
+                           (at, maxy + 1)]) if along_x else Polygon(
+                [(minx - 1, at), (maxx + 1, at), (maxx + 1, maxy + 1), (minx - 1, maxy + 1)])
         return turned.intersection(cut)
 
-    low, high = (minx, maxx) if along_x else (miny, maxy)
+    first, last = (minx, maxx) if along_x else (miny, maxy)
+    short, enough = (first, last) if low else (last, first)  # the end holds too little, enough
     for _ in range(40):
-        middle = (low + high) / 2
+        middle = (short + enough) / 2
         if keep(middle).area < area:
-            low = middle
+            short = middle
         else:
-            high = middle
-    parts = polygons(keep(high))
-    if not parts:
-        return None
-    piece = max(parts, key=lambda p: p.area)
+            enough = middle
+    parts = polygons(keep(enough))
+    return max(parts, key=lambda p: p.area) if parts else None
+
+
+def _counts(piece: Polygon, area: float, min_width_m: float, min_sqm: float) -> bool:
+    """Whether a piece cut holds what was asked and is still a pocket the rule counts."""
     if piece.area < area / TRIM_MARGIN or piece.area < min_sqm:
-        return None
-    if opening(piece, min_width_m + 2 * EPS_M).area < piece.area * TRIM_WIDE_SHARE:
-        return None
-    return rotate(piece, turn_deg, origin=(0, 0))
+        return False
+    return opening(piece, min_width_m + 2 * EPS_M).area >= piece.area * TRIM_WIDE_SHARE

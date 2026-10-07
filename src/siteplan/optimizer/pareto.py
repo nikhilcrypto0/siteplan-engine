@@ -12,7 +12,8 @@ from those already chosen:
   candidate whose readings are known (its validation report read) may fill it, a different idea
   as every alternative is; it is left unfilled when a layout chosen before it already holds under
   every reading;
-- CONVENTIONAL_OPEN_SPACE: the most conventional blocks with the most open space, in the plainest
+- CONVENTIONAL_OPEN_SPACE: the most conventional blocks with the most usable open space (C4-12:
+  the part a lawn or a play area fits in, near a block), in the plainest
   scheme (the objective's quality: little road, blocks repeated and running one way, few leftover
   pieces; C4-11);
 - BALANCED: the compromise nearest the best on every axis, weighted by the brief's priorities.

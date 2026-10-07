@@ -631,7 +631,8 @@ def _furnish(run: Run, program: _Program, repair: str | None = None
     keep_off = [g.buffer(ground.CLEARANCE_M, join_style="mitre") for g in [club, *ramps]
                 if g is not None]
     pocket_room = p.open_land.difference(unary_union(keep_off)) if keep_off else p.open_land
-    pockets, total = ground.choose_open_space(pocket_room, q, angle)
+    pockets, total = ground.choose_open_space(
+        pocket_room, q, angle, unary_union([pl.footprint for pl in p.placements]))
     if total + 1e-6 < q.open_space_sqm:
         return None, (f"{NO_OPEN} {total:,.0f} m² of pockets 3 m wide, "
                       f"{q.open_space_sqm:,.0f} m² needed")

@@ -4,8 +4,11 @@ wrong).
 
 - saleable area: every tower's prototype saleable area per floor times its floors;
 - units: flats, floors counted the same way;
-- open space: the area of the open-space ground the candidate draws (every area here is read to
-  0.01 m², so two layouts the same to a drawing's precision tie, and a later measure chooses);
+- open space: the usable part of the open space the candidate draws (C4-12): at least
+  OPEN_WIDE_M across, where a lawn, a court or a play area fits, and within OPEN_REACH_M of a
+  block, where residents see and reach it; the whole area is kept beside it, unscored (every area
+  here is read to 0.01 m², so two layouts the same to a drawing's precision tie, and a later
+  measure chooses);
 - mix fit: 1 less how far the flats' shares are from the brief's unit mix;
 - conventionality: how ordinary the blocks are, 1 for a block with one core and falling as cores
   are added (a long multi-core slab is the less conventional building). More towers break a tie
@@ -40,12 +43,14 @@ from siteplan import rules
 from siteplan.contracts import CandidateLayout, DesignBrief
 from siteplan.contracts.accounting import LayerKind, PartitionLedger, PhysicalUse, RuleLayers
 from siteplan.contracts.design_brief import Priority
-from siteplan.geometry import frontage
+from siteplan.geometry import frontage, opening
 
 AXES = tuple(priority.value for priority in Priority)  # the brief names its priorities by these
 FRAGMENT_SQM = 50.0  # a piece of leftover ground this big counts as a fragment (C4-11)
 TOUCH_M = 0.5  # a block's outline this close to pavement faces it (the search's own copy)
 AREA_DECIMALS = 2  # areas are scored to 0.01 m², so their last digits never choose (C4-11)
+OPEN_WIDE_M = 12.0  # open space this wide holds a lawn, a court or a play area (C4-12)
+OPEN_REACH_M = 30.0  # and this near a block, its residents see and reach it (C4-12)
 KEPT_OPEN = (LayerKind.SETBACK, LayerKind.BLOCK_GAP, LayerKind.FIRE_CLEAR_BAND,
              LayerKind.TURNING_SECTOR, LayerKind.WATER_BUFFER, LayerKind.GREEN_STRIP_ZONE)
 
@@ -67,6 +72,7 @@ class Scores:
     towers: int
     site_use: float = 0.0  # 0 where the candidate draws no ledger: unknown is not good
     quality: float = 0.0
+    open_space_usable_sqm: float = 0.0  # the open-space axis (C4-12); open_space_sqm is the whole
 
     @property
     def yield_score(self) -> float:
@@ -76,7 +82,7 @@ class Scores:
     @property
     def vector(self) -> tuple[float, ...]:
         """The seven bigger-is-better numbers, in AXES order."""
-        return (self.saleable_sqft, float(self.units), self.open_space_sqm, self.mix_fit,
+        return (self.saleable_sqft, float(self.units), self.open_space_usable_sqm, self.mix_fit,
                 self.conventionality, self.site_use, self.quality)
 
     def as_dict(self) -> dict[str, float]:
@@ -84,6 +90,7 @@ class Scores:
                 "open_space_sqm": self.open_space_sqm, "mix_fit": self.mix_fit,
                 "conventionality": self.conventionality, "towers": float(self.towers),
                 "site_use": self.site_use, "quality": self.quality,
+                "open_space_usable_sqm": self.open_space_usable_sqm,
                 "yield_score": self.yield_score}
 
 
@@ -100,13 +107,32 @@ def measure(candidate: CandidateLayout, brief: DesignBrief) -> Scores:
         conventionality.append(1 / max(1, prototype.cores))
     towers = len(candidate.towers)
     site_use, quality = _ground_scores(candidate)
+    open_space = unary_union([shape.to_shapely() for shape in candidate.program.open_space])
+    reach = reach_of(unary_union([candidate.placed_footprint(t) for t in candidate.towers]))
     return Scores(
         saleable_sqft=saleable, units=sum(flats.values()),
         open_space_sqm=round(sum(shape.area_sqm for shape in candidate.program.open_space),
                              AREA_DECIMALS),
         mix_fit=1 - mix_error(dict(flats), brief.program.unit_mix.value),
         conventionality=sum(conventionality) / towers if towers else 0.0, towers=towers,
-        site_use=site_use, quality=quality)
+        site_use=site_use, quality=quality,
+        open_space_usable_sqm=usable_open_sqm(open_space, reach))
+
+
+def reach_of(blocks: BaseGeometry) -> BaseGeometry:
+    """The ground within OPEN_REACH_M of the blocks, drawn once for a caller that asks often."""
+    return blocks.buffer(OPEN_REACH_M)
+
+
+def usable_open_sqm(open_space: BaseGeometry, reach: BaseGeometry) -> float:
+    """The open space a lawn, a court or a play area fits in (at least OPEN_WIDE_M across) that
+    is near enough a block for its residents to see and reach (within the `reach` of the blocks,
+    reach_of), to 0.01 m² (C4-12). The generator seeks it and the objective scores it, the same
+    measure."""
+    if open_space.is_empty or reach.is_empty:
+        return 0.0
+    wide = opening(open_space, OPEN_WIDE_M).intersection(open_space)
+    return round(wide.intersection(reach).area, AREA_DECIMALS)
 
 
 def _ground_scores(candidate: CandidateLayout) -> tuple[float, float]:

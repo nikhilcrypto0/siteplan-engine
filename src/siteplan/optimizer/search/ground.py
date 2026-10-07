@@ -26,6 +26,7 @@ from shapely.ops import unary_union
 from siteplan.contracts import ResolvedRules
 from siteplan.contracts.common import Surface
 from siteplan.contracts.design_brief import AmenityPriority, AmenityRequest, AmenitySetting
+from siteplan.optimizer.objective import reach_of, usable_open_sqm
 from siteplan.optimizer.search.fit import choose_pockets, fit_rectangle
 from siteplan.optimizer.search.land import EMPTY, Land, Plot, grow, polygons
 from siteplan.optimizer.search.quantities import Quantities
@@ -126,9 +127,17 @@ def open_space_target(q: Quantities) -> float:
     return q.open_space_sqm
 
 
-def choose_open_space(room: BaseGeometry, q: Quantities, turn_deg: float
-                      ) -> tuple[list[Polygon], float]:
-    return choose_pockets(room, q.open_space_sqm, q.pocket_width_m, q.pocket_sqm, turn_deg)
+def choose_open_space(room: BaseGeometry, q: Quantities, turn_deg: float,
+                      blocks: BaseGeometry = EMPTY) -> tuple[list[Polygon], float]:
+    """The open space the rule asks for, the most usable pockets first (C4-12: the part a lawn or
+    a play area fits in, near the blocks; objective.usable_open_sqm)."""
+    reach = reach_of(blocks)
+
+    def usable(pocket: BaseGeometry) -> float:
+        return usable_open_sqm(pocket, reach)
+
+    return choose_pockets(room, q.open_space_sqm, q.pocket_width_m, q.pocket_sqm, turn_deg,
+                          usable if not blocks.is_empty else None)
 
 
 @dataclass(frozen=True)

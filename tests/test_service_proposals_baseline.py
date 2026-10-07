@@ -46,7 +46,12 @@ three blocks placed differently); before, `-86` dominated it on open space by th
 floating-point area (1836.0000000015675 m² against ...567). The balanced
 option is S+9, S+9, S+5 (374,440 sft, 3,612 m² of open space) where it was 4 x S+10 (440,800 sft,
 1,836 m²), and the open-space one S+9, S+9, S+5, S+5 with 4,379 m², the most of any judged
-layout, where it was 4 x S+8 and S+3; the robust one is the same 3 x S+7.
+layout, where it was 4 x S+8 and S+3; the robust one is the same 3 x S+7. Re-pinned on C4-12,
+where the open space is taken where it is usable (at least 12 m across, within 30 m of a block)
+and the open-space axis scores that part: maximum yield is `-86`, the 3 x S+10 (570 m² of its
+1,836 m² of open space usable); balanced the 4 x S+10 `-88` (1,341 m² usable); the open-space
+option S+9, S+9 and five S+5 (311,940 sft, 1,605 m² usable), where it was S+9, S+9, S+5, S+5;
+the robust one the same 3 x S+7.
 
 The values pin exact output on the locked dependencies (uv.lock). They move only with a normative
 replacement and an entry in docs/behaviour-changes.md.
@@ -76,32 +81,32 @@ PINNED = {
         "UNVERIFIED",
     ],
     "proposed": [
-        "full-not_counted-allowed-85",
+        "full-not_counted-allowed-86",
         "full-ALL-allowed-29",
-        "full-ALL-allowed-30",
+        "full-ALL-allowed-31",
         "full-not_counted-allowed-89",
         "full-not_counted-allowed-88",
         "full-not_counted-ALL-57",
         "full-not_counted-ALL-58",
-        "full-not_counted-ALL-116",
         "full-ALL-allowed-33",
-        "full-not_counted-allowed-102",
+        "full-not_counted-ALL-63",
         "full-ALL-ALL-1",
-        "full-ALL-allowed-46",
-        "full-ALL-ALL-6",
-        "full-not_counted-ALL-83",
-        "full-ALL-ALL-14",
+        "full-not_counted-allowed-112",
+        "full-ALL-ALL-7",
+        "full-not_counted-ALL-65",
+        "full-ALL-allowed-54",
+        "full-ALL-ALL-20",
     ],
-    "proposed_sha256": "35053b4a647c21538f66be6a4323b5d2d2af1a4b64273f1883a71adaa1622b4e",
+    "proposed_sha256": "b1528ba7c0d06248f7f0ea7f4dee739547eec066324f6cc15f59961a89049038",
     "shown": [
-        ["full-not_counted-allowed-102", "BALANCED"],
-        ["full-not_counted-allowed-85", "MAX_YIELD"],
-        ["full-not_counted-ALL-83", "CONVENTIONAL_OPEN_SPACE"],
+        ["full-not_counted-allowed-88", "BALANCED"],
+        ["full-not_counted-allowed-86", "MAX_YIELD"],
+        ["full-not_counted-ALL-65", "CONVENTIONAL_OPEN_SPACE"],
         ["full-ALL-ALL-1", "ROBUST"],
     ],
-    "shown_digests": ["d444e36af36ea7c2", "1c41801aab210a62", "bfa933fe7cb5f219",
-                      "7abf46ae252ccb97"],
-    "answer_sha256": "b75865cf962241436ccb6e3a0231e56eaf4c65461b51a6e3d1dffde89c3b1906",
+    "shown_digests": ["8f274f40eb4b7f7b", "c72ef2c1e1001f54", "d6476a637a39b30c",
+                      "b0df348af436ba15"],
+    "answer_sha256": "c0ca6ceb539d7d1673a200a7cd7ac74f313dd22c7600a7e37f5c8c16d274f05a",
     "approval_page_sha256": "cd3ebee2af46849756df643999df9b16d2cbc91d92c45101983782cff1eb0181",
 }
 PROPOSALS: list = []

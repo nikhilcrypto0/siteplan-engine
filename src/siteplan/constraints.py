@@ -1094,6 +1094,21 @@ REGISTRY: tuple[Constraint, ...] = (
         settles="Nothing that passes a layout: which layouts the search prefers.",
     ),
     Constraint(
+        "Open space", "What open space the search counts as usable (C4-12): wide enough for a "
+                      "lawn, a court or a play area, and near enough a block for its residents "
+                      "to see and reach it.",
+        f"at least {optimizer_objective.OPEN_WIDE_M:g} m across and within "
+        f"{optimizer_objective.OPEN_REACH_M:g} m of a block", Basis.ENGINE_DESIGN_ASSUMPTION,
+        "none (optimizer.objective.usable_open_sqm; the generator's pocket choice and the "
+        "objective's open-space axis)",
+        ("optimizer.objective.OPEN_WIDE_M", "optimizer.objective.OPEN_REACH_M"),
+        note="A score of the search's, never a rule: the open space the law asks for is any "
+             "pocket 3 m wide and 50 m² (rule 15), which the validator checks; these only decide "
+             "which pockets the generator takes first and how the alternatives rank.",
+        settles="The firm's own idea of a usable park: the width it plans a lawn or play area "
+                "to, and how far from the blocks it would put one.",
+    ),
+    Constraint(
         "Towers", "The three massing strategies shown: maximum yield with no limit; balanced, "
                   "medium blocks of up to this many cores and this length; conventional, "
                   "compact towers of this many cores.",

@@ -120,7 +120,8 @@ def test_the_architects_priorities_are_weights_and_a_misspelt_one_is_refused():
 
 def _scores(*vector) -> Scores:
     area, units, open_space, mix, conventionality = vector
-    return Scores(area, units, open_space, mix, conventionality, towers=1)
+    return Scores(area, units, open_space, mix, conventionality, towers=1,
+                  open_space_usable_sqm=open_space)  # all of it usable (C4-12)
 
 
 def test_a_candidate_is_dominated_only_when_another_is_no_worse_everywhere_and_better_somewhere():
@@ -242,9 +243,11 @@ def test_the_front_is_preferred_and_what_it_dominates_is_chosen_only_to_be_diffe
 def test_two_layouts_that_tie_on_yield_take_the_labels_that_suit_them():
     """Equal saleable area and units, one with more open space. That one dominates, so the fill
     reaches it first; the labels are then settled so the open-space point is on the layout with
-    more open space, and the maximum-yield point (a tie) on the other."""
+    more open space, and the maximum-yield point (a tie) on the other. (The helper draws the open
+    space at the origin; each tower stands near enough to it that more open space is more usable
+    open space, C4-12.)"""
     tight = candidate("tight", [tower("T1", P1, 40, 20, 9)], [P1], open_space_sqm=1000)
-    spacious = candidate("spacious", [tower("T1", P1, 110, 75, 9)], [P1], open_space_sqm=2000)
+    spacious = candidate("spacious", [tower("T1", P1, 22, 50, 9)], [P1], open_space_sqm=2000)
     picks = select(_scored(tight, spacious), BRIEF).picks
     assert {p.point: (p.scored.candidate.candidate_id, p.on_front) for p in picks} == {
         ParetoPoint.MAX_YIELD: ("tight", False),
