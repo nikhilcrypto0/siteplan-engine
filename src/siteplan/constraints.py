@@ -1143,7 +1143,9 @@ REGISTRY: tuple[Constraint, ...] = (
         f"up to {_lim.attempts_per_profile} tried, {_lim.judged_per_profile} judged and "
         f"{_lim.per_profile_proposed} proposed; evaluating stops at "
         f"{_pct(strategy.EVALUATE_SHARE)} of the time budget and laying out at "
-        f"{_pct(strategy.LAY_OUT_SHARE)}", Basis.ENGINE_DESIGN_ASSUMPTION,
+        f"{_pct(strategy.LAY_OUT_SHARE)}; the ground the ring road leaves laid with blocks in the "
+        f"configuration's direction and {fringe.FRINGE_DIRECTIONS} of the plot's own",
+        Basis.ENGINE_DESIGN_ASSUMPTION,
         "none (optimizer.search.strategy.Limits, optimizer.search.columns)",
         ("optimizer.search.strategy.Limits.offsets", "optimizer.search.strategy.Limits.heights",
          "optimizer.search.strategy.Limits.laid_per_profile",
@@ -1152,7 +1154,7 @@ REGISTRY: tuple[Constraint, ...] = (
          "optimizer.search.strategy.Limits.per_profile_proposed",
          "optimizer.search.strategy.PITCH_GAP_M", "optimizer.search.strategy.EVALUATE_SHARE",
          "optimizer.search.strategy.LAY_OUT_SHARE", "optimizer.search.columns.STEP_M",
-         "optimizer.search.columns.GAP_SLACK_M"),
+         "optimizer.search.columns.GAP_SLACK_M", "optimizer.search.fringe.FRINGE_DIRECTIONS"),
         note="Search bounds, never rules: a wider search can only add options, and the "
              "validator judges every candidate. A firm's design margin on the gap is added "
              "apart (design_margins.tower_gap_extra_m).",

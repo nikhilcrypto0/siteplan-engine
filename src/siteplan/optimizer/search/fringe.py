@@ -20,15 +20,19 @@ Blocks are placed one at a time, the one that adds the most saleable area first 
 equals, the nearer the ring, until the fringe holds no more or the next would leave less free
 ground than the club house, the ramp, the open space and the facilities are expected to need
 (`Run.reserve_target_sqm`, the estimate the search keeps an end of the plot by): what the rules
-ask of the layout comes before another block. The work is done in the turned frame (frame.py),
-where every block stands upright as in a column; any prototype of the kit may stand on the
-fringe, whatever its depth, since no column has to take it.
+ask of the layout comes before another block. Of each kind of block only the nearest few places
+are tried; a kind none of whose places serves gives way to a smaller or a lower one. The work is
+done in a turned frame (frame.py), where every block stands upright as in a column: the
+configuration's and the plot's own directions, the most valuable fringe kept (C4-05). Any
+prototype of the kit may stand on the fringe, whatever its depth, since no column has to take
+it.
 """
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from itertools import groupby
 
 import numpy as np
@@ -42,14 +46,17 @@ from siteplan.contracts.resolved_rules import HEIGHT_TOL_M
 from siteplan.geometry import opening
 from siteplan.optimizer.search.columns import STEP_M, Choice, Standing
 from siteplan.optimizer.search.fit import fit_rectangle
-from siteplan.optimizer.search.frame import Frame
+from siteplan.optimizer.search.frame import Frame, distinct_angles
 from siteplan.optimizer.search.land import EMPTY, Land, Plot, erode, grow, polygons, setback_land
 from siteplan.optimizer.search.network import ENTRANCES_TRIED, EPS_M, TOUCH_M
 from siteplan.optimizer.search.quantities import Quantities
 from siteplan.optimizer.search.readings import FloorClass
+from siteplan.towers import orientations
 
 TIE_M = 0.001  # distances and grid positions this close rank as equal
 CONTAIN_TOL_M = 1e-6  # a block whose edge lies on its ground's edge stands on it
+FRINGE_DIRECTIONS = 2  # the plot's own directions the fringe is laid in besides the
+# configuration's (C4-05)
 
 
 def _tied(value: float) -> int:
@@ -135,9 +142,38 @@ def place(plot: Plot, q: Quantities, frame: Frame, land: Land, rings: BaseGeomet
     block stands on (`own_lands`); `roads_in_setback` whether the profile lets a road, and so a
     pathway, run inside the setback; `eps_m` how far inside its ground a block stands, so no
     rounding puts it over a line; `room_sqm` the free ground the rest of the layout is expected
-    to need, which no block takes."""
+    to need, which no block takes.
+
+    The fringe is laid in the configuration's direction and (C4-05) in up to FRINGE_DIRECTIONS of
+    the plot's own, along and across its longest edges, where the ground the columns leave often
+    runs; the most valuable is kept, the configuration's between equals, and a block laid in
+    another direction carries it (`Standing.frame`)."""
     if not choices:
         return []
+    given = dict(own=own, kept_clear=kept_clear, roads_in_setback=roads_in_setback, eps_m=eps_m,
+                 room_sqm=room_sqm)
+    best = _place_in(plot, q, frame, land, rings, hulls, standing, choices, **given)
+    framed = [s if s.frame is not None else replace(s, frame=frame) for s in standing]
+    for angle in distinct_angles([frame.angle_deg, *orientations(plot.net)])[
+            1:1 + FRINGE_DIRECTIONS]:
+        turned = Frame(angle)
+        found = _place_in(plot, q, turned, land, rings, hulls, framed, choices, **given)
+        if _value(found) > _value(best):
+            best = [replace(f, standing=replace(f.standing, frame=turned)) for f in found]
+    return best
+
+
+def _value(placed: Sequence[Fringed]) -> float:
+    """The saleable area a fringe adds, summed exactly, so the same blocks laid in another order
+    add the same."""
+    return math.fsum(f.standing.choice.value for f in placed)
+
+
+def _place_in(plot: Plot, q: Quantities, frame: Frame, land: Land, rings: BaseGeometry,
+              hulls: BaseGeometry, standing: Sequence[Standing], choices: Sequence[Choice], *,
+              own: Mapping[tuple[float, float], BaseGeometry], kept_clear: BaseGeometry | None,
+              roads_in_setback: bool, eps_m: float, room_sqm: float) -> list[Fringed]:
+    """The fringe laid upright in one frame, one block at a time, as `place` describes."""
     ring = frame.to_turned(rings)
     hull = frame.to_turned(hulls)
     water = [frame.to_turned(plot.excluded)] if not plot.excluded.is_empty else []
@@ -209,11 +245,12 @@ def _best(choices: Sequence[Choice], fits: _Fits, ring: BaseGeometry, paths: Bas
     """The most valuable block the fringe still holds that a road or a pathway reaches and that
     leaves the free ground the rest of the layout needs, the nearer the ring the better between
     equals, and its pathway and the pathway's centre line (empty and None when none is needed).
-    Only the first few are tried, as the entrance tries its nearest few, so the blocks of less
-    value are looked at only while tries are left."""
-    tried = 0
+    Of each kind of block (each value) only the nearest few places are tried, as the entrance
+    tries its nearest few; a kind none of whose places serves gives way to the next, a smaller or
+    a lower block (C4-05), where the tries once ran out for all of them together."""
     by_value = sorted(range(len(choices)), key=lambda i: -choices[i].value)
     for _, same in groupby(by_value, key=lambda i: choices[i].value):
+        tried = 0
         found = []
         for index in same:
             boxes, distances = fits.of(choices[index])
@@ -225,7 +262,7 @@ def _best(choices: Sequence[Choice], fits: _Fits, ring: BaseGeometry, paths: Bas
                                   footprint, float(distance)))
         for _, _, _, index, footprint, distance in sorted(found, key=lambda f: f[:4]):
             if tried >= ENTRANCES_TRIED:
-                return None
+                break
             tried += 1
             path: LineString | None = None
             pathway: BaseGeometry = EMPTY
@@ -276,12 +313,20 @@ def _grid(ground: BaseGeometry, rooms: Sequence[Polygon], depth_m: float, length
         minx, miny, maxx, maxy = piece.bounds
         if maxx - minx < depth_m - CONTAIN_TOL_M or maxy - miny < length_m - CONTAIN_TOL_M:
             continue
-        xs = np.arange(minx, maxx - depth_m + EPS_M, STEP_M)
-        ys = np.arange(miny, maxy - length_m + EPS_M, STEP_M)
+        xs = _steps(minx, maxx - depth_m)
+        ys = _steps(miny, maxy - length_m)
         x, y = (a.ravel() for a in np.meshgrid(xs, ys))
         boxes = shapely.box(x, y, x + depth_m, y + length_m)
         out.append(boxes[shapely.contains(on, boxes)])
     return np.concatenate(out) if out else np.array([])
+
+
+def _steps(low: float, high: float) -> np.ndarray:
+    """A block's positions along one axis of its ground: every STEP_M from `low`, and `high`
+    itself, so it may stand flush against either edge (C4-05: against the far edge, a ring road
+    there was reached only when the ground's width came to a whole number of steps)."""
+    steps = np.arange(low, high + EPS_M, STEP_M)
+    return steps if len(steps) and high - steps[-1] <= TIE_M else np.append(steps, high)
 
 
 def _pathway(block: Polygon, ring: BaseGeometry, paths: BaseGeometry, q: Quantities

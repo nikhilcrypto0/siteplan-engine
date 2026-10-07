@@ -14,6 +14,8 @@ no fire lane or turning room round a block that is not a high-rise, and the plan
 III asks.
 """
 
+from unittest.mock import patch
+
 from search_support import (
     l_plot,
     made_up,
@@ -29,6 +31,8 @@ from siteplan.contracts.common import Status
 from siteplan.contracts.design_brief import HeightIntent, HeightMode
 from siteplan.contracts.validation import LegalVerdict
 from siteplan.optimizer.search import fringe
+from siteplan.optimizer.search import strategy as strategy_module
+from siteplan.optimizer.search.build import build_candidate
 from siteplan.optimizer.search.land import Plot, setback_land
 from siteplan.optimizer.search.layout import make_run
 from siteplan.optimizer.search.readings import ALL, FloorClass, Profile, floor_classes, profiles
@@ -297,18 +301,38 @@ def test_the_arm_is_tried_for_a_low_block_and_says_why_none_stands_there():
 
 def test_where_a_block_fits_the_arm_the_objective_decides_and_the_layouts_say_which_did():
     """With a made-up 13.13 m deep block in the kit, a two-floor block fits the arm (14 m between
-    its 5 m side setbacks). Whether a layout stands one there is the objective's to decide:
-    layouts with one and without one are judged side by side, and the note counts the proposals
-    that did. A block there is low, served by the ring road or a pathway branching out of it, and
-    passes the validator."""
-    made, proposal = l_plot(True), proposal_on_the_l_plot(True)
+    its 5 m side setbacks). The search lays out layouts with one there and without, and whether
+    a proposal stands one there is the objective's to decide: the note counts the proposals that
+    did and, when none did, the layouts laid out that did and were ranked lower (since C4-05 the
+    fringe finds layouts 8-14% larger that leave the arm, and they outrank those that use it). A
+    block there is low, served by the ring road or a pathway branching out of it, and passes the
+    validator: every layout laid out with one is judged here, proposed or not."""
+    made = l_plot(True)
+    laid_in_arm = []
+    real = strategy_module.lay_out
+
+    def watched(run, ev):
+        result, why = real(run, ev)
+        if result is not None and any(_mostly_in_arm(p.footprint) for p in result.placements):
+            laid_in_arm.append((run, ev.config.profile, result))
+        return result, why
+
+    with patch.object(strategy_module, "lay_out", watched):
+        proposal = strategy().propose(made.context())
     note = _arm_note(proposal.notes)
     assert "one fits (slim-2 at 2 floors)" in note
     in_arm = [c for c in proposal.candidates
               if any(_mostly_in_arm(c.placed_footprint(t)) for t in c.towers)]
     assert f"{len(in_arm)} of the {len(proposal.candidates)} layouts proposed" in note
-    assert in_arm and len(in_arm) < len(proposal.candidates)  # with one, and without
-    for candidate in in_arm:
+    assert laid_in_arm and len(in_arm) < len(proposal.candidates)  # with one, and without
+    if not in_arm:
+        assert (f"{len(laid_in_arm)} of the layouts laid out did, and the objective ranked them "
+                "lower") in note
+    built = [build_candidate(result, site=made.site, rules=made.rules, brief=made.brief,
+                             plot=run.plot, q=run.q, profile=profile, envelope=run.envelope,
+                             candidate_id=f"arm-{i}", seed=0, notes=[])
+             for i, (run, profile, result) in enumerate(laid_in_arm, 1)]
+    for candidate in [*in_arm, *built]:
         report = _judge(made, candidate)
         assert report.verdict.legal is not LegalVerdict.FAIL
         for tower in candidate.towers:

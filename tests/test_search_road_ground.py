@@ -3,7 +3,8 @@ roads were drawn from a centre-line graph (C4-01), so that drawing them from the
 shown to lay the same ground: the same candidates, the same roads of the same kinds, each the same
 number of pieces and the same area to 0.01 m². (On 1c4fd2e the slim L-plot's fringe chose between
 equally near places by the last digits of the geometry; C4-01a chooses by place, which moves two of
-its eight proposals, docs/behaviour-changes.md.)
+its eight proposals; C4-05's fringe search lays the L-plots' layouts with blocks below 21 m anew,
+8-17% larger, docs/behaviour-changes.md.)
 
 The values pin exact output on the locked dependencies (uv.lock). They move only with a normative
 replacement and an entry in docs/behaviour-changes.md.
@@ -39,11 +40,9 @@ RECTANGLE_A = [(*RING, 4023.36), *_streets(738.0, 738.0, 738.0), (*APPROACH, 99.
 RECTANGLE_B = [(*RING, 4183.02), *_streets(1220.0, 1220.0), (*APPROACH, 86.46)]
 RECTANGLE_C = [(*RING, 3427.02), *_streets(738.0, 738.0), (*APPROACH, 99.43)]
 L_THREE = [(*RING, 3339.36), *_streets(410.0, 410.0, 410.0), (*APPROACH, 36.25)]
-L_PATH = [(*RING, 2711.34), (*APPROACH, 253.44), _pathway(1, 36.3)]
-L_ONE = [(*RING, 2425.68), *_streets(585.0), (*APPROACH, 108.43)]
+L_RING = [(*RING, 2711.34), (*APPROACH, 253.44)]
+L_ONE_PATH = [(*RING, 2425.68), *_streets(585.0), (*APPROACH, 108.43), _pathway(1, 36.3)]
 SLIM_ONE = [(*RING, 2830.68), *_streets(738.0), (*APPROACH, 222.97)]
-SLIM_SHORT = [(*RING, 2407.68), *_streets(526.5), (*APPROACH, 99.43)]
-SLIM_PATH = [*SLIM_SHORT, _pathway(1, 36.3)]
 
 PINNED = {
     "rectangle": {
@@ -57,22 +56,22 @@ PINNED = {
         "full-ALL-ALL-2": RECTANGLE_C,
     },
     "l_plot": {
-        "full-not_counted-allowed-17": L_THREE,
+        "full-not_counted-allowed-18": L_THREE,
         "full-ALL-allowed-7": L_THREE,
-        "full-not_counted-ALL-11": L_PATH,
-        "full-not_counted-ALL-12": L_ONE,
-        "full-ALL-ALL-1": L_PATH,
-        "full-ALL-ALL-3": L_ONE,
+        "full-not_counted-ALL-12": L_RING,
+        "full-ALL-ALL-1": L_RING,
+        "full-not_counted-ALL-13": L_ONE_PATH,
+        "full-ALL-ALL-2": L_ONE_PATH,
     },
     "l_plot_slim": {
         "full-not_counted-allowed-18": L_THREE,
         "full-not_counted-allowed-19": SLIM_ONE,
         "full-ALL-allowed-7": L_THREE,
         "full-ALL-allowed-8": SLIM_ONE,
-        "full-not_counted-ALL-13": SLIM_PATH,
-        "full-not_counted-ALL-14": SLIM_SHORT,
-        "full-ALL-ALL-2": SLIM_SHORT,
-        "full-ALL-ALL-3": SLIM_PATH,
+        "full-not_counted-ALL-12": L_RING,
+        "full-ALL-ALL-1": L_RING,
+        "full-not_counted-ALL-13": L_ONE_PATH,
+        "full-ALL-ALL-3": L_ONE_PATH,
     },
 }
 

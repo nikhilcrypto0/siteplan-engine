@@ -10,7 +10,13 @@ where two open-space pockets are the same size or two layouts score the same, th
 still choose, so `full-not_counted-ALL-61` is proposed for `-62` (the same blocks, flats and
 saleable area) and `full-ALL-ALL-6` is shown for `-5` (the same blocks, flats, saleable area and
 open space). Re-pinned on C4-02, where every configuration is also tried with further clusters:
-768 evaluated where 384 were, and the same twelve proposed, the same three shown.
+768 evaluated where 384 were, and the same twelve proposed, the same three shown. Re-pinned on
+C4-05, where the fringe tries each kind of block in turn and the plot's own directions: four
+proposals of the lower profiles are others, none smaller (one 224-flat layout is now 232 flats),
+and the open-space option shown is `full-not_counted-ALL-63` (4 x S+9, 252 flats), not
+`full-ALL-ALL-6` (4 x S+8, 224 flats). Only 1 of the 12 holds under every reading where 3 did: the
+3 x S+7 layout that does is still judged, the same, but an S+8, S+8, S+5 layout of the same flats
+and saleable area is proposed in its place; the selector has no robustness objective yet (C4-09).
 
 The values pin exact output on the locked dependencies (uv.lock). They move only with a normative
 replacement and an entry in docs/behaviour-changes.md.
@@ -34,7 +40,7 @@ TEST_CLASS = "characterization"
 PINNED = {
     "notes": [
         "FULL: 768 configurations evaluated, 112 laid out, 24 judged by the validator, 12 proposed",
-        "FULL: 3 of 12 proposed hold under every reading of the open questions; the others each "
+        "FULL: 1 of 12 proposed hold under every reading of the open questions; the others each "
         "name the readings they rest on",
         "FULL: every layout leaves the height above sea level and the 45 t loading of the paving "
         "UNVERIFIED",
@@ -47,20 +53,20 @@ PINNED = {
         "full-ALL-allowed-33",
         "full-not_counted-ALL-57",
         "full-ALL-allowed-31",
-        "full-not_counted-ALL-61",
-        "full-ALL-ALL-1",
-        "full-not_counted-ALL-59",
-        "full-ALL-ALL-5",
-        "full-ALL-ALL-6",
+        "full-not_counted-ALL-63",
+        "full-ALL-ALL-3",
+        "full-not_counted-ALL-62",
+        "full-ALL-ALL-4",
+        "full-ALL-ALL-7",
     ],
-    "proposed_sha256": "a62489382a306e993040f3ca1b5a1cd537f98efb3ea98aa5774aa8f0ebbab0c9",
+    "proposed_sha256": "12ba6e5eb6c9a3bed16478e3b6701340981bd0699c38db9704f744352b27ee59",
     "shown": [
         ["full-not_counted-allowed-87", "BALANCED"],
         ["full-not_counted-allowed-85", "MAX_YIELD"],
-        ["full-ALL-ALL-6", "CONVENTIONAL_OPEN_SPACE"],
+        ["full-not_counted-ALL-63", "CONVENTIONAL_OPEN_SPACE"],
     ],
-    "shown_digests": ["13d6b77dcd83853e", "5f9926f7bb81930f", "2b7c2b1c529bb28c"],
-    "answer_sha256": "6490670e2a430e8dbf7232f53ac0eda60e7b20e91c0c3a36079b2d779216453d",
+    "shown_digests": ["13d6b77dcd83853e", "5f9926f7bb81930f", "1f0eeb6707a180b5"],
+    "answer_sha256": "7a6dc9bb5339f6e1bff10c451274d71c33aa5543d4b73fb8ff858f0fadb2188e",
     "approval_page_sha256": "cd3ebee2af46849756df643999df9b16d2cbc91d92c45101983782cff1eb0181",
 }
 PROPOSALS: list = []

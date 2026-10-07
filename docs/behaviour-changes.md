@@ -4,6 +4,52 @@ A characterization test (tests/manifest.py) pins what the engine produces today.
 only together with a normative replacement test and an entry here: what changed, why, the
 evidence, and the test that now holds the behaviour. Newest first.
 
+## 2026-10-06: C4-05, the fringe's search: every kind of block tried, and the plot's directions
+
+The blocks on the ground the ring road leaves (the fringe, stream C3) were placed by one greedy
+pass, upright in the configuration's direction, and three things kept it from blocks that fit:
+
+- its tries were shared by every kind of block: when the most valuable kind's nearest twelve
+  places all left too little room for the rest of the layout, or no pathway reached them, the
+  pass ended, and a smaller or a lower block that would have stood was never looked at. Each
+  kind now has its own twelve (`fringe._best`);
+- it stood blocks only in the configuration's direction, so a band of ground turned from the
+  columns took none it could not hold upright. The fringe is now also laid in the plot's own
+  directions, along and across its longest edges, two of them (`fringe.FRINGE_DIRECTIONS`), and
+  the most valuable is kept, the configuration's between equals; a block laid so carries its
+  frame (`Standing.frame`, as a turned cluster's do since C4-03);
+- its grid ran from the near edge of each piece of ground a metre at a time, so a block stood
+  flush against the far edge, where a ring road on that side is, only when the width came to a
+  whole number of metres. The far edge is now a place too (`fringe._steps`).
+
+Measured first on Dhulapally (Run B prime's request, every fringe the search laid, 671): separate
+tries beat the shared ones in 162 and the plot's directions in 268, and the two together add
+about 7.0 million sft over all of them, for about 35 s.
+
+- Made-up land (`tests/test_search_fringe_search.py`, normative): a kind none of whose places
+  leaves the room gives way to a smaller one; where the most valuable kind stands the search is as
+  before; a band turned 30° or 140° from the columns takes blocks turned with it, flush against
+  its road; a block stands flush against either edge of its ground.
+- The quick search's proposals: on the L-plot those with blocks below 21 m are 249,340, 241,960,
+  230,680 and 220,920 sft where they were 216,780, 210,400, 198,120 and 189,360 (15-17% more); on
+  the L-plot with the slim block 8-14% more; on the rectangles the same. The L-plots' road ground
+  is re-pinned (`tests/test_search_road_ground.py`).
+- The slim L-plot's arm: layouts with a block there are still laid out (two), and the note says
+  so, but the larger layouts that leave the arm outrank them, so none is proposed. Its test
+  (`tests/test_search_low_blocks.py`) asked that one be proposed, an outcome of the objective on
+  that land rather than a rule; it now judges every layout laid out with a block in the arm,
+  proposed or not, with the validator, and checks the block is low, served and passes.
+- The service's made-up baseline (`tests/test_service_proposals_baseline.py`, re-pinned): four
+  proposals of the lower profiles are others, none smaller (a 224-flat layout is now 232), and the
+  open-space option shown is 4 x S+9 (252 flats) where it was 4 x S+8 (224). 1 of the 12
+  proposals holds under every reading where 3 did: the 3 x S+7 layout that does is still judged,
+  unchanged, but an S+8, S+8, S+5 layout of the same flats and saleable area is proposed in its
+  place, since the selector has no robustness objective yet (C4-09).
+- Dhulapally, Run B prime's request (the C4 benchmark): no legal FAIL; the best layout (3 x S+10,
+  360 flats) and the three shown are those of C4-04, the best of the profiles with blocks below
+  21 m larger (ALL-ALL 309,686 to 316,888 sft, 264 flats, the 7-5-5-5 layout Run C exported;
+  not_counted-ALL 321,246 to 331,292), 12 proposed where 10 were; 79.6 s where it took 45.8.
+
 ## 2026-10-06: C4-04, columns of more than one depth in a layout
 
 The columns took the kit's main depth (the one most of its prototypes come in); blocks of the
