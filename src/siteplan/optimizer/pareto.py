@@ -126,8 +126,9 @@ def select(pool: Sequence[Scored], brief: DesignBrief) -> Selection:
               for point, key in keys.items()}
     picks: list[Pick] = []
 
-    def next_different(order: list[Scored]) -> Scored | None:
-        for s in sorted(order, key=lambda s: id(s) not in on_front):  # stable: front first
+    def next_different(order: list[Scored], front_first: bool = True) -> Scored | None:
+        ranked = sorted(order, key=lambda s: id(s) not in on_front) if front_first else order
+        for s in ranked:  # stable: front first, in the point's own order
             if not any(s is p.scored or same_idea(s.candidate, p.scored.candidate)
                        for p in picks):
                 return s
@@ -146,7 +147,10 @@ def select(pool: Sequence[Scored], brief: DesignBrief) -> Selection:
         known = [s for s in order if s.rests is not None]
         if not known:
             return None, "no candidate's validation report was read"
-        found = next_different(known)
+        # its own order, not the front's first: the front is drawn over the objective's axes, none
+        # of them the readings a layout rests on, so the best layout that holds under every one
+        # may be one the front dominates
+        found = next_different(known, front_first=False)
         return (found, "") if found is not None else (None, (
             "no candidate left that is a different idea from those already chosen"))
 

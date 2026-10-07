@@ -334,3 +334,14 @@ def test_the_fewer_open_questions_rank_first_then_the_fewer_checks():
     picks = select(_rested({"balanced": (1, 4), "turned": (1, 1)}), EVERY_POINT).picks
     assert {p.point: p.scored.candidate.candidate_id for p in picks}[ParetoPoint.ROBUST] == \
         "turned"
+
+
+def test_robust_ranks_by_its_own_measure_not_the_front_of_the_other_axes():
+    """The turned slabs (8 floors) are dominated by the upright ones (9 floors) on every axis the
+    front is drawn over, none of them robustness; of the two layouts that hold under every
+    reading they sell more than the conventional one, which is on the front: ROBUST is them.
+    (A brief asking for these two points only, so no other point takes either layout.)"""
+    two = _brief(pareto=[ParetoPoint.MAX_YIELD, ParetoPoint.ROBUST])
+    picks = select(_rested({"turned": (0, 0), "conventional": (0, 0)}, two), two).picks
+    assert {p.point: p.scored.candidate.candidate_id for p in picks}[ParetoPoint.ROBUST] == \
+        "turned"

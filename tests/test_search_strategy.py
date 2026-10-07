@@ -29,6 +29,7 @@ from shapely.ops import unary_union
 from siteplan import validator as independent
 from siteplan.contracts import digest
 from siteplan.contracts.common import Finding, Status
+from siteplan.contracts.design_brief import ParetoPoint
 from siteplan.contracts.resolved_rules import CIRCULATION_IN_SETBACK, STILT_IN_RULE_HEIGHT
 from siteplan.contracts.validation import Check, Family, LegalVerdict, legal_verdict
 from siteplan.optimizer import optimize
@@ -75,7 +76,7 @@ def test_the_optimizer_core_returns_alternatives_made_by_the_full_search():
     made = rectangle()
     result = optimize(made.site, made.rules, made.brief, [strategy()], envelope=made.envelope,
                       prototypes=made.kit)
-    assert 1 <= len(result.alternatives) <= 3
+    assert 1 <= len(result.alternatives) <= len(ParetoPoint)  # one a point at most
     assert result.rejected == ()  # it judges its own candidates: the guard has nothing to refuse
     assert not result.budget_exhausted
     for alternative in result.alternatives:
