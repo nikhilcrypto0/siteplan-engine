@@ -29,6 +29,7 @@ from shapely.ops import unary_union
 from siteplan import validator as independent
 from siteplan.contracts.common import Status
 from siteplan.contracts.design_brief import HeightIntent, HeightMode
+from siteplan.contracts.resolved_rules import ALLOWED
 from siteplan.contracts.validation import LegalVerdict
 from siteplan.optimizer.search import fringe
 from siteplan.optimizer.search import strategy as strategy_module
@@ -81,11 +82,14 @@ def _arm_note(notes):
 def test_the_counts_below_21_m_carry_their_table_iii_figures():
     """On a plot over 2,500 m² Table III's row 11 gives 5 m on the sides up to 7 m of height above
     the stilt and 6 m up to 15 m, the Building Line of an 18 m (60 ft) road in front, 4 m; the gap
-    between two such blocks is the side setback (rule 5(f)(xiii)) and the planting strip 1 m."""
+    between two such blocks is the side setback (rule 5(f)(xiii)) and the planting strip 1 m.
+    (Read under a profile that may rest on a reading: the one built for every reading takes no
+    count NBC's own 15 m line holds, the four and five floors, C4-06.)"""
     made = rectangle()
     by_floors = {c.floors: c for c in floor_classes(made.rules, made.brief, made.kit[0],
-                                                    Profile(ALL, ALL))}
+                                                    Profile(ALL, ALLOWED))}
     assert {f for f, c in by_floors.items() if not c.high_rise} == {1, 2, 3, 4, 5}
+    assert [f for f, c in by_floors.items() if c.nbc_held] == [4, 5]  # 15 m and 18 m
     two, three = by_floors[2], by_floors[3]  # 6 m and 9 m above the 3 m stilt
     assert (two.setback_m, two.front, two.gap_m, two.strip_m) == (5.0, 4.0, 5.0, 1.0)
     assert (three.setback_m, three.front, three.gap_m, three.strip_m) == (6.0, 4.0, 6.0, 1.0)
@@ -116,7 +120,7 @@ def test_two_low_blocks_keep_the_taller_ones_side_setback_and_a_high_rise_its_ow
     run = make_run(made.site, made.rules, made.brief, made.envelope, made.kit,
                    profiles(made.rules, made.brief, list(made.kit)))
     q = run.q
-    by_floors = {c.floors: c for c in run.classes["ALL-ALL"][made.kit[0].id]}
+    by_floors = {c.floors: c for c in run.classes["ALL-allowed"][made.kit[0].id]}
     assert fringe.need_m(q, by_floors[2], by_floors[2]) == 5.0
     assert fringe.need_m(q, by_floors[2], by_floors[5]) == 6.0  # rule 5(f)(xiii): the taller's
     assert fringe.need_m(q, by_floors[3], by_floors[9]) == 10.0  # beside a high-rise: its gap

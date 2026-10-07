@@ -4,6 +4,46 @@ A characterization test (tests/manifest.py) pins what the engine produces today.
 only together with a normative replacement test and an entry here: what changed, why, the
 evidence, and the test that now holds the behaviour. Newest first.
 
+## 2026-10-06: C4-06, floor counts kept on everything they ask and rest on
+
+Of two floor counts of a prototype the shorter was dropped whenever the taller asked the same
+setback and gap (`columns.choices_for`, and the fringe's `options`). That hid a shorter count that
+asks less of something else. Since contracts 1.3 the validator evaluates NBC's own 15 m high-rise
+line (the nbc_fire_height reading): under it a block of 15 m or more, stilt included, is held to
+4.6's fire access, which the search lays round no block below 21 m. So a five-floor block (18 m)
+stands only under the state's line, where a three-floor one (12 m) asking the same 6 m setback
+and gap stands under both, and the five-floor one hid it.
+
+- A count is now dropped only behind a taller one alike in all it asks and rests on
+  (`readings.resources`): the ground (the larger setback, the gap, the planting strip), the fire
+  access it is held to under some reading (a high-rise, or below one held by NBC's line,
+  `FloorClass.nbc_held`), and the unsettled inputs it rests on.
+- The profile built to hold under every reading (`Profile.every_reading`) takes no block below
+  21 m that NBC's line holds, so its layouts hold under that reading too, as readings.py promises
+  of it; it had rested on the state's line since contracts 1.3. The profiles built for a single
+  reading of the stilt or of circulation may still rest on the state's line, as they rest on
+  their own reading. No interpretation changes: the validator evaluates both lines as before.
+
+- Made-up land (`tests/test_search_floor_options.py`, normative): under a single reading of the
+  stilt, three floors are kept beside five, four and one are dropped; the profile built for every
+  reading offers one to three floors below 21 m, not four or five; and on the L-plot every layout
+  it judges holds under both lines, some with blocks below 21 m. `tests/test_search_readings.py`
+  and two tests of `tests/test_search_low_blocks.py` read the four- and five-floor counts under a
+  profile that may rest on a reading.
+- The quick search's proposals: the layouts meant for every reading on the L-plots and the
+  rectangle trade their five-floor blocks for three-floor ones (the rectangle's 348 flats are 324)
+  and hold under both lines; the others are as on C4-05. The L-plots' and the rectangle's road
+  ground is re-pinned (`tests/test_search_road_ground.py`).
+- The service's made-up baseline (re-pinned): 3 of the 12 proposals hold under every reading again
+  (C4-05: 1), and the open-space option shown is the 4 x S+8 layout that does, as on C4-04.
+- Dhulapally, Run B prime's request (the C4 benchmark): the first layout that holds under every
+  reading the validator evaluates, full-ALL-ALL-1: 4 towers, S+7, S+7, S+3, S+3, 222 flats,
+  266,474 sft, 10.6% open space, 7 of 9 amenities, no legal FAIL; it is the open-space option
+  shown. All six judged in that profile hold under every reading. The best layout (3 x S+10, 360
+  flats) and the balanced one are unchanged. The 7-5-5-5 layout Run C exported (316,888 sft) is
+  no longer built: under today's validator it holds only under the state's line, a reading added
+  after Run C.
+
 ## 2026-10-06: C4-05, the fringe's search: every kind of block tried, and the plot's directions
 
 The blocks on the ground the ring road leaves (the fringe, stream C3) were placed by one greedy

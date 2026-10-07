@@ -17,6 +17,10 @@ and the open-space option shown is `full-not_counted-ALL-63` (4 x S+9, 252 flats
 `full-ALL-ALL-6` (4 x S+8, 224 flats). Only 1 of the 12 holds under every reading where 3 did: the
 3 x S+7 layout that does is still judged, the same, but an S+8, S+8, S+5 layout of the same flats
 and saleable area is proposed in its place; the selector has no robustness objective yet (C4-09).
+Re-pinned on C4-06, where the layouts built for every reading take no block below 21 m that NBC's
+own 15 m line holds to its fire access: 3 of the 12 hold under every reading again (3 x S+7, an
+S+8, S+8, S+3 of 309,320 sft and 4 x S+8), and the open-space option shown is the 4 x S+8 one,
+which holds under every reading, as on C4-04.
 
 The values pin exact output on the locked dependencies (uv.lock). They move only with a normative
 replacement and an entry in docs/behaviour-changes.md.
@@ -40,7 +44,7 @@ TEST_CLASS = "characterization"
 PINNED = {
     "notes": [
         "FULL: 768 configurations evaluated, 112 laid out, 24 judged by the validator, 12 proposed",
-        "FULL: 1 of 12 proposed hold under every reading of the open questions; the others each "
+        "FULL: 3 of 12 proposed hold under every reading of the open questions; the others each "
         "name the readings they rest on",
         "FULL: every layout leaves the height above sea level and the 45 t loading of the paving "
         "UNVERIFIED",
@@ -54,19 +58,19 @@ PINNED = {
         "full-not_counted-ALL-57",
         "full-ALL-allowed-31",
         "full-not_counted-ALL-63",
-        "full-ALL-ALL-3",
+        "full-ALL-ALL-1",
         "full-not_counted-ALL-62",
-        "full-ALL-ALL-4",
-        "full-ALL-ALL-7",
+        "full-ALL-ALL-3",
+        "full-ALL-ALL-5",
     ],
-    "proposed_sha256": "12ba6e5eb6c9a3bed16478e3b6701340981bd0699c38db9704f744352b27ee59",
+    "proposed_sha256": "d48c2f9648cabb1deff43ad469a694847e6278378dec7d4dc83664a26337ef78",
     "shown": [
         ["full-not_counted-allowed-87", "BALANCED"],
         ["full-not_counted-allowed-85", "MAX_YIELD"],
-        ["full-not_counted-ALL-63", "CONVENTIONAL_OPEN_SPACE"],
+        ["full-ALL-ALL-5", "CONVENTIONAL_OPEN_SPACE"],
     ],
-    "shown_digests": ["13d6b77dcd83853e", "5f9926f7bb81930f", "1f0eeb6707a180b5"],
-    "answer_sha256": "7a6dc9bb5339f6e1bff10c451274d71c33aa5543d4b73fb8ff858f0fadb2188e",
+    "shown_digests": ["13d6b77dcd83853e", "5f9926f7bb81930f", "69747814fb48558e"],
+    "answer_sha256": "1763f0c4af11764769c48efca21a3f150c9fb45d9d65305aa45395621134c480",
     "approval_page_sha256": "cd3ebee2af46849756df643999df9b16d2cbc91d92c45101983782cff1eb0181",
 }
 PROPOSALS: list = []

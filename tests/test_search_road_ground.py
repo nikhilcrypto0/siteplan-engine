@@ -4,7 +4,8 @@ shown to lay the same ground: the same candidates, the same roads of the same ki
 number of pieces and the same area to 0.01 m². (On 1c4fd2e the slim L-plot's fringe chose between
 equally near places by the last digits of the geometry; C4-01a chooses by place, which moves two of
 its eight proposals; C4-05's fringe search lays the L-plots' layouts with blocks below 21 m anew,
-8-17% larger, docs/behaviour-changes.md.)
+8-17% larger; C4-06 builds the layouts meant for every reading with no block NBC's own 15 m line
+would hold, docs/behaviour-changes.md.)
 
 The values pin exact output on the locked dependencies (uv.lock). They move only with a normative
 replacement and an entry in docs/behaviour-changes.md.
@@ -42,7 +43,10 @@ RECTANGLE_C = [(*RING, 3427.02), *_streets(738.0, 738.0), (*APPROACH, 99.43)]
 L_THREE = [(*RING, 3339.36), *_streets(410.0, 410.0, 410.0), (*APPROACH, 36.25)]
 L_RING = [(*RING, 2711.34), (*APPROACH, 253.44)]
 L_ONE_PATH = [(*RING, 2425.68), *_streets(585.0), (*APPROACH, 108.43), _pathway(1, 36.3)]
+L_TWO_PATHS = [(*RING, 2729.34), (*APPROACH, 347.0), _pathway(1, 36.3), _pathway(2, 36.3)]
 SLIM_ONE = [(*RING, 2830.68), *_streets(738.0), (*APPROACH, 222.97)]
+SLIM_TWO_PATHS = [(*RING, 2425.68), *_streets(585.0), (*APPROACH, 141.79), _pathway(1, 36.3),
+                  _pathway(2, 36.3)]
 
 PINNED = {
     "rectangle": {
@@ -53,15 +57,15 @@ PINNED = {
         "full-not_counted-ALL-14": RECTANGLE_C,
         "full-ALL-allowed-7": RECTANGLE_B,
         "full-ALL-allowed-8": RECTANGLE_B,
-        "full-ALL-ALL-2": RECTANGLE_C,
+        "full-ALL-ALL-4": RECTANGLE_C,
     },
     "l_plot": {
         "full-not_counted-allowed-18": L_THREE,
         "full-ALL-allowed-7": L_THREE,
         "full-not_counted-ALL-12": L_RING,
-        "full-ALL-ALL-1": L_RING,
         "full-not_counted-ALL-13": L_ONE_PATH,
-        "full-ALL-ALL-2": L_ONE_PATH,
+        "full-ALL-ALL-1": L_ONE_PATH,
+        "full-ALL-ALL-2": L_TWO_PATHS,
     },
     "l_plot_slim": {
         "full-not_counted-allowed-18": L_THREE,
@@ -69,9 +73,9 @@ PINNED = {
         "full-ALL-allowed-7": L_THREE,
         "full-ALL-allowed-8": SLIM_ONE,
         "full-not_counted-ALL-12": L_RING,
-        "full-ALL-ALL-1": L_RING,
         "full-not_counted-ALL-13": L_ONE_PATH,
-        "full-ALL-ALL-3": L_ONE_PATH,
+        "full-ALL-ALL-1": L_ONE_PATH,
+        "full-ALL-ALL-2": SLIM_TWO_PATHS,
     },
 }
 

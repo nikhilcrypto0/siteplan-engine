@@ -744,7 +744,9 @@ INVENTORY: tuple[Entry, ...] = (
                "occupancy)', its height to the terrace of the last livable floor (2.6). Whether "
                "the 'high rise buildings' of 4.6 are NBC's or the state's is open: both are "
                "evaluated (nbc_fire_height), so a block of 15 to 21 m over no large cellar that "
-               "fails 4.6 is UNVERIFIED.",
+               "fails 4.6 is UNVERIFIED. The full search lays no fire lane round a block below "
+               "21 m, so the layouts it builds to hold under every reading take no block of 15 "
+               "to 21 m; those built for a single reading may rest on the state's line (C4-06).",
         settles="The fire NOC of a sanctioned 15 to 21 m block over no large cellar, or the fire "
                 "department's written reading.",
     ),

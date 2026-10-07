@@ -14,7 +14,11 @@ that holds under only some of their readings is UNVERIFIED. A layout is therefor
 A profile that adds nothing over `ALL` (a reading whose floor counts are no more than the ones
 every reading allows) is not tried. Everything else the rules leave open (the turning radius, the
 spacing of blocks of different heights, the denominators of the open space, the club house share)
-is always met under every reading, which costs nothing here.
+is always met under every reading, which costs nothing here. NBC's own 15 m high-rise line
+(nbc_fire_height) does cost something: under it a block of 15 to 21 m is held to 4.6's fire
+access, which the search lays round no block below 21 m. The profile built for every reading
+takes no such block, so its layouts hold under both lines; a profile that rests on a reading of
+the stilt or of circulation may rest on the state's line too (C4-06).
 
 The floor counts below the high-rise height are here too (C3), each with its Table III band's
 figures: the setback on the sides, the Building Line on the access road's frontage, the gap
@@ -29,6 +33,9 @@ from siteplan.contracts import DesignBrief, ResolvedRules, TowerPrototype
 from siteplan.contracts.resolved_rules import (
     ALLOWED,
     CIRCULATION_IN_SETBACK,
+    HEIGHT_TOL_M,
+    NBC_FIRE_HEIGHT,
+    NBC_LINE,
     NOT_ALLOWED,
     STILT_IN_RULE_HEIGHT,
 )
@@ -55,6 +62,13 @@ class Profile:
     def stilt_readings(self, rules: ResolvedRules) -> list[str]:
         return rules.readings(STILT_IN_RULE_HEIGHT) if self.stilt == ALL else [self.stilt]
 
+    def every_reading(self, rules: ResolvedRules) -> bool:
+        """Whether it is built to hold under every reading of the stilt and of circulation the
+        rules carry: ALL on both, or the only reading there is."""
+        return ((self.stilt == ALL or len(rules.readings(STILT_IN_RULE_HEIGHT)) <= 1)
+                and (self.circulation == ALL
+                     or len(rules.readings(CIRCULATION_IN_SETBACK)) <= 1))
+
     def basis(self) -> dict[str, str]:
         """The interpretation_basis a candidate made for this profile carries."""
         return {STILT_IN_RULE_HEIGHT: self.stilt, CIRCULATION_IN_SETBACK: self.circulation}
@@ -76,6 +90,8 @@ class FloorClass:
     front_m: float | None = None  # on the access road's frontage, where a band gives its own
     high_rise: bool = True
     strip_m: float = 0.0  # the planting strip its band asks along the plot line
+    nbc_held: bool = False  # below the high-rise height, held to NBC 4.6's fire access under the
+    # nbc_line reading, by NBC's own 15 m (C4-06)
 
     @property
     def front(self) -> float:
@@ -90,25 +106,44 @@ class FloorClass:
 def floor_classes(rules: ResolvedRules, brief: DesignBrief, prototype: TowerPrototype,
                   profile: Profile) -> list[FloorClass]:
     """The floor counts a block of this prototype may take under every reading of the profile,
-    lowest first. A count the law leaves open under one reading only is not here."""
+    lowest first. A count the law leaves open under one reading only is not here; nor, in a
+    profile built to hold under every reading, a block below the high-rise height that NBC's own
+    15 m line would hold to 4.6's fire access (the nbc_line reading): the search lays no fire lane
+    round a block that low (C3), so it would stand only under the state's line (C4-06)."""
     readings = profile.stilt_readings(rules)
     per_reading = [{o.floors: o for o in feasible_floors(rules, brief, prototype, reading)}
                    for reading in readings]
     common = sorted(set.intersection(*(set(found) for found in per_reading)))
+    nbc_line = NBC_LINE in rules.readings(NBC_FIRE_HEIGHT)
     classes = []
     for floors in common:
         options = [found[floors] for found in per_reading]
         fronts = [o.band.front_setback_m for o in options if o.band.front_setback_m is not None]
+        physical = options[0].physical_height_m
+        high_rise = any(not o.below_high_rise for o in options)
+        nbc_held = (not high_rise and nbc_line
+                    and physical >= rules.fire.nbc_high_rise_m.value - HEIGHT_TOL_M)
+        if nbc_held and profile.every_reading(rules):
+            continue
         classes.append(FloorClass(
-            floors=floors, physical_m=options[0].physical_height_m,
+            floors=floors, physical_m=physical,
             setback_m=max(o.setback_m for o in options),
             gap_m=max(o.gap_m if o.gap_m is not None else o.setback_m for o in options),
             rule_heights=tuple((o.reading, o.rule_height_m) for o in options),
             open_items=tuple(sorted({item for o in options for item in o.open_items})),
             front_m=max(o.band.front_m for o in options) if fronts else None,
-            high_rise=any(not o.below_high_rise for o in options),
-            strip_m=max(_strip_asked(rules, o) for o in options)))
+            high_rise=high_rise,
+            strip_m=max(_strip_asked(rules, o) for o in options), nbc_held=nbc_held))
     return classes
+
+
+def resources(cls: FloorClass) -> tuple:
+    """Everything a floor count asks or rests on but its height (C4-06): the ground (the larger
+    of its setbacks, its gap and the planting strip), the fire access it is held to under some
+    reading (a high-rise, or below one held by NBC's own line) and the inputs nobody has settled
+    that it rests on. Of two counts alike in all of it the taller is the better; one that asks or
+    rests on less of anything is another choice."""
+    return cls.zone_m, cls.gap_m, cls.strip_m, cls.high_rise, cls.nbc_held, cls.open_items
 
 
 def _strip_asked(rules: ResolvedRules, option: FloorOption) -> float:

@@ -50,7 +50,7 @@ from siteplan.optimizer.search.frame import Frame, distinct_angles
 from siteplan.optimizer.search.land import EMPTY, Land, Plot, erode, grow, polygons, setback_land
 from siteplan.optimizer.search.network import ENTRANCES_TRIED, EPS_M, TOUCH_M
 from siteplan.optimizer.search.quantities import Quantities
-from siteplan.optimizer.search.readings import FloorClass
+from siteplan.optimizer.search.readings import FloorClass, resources
 from siteplan.towers import orientations
 
 TIE_M = 0.001  # distances and grid positions this close rank as equal
@@ -105,14 +105,15 @@ def options(kit: Sequence[TowerPrototype], classes: Mapping[str, Sequence[FloorC
             max_floors: int, q: Quantities) -> list[Choice]:
     """The blocks the fringe may take: every prototype of the kit, whatever its depth, at each
     floor count below the high-rise height the profile leaves open, up to the configuration's
-    tallest. Of the counts that ask the same of the ground only the tallest is kept, once among
-    those a pathway may reach and once among those only a road reaches."""
+    tallest. Of the counts that ask and rest on the same (`readings.resources`, and its front
+    setback) only the tallest is kept, once among those a pathway may reach and once among those
+    only a road reaches."""
     found = []
     for prototype in kit:
         best: dict[tuple, FloorClass] = {}
         for cls in classes.get(prototype.id, ()):  # lowest first: the tallest of a kind wins
             if not cls.high_rise and cls.floors <= max_floors:
-                best[(*_key(cls), pathway_serves(q, cls))] = cls
+                best[(*_key(cls), *resources(cls), pathway_serves(q, cls))] = cls
         found += [Choice(prototype, cls, prototype.length_m, prototype.depth_m,
                          prototype.per_floor.saleable_sqft * cls.floors) for cls in best.values()]
     return found
