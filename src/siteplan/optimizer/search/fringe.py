@@ -48,6 +48,15 @@ from siteplan.optimizer.search.network import ENTRANCES_TRIED, EPS_M, TOUCH_M, C
 from siteplan.optimizer.search.quantities import Quantities
 from siteplan.optimizer.search.readings import FloorClass
 
+TIE_M = 0.001  # distances and grid positions this close rank as equal
+CONTAIN_TOL_M = 1e-6  # a block whose edge lies on its ground's edge stands on it
+
+
+def _tied(value: float) -> int:
+    """A distance or a position as it is ranked: within TIE_M of another is the same, so the
+    last digits of the geometry never choose between equals."""
+    return round(value / TIE_M)
+
 
 @dataclass(frozen=True)
 class Fringed:
@@ -195,8 +204,9 @@ def _best(choices: Sequence[Choice], fits: _Fits, ring: BaseGeometry, paths: Bas
             for footprint, distance in zip(boxes, distances, strict=True):
                 if distance <= TOUCH_M or by_path:
                     x0, y0, _, _ = footprint.bounds
-                    found.append((float(distance), y0, x0, index, footprint))
-        for distance, _, _, index, footprint in sorted(found, key=lambda f: f[:4]):
+                    found.append((_tied(float(distance)), _tied(y0), _tied(x0), index,
+                                  footprint, float(distance)))
+        for _, _, _, index, footprint, distance in sorted(found, key=lambda f: f[:4]):
             if tried >= ENTRANCES_TRIED:
                 return None
             tried += 1
@@ -238,17 +248,18 @@ def _grid(ground: BaseGeometry, rooms: Sequence[Polygon], depth_m: float, length
           ) -> np.ndarray:
     """Every upright block of this size, on the search's grid, that lies wholly on the ground:
     `rooms` are the pieces of the ground at least the block's depth wide."""
+    on = ground.buffer(CONTAIN_TOL_M, join_style="mitre")
+    shapely.prepare(on)
     out = []
     for piece in rooms:
         minx, miny, maxx, maxy = piece.bounds
-        if maxx - minx < depth_m or maxy - miny < length_m:
+        if maxx - minx < depth_m - CONTAIN_TOL_M or maxy - miny < length_m - CONTAIN_TOL_M:
             continue
         xs = np.arange(minx, maxx - depth_m + EPS_M, STEP_M)
         ys = np.arange(miny, maxy - length_m + EPS_M, STEP_M)
         x, y = (a.ravel() for a in np.meshgrid(xs, ys))
         boxes = shapely.box(x, y, x + depth_m, y + length_m)
-        shapely.prepare(ground)
-        out.append(boxes[shapely.contains(ground, boxes)])
+        out.append(boxes[shapely.contains(on, boxes)])
     return np.concatenate(out) if out else np.array([])
 
 

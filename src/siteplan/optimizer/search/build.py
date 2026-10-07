@@ -111,7 +111,9 @@ def partition(plot: Plot, claims: dict[PhysicalUse, list[tuple[str, BaseGeometry
             if not piece:
                 continue
             ground = unary_union(piece)
-            taken = unary_union([taken, ground])
+            # one union at a time: GEOS 3.13's cascaded union of the claims so far and a ring
+            # road whose hole a block lines was seen to drop the block (Dhulapally, 2026-10-06)
+            taken = taken.union(ground)
             entries.append({"use": use, "shapes": shapes_from(ground), "area_sqm": ground.area,
                             "ref": ref, "tags": tags})
     left = polygons(net.difference(taken), SLIVER_SQM)

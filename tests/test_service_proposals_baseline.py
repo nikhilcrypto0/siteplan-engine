@@ -3,7 +3,8 @@ architect is asked and what the model is answered: pinned on main (0e2ffa2) befo
 every proposal, so that keeping them is shown to change none of it; re-pinned on contracts 1.3
 (2026-10-06), where the search keeps its cellar out from under blocks below 21 m, so the same
 twelve are proposed and the model is answered as on main; only the digests move
-(docs/behaviour-changes.md).
+(docs/behaviour-changes.md). Re-pinned on C4-01a, where the generator's ledger takes its claims one
+union at a time: the same twelve, the same three and the same answer; only the digests move.
 
 The values pin exact output on the locked dependencies (uv.lock). They move only with a normative
 replacement and an entry in docs/behaviour-changes.md.
@@ -46,13 +47,13 @@ PINNED = {
         "full-ALL-ALL-5",
         "full-ALL-ALL-6",
     ],
-    "proposed_sha256": "d887917403f20ed2ac8e81350780a0f26af0c570378d130596970ac13cd11746",
+    "proposed_sha256": "04a8ef1de9f059d6b54a39a8553007f2d25632fc0cddf8abfe2a6247f9f9c8e1",
     "shown": [
         ["full-not_counted-allowed-87", "BALANCED"],
         ["full-not_counted-allowed-85", "MAX_YIELD"],
         ["full-ALL-ALL-5", "CONVENTIONAL_OPEN_SPACE"],
     ],
-    "shown_digests": ["ff6ec6e20473d155", "e721df66e0a346b3", "0e4781844015c539"],
+    "shown_digests": ["bbb9e5b4405f4a9d", "0996ee91d920d560", "8462b9949b1923f0"],
     "answer_sha256": "73c8a93310bdf108b43acd99987b14fe184fe004589b789bffbfc1f694e2aa54",
     "approval_page_sha256": "cd3ebee2af46849756df643999df9b16d2cbc91d92c45101983782cff1eb0181",
 }

@@ -4,6 +4,43 @@ A characterization test (tests/manifest.py) pins what the engine produces today.
 only together with a normative replacement test and an entry here: what changed, why, the
 evidence, and the test that now holds the behaviour. Newest first.
 
+## 2026-10-06: C4-01a, the search's choices no longer turn on the last digits of its geometry
+
+Drawing the roads from centre lines (C4-01) lays the same ground with other last digits, and that
+alone changed what the full search laid out. Three defects were behind it, fixed here first:
+
+- **The ring road's narrowness** (`network.cluster_of`). The ring was opened at exactly a road's
+  width to find where the ground cuts it narrower than a road. A ring drawn at exactly that width
+  (the Dhulapally ASSUMPTION_TEST inputs give no firm margin over rule 8(m)'s 9 m) shrinks to a
+  line, and GEOS grows that line back unstably: at some turns the whole ring read as narrow when
+  the ground had cut only the 2 m tip of a mitred corner. The check now asks directly whether a
+  road a hair under the rule's width, laid against the cluster's outline with its turns rounded,
+  lies on the ring's ground. A cut deeper into a side than the ring's margin over a road is
+  refused as before; the tip of a corner beyond a road's width is no longer a narrowing.
+- **The fringe** (`fringe._best`, `fringe._grid`). Between equally valuable blocks the fringe took
+  the one nearest the ring, and a block the ring touches is 0 m or, by noise, 1e-13 m away: noise
+  chose. Distances and places now rank to the millimetre (`TIE_M`), and a block whose edge lies on
+  its ground's edge stands on it (`CONTAIN_TOL_M`, a micrometre), its bounds check included.
+- **The generator's ledger** (`build.partition`). Each claim went into a cascaded union with the
+  claims so far. On one Dhulapally layout GEOS 3.13 returned that union without a block lining the
+  ring road's hole, the ledger counted the block's 1,582 m² as UNALLOCATED too, and the
+  validator's partition cross-check failed the layout, rightly. One binary union at a time now.
+
+Evidence and tests:
+
+- `tests/test_search_ties.py` (normative): the corner-tip cut at the turns the old check refused
+  (14.4°, 25.8°, 27.3°), a 1 m cut into a side still refused, the fringe's tie and edge, and the
+  ledger counting every square metre once on made-up land. Five of its eleven fail on 1c4fd2e.
+- Made-up land: the service's twelve proposals, the three shown, the model's answer and the
+  approval page are unchanged; only the digests move (re-pinned). On the slim L-plot the quick
+  search proposes `full-not_counted-ALL-13`/`-14` and `full-ALL-ALL-2`/`-3` (five blocks, one
+  with a pathway) where it proposed `-12`/`-13` and `-1`/`-2` (four blocks, two with pathways);
+  `tests/test_search_road_ground.py` is pinned on C4-01a.
+- Dhulapally, Run B prime's request (the C4 benchmark, `out/dhulapally-C4-BENCHMARK-20261006/`):
+  the same 1,152 configurations, 112 laid out and 24 judged, no legal FAIL, 11 proposed where 12
+  were. The best layout is the same (three towers of stilt + 10, 360 flats, 432,120 sft); the
+  balanced and the open-space options shown are others.
+
 ## 2026-10-06: the search keeps its cellar out from under blocks below 21 m
 
 The full search lays fire lanes round its high-rise blocks only, and its cellar was the whole plot

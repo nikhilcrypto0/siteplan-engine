@@ -132,9 +132,20 @@ def cluster_of(footprints: Sequence[Polygon], streets: Sequence[Polygon], land: 
     if not [p for p in parts if p.interiors]:
         return None, "the ring road does not close round the cluster"
     whole = unary_union(parts)
-    if lost > RING_CLIP_SQM and whole.difference(opening(whole, road_width_m)).area > RING_CLIP_SQM:
+    if lost > RING_CLIP_SQM and _narrower_than_a_road(hull, whole, road_width_m):
         return None, "the ring road is narrower than a road in places, where the ground cuts it"
     return Cluster(hull, whole, lost > RING_CLIP_SQM), ""
+
+
+def _narrower_than_a_road(hull: Polygon, ring: BaseGeometry, road_width_m: float) -> bool:
+    """Whether the ground cuts the ring road narrower than a road anywhere: a road as wide as the
+    rule asks (a hair under), laid against the cluster's outline with its turns rounded, leaves the
+    ring's ground. The ground cuts the ring only from outside, so a cut within the ring's margin
+    over a road leaves the road whole. (Opening the ring at the road's width instead shrinks a ring
+    exactly that wide to a line, whose last digits decide what grows back.)"""
+    centre = LineString(grow(hull, road_width_m / 2).exterior.coords)
+    road = centre.buffer(road_width_m / 2 - EPS_M, cap_style="flat", join_style="round")
+    return road.difference(ring).area > RING_CLIP_SQM
 
 
 def _violation(hull: Polygon, land: Land, ring_width_m: float) -> float:
