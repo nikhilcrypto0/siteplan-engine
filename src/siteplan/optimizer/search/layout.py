@@ -89,12 +89,13 @@ class Config:
     reserve_scale: float = 1.0
     low_blocks: bool = False  # blocks below the high-rise height may stand (Table III)
     more_clusters: bool = False  # further clusters stand on the land the first leaves (C4-02)
+    mixed_depths: bool = False  # columns may be of the kit's other depths too (C4-04)
 
     @property
     def key(self) -> tuple:
         return (self.profile.key, round(self.angle_deg, 3), round(self.offset_m, 3),
                 self.max_floors, self.reserve or "", self.reserve_scale, self.low_blocks,
-                self.more_clusters)
+                self.more_clusters, self.mixed_depths)
 
 
 @dataclass(frozen=True)
@@ -115,6 +116,11 @@ class Run:
     profiles: tuple[Profile, ...] = ()
     fringe_kit: tuple[TowerPrototype, ...] = ()
     own_lands: dict[tuple[float, float], BaseGeometry] = field(default_factory=dict)
+
+    @property
+    def other_depths(self) -> tuple[TowerPrototype, ...]:
+        """The kit's blocks of another depth than the columns' main one (C4-04)."""
+        return tuple(p for p in self.fringe_kit if round(p.depth_m, 2) != self.depth_m)
 
     def has_low(self, profile: Profile) -> bool:
         """Whether the profile leaves a floor count below the high-rise height open."""
@@ -198,14 +204,16 @@ def evaluate(run: Run, config: Config) -> Evaluation | Failure:
                      and (c.high_rise or config.low_blocks)]
                for pid, found in run.classes[config.profile.key].items()}
     choices = choices_for(run.kit, classes)
+    # C4-04: in a configuration of its own, the kit's other depths may stand in columns too
+    others = choices_for(run.other_depths, classes) if config.mixed_depths else []
     if not choices:
         return Failure("no floor count is left open")
     beyond = fringe.options(run.fringe_kit, classes, config.max_floors, q) \
         if config.low_blocks else []
-    asked = [c.cls for c in [*choices, *beyond]]
+    asked = [c.cls for c in [*choices, *others, *beyond]]
     zone_depth = max(cls.zone_m for cls in asked)
     strip_width = max(cls.strip_m for cls in asked)
-    street = max(q.road_m, max(c.cls.gap_m for c in choices) + q.gap_margin_m)
+    street = max(q.road_m, max(c.cls.gap_m for c in [*choices, *others]) + q.gap_margin_m)
     frame = Frame(config.angle_deg)
     kept_clear = None
     if config.reserve:
@@ -221,7 +229,7 @@ def evaluate(run: Run, config: Config) -> Evaluation | Failure:
                      kept_clear=kept_clear)
     if land.cluster_land.is_empty:
         return Failure("the ring road leaves no ground for a block")
-    standing, _ = _columns(run, config, frame, land, choices, street)
+    standing, _ = _columns(run, config, frame, land, choices, street, others)
     if not standing:
         return Failure("no block fits the ground")
     fitted, streets, cluster, why = network.fit_cluster(
@@ -231,14 +239,18 @@ def evaluate(run: Run, config: Config) -> Evaluation | Failure:
         return Failure(why)
     if not run.brief.height_intent.mixed_heights_allowed:  # the rest keep the columns' height
         choices = [c for c in choices if c.cls.floors == fitted[0].choice.cls.floors]
+        others = [c for c in others if c.cls.floors == fitted[0].choice.cls.floors]
         beyond = [c for c in beyond if c.cls.floors == fitted[0].choice.cls.floors]
     clusters: list[network.Cluster] = [cluster]
     links: list[Road] = []
     if config.more_clusters:
         fitted, streets, clusters, links = _more_clusters(run, config, frame, land, choices,
-                                                          street, fitted, streets, clusters)
+                                                          others, street, fitted, streets,
+                                                          clusters)
         if len(clusters) == 1:
             return Failure("no further cluster stands on the ground the first leaves")
+    if config.mixed_depths and all(round(s.choice.depth_m, 2) == run.depth_m for s in fitted):
+        return Failure("no column of another depth stands")  # the same as without them
     rings = unary_union([*(c.ring for c in clusters), *(r.ground for r in links)])
     hulls = unary_union([c.hull for c in clusters])
     extra = fringe.place(plot, q, frame, land, rings, hulls, fitted, beyond, own=run.own_lands,
@@ -255,8 +267,8 @@ def evaluate(run: Run, config: Config) -> Evaluation | Failure:
 
 
 def _more_clusters(run: Run, config: Config, frame: Frame, land: Land, choices: list[Choice],
-                   street: float, fitted: list[Standing], streets: list[Road],
-                   clusters: list[network.Cluster]
+                   others: Sequence[Choice], street: float, fitted: list[Standing],
+                   streets: list[Road], clusters: list[network.Cluster]
                    ) -> tuple[list[Standing], list[Road], list[network.Cluster], list[Road]]:
     """Further clusters on the ground the first leaves (an arm, a wing the first one's convex
     outline cannot take in): the blocks' land less every cluster and link laid, grown by the
@@ -276,10 +288,10 @@ def _more_clusters(run: Run, config: Config, frame: Frame, land: Land, choices: 
         if rest.cluster_land.is_empty:
             break
         best: tuple | None = None
-        smallest = min(c.depth_m * c.length_m for c in choices)
+        smallest = min(c.depth_m * c.length_m for c in [*choices, *others])
         for angle in zone_angles(rest.cluster_land, frame.angle_deg, smallest):  # C4-03
             turned = Frame(angle)
-            standing, _ = _columns(run, config, turned, rest, choices, street)
+            standing, _ = _columns(run, config, turned, rest, choices, street, others)
             if not standing:
                 continue
             more, more_streets, cluster, _ = network.fit_cluster(
@@ -361,36 +373,75 @@ def _principal_axis_deg(piece: Polygon) -> float:
 
 
 def _columns(run: Run, config: Config, frame: Frame, land: Land, choices: list[Choice],
-             street: float) -> tuple[list[Standing], float]:
+             street: float, others: Sequence[Choice] = ()) -> tuple[list[Standing], float]:
+    """The blocks in columns across the land, column after column a street apart: every column of
+    the kit's main depth, or (C4-04), where the kit has `others` of other depths, each column of
+    whichever depth adds most for the width it takes; the more valuable of the two."""
     q = run.q
     base = frame.to_turned(land.cluster_land)
     net = frame.to_turned(run.plot.net)
     lands = {}
-    for setback in sorted({ground_key(c.cls) for c in choices}):
+    for setback in sorted({ground_key(c.cls) for c in [*choices, *others]}):
         own = base.intersection(erode(net, setback + q.setback_margin_m))
         lands[setback] = erode(own, EPS_LAND_M)
     minx, _, maxx, _ = base.bounds
     minx, maxx = minx + EPS_LAND_M, maxx - EPS_LAND_M
-    pitch = run.depth_m + street
-    by_floors = ({None: choices} if run.brief.height_intent.mixed_heights_allowed else {
-        f: [c for c in choices if c.cls.floors == f] for f in sorted({c.cls.floors
-                                                                      for c in choices})})
     best: tuple[list[Standing], float] = ([], 0.0)
-    for allowed in by_floors.values():
-        found: list[Standing] = []
-        total = 0.0
-        x = minx + config.offset_m
-        column = 0
-        while x + run.depth_m <= maxx + 1e-9:
-            stretches = {s: free_stretches(land_s, x, run.depth_m) for s, land_s in lands.items()}
-            planned = plan_column(stretches, allowed, _gap(q), column, x)
-            found += planned.standing
-            total += planned.value
-            x += pitch
-            column += 1
-        if total > best[1]:
-            best = (found, total)
+    for allowed in _by_floors(run, choices).values():
+        found = _lay_columns(run, config, lands, minx, maxx, street, allowed)
+        if found[1] > best[1]:
+            best = found
+    if others:
+        for allowed in _by_floors(run, [*choices, *others]).values():
+            found = _lay_columns(run, config, lands, minx, maxx, street, allowed)
+            if found[1] > best[1]:
+                best = found
     return best
+
+
+def _by_floors(run: Run, choices: Sequence[Choice]) -> dict[int | None, list[Choice]]:
+    """The blocks a layout may stand together: any, or where heights may not mix, those of one
+    floor count at a time."""
+    if run.brief.height_intent.mixed_heights_allowed:
+        return {None: list(choices)}
+    return {f: [c for c in choices if c.cls.floors == f]
+            for f in sorted({c.cls.floors for c in choices})}
+
+
+def _lay_columns(run: Run, config: Config, lands: dict[float, BaseGeometry], minx: float,
+                 maxx: float, street: float, allowed: Sequence[Choice]
+                 ) -> tuple[list[Standing], float]:
+    """Columns from the configuration's offset across the land: each the depth, of those the
+    blocks allowed come in, that adds the most saleable area for the width it takes (its depth and
+    the street beside it); a column where none stands takes the main depth's room."""
+    depths = sorted({round(c.depth_m, 2) for c in allowed}, reverse=True)
+    if not depths:
+        return [], 0.0
+    by_depth = {d: [c for c in allowed if round(c.depth_m, 2) == d] for d in depths}
+    found: list[Standing] = []
+    total = 0.0
+    x = minx + config.offset_m
+    column = 0
+    while x + min(depths) <= maxx + 1e-9:
+        pick: tuple[float, float, list[Standing], float] | None = None
+        for depth in depths:
+            if x + depth > maxx + 1e-9:
+                continue
+            stretches = {s: free_stretches(land_s, x, depth) for s, land_s in lands.items()}
+            planned = plan_column(stretches, by_depth[depth], _gap(run.q), column, x)
+            density = planned.value / (depth + street)
+            if planned.standing and (pick is None or density > pick[0]):
+                pick = (density, depth, list(planned.standing), planned.value)
+        if pick is None:
+            if x + run.depth_m > maxx + 1e-9:
+                break
+            x += run.depth_m + street
+        else:
+            found += pick[2]
+            total += pick[3]
+            x += pick[1] + street
+        column += 1
+    return found, total
 
 
 # --- The exact half: the roads, the club house, the ramp, the open space -------------------------

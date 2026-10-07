@@ -4,6 +4,40 @@ A characterization test (tests/manifest.py) pins what the engine produces today.
 only together with a normative replacement test and an entry here: what changed, why, the
 evidence, and the test that now holds the behaviour. Newest first.
 
+## 2026-10-06: C4-04, columns of more than one depth in a layout
+
+The columns took the kit's main depth (the one most of its prototypes come in); blocks of the
+kit's other depths stood only on the fringe. Each configuration is now searched once more, after
+all of the others and in an order of its own (`Config.mixed_depths`), with each column of
+whichever depth adds the most saleable area for the width it takes, its depth and the street
+beside it; that configuration keeps the main depth's columns where they add more, and counts as a
+layout of its own only when a column of another depth stands in it, else it is the same as the
+first. A kit of one depth (Dhulapally's, the made-up rectangle's and L-plot's) searches exactly as
+before.
+
+The first version let every configuration take the other depths. On the made-up L-plot with the
+slim block those configurations rated highest in the cheap half, by filling the strip the main
+depth leaves, and then failed the exact half, since that strip was where the club house went:
+every one of them ran out of room for the club house, the cellar ramp or the approach, and on the
+way one deep-only layout that had laid out before was no longer laid. So the configurations with
+other depths are laid out after all of the others, with quotas of their own: they take neither
+the others' place, nor their time, nor their numbers.
+
+- Made-up land (`tests/test_search_depths.py`, normative): on land as wide as two deep columns,
+  a slim one and their streets, a slim column stands beside the deep ones and the columns add
+  more than the deep ones alone; where only deep columns fit, they are as before; mixing never
+  adds less than the main depth alone; a configuration stands another depth in its columns only
+  when it lets it, and then always does; and on the slim L-plot every configuration of before is
+  laid out first, columns of the main depth alone, and layouts with columns of two depths reach
+  the exact half (22 on the slim L-plot, 20 on the slim rectangle, none before).
+- What they give there: the best of them is 16-23% below the best deep-only layout of each
+  profile, since the room a mixed plan needs for the club house is an end of the plot kept clear,
+  which takes more than its slim column adds; none is proposed, and the proposals and every
+  characterization pin are unchanged. A multi-depth kit takes about twice as long (4.4 to 8.1 s,
+  6.3 to 11.8 s), a kit of one depth no longer.
+- Dhulapally, Run B prime's request (the C4 benchmark): its kit is of one depth, so the search is
+  unchanged.
+
 ## 2026-10-06: C4-03, a further cluster turned to its own ground
 
 A further cluster (C4-02) stood in its configuration's direction, so a wing turned from the plot's

@@ -184,17 +184,23 @@ class FullSearchStrategy:
         # the others and in an order of its own, so those are evaluated as they were before
         more = [*configs[False], *configs[True]]
         context.rng("evaluate-clusters").shuffle(more)
+        plans = [*((c, False, False) for c in [*configs[False], *configs[True]]),
+                 *((c, True, False) for c in more)]
+        if run.other_depths:
+            # each again with columns of the kit's other depths too (C4-04), where it has any:
+            # after all of the others and in an order of its own, as further clusters are
+            mixed = [(c, clusters, True) for c, clusters, _ in plans]
+            context.rng("evaluate-depths").shuffle(mixed)
+            plans += mixed
         queues: dict[str, list[Evaluation]] = {p.key: [] for p in wanted}
-        for (profile, angle, tallest, step, low), clusters in [
-                *((c, False) for c in [*configs[False], *configs[True]]),
-                *((c, True) for c in more)]:
+        for (profile, angle, tallest, step, low), clusters, depths in plans:
             if stage.expired():
                 tally.exhausted = True
                 break
             pitch = run.depth_m + max(run.q.road_m, PITCH_GAP_M)
             ev = _guarded(evaluate, run, Config(profile, angle, step * pitch / self.limits.offsets,
                                                 tallest, None, low_blocks=low,
-                                                more_clusters=clusters))
+                                                more_clusters=clusters, mixed_depths=depths))
             tally.evaluated += 1
             if isinstance(ev, Failure):
                 tally.reasons[ev.reason] += 1
@@ -206,59 +212,74 @@ class FullSearchStrategy:
                  tally: Tally, stage: _Stage) -> list[tuple[Profile, Config, object]]:
         """The best configurations of each profile, laid out exactly. Those that let blocks below
         21 m stand have their own quota beside the others', so neither crowds out the other: the
-        objective decides between them when they are judged."""
+        objective decides between them when they are judged. Those whose columns may be of the
+        kit's other depths (C4-04) are laid out after all of the others, with quotas of their own,
+        so they take neither the others' place nor their time, and the others keep their
+        numbers."""
         laid: list[tuple[Profile, Config, object]] = []
         by_key = {p.key: p for p in run.profiles}
+        for mixed in (False, True):
+            for key, evaluations in queues.items():
+                laid += self._lay_out_profile(
+                    run, by_key[key], [ev for ev in evaluations
+                                       if ev.config.mixed_depths == mixed], tally, stage)
+        return laid
+
+    def _lay_out_profile(self, run: Run, profile: Profile, evaluations: list[Evaluation],
+                         tally: Tally, stage: _Stage) -> list[tuple[Profile, Config, object]]:
+        """One profile's configurations, the most valuable first, laid out exactly until its
+        quotas are met; one that has no room for the club house or the open space is tried again
+        with an end of the plot kept for them."""
+        laid: list[tuple[Profile, Config, object]] = []
         limits = self.limits
-        for key, evaluations in queues.items():
-            heap = [(-ev.value, i, ev) for i, ev in enumerate(evaluations)]
-            heapq.heapify(heap)
-            counter = len(evaluations)
-            seen: set[tuple] = set()
-            made, attempts = Counter(), Counter()
+        heap = [(-ev.value, i, ev) for i, ev in enumerate(evaluations)]
+        heapq.heapify(heap)
+        counter = len(evaluations)
+        seen: set[tuple] = set()
+        made, attempts = Counter(), Counter()
 
-            def open_(low: bool, made=made, attempts=attempts) -> bool:
-                return (made[low] < limits.laid_per_profile
-                        and attempts[low] < limits.attempts_per_profile)
+        def open_(low: bool) -> bool:
+            return (made[low] < limits.laid_per_profile
+                    and attempts[low] < limits.attempts_per_profile)
 
-            while heap and (open_(False) or open_(True)):
-                if stage.expired():
-                    tally.exhausted = True
-                    break
-                _, _, ev = heapq.heappop(heap)
-                signature = _signature(ev)
-                if signature in seen or not open_(ev.config.low_blocks):
-                    continue
-                seen.add(signature)
-                result, why = _guarded(lay_out, run, ev, failed=(None, ""))
-                attempts[ev.config.low_blocks] += 1
-                if result is None:
-                    tally.reasons[why] += 1
-                    if ev.config.reserve is None and why.startswith(ROOM_FAILURES):
-                        # the same with an end kept, and with blocks below 21 m too (whose own
-                        # configuration may have had no room to place one); never the other way
-                        kinds = [low for low in _low_blocks(run, ev.config.profile)
-                                 if low or not ev.config.low_blocks]
-                        for side in SIDES:
-                            for low in kinds:
-                                variant = _guarded(evaluate, run, _reserved(
-                                    ev.config, side, 1.0, low))
-                                if not isinstance(variant, Failure):
-                                    counter += 1
-                                    heapq.heappush(heap, (-variant.value, counter, variant))
-                    elif ev.config.reserve and ev.config.reserve_scale == 1.0 \
-                            and why.startswith(ROOM_FAILURES):
-                        variant = _guarded(evaluate, run, _reserved(
-                            ev.config, ev.config.reserve, RETRY_SCALE))
-                        if not isinstance(variant, Failure):
-                            counter += 1
-                            heapq.heappush(heap, (-variant.value, counter, variant))
-                    continue
-                made[ev.config.low_blocks] += 1
-                tally.laid += 1
-                tally.low_blocks.append([p.footprint for p in result.placements
-                                         if not p.standing.choice.cls.high_rise])
-                laid.append((by_key[key], ev.config, (ev, result)))
+        while heap and (open_(False) or open_(True)):
+            if stage.expired():
+                tally.exhausted = True
+                break
+            _, _, ev = heapq.heappop(heap)
+            signature = _signature(ev)
+            if signature in seen or not open_(ev.config.low_blocks):
+                continue
+            seen.add(signature)
+            result, why = _guarded(lay_out, run, ev, failed=(None, ""))
+            attempts[ev.config.low_blocks] += 1
+            if result is None:
+                tally.reasons[why] += 1
+                if ev.config.reserve is None and why.startswith(ROOM_FAILURES):
+                    # the same with an end kept, and with blocks below 21 m too (whose own
+                    # configuration may have had no room to place one); never the other way
+                    kinds = [low for low in _low_blocks(run, ev.config.profile)
+                             if low or not ev.config.low_blocks]
+                    for side in SIDES:
+                        for low in kinds:
+                            variant = _guarded(evaluate, run, _reserved(
+                                ev.config, side, 1.0, low))
+                            if not isinstance(variant, Failure):
+                                counter += 1
+                                heapq.heappush(heap, (-variant.value, counter, variant))
+                elif ev.config.reserve and ev.config.reserve_scale == 1.0 \
+                        and why.startswith(ROOM_FAILURES):
+                    variant = _guarded(evaluate, run, _reserved(
+                        ev.config, ev.config.reserve, RETRY_SCALE))
+                    if not isinstance(variant, Failure):
+                        counter += 1
+                        heapq.heappush(heap, (-variant.value, counter, variant))
+                continue
+            made[ev.config.low_blocks] += 1
+            tally.laid += 1
+            tally.low_blocks.append([p.footprint for p in result.placements
+                                     if not p.standing.choice.cls.high_rise])
+            laid.append((profile, ev.config, (ev, result)))
         return laid
 
     def _judge(self, context: SearchContext, run: Run, laid, tally: Tally, stage: _Stage
@@ -339,7 +360,7 @@ def _planning_notes(run: Run) -> list[str]:
 def _reserved(config: Config, side: str, scale: float, low_blocks: bool | None = None) -> Config:
     return Config(config.profile, config.angle_deg, config.offset_m, config.max_floors, side,
                   scale, config.low_blocks if low_blocks is None else low_blocks,
-                  config.more_clusters)
+                  config.more_clusters, config.mixed_depths)
 
 
 def _low_blocks(run: Run, profile: Profile) -> tuple[bool, ...]:
