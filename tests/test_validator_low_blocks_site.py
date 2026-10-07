@@ -1,13 +1,22 @@
 """The rest of what a block below 21 m is held to: the club house's own band, rule 8(l)'s roads and
-pathways, and fire access, where a low block is not held to the NBC high-rise lanes and the report
-says what it is held to instead.
+pathways, and fire access, where NBC 4.6 holds a low block only as a special building (over a
+large or deep cellar) or, under one reading, from NBC's own 15 m, and the report says which.
 
 Every band is MADE UP (tests/validator_low_helpers.py); no figure is a value of the order. The
 pathways, drawn, are in test_validator_pathways.py and the planting in test_validator_planting.py.
 """
 
 from shapely import affinity
-from validator_helpers import check, fixture, move_tower, select, set_floors, shape, status
+from validator_helpers import (
+    check,
+    fixture,
+    move_tower,
+    rectangle,
+    select,
+    set_floors,
+    shape,
+    status,
+)
 from validator_low_helpers import (
     MADE_UP,
     all_low,
@@ -20,8 +29,9 @@ from validator_low_helpers import (
     with_low_bands,
 )
 
+from siteplan.contracts.candidate import PlacedAmenity
 from siteplan.contracts.common import Status
-from siteplan.contracts.resolved_rules import STILT_IN_RULE_HEIGHT
+from siteplan.contracts.resolved_rules import NBC_FIRE_HEIGHT, STILT_IN_RULE_HEIGHT
 from siteplan.contracts.validation import Family
 
 TEST_CLASS = "normative"
@@ -54,6 +64,15 @@ def _club_west_by(candidate, metres):
 
 def _off_the_roads(candidate, name="T3"):
     move_tower(candidate, name, 0.0, -10.0)  # 34 m from the nearest road
+
+
+def _no_cellar(candidate):
+    candidate.program.cellars = None
+
+
+def _cabin_beside_t3(candidate):
+    candidate.program.amenities.append(
+        PlacedAmenity(name="SECURITY CABIN", shape=rectangle(134.5, 40.0, 137.0, 42.5)))
 
 
 def _names(report, family):
@@ -167,59 +186,84 @@ def test_a_low_block_above_12_m_off_every_road_fails_as_a_high_rise_would():
 # --- fire access below 21 m ----------------------------------------------------------------------
 
 
-def test_a_low_block_is_not_held_to_the_high_rise_fire_lanes():
-    """As a high-rise T2 has the 6 m lanes and corner turns checked; at 15 m none of those is made
-    for it, and the report lists the blocks it is not holding to them."""
+def test_a_low_block_over_no_cellar_and_below_15_m_is_not_held_to_nbc_4_6():
+    """12 m blocks over no cellar are neither high-rise (not at the state's 21 m, nor at NBC's own
+    15 m) nor special buildings, so NBC 4.6 asks nothing of them under any reading: no lanes are
+    judged for them, and the report says so block by block."""
     assert "Fire access: T2" in _names(fixture("rectangle").report(), Family.FIRE)
-    low = with_low_bands(all_low(fixture("rectangle"))).report()
-    fire = _names(low, Family.FIRE)
-    assert not [n for n in fire if n.startswith("Fire access: T")]
+    low = with_low_bands(all_low(fixture("rectangle"), floors=4)).edited(_no_cellar).report()
+    assert not [n for n in _names(low, Family.FIRE) if n.startswith("Fire access: T")]
+    assert status(low, "Fire access") is Z.INFO
     c = check(low, BELOW)
     assert c.family is Family.FIRE and BELOW in low.not_checked
-    assert "T1, T2, T3" in c.finding.measured
-    assert "not held to the high-rise lanes" in c.finding.measured
-    assert "6 m clear and motorable on all sides" in c.finding.measured  # read from the rules
+    assert c.finding.measured == "T1: not held to 4.6; T2: not held to 4.6; T3: not held to 4.6"
 
 
-def test_fire_access_below_21_m_is_not_checked_because_the_rule_gives_no_figure():
-    """Rule 15(a)(i) holds a block below the high-rise height to the National Building Code's
-    requirements other than heights and setbacks and gives no figure for what that asks of a fire
-    vehicle's access (A2 read the order so), so nothing numeric is judged: NOT_CHECKED, listed
-    beside the verdict, naming the rule. If a figure is ever carried, this one check is replaced
-    by a PASS or FAIL on it."""
+def test_a_low_block_over_the_cellar_is_a_special_building_held_to_nbc_4_6():
+    """NBC 2016 Part 3 4.6 is for 'high rise buildings and special buildings'; Part 4 1.2(b)(6)
+    makes a special building of one with a basement of more than 500 m², at any height; rule
+    15(a)(i) brings it to a block below 21 m (read as law). The fixture's one cellar level runs
+    under every block, so each 12 m block is held to the lanes and the corner turns."""
+    low = with_low_bands(all_low(fixture("rectangle"), floors=4)).report()
+    for name in ("T1", "T2", "T3"):
+        c = check(low, f"Fire access: {name}")
+        assert c.finding.status is Z.PASS  # the fixture gives every block its lanes
+        assert "a special building (NBC Part 4 1.2(b)(6))" in c.finding.note
+        assert "1.2(b)(6)" in c.finding.clause and "15(a)(i)" in c.finding.clause
+    measured = check(low, BELOW).finding.measured
+    assert "T2: a special building over the cellar, held to 4.6" in measured
+
+
+def test_what_the_rest_of_the_code_asks_below_21_m_is_not_checked_and_says_why():
+    """Rule 15(a)(i) keeps the National Building Code's requirements other than heights and
+    setbacks. 4.6's access is judged block by block and 4.3.2.2's pathway with the roads; the rest
+    of the Code (exits, the fire protection inside a block) is not on a site plan: NOT_CHECKED,
+    listed beside the verdict, naming the rule."""
     report = with_low_bands(all_low(fixture("rectangle"))).report()
     c = check(report, BELOW)
     assert c.finding.status is Z.NOT_CHECKED and BELOW in report.not_checked
     assert "rule 15(a)(i), p.20" in c.finding.note and RULE_15_A_I in c.finding.note
-    assert "no figure" in c.finding.note and "nothing numeric is judged" in c.finding.note
+    assert "1.2(b)(6)" in c.finding.note and "4.3.2.2" in c.finding.note
+    assert "not shown on a site plan" in c.finding.note
     assert "other than heights and setbacks" in c.finding.required
-    assert status(report, "Fire access") is Z.INFO  # the high-rise lanes: no high-rise block
 
 
 def test_a_low_blocks_fire_access_never_fails_a_block_for_a_lane_it_is_not_held_to():
-    report = with_low_bands(all_low(fixture("rectangle"))).report()
+    """A 15 m block over no cellar is held to 4.6 only under the nbc_line reading: something
+    standing in its lane fails it there and under no other reading, so it is UNVERIFIED, never
+    FAIL, and so is every site-wide fire check that holds only where it is held."""
+    report = with_low_bands(all_low(fixture("rectangle"))).edited(
+        lambda c: (_no_cellar(c), _cabin_beside_t3(c))).report()
     fire = {c.finding.rule: c.finding.status for c in report.legal if c.family is Family.FIRE}
     assert Z.FAIL not in fire.values()
+    t3 = check(report, "Fire access: T3")
+    assert t3.finding.status is Z.UNVERIFIED
+    assert t3.by_reading[NBC_FIRE_HEIGHT] == {"state_line": Z.PASS, "nbc_line": Z.FAIL}
+    assert "NBC's own 15 m line" in t3.finding.note
 
 
 def test_in_a_mixed_layout_the_high_rise_fire_checks_are_unchanged_and_the_low_block_is_named():
     shut = flat(fixture("rectangle"), T3=5)
     for inputs in (shut, with_low_bands(shut)):
         report = inputs.report()
-        assert "Fire access: T3" not in _names(report, Family.FIRE)
-        assert "T3" in check(report, BELOW).finding.measured
+        assert "T3: a special building over the cellar" in check(report, BELOW).finding.measured
+        assert check(report, "Fire access: T3").finding.status is Z.PASS
         for rule in ("Fire access: T1", "Fire access: T2"):
             assert check(report, rule) == check(fixture("rectangle").report(), rule), rule
+    report = with_low_bands(shut).edited(_no_cellar).report()  # 15 m: NBC's own line only
+    assert "T3: 15 m, held to 4.6 under the nbc_line reading only" in (
+        check(report, BELOW).finding.measured)
 
 
 def test_a_block_that_is_low_only_under_one_reading_of_the_stilt_says_which():
-    """6 floors on a 3 m stilt: 21 m if the stilt counts (a high-rise), 18 m if not (below)."""
+    """6 floors on a 3 m stilt: 21 m if the stilt counts (a high-rise), 18 m if not (below), over
+    the cellar either way: held to the lanes under every reading."""
     report = with_low_bands(floors_of(fixture("rectangle"), T3=6)).report()
     c = check(report, BELOW)
     assert "T3 (only if the stilt is not_counted)" in c.finding.measured
-    t3 = check(report, "Fire access: T3")  # as a high-rise it is still held to the lanes
-    assert t3.by_reading[STILT_IN_RULE_HEIGHT][NOT_COUNTED] is Z.NOT_CHECKED
-    assert "rule 15(a)(i)" in t3.finding.note and "15(b)(iv)" in t3.finding.note
+    t3 = check(report, "Fire access: T3")
+    assert t3.by_reading[STILT_IN_RULE_HEIGHT] == {COUNTED: Z.PASS, NOT_COUNTED: Z.PASS}
+    assert "special building" in t3.finding.note and "15(b)(iv)" in t3.finding.clause
 
 
 def test_a_low_block_standing_on_a_road_still_takes_the_road_from_its_width():

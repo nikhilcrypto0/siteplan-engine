@@ -251,7 +251,12 @@ INVENTORY: tuple[Entry, ...] = (
                "through pathways of 6m width branching out from the internal roads / loop road "
                "would be allowed.' The permission stops at 12 m, so a taller block opens onto an "
                "internal road. Applied on a Group Development Scheme only, like the rest of "
-               "rule 8.",
+               "rule 8. How much of a block must face the road is not said: a block that only "
+               "touches one at a corner opens onto it under one reading and not the other, and "
+               "both are evaluated (opens_onto_road: a touch, or an unbroken 6 m, the pathway's "
+               "width).",
+        settles="A sanctioned plan with a block that only touches a road at a corner, or the "
+                "authority's reading of rule 8(l) and (m).",
     ),
     Entry(
         "Road", "A residential building above this height may not stand on a road that ends at "
@@ -681,9 +686,10 @@ INVENTORY: tuple[Entry, ...] = (
                "bay, facility, ramp or tot-lot stands in them. The order does not say where the "
                "9 m is measured: read as the tender's turning circle, the outer edge of the "
                "lane, which fits the state's 7 m minimum setback and the 7 m rule 13(c)(vii) "
-               "keeps for fire vehicles (a 9 m centreline would need 7.76 m). Asked once a block "
-               "is a high-rise in the state's sense (21 m); NBC's own starts at 15 m. The 45 t "
-               "surface is a specification and is reported UNVERIFIED.",
+               "keeps for fire vehicles (a 9 m centreline would need 7.76 m). Asked of every "
+               "high-rise in the state's sense (21 m), of every special building whatever its "
+               "height, and under one reading of every block of NBC's own 15 m (the entries "
+               "below). The 45 t surface is a specification and is reported UNVERIFIED.",
         settles="The fire NOC of a sanctioned high-rise, or the layout agreed with the Chief "
                 "Fire Officer, which 4.6(c) asks for.",
     ),
@@ -699,16 +705,57 @@ INVENTORY: tuple[Entry, ...] = (
     Entry(
         "Access", "A block below high-rise keeps the National Building Code's requirements other "
                 "than heights and setbacks.",
-        "no figure in the order", rules.NON_HIGH_RISE_NBC_CLAUSE, Reading.NOT_MODELLED,
-        uses=("NON_HIGH_RISE_NBC_CLAUSE",),
+        "NBC 2016 Part 3 4.6 and 4.3.2.2, through rule 15(a)(i)", rules.NON_HIGH_RISE_NBC_CLAUSE,
+        Reading.INTERPRETED, (Where.RESOLVER,), ("NON_HIGH_RISE_NBC_CLAUSE",),
         choice="Rule 15(a)(i) as G.O.Ms.No.50 of 2019 substituted it (NBC 2016; the 2012 text said "
-               "2005). It gives no number, and carves out 'heights and setbacks': whether the "
-               "NBC's fire-vehicle open space round a building of 15 m or more is a setback "
-               "that the carve-out leaves out is not said, so no fire lane is asked of a "
-               "block below 21 m and none is judged. High-rise fire access is rule 15(b)(iv), "
-               "which cites NBC 2005 in the 2012 text and which no order read substitutes.",
+               "2005). It gives no number, and carves out 'heights and setbacks'. Read on "
+               "2026-10-06: 4.6's fire access and 4.3.2.2's pathway are provisions of means of "
+               "access, neither a height nor a setback, so they reach a block below 21 m where "
+               "the Code asks them (the entries below). The rest of the Code, exits and the fire "
+               "protection inside a block, is not on a site plan and is reported NOT_CHECKED. "
+               "High-rise fire access is rule 15(b)(iv), which cites NBC 2005 in the 2012 text "
+               "and which no order read substitutes.",
         settles="The fire NOC of a sanctioned block of 15-21 m, or the Fire Services Department's "
                 "reading.",
+    ),
+    Entry(
+        "Access", "A block over a cellar of more than 500 m², or of two levels or more, is a "
+                "special building and is held to NBC 4.6's fire access whatever its height.",
+        f"one cellar level over {rules.NBC_SPECIAL_BASEMENT_SQM:g} m², or "
+        f"{rules.NBC_SPECIAL_BASEMENT_LEVELS} levels or more", rules.NBC_SPECIAL_BUILDING_CLAUSE,
+        Reading.INTERPRETED, (Where.RESOLVER,),
+        ("NBC_SPECIAL_BASEMENT_SQM", "NBC_SPECIAL_BASEMENT_LEVELS", "NBC_SPECIAL_BUILDING_CLAUSE"),
+        choice="NBC 2016 Part 3 4.6 is 'for high rise buildings and special buildings'; Part 4 "
+               "1.2(b)(6) makes a special building of 'buildings with two basements or more, or "
+               "with one basement of area more than 500 m²'. Read as law on 2026-10-06 through "
+               "rule 15(a)(i). A block standing over a cellar shared with others has it as its "
+               "basement. The generator lays no fire band round a block below 21 m, so it keeps "
+               "its cellar out from under every such block (optimizer.search.parking_plan).",
+        settles="The fire NOC of a sanctioned block below 21 m over a cellar, or the Fire Services "
+                "Department's reading of 15(a)(i).",
+    ),
+    Entry(
+        "Access", "NBC's own high-rise line: whether 4.6 reaches a block of 15 to 21 m the state "
+                "calls non-high-rise.",
+        f"{rules.NBC_HIGH_RISE_M:g} m to the terrace, the stilt included",
+        rules.NBC_HIGH_RISE_CLAUSE, Reading.INTERPRETED, (Where.RESOLVER,),
+        ("NBC_HIGH_RISE_M", "NBC_HIGH_RISE_CLAUSE"),
+        choice="NBC 2016 Part 4 2.38: 'A building 15 m or above in height (irrespective of its "
+               "occupancy)', its height to the terrace of the last livable floor (2.6). Whether "
+               "the 'high rise buildings' of 4.6 are NBC's or the state's is open: both are "
+               "evaluated (nbc_fire_height), so a block of 15 to 21 m over no large cellar that "
+               "fails 4.6 is UNVERIFIED.",
+        settles="The fire NOC of a sanctioned 15 to 21 m block over no large cellar, or the fire "
+                "department's written reading.",
+    ),
+    Entry(
+        "Access", "The paved pathway from a road to a building it serves is no longer than 30 m.",
+        f"{rules.PATHWAY_MAX_LENGTH_M:g} m", rules.PATHWAY_LENGTH_CLAUSE, Reading.AS_WRITTEN,
+        (Where.RESOLVER,), ("PATHWAY_MAX_LENGTH_M", "PATHWAY_LENGTH_CLAUSE"),
+        choice="NBC 2016 Part 3 4.3.2.2: 'The length of the pathway shall not be more than 30 "
+               "m.' Measured for each block reached by a rule 8(l) pathway: along a straight "
+               "one; between the straight line and half the outline of any other, UNVERIFIED in "
+               "between.",
     ),
     # Parking
     Entry(

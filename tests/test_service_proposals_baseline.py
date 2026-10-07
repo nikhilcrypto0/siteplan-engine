@@ -1,6 +1,9 @@
 """What the service's full search proposes on made-up land, which three it shows, what the
 architect is asked and what the model is answered: pinned on main (0e2ffa2) before a run kept
-every proposal, so that keeping them is shown to change none of it.
+every proposal, so that keeping them is shown to change none of it; re-pinned on contracts 1.3
+(2026-10-06), where the search keeps its cellar out from under blocks below 21 m, so the same
+twelve are proposed and the model is answered as on main; only the digests move
+(docs/behaviour-changes.md).
 
 The values pin exact output on the locked dependencies (uv.lock). They move only with a normative
 replacement and an entry in docs/behaviour-changes.md.
@@ -23,22 +26,33 @@ TEST_CLASS = "characterization"
 
 PINNED = {
     "notes": [
-        "FULL: 384 configurations evaluated, 112 laid out, 24 judged by the validator, "
-        "12 proposed",
+        "FULL: 384 configurations evaluated, 112 laid out, 24 judged by the validator, 12 proposed",
         "FULL: 3 of 12 proposed hold under every reading of the open questions; the others each "
         "name the readings they rest on",
         "FULL: every layout leaves the height above sea level and the 45 t loading of the paving "
-        "UNVERIFIED"],
+        "UNVERIFIED",
+    ],
     "proposed": [
-        "full-not_counted-allowed-85", "full-ALL-allowed-29", "full-not_counted-allowed-89",
-        "full-not_counted-allowed-87", "full-ALL-allowed-33", "full-not_counted-ALL-57",
-        "full-ALL-allowed-31", "full-not_counted-ALL-62", "full-ALL-ALL-1",
-        "full-not_counted-ALL-59", "full-ALL-ALL-5", "full-ALL-ALL-6"],
-    "proposed_sha256": "801476b84ec192df374318599ba79b12c7b2fe3e6d4b8fe63055dfabbdef3bcc",
-    "shown": [["full-not_counted-allowed-87", "BALANCED"],
-              ["full-not_counted-allowed-85", "MAX_YIELD"],
-              ["full-ALL-ALL-5", "CONVENTIONAL_OPEN_SPACE"]],
-    "shown_digests": ["f89b0195cb713a18", "85d6f0e86816fa0f", "8960cf4bc4d27c49"],
+        "full-not_counted-allowed-85",
+        "full-ALL-allowed-29",
+        "full-not_counted-allowed-89",
+        "full-not_counted-allowed-87",
+        "full-ALL-allowed-33",
+        "full-not_counted-ALL-57",
+        "full-ALL-allowed-31",
+        "full-not_counted-ALL-62",
+        "full-ALL-ALL-1",
+        "full-not_counted-ALL-59",
+        "full-ALL-ALL-5",
+        "full-ALL-ALL-6",
+    ],
+    "proposed_sha256": "d887917403f20ed2ac8e81350780a0f26af0c570378d130596970ac13cd11746",
+    "shown": [
+        ["full-not_counted-allowed-87", "BALANCED"],
+        ["full-not_counted-allowed-85", "MAX_YIELD"],
+        ["full-ALL-ALL-5", "CONVENTIONAL_OPEN_SPACE"],
+    ],
+    "shown_digests": ["ff6ec6e20473d155", "e721df66e0a346b3", "0e4781844015c539"],
     "answer_sha256": "73c8a93310bdf108b43acd99987b14fe184fe004589b789bffbfc1f694e2aa54",
     "approval_page_sha256": "cd3ebee2af46849756df643999df9b16d2cbc91d92c45101983782cff1eb0181",
 }

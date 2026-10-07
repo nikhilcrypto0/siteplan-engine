@@ -1,6 +1,10 @@
 """Blocks below 21 m in the full search (stream C3): wherever the envelope allows, each held to its
 own Table III band, and every layout still judged by the independent validator.
 
+The search lays no fire band round a block below 21 m, so it keeps its cellar out from under one:
+a block over a cellar of more than 500 m², or of two levels, is an NBC special building held to
+4.6's fire access whatever its height (Part 4 1.2(b)(6), contracts 1.3).
+
 Everything runs on made-up land (search_support.py). The acceptance criterion of
 docs/ARCHITECTURE.md section 6, "C3 Below 21 m", has its test here: on the made-up L-plot the 24 m
 arm is tried for a block below 21 m and the reason it is or is not used is said, and where a block
@@ -214,9 +218,12 @@ def _all_low():
 
 
 def test_a_layout_of_blocks_below_21_m_lays_no_fire_lane_and_draws_table_iii_planting():
-    """Rule 15(a)(i) gives no figure for fire access below 21 m, so no hardstanding is laid round
-    such a block (the validator lists the rule as NOT_CHECKED), and the 1 m strip Table III asks
-    (rule 5(f)) runs round the plot, broken only at the gate."""
+    """Under the state's line NBC 4.6 asks nothing of a block below 21 m that is not a special
+    building, and the search keeps its cellar out from under one, so no hardstanding is laid round
+    such a block; a block of NBC's own 15 m or more is held under the other reading, so what it
+    lacks there is UNVERIFIED, never FAIL. The validator lists the rest of rule 15(a)(i) as
+    NOT_CHECKED, and the 1 m strip Table III asks (rule 5(f)) runs round the plot, broken only at
+    the gate."""
     made = _all_low()
     proposal = strategy().propose(made.context())
     assert proposal.candidates
@@ -250,6 +257,26 @@ def test_no_layout_with_a_low_block_is_offered_that_the_validator_fails():
             if not rests_on(report).holds_under_every_reading:
                 assert any("holds only if" in c for c in candidate.caveats)
     assert used
+
+
+def test_under_the_law_no_layout_offers_a_special_building_without_its_fire_access():
+    """NBC 4.6 holds a block over a cellar of more than 500 m², or of two levels, to the lanes a
+    high-rise keeps (Part 4 1.2(b)(6), through rule 15(a)(i)). No layout the search offers fails a
+    block's fire access, and no block it lays no fire band for stands over its cellar."""
+    for slim in (False, True):
+        made, proposal = l_plot(slim), proposal_on_the_l_plot(slim)
+        assert proposal.candidates
+        for candidate in proposal.candidates:
+            report = _judge(made, candidate)
+            fire = [c for c in report.legal if c.finding.rule.startswith("Fire access: ")]
+            assert all(c.finding.status is not Status.FAIL for c in fire), [
+                (c.finding.rule, c.finding.measured) for c in fire
+                if c.finding.status is Status.FAIL]
+            cellars = candidate.program.cellars
+            under = unary_union([s.to_shapely() for s in cellars.outline]) if cellars else None
+            for tower in candidate.towers:
+                if under is not None and _low(made, tower):
+                    assert candidate.placed_footprint(tower).intersection(under).area < 0.5
 
 
 # --- The acceptance criterion: the L-plot's arm --------------------------------------------------

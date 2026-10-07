@@ -429,7 +429,9 @@ def _circulation(group: bool, gross_status: Provenance) -> dict:
                                 note="a driveway is never counted as an internal road"),
         "block_over_12m_on_road": _rv(
             True, rules.PATHWAY_CLAUSE,
-            note="a block above the pathway height takes its access from an internal road")}
+            note="a block above the pathway height takes its access from an internal road"),
+        "pathway_max_length_m": _rv(rules.PATHWAY_MAX_LENGTH_M, rules.PATHWAY_LENGTH_CLAUSE,
+                                    unit="m")}
 
 
 def _fire() -> dict:
@@ -445,7 +447,12 @@ def _fire() -> dict:
                       note="a paving specification the engine cannot check", **fire),
         "street_join_m": _rv(rules.FIRE_STREET_JOIN_M, rules.FIRE_STREET_CLAUSE, unit="m"),
         "dead_end_max_physical_m": _rv(rules.DEAD_END_MAX_HEIGHT_M, rules.DEAD_END_CLAUSE,
-                                       unit="m")}
+                                       unit="m"),
+        "special_basement_sqm": _rv(rules.NBC_SPECIAL_BASEMENT_SQM,
+                                    rules.NBC_SPECIAL_BUILDING_CLAUSE, unit="m²"),
+        "special_basement_levels": _rv(rules.NBC_SPECIAL_BASEMENT_LEVELS,
+                                       rules.NBC_SPECIAL_BUILDING_CLAUSE, unit="levels"),
+        "nbc_high_rise_m": _rv(rules.NBC_HIGH_RISE_M, rules.NBC_HIGH_RISE_CLAUSE, unit="m")}
 
 
 def _table_v_column(site: CanonicalSiteModel) -> tuple[TableVColumn, Provenance, str]:

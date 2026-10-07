@@ -3,8 +3,11 @@
 Table V asks a share of the built-up area as parking floor; rule 13(b) lets it be met in the stilt,
 the open space beyond the setbacks and the cellars. The cellars take the whole plot less the cellar
 setback of rule 13(c)(x), which grows with every level, less the cores, the ramp and the share
-rule 13(c)(xi) allows for utilities. The area is not enough: the cars laid out in bays and aisles on
-every floor have to meet it too, and that count is made here the way a floor is really laid out.
+rule 13(c)(xi) allows for utilities, and run under no block the search lays no fire band for: a
+block over a cellar of more than 500 m², or of two levels, is an NBC special building (Part 4
+1.2(b)(6)), held to 4.6's fire access whatever its height. The area is not enough: the cars laid
+out in bays and aisles on every floor have to meet it too, and that count is made here the way a
+floor is really laid out.
 
 The count is deliberately a little shy of the validator's (fewer offsets are tried), so a plan
 that meets the need here meets it there.
@@ -111,10 +114,11 @@ class ParkingPlan:
 
 def plan_parking(net: Polygon, excluded: BaseGeometry, rules: ResolvedRules, q: Quantities,
                  towers: Sequence[Polygon], cores: Sequence[BaseGeometry],
-                 ramps: Sequence[Polygon], built_up_sqm: float, turn_deg: float
-                 ) -> tuple[ParkingPlan | None, str]:
+                 ramps: Sequence[Polygon], built_up_sqm: float, turn_deg: float,
+                 clear_of: BaseGeometry = EMPTY) -> tuple[ParkingPlan | None, str]:
     """The fewest cellar levels that meet Table V by floor area and by cars laid out, or why none
-    do within the deepest the brief allows."""
+    do within the deepest the brief allows. The cellars run under nothing in `clear_of`: the
+    blocks with no fire band, which a cellar under them would make special buildings."""
     need = max(q.parking_shares, default=0.0) / 100 * built_up_sqm * (1 + q.parking_margin)
     turns = sorted({turn_deg % 180, 0.0})
     core_land = unary_union([c for c in cores if not c.is_empty]) if cores else EMPTY
@@ -132,6 +136,8 @@ def plan_parking(net: Polygon, excluded: BaseGeometry, rules: ResolvedRules, q: 
             return None, "the rules give no cellar setback for a site this large"
         outline = erode(net, setback).difference(excluded) if not excluded.is_empty \
             else erode(net, setback)
+        if not clear_of.is_empty:
+            outline = outline.difference(clear_of)
         if outline.is_empty:
             return None, "no ground is left for a cellar inside its setback"
         floor = outline.difference(unary_union([core_land, *ramps]) if ramps else core_land)

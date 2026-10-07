@@ -245,8 +245,8 @@
       "type": "array"
     },
     "schema_version": {
-      "const": "1.2",
-      "default": "1.2",
+      "const": "1.3",
+      "default": "1.3",
       "title": "Schema Version",
       "type": "string"
     }

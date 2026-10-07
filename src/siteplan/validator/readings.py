@@ -27,6 +27,8 @@ MINIMUM_APPROACH, AUTHORITY_CHOICE = "minimum", "authority_choice"  # approach_w
 TALLER_GOVERNS, EACH_OWN = "taller_governs", "each_own"  # mixed_height_spacing
 AT_GROUND, ANYWHERE = "at_ground", "anywhere"  # visitor_parking
 MINIMUM_SHARE, SHARE_OR_CAP = "minimum_3_percent", "up_to_3_percent_or_cap"  # amenity_share
+STATE_LINE, NBC_LINE = "state_line", "nbc_line"  # nbc_fire_height
+TOUCH, FRONTAGE = "touch", "frontage"  # opens_onto_road
 # Whose Table V column applies is not an Interpretation: it is ResolvedRules.jurisdiction. When
 # it is OPEN the validator evaluates both columns, under this key.
 TABLE_V_COLUMN = "jurisdiction.table_v_column"

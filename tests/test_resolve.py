@@ -21,8 +21,10 @@ from siteplan.contracts.resolved_rules import (
     CIRCULATION_IN_SETBACK,
     FIRE_TURNING_RADIUS,
     MIXED_HEIGHT_SPACING,
+    NBC_FIRE_HEIGHT,
     OPEN_SPACE_BASIS,
     OPEN_SPACE_OTHER_USES,
+    OPENS_ONTO_ROAD,
     REQUIRED_INTERPRETATIONS,
     STILT_IN_RULE_HEIGHT,
     TOT_LOT_SURFACE,
@@ -47,7 +49,7 @@ from siteplan.legal.resolve import AIRPORT_CLAUSE, resolve, rules_digest
 TEST_CLASS = "normative"
 PLOT = box(0, 0, 150, 120)  # 18,000 m²: a group development scheme, a high-rise plot
 OPEN_EVERY_WAY = {STILT_IN_RULE_HEIGHT, OPEN_SPACE_BASIS, CIRCULATION_IN_SETBACK, TOT_LOT_SURFACE,
-                  OPEN_SPACE_OTHER_USES}
+                  OPEN_SPACE_OTHER_USES, NBC_FIRE_HEIGHT, OPENS_ONTO_ROAD}
 
 
 def _keys(node) -> set[str]:
@@ -107,7 +109,7 @@ def test_every_rule_value_has_its_clause_basis_and_status(name):
 
 
 @pytest.mark.parametrize("name", SITES)
-def test_the_required_readings_are_carried_and_the_five_open_ones_are_all(name):
+def test_the_required_readings_are_carried_and_the_seven_open_ones_are_all(name):
     rules = resolve(load(name, "CanonicalSiteModel"))
     ids = [i.id for i in rules.interpretations]
     assert set(REQUIRED_INTERPRETATIONS) <= set(ids) and len(ids) == len(set(ids))
@@ -134,6 +136,8 @@ AUDITED_READINGS = {
     "Where the 9 m turning radius is measured": FIRE_TURNING_RADIUS,
     "The amenities (club house) area as a share of the built-up area": AMENITY_SHARE,
     "The extra cellar setback is applied to every level": CELLAR_EXTRA_SETBACK,
+    "NBC's own high-rise line, the stilt included": NBC_FIRE_HEIGHT,
+    "How much of a block must face a road for it to open onto one": OPENS_ONTO_ROAD,
 }
 
 

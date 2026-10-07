@@ -1,10 +1,12 @@
 """The open readings of the law, as ResolvedRules carries them.
 
 Where the orders leave a question open, the contract keeps every reading as an Interpretation.
-Five are carried as ALL, so every consumer evaluates every reading and a result that holds under
+Seven are carried as ALL, so every consumer evaluates every reading and a result that holds under
 only some of them is UNVERIFIED: whether the stilt counts toward the Table IV height, of which
 area the open space is measured, whether roads may run inside a setback, whether a tot-lot must
-be soft to count as open space, and what the rule's "etc." takes in. The others carry the
+be soft to count as open space, what the rule's "etc." takes in, whether NBC's 15 m high-rise line
+reaches a block the state calls non-high-rise, and whether a block that only touches a road opens
+onto it. The others carry the
 reading the engine takes for the test (ASSUMED_FOR_TEST, never evidence). A test profile picks a
 reading with `selections`; that choice is recorded ASSUMED_FOR_TEST and never stronger.
 
@@ -23,8 +25,10 @@ from siteplan.contracts.resolved_rules import (
     CIRCULATION_IN_SETBACK,
     FIRE_TURNING_RADIUS,
     MIXED_HEIGHT_SPACING,
+    NBC_FIRE_HEIGHT,
     OPEN_SPACE_BASIS,
     OPEN_SPACE_OTHER_USES,
+    OPENS_ONTO_ROAD,
     STILT_IN_RULE_HEIGHT,
     TOT_LOT_SURFACE,
     VISITOR_PARKING,
@@ -215,6 +219,40 @@ def _defaults(master_plan_road: bool) -> list[dict]:
             ALL,
             sources=[f"{rules.OPEN_SPACE_CLAUSE}: {NAMED_USES}"],
             settles="the organised open space a sanctioned plan's area statement counts"),
+        _reading(
+            NBC_FIRE_HEIGHT,
+            "Is a block of 15 to 21 m that the state calls non-high-rise one of NBC 4.6's 'high "
+            "rise buildings'?",
+            {"state_line": "no: 4.6 reaches a block below the state's high-rise height only as a "
+                           "special building (over a large or deep cellar)",
+             "nbc_line": "yes: through rule 15(a)(i) 4.6 reaches every block of NBC's own 15 m "
+                         "or more, measured as NBC measures it, the stilt included"},
+            ALL,
+            sources=[f"{rules.NBC_HIGH_RISE_CLAUSE}: 'A building 15 m or above in height "
+                     "(irrespective of its occupancy)'",
+                     f"{rules.HIGH_RISE_CLAUSE}: the state's own line",
+                     f"{rules.NON_HIGH_RISE_NBC_CLAUSE}: the Code's requirements other than "
+                     "heights and setbacks; whether NBC's definition of a high-rise is one of "
+                     "its 'heights' is what is open"],
+            settles="the fire NOC of a sanctioned 15 to 21 m block that is not over a large "
+                    "cellar, or the fire department's written reading"),
+        _reading(
+            OPENS_ONTO_ROAD,
+            "When does a block 'open onto' an internal road: when any part touches one, or only "
+            "when a stretch of it as wide as a pathway faces one?",
+            {"touch": "any part of the block within half a metre of the road",
+             "frontage": "an unbroken stretch of the block's outline at least rule 8(l)'s "
+                         "pathway width long faces the road; a corner that only touches it does "
+                         "not open onto it"},
+            ALL,
+            sources=[f"{rules.PATHWAY_CLAUSE}: 'access through pathways of 6m width "
+                     "branching out from the internal roads' for blocks up to 12 m, so a taller "
+                     "block takes its access from a road, with no figure for how much of it "
+                     "must face the road",
+                     "the access a lower block may have is a 6 m pathway: the frontage reading "
+                     "asks no less of a road"],
+            settles="a sanctioned plan with a block that only touches a road at a corner, or "
+                    "the authority's reading of rule 8(l) and (m)"),
     ]
     if master_plan_road:
         readings.append(_reading(
