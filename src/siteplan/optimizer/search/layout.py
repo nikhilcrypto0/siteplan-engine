@@ -65,7 +65,7 @@ from siteplan.optimizer.search.parking_plan import plan_parking, ramp_length_m
 from siteplan.optimizer.search.quantities import Quantities, quantities
 from siteplan.optimizer.search.readings import FloorClass, Profile, floor_classes
 from siteplan.optimizer.search.road_graph import NODE_SNAP_M, Road
-from siteplan.optimizer.search.turns import Turning, loop_turns
+from siteplan.optimizer.search.turns import Turning, junction_turns, loop_turns
 from siteplan.towers import orientations
 
 EPS_LAND_M = 0.02  # ground a block must stand this far inside, so no rounding puts it over a line
@@ -462,14 +462,16 @@ def lay_out(run: Run, ev: Evaluation) -> tuple[Laid | None, str]:
     high = [p.standing.choice.cls.high_rise for p in placements]
     blocks = unary_union(footprints)
     blocked = unary_union([blocks, ev.kept_clear]) if ev.kept_clear is not None else blocks
+    turnings = [Turning(*t) for t in q.turnings]
+    in_way = unary_union([blocks, land.strip])
     entrance, why = network.find_entrance(plot, clusters, blocked, q.approach_m,
-                                          land_strip(land, q))
+                                          land_strip(land, q), turnings, in_way, q.lane_m)
     if entrance is None and ev.kept_clear is not None:
         # C4-14: the approach keeps off the end kept for the open space when it can; when that
         # end lies across every way in, it crosses it, a road through the park, and the open
         # space is taken from the ground round it
         entrance, why = network.find_entrance(plot, clusters, blocks, q.approach_m,
-                                              land_strip(land, q))
+                                              land_strip(land, q), turnings, in_way, q.lane_m)
     if entrance is None:
         return None, why
     serving = _pathway_roads(ev, q)
@@ -490,7 +492,6 @@ def lay_out(run: Run, ev: Evaluation) -> tuple[Laid | None, str]:
                 if not _served(p, roads, way)]
     if unserved:
         return None, f"no road touches {', '.join(unserved)}"
-    turnings = [Turning(*t) for t in q.turnings]
     turns_of = [(c, loop_turns(c.ring, turnings)) for c in clusters]
     turns = unary_union([t for _, t in turns_of])
     off = turns.difference(plot.net).area + turns.intersection(
@@ -506,7 +507,20 @@ def lay_out(run: Run, ev: Evaluation) -> tuple[Laid | None, str]:
                        if i >= len(ev.standing) or not _within(p.footprint, c.hull))]
     if on_turns:
         return None, f"{', '.join(on_turns)} stands where the tender turns on the ring road"
-    zones = ground.zones_of(footprints, gaps, roads, lanes, q.reach_m, turns, high,
+    # C4-15: the tender turns where the approach, a street or a link joins a ring too; a block in
+    # the way under every reading of the radius fails the layout, under some it is the
+    # validator's to say (UNVERIFIED), and the program keeps off every reading's turns
+    by_reading = junction_turns(roads, unary_union([c.ring for c in clusters]), plot.net.boundary,
+                                turnings, network.EPS_M, network.TOUCH_M, q.lane_m)
+    in_way = unary_union([in_way, plot.excluded])
+    stuck = [any(s.difference(plot.net).area + s.intersection(in_way).area
+                 > network.RING_CLIP_SQM for s in sectors) for sectors in by_reading]
+    if by_reading and all(stuck):
+        return None, "a block or the planted strip stands where the tender turns at a junction"
+    junctions = unary_union([s for sectors in by_reading for s in sectors]) if by_reading \
+        else EMPTY
+    zones = ground.zones_of(footprints, gaps, roads, lanes, q.reach_m,
+                            unary_union([turns, junctions]), high,
                             unary_union(pathways) if pathways else EMPTY)
     open_land = ground.open_ground(plot, land, zones)
     buildable = ground.buildable_ground(plot, open_land)

@@ -50,6 +50,7 @@ from siteplan.validator.readings import (
     verdict,
 )
 from siteplan.validator.shapes import (
+    EPS_M,
     NOISE_SQM,
     mitred,
     opening,
@@ -57,7 +58,7 @@ from siteplan.validator.shapes import (
     union_of_all,
     width_along_edge,
 )
-from siteplan.validator.turning import road_bends, round_block, turning_for
+from siteplan.validator.turning import junction_turns, road_bends, round_block, turning_for
 from siteplan.validator.zones import bearings_near, compass_name, faces
 
 # Rule 15(a)(i), read on page 20 of fixtures/rules/go168-2012.pdf (the 2012 text). Rule 15(b)(iv)
@@ -268,6 +269,51 @@ def loop_turns_check(ctx: Context, ground: Ground) -> Check:
     return check_from(run(ctx.rules, [STILT_IN_RULE_HEIGHT, NBC_FIRE_HEIGHT, FIRE_TURNING_RADIUS],
                           cell),
                       family=Family.FIRE, rule="Fire access: turns along the loop road",
+                      clause=ctx.rules.fire.turning_radius_m.clause)
+
+
+JUNCTION_ROADS = (RoadKind.LOOP, RoadKind.PERIMETER_LANE, RoadKind.INTERNAL, RoadKind.APPROACH,
+                  RoadKind.CUL_DE_SAC)  # the roads a tender drives; a pathway or driveway is not
+
+
+def junction_turns_check(ctx: Context, ground: Ground) -> Check:
+    """Where the approach, a street or a link joins the loop road, the tender turns too (C4-15):
+    the corners every junction makes are swept as the loop road's bends are, under each reading
+    of the 9 m, and nothing may stand in them."""
+    loop = union_of_all([r.shape for r in ctx.drawn.roads_of(RoadKind.LOOP,
+                                                              RoadKind.PERIMETER_LANE)])
+    network = union_of_all([r.shape for r in ctx.drawn.roads_of(*JUNCTION_ROADS)])
+    radius = ctx.rules.fire.turning_radius_m.value
+    subjects = fire_subjects(ctx)
+
+    def cell(a: Assignment) -> Cell:
+        unknown = _readings_known(ctx, a)
+        if unknown is not None:
+            return unknown
+        held = [h for h in (held_by(ctx, t, a[STILT_IN_RULE_HEIGHT], a[NBC_FIRE_HEIGHT])
+                            for t in subjects) if h is not False]
+        if not held:
+            return Cell(Status.PASS, "no block held to NBC 4.6 under this reading", NOT_ASKED,
+                        _below_note(ctx))
+        turning = turning_for(ctx.rules, a[FIRE_TURNING_RADIUS])
+        if turning is None:
+            return unknown_reading(FIRE_TURNING_RADIUS, a[FIRE_TURNING_RADIUS])
+        turns = junction_turns(network, loop, ctx.net.boundary, turning, EPS_M,
+                               GATE_TOUCH_M) if not network.is_empty else []
+        stuck = [s for s in turns if ground.blocked_area(s) > NOISE_SQM]
+        if stuck:
+            measured = (f"{len(stuck)} of {len(turns)} junction turns blocked "
+                        f"({ground.blocked_by(stuck[0])})")
+        else:
+            measured = f"all {len(turns)} junction turns turn at {radius:g} m"
+        required = f"a {radius:g} m turn at every junction"
+        if stuck and True not in held:
+            return Cell(Status.UNVERIFIED, measured, required, MAYBE_SPECIAL_NOTE)
+        return Cell(verdict(not stuck), measured, required)
+
+    return check_from(run(ctx.rules, [STILT_IN_RULE_HEIGHT, NBC_FIRE_HEIGHT, FIRE_TURNING_RADIUS],
+                          cell),
+                      family=Family.FIRE, rule="Fire access: turns at the road junctions",
                       clause=ctx.rules.fire.turning_radius_m.clause)
 
 
@@ -519,6 +565,7 @@ def fire_checks(ctx: Context, ground: Ground) -> list[Check]:
     if not ctx.drawn.has_circulation:
         return [*out, held(_no_layout(ctx)), held(loading_check(ctx)), *below]
     out += tower_checks(ctx, ground)
-    out += [loop_turns_check(ctx, ground), reach_check(ctx), held(entrance_check(ctx, ground)),
+    out += [loop_turns_check(ctx, ground), junction_turns_check(ctx, ground), reach_check(ctx),
+            held(entrance_check(ctx, ground)),
             held(obstruction_check(ctx)), held(loading_check(ctx))]
     return [*out, *below]

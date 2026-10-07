@@ -58,7 +58,10 @@ Re-pinned on C4-14, where an approach that finds no way in clear of the end kept
 crosses it: configurations that reserve had shut off lay out, so those laid after them are numbered
 on. Balanced is the same 4 x S+10, now `-90`; maximum yield `-86` is now another 3 x S+10 of the
 same saleable area that leaves less ground to no use, 985 m² of its open space usable where the last
-had 570; the open-space and robust ones are the same.
+had 570; the open-space and robust ones are the same. Re-pinned on C4-15, where the generator keeps
+its program off the turns at the road junctions: the same proposals, the same four shown and the
+same answer; two proposals not shown (`ALL-allowed-29`, `-91`) lay the same facilities off a
+junction turn, so the proposals' digest moves.
 
 The values pin exact output on the locked dependencies (uv.lock). They move only with a normative
 replacement and an entry in docs/behaviour-changes.md.
@@ -104,7 +107,7 @@ PINNED = {
         "full-ALL-allowed-55",
         "full-ALL-ALL-20",
     ],
-    "proposed_sha256": "fd7eae38ef689ad35a3ba211a23f4e4cab6a8abb8d37853a6b7290d61b09e6a0",
+    "proposed_sha256": "77c6a03eaa1376166815e09041a1c2d040a7694e4c2b9146101cf0b2940b8d92",
     "shown": [
         ["full-not_counted-allowed-90", "BALANCED"],
         ["full-not_counted-allowed-86", "MAX_YIELD"],

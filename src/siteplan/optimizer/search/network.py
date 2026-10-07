@@ -52,6 +52,7 @@ from siteplan.optimizer.search.road_graph import (
     nearest_on,
     pavement,
 )
+from siteplan.optimizer.search.turns import Turning, junction_turns
 
 # A street shorter than its own width (rule 8(m)'s 9 m, read from rules.py) is no street.
 MIN_STREET_LENGTH_M = law.INTERNAL_ROAD_M
@@ -253,13 +254,17 @@ class Entrance:
 
 
 def find_entrance(plot: Plot, clusters: Sequence[Cluster], blocked: BaseGeometry, width_m: float,
-                  strip_width_m: float) -> tuple[Entrance | None, str]:
+                  strip_width_m: float, turnings: Sequence[Turning] = (),
+                  solid: BaseGeometry = EMPTY, lane_m: float = 0.0
+                  ) -> tuple[Entrance | None, str]:
     """The gate and the straight approach that give the shortest road from the access side to a
     ring road, clear of everything in `blocked` (the blocks, and ground kept for something else),
     of every cluster and of every other ring (a road that crossed one would meet it nowhere). The
     approach is a road 9 m wide everywhere, which a straight strip meeting the ring at a slant is
     not (a sliver of its corner is narrower), so a position is kept only if the strip and the ring
-    together are as wide as a road all along it."""
+    together are as wide as a road all along it. Where the approach joins the ring the tender
+    turns (C4-15): a position whose junction turn some block (`solid`), the planted strip or the
+    water stands in under every reading of the radius is passed over for the next."""
     if not plot.gate_runs:
         return None, "the access side gives no stretch of boundary a gate may open in"
     half = width_m / 2 + EPS_M
@@ -295,10 +300,24 @@ def find_entrance(plot: Plot, clusters: Sequence[Cluster], blocked: BaseGeometry
             return Entrance(gate, None, width_m, plot.access_side, at, cluster.road.id), ""
         if _sliver(approach, cluster.ring, width_m):
             continue
+        if turnings and _turn_blocked(approach, cluster.ring, plot, turnings,
+                                      unary_union([solid, plot.excluded]), lane_m):
+            continue
         road = Road("approach", RoadKind.APPROACH, joining(paved, cluster.road.line), 2 * half,
                     plot.net, paved=paved)
         return Entrance(gate, road, width_m, plot.access_side, at, cluster.road.id), ""
     return None, "no approach meets the ring road as a road 9 m wide all along it"
+
+
+def _turn_blocked(approach: BaseGeometry, ring: BaseGeometry, plot: Plot,
+                  turnings: Sequence[Turning], solid: BaseGeometry, lane_m: float) -> bool:
+    """Whether, under every reading, something stands where the tender turns from the approach
+    into the ring, or the turn leaves the plot."""
+    by_reading = junction_turns(unary_union([ring, approach]), ring, plot.net.boundary, turnings,
+                                EPS_M, TOUCH_M, lane_m)
+    return bool(by_reading) and all(
+        any(s.difference(plot.net).area + s.intersection(solid).area > RING_CLIP_SQM
+            for s in sectors) for sectors in by_reading)
 
 
 def _sliver(approach: BaseGeometry, ring: BaseGeometry, width_m: float) -> bool:

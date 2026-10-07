@@ -674,15 +674,17 @@ INVENTORY: tuple[Entry, ...] = (
                   "space on all its sides, a 9 m turning radius, nothing built or parked in it, "
                   "a 45 t hard surface.",
         f"{rules.FIRE_TENDER_MIN_WIDTH_M:g} m on all sides; a {rules.FIRE_TURNING_RADIUS_M:g} m "
-        "turn at every corner and every bend; 45 t",
+        "turn at every corner, every bend and every junction; 45 t",
         rules.FIRE_ACCESS_CLAUSE, Reading.INTERPRETED, _BOTH,
         ("FIRE_TENDER_MIN_WIDTH_M", "FIRE_TENDER_LOAD_T", "FIRE_TURNING_RADIUS_M",
          "FIRE_ACCESS_CLAUSE"),
         choice="Every high-rise keeps 6.88 m of clear, motorable ground on every side, a road or "
                "a fire lane, which is what a 6 m lane needs to turn round a square corner on our "
                "reading of the 9 m; the order gives the 9 m and the 6 m, never the 6.88 m. The "
-               "turns at every tower corner and every bend of the loop road are checked as the "
-               "swept sectors themselves, and the lanes as one network from the entrance. No "
+               "turns at every tower corner, every bend of the loop road and every junction "
+               "where a road joins another (the approach, a street or a link meeting the loop; "
+               "C4-15) are checked as the swept sectors themselves, and the lanes as one network "
+               "from the entrance. No "
                "bay, facility, ramp or tot-lot stands in them. The order does not say where the "
                "9 m is measured: read as the tender's turning circle, the outer edge of the "
                "lane, which fits the state's 7 m minimum setback and the 7 m rule 13(c)(vii) "

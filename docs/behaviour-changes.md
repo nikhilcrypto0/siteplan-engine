@@ -4,6 +4,40 @@ A characterization test (tests/manifest.py) pins what the engine produces today.
 only together with a normative replacement test and an entry here: what changed, why, the
 evidence, and the test that now holds the behaviour. Newest first.
 
+## 2026-10-07: C4-15, the turn at every road junction
+
+The validator swept the fire tender's turns at every corner of a block held to NBC 4.6 and at
+every bend of the loop road, never where a road joins another: the approach, a street or a link
+meeting the loop. A new check, "Fire access: turns at the road junctions" (`fire`,
+`turning.junction_turns`), sweeps every corner of the fire roads (loop, perimeter lane, street,
+approach, cul-de-sac; not a pathway or a driveway) that is no bend of the loop, under each reading
+of the 9 m as the loop check does: FAIL where something stands in a turn under every reading,
+UNVERIFIED under some. Three kinds of corner are no junction and are not swept: one on the plot's
+boundary (the gate, where the tender turns on the street outside), one that doubles back (the tip
+of a slit the drawing leaves) and one either side of which is shorter than the lane is wide (a
+jog, not a wall a tender drives along). The generator keeps its program (club house, ramp,
+facilities, tot-lots, bays) off every reading's junction turns, refuses a layout a block or the
+planted strip stands in one of under every reading, and the approach planner passes over a gate
+position whose turn into the ring is blocked so for the next (`network.find_entrance`).
+
+Measured first without the three exclusions, 13 of Dhulapally's 23 judged layouts had a junction
+turn blocked under the outer-edge reading and all 23 under the centreline one, and the generator
+refused 96 tries; every one of those came from the gate's corners, slit tips the union of the road
+pieces leaves, or a one-metre jog where an approach meets the loop. With them, no judged
+Dhulapally layout has a junction turn blocked and the search lays out the same layouts.
+
+Tests: `tests/test_junction_turns.py` (normative: on the made-up rectangle the turns at each end of
+its street are swept and no other, not at a loop bend, the gate or the approach's jog; a kiosk on
+the loop where the street joins it fails the junction check while the loop check still passes;
+the tip of a 15 m slit is swept by neither side; the approach planner takes the next gate when a
+block stands where the shortest approach turns into the ring). Characterization re-pinned: the
+service's made-up baseline (the same proposals, the same four shown and the same answer; two
+proposals not shown lay the same facilities off a junction turn).
+
+- Dhulapally, Run B prime's request (the C4 benchmark, 15-junctions): the same 23 layouts judged,
+  the same proposals and the same four shown; no junction turn blocked; one legal FAIL (the
+  validator's 9.00 m gap read as 8.9999989), unchanged; runtime 107 s to 108 s.
+
 ## 2026-10-07: C4-14, an approach that crosses the open-space reserve when it must
 
 A configuration may keep one end of the plot for the open space (`Config.reserve`), and the
