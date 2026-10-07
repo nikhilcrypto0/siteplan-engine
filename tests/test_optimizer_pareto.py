@@ -11,7 +11,14 @@ from siteplan import layout
 from siteplan.contracts.common import Sourced
 from siteplan.contracts.design_brief import Objectives, ParetoPoint
 from siteplan.optimizer import pareto as pareto_module
-from siteplan.optimizer.objective import AXES, Scores, measure, mix_error, priority_weights
+from siteplan.optimizer.objective import (
+    AREA_DECIMALS,
+    AXES,
+    Scores,
+    measure,
+    mix_error,
+    priority_weights,
+)
 from siteplan.optimizer.pareto import Scored, dominates, pareto_front, same_idea, select
 
 TEST_CLASS = "normative"
@@ -92,7 +99,8 @@ def test_the_generators_own_measures_are_the_same_numbers():
         assert scores.units == option.total_flats
         assert scores.mix_fit == pytest.approx(1 - option.mix_error)
         assert scores.yield_score == pytest.approx(option.score)
-        assert scores.open_space_sqm == pytest.approx(option.open_space_sqm)
+        assert scores.open_space_sqm == pytest.approx(  # the objective reads areas to 0.01 m²
+            option.open_space_sqm, abs=10.0 ** -AREA_DECIMALS / 2)
 
 
 def test_the_architects_priorities_are_weights_and_a_misspelt_one_is_refused():
@@ -112,7 +120,8 @@ def test_the_architects_priorities_are_weights_and_a_misspelt_one_is_refused():
 
 def _scores(*vector) -> Scores:
     area, units, open_space, mix, conventionality = vector
-    return Scores(area, units, open_space, mix, conventionality, towers=1)
+    return Scores(area, units, open_space, mix, conventionality, towers=1,
+                  open_space_usable_sqm=open_space)  # all of it usable (C4-12)
 
 
 def test_a_candidate_is_dominated_only_when_another_is_no_worse_everywhere_and_better_somewhere():
@@ -234,9 +243,11 @@ def test_the_front_is_preferred_and_what_it_dominates_is_chosen_only_to_be_diffe
 def test_two_layouts_that_tie_on_yield_take_the_labels_that_suit_them():
     """Equal saleable area and units, one with more open space. That one dominates, so the fill
     reaches it first; the labels are then settled so the open-space point is on the layout with
-    more open space, and the maximum-yield point (a tie) on the other."""
+    more open space, and the maximum-yield point (a tie) on the other. (The helper draws the open
+    space at the origin; each tower stands near enough to it that more open space is more usable
+    open space, C4-12.)"""
     tight = candidate("tight", [tower("T1", P1, 40, 20, 9)], [P1], open_space_sqm=1000)
-    spacious = candidate("spacious", [tower("T1", P1, 110, 75, 9)], [P1], open_space_sqm=2000)
+    spacious = candidate("spacious", [tower("T1", P1, 22, 50, 9)], [P1], open_space_sqm=2000)
     picks = select(_scored(tight, spacious), BRIEF).picks
     assert {p.point: (p.scored.candidate.candidate_id, p.on_front) for p in picks} == {
         ParetoPoint.MAX_YIELD: ("tight", False),
@@ -252,7 +263,8 @@ def test_a_label_never_moves_off_a_layout_that_beats_the_others_on_the_earlier_p
 
 
 def test_more_options_than_points_are_more_different_ideas_by_yield():
-    brief = _brief(options=4)
+    # one more than the brief's points; ROBUST (C4-09) is left unfilled here, no report read
+    brief = _brief(options=len(ParetoPoint) + 1)
     picks = select(_scored(*_pool(), brief=brief), brief).picks
     assert [p.point for p in picks][:3] == [ParetoPoint.MAX_YIELD, ParetoPoint.BALANCED,
                                             ParetoPoint.CONVENTIONAL_OPEN_SPACE]
@@ -295,3 +307,52 @@ def test_the_selection_does_not_depend_on_the_order_the_pool_was_made_in():
         random.Random(seed).shuffle(shuffled)
         assert [(p.point, p.scored.candidate.candidate_id)
                 for p in select(_scored(*shuffled), BRIEF).picks] == expected
+
+
+# --- ROBUST: the layout that rests on the fewest open readings (C4-09) -------------------------
+
+
+EVERY_POINT = _brief(pareto=list(ParetoPoint))  # a brief that asks for every point, ROBUST too
+
+
+def _rested(rests: dict[str, tuple[int, int]], brief=EVERY_POINT):
+    """The pool, each candidate with the readings it rests on (as the guard's report gives)."""
+    return [Scored(c, measure(c, brief), rests.get(c.candidate_id, (2, 3))) for c in _pool()]
+
+
+def test_robust_is_the_different_idea_resting_on_the_fewest_readings_the_most_saleable():
+    """The most saleable layouts rest on readings; of those that hold under every one, the most
+    saleable different idea is ROBUST: not the near-copy of the scheme shown for MAX_YIELD, which
+    holds too and sells more, since every alternative is another idea."""
+    picks = select(_rested({"near-copy": (0, 0), "conventional": (0, 0)}), EVERY_POINT).picks
+    by_point = {p.point: p.scored.candidate.candidate_id for p in picks}
+    assert by_point[ParetoPoint.MAX_YIELD] == "yield"
+    assert by_point[ParetoPoint.ROBUST] == "conventional"
+    for a, b in combinations([p.scored.candidate for p in picks], 2):
+        assert not same_idea(a, b)
+
+
+def test_robust_is_left_unfilled_when_the_layout_shown_first_holds_or_no_report_was_read():
+    selection = select(_rested({"yield": (0, 0), "near-copy": (0, 0)}), EVERY_POINT)
+    assert ParetoPoint.ROBUST not in {p.point for p in selection.picks}
+    assert (ParetoPoint.ROBUST, "a layout already chosen holds under every reading") in \
+        selection.unfilled
+    unread = select(_scored(*_pool(), brief=EVERY_POINT), EVERY_POINT)
+    assert (ParetoPoint.ROBUST, "no candidate's validation report was read") in unread.unfilled
+
+
+def test_the_fewer_open_questions_rank_first_then_the_fewer_checks():
+    picks = select(_rested({"balanced": (1, 4), "turned": (1, 1)}), EVERY_POINT).picks
+    assert {p.point: p.scored.candidate.candidate_id for p in picks}[ParetoPoint.ROBUST] == \
+        "turned"
+
+
+def test_robust_ranks_by_its_own_measure_not_the_front_of_the_other_axes():
+    """The turned slabs (8 floors) are dominated by the upright ones (9 floors) on every axis the
+    front is drawn over, none of them robustness; of the two layouts that hold under every
+    reading they sell more than the conventional one, which is on the front: ROBUST is them.
+    (A brief asking for these two points only, so no other point takes either layout.)"""
+    two = _brief(pareto=[ParetoPoint.MAX_YIELD, ParetoPoint.ROBUST])
+    picks = select(_rested({"turned": (0, 0), "conventional": (0, 0)}, two), two).picks
+    assert {p.point: p.scored.candidate.candidate_id for p in picks}[ParetoPoint.ROBUST] == \
+        "turned"

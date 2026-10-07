@@ -24,6 +24,7 @@ from shapely.geometry import Polygon
 
 from siteplan.contracts import CandidateLayout, DesignBrief
 from siteplan.contracts.common import SourceKind
+from siteplan.contracts.design_brief import ParetoPoint
 from siteplan.contracts.validation import LegalVerdict
 from siteplan.intake import WORKSPACE_FILE, build_project, extract, load_defaults, save
 from siteplan.profiles import apply_profile, load_profile
@@ -122,7 +123,7 @@ def site(request, tmp_path_factory):
 def test_the_service_proposes_full_alternatives_with_no_legal_fail(site):
     name, _, service, proposed, _ = site
     assert proposed.status is ProposeStatus.PROPOSED, (name, proposed.notes)
-    assert 1 <= len(proposed.candidates) <= 3, name
+    assert 1 <= len(proposed.candidates) <= len(ParetoPoint), name  # one a point at most
     for candidate in proposed.candidates:
         assert candidate.strategy == "FULL", name
         assert candidate.legal_verdict is not LegalVerdict.FAIL, (name, candidate.candidate_id)

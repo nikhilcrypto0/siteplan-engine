@@ -674,15 +674,17 @@ INVENTORY: tuple[Entry, ...] = (
                   "space on all its sides, a 9 m turning radius, nothing built or parked in it, "
                   "a 45 t hard surface.",
         f"{rules.FIRE_TENDER_MIN_WIDTH_M:g} m on all sides; a {rules.FIRE_TURNING_RADIUS_M:g} m "
-        "turn at every corner and every bend; 45 t",
+        "turn at every corner, every bend and every junction; 45 t",
         rules.FIRE_ACCESS_CLAUSE, Reading.INTERPRETED, _BOTH,
         ("FIRE_TENDER_MIN_WIDTH_M", "FIRE_TENDER_LOAD_T", "FIRE_TURNING_RADIUS_M",
          "FIRE_ACCESS_CLAUSE"),
         choice="Every high-rise keeps 6.88 m of clear, motorable ground on every side, a road or "
                "a fire lane, which is what a 6 m lane needs to turn round a square corner on our "
                "reading of the 9 m; the order gives the 9 m and the 6 m, never the 6.88 m. The "
-               "turns at every tower corner and every bend of the loop road are checked as the "
-               "swept sectors themselves, and the lanes as one network from the entrance. No "
+               "turns at every tower corner, every bend of the loop road and every junction "
+               "where a road joins another (the approach, a street or a link meeting the loop; "
+               "C4-15) are checked as the swept sectors themselves, and the lanes as one network "
+               "from the entrance. No "
                "bay, facility, ramp or tot-lot stands in them. The order does not say where the "
                "9 m is measured: read as the tender's turning circle, the outer edge of the "
                "lane, which fits the state's 7 m minimum setback and the 7 m rule 13(c)(vii) "
@@ -744,7 +746,9 @@ INVENTORY: tuple[Entry, ...] = (
                "occupancy)', its height to the terrace of the last livable floor (2.6). Whether "
                "the 'high rise buildings' of 4.6 are NBC's or the state's is open: both are "
                "evaluated (nbc_fire_height), so a block of 15 to 21 m over no large cellar that "
-               "fails 4.6 is UNVERIFIED.",
+               "fails 4.6 is UNVERIFIED. The full search lays no fire lane round a block below "
+               "21 m, so the layouts it builds to hold under every reading take no block of 15 "
+               "to 21 m; those built for a single reading may rest on the state's line (C4-06).",
         settles="The fire NOC of a sanctioned 15 to 21 m block over no large cellar, or the fire "
                 "department's written reading.",
     ),

@@ -19,7 +19,7 @@ import math
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 
-from shapely.geometry import Polygon
+from shapely.geometry import Point, Polygon
 from shapely.geometry.base import BaseGeometry
 from shapely.geometry.polygon import orient
 from shapely.ops import unary_union
@@ -51,6 +51,7 @@ class _Corner:
     out1: tuple[float, float]
     out2: tuple[float, float]
     turn: float  # radians, positive turning left: convex on an anticlockwise outline
+    sides: tuple[float, float]  # the lengths of the edges coming in and going out
 
 
 def _unit(a, b) -> tuple[float, float]:
@@ -66,7 +67,8 @@ def _corners(polygon: Polygon) -> Iterator[_Corner]:
         d1, d2 = _unit(before, here), _unit(here, after)
         turn = math.atan2(d1[0] * d2[1] - d1[1] * d2[0], d1[0] * d2[0] + d1[1] * d2[1])
         if abs(math.degrees(turn)) >= MIN_TURN_DEG:
-            yield _Corner(here, (d1[1], -d1[0]), (d2[1], -d2[0]), turn)
+            yield _Corner(here, (d1[1], -d1[0]), (d2[1], -d2[0]), turn,
+                          (math.dist(before, here), math.dist(here, after)))
 
 
 def _bisector(u: tuple[float, float], v: tuple[float, float]) -> tuple[float, float]:
@@ -79,34 +81,60 @@ def _angle(v: tuple[float, float]) -> float:
     return math.atan2(v[1], v[0])
 
 
+def _round_corner(c: _Corner, turning: Turning) -> Polygon:
+    bx, by = _bisector(c.out1, c.out2)
+    centre = (c.at[0] - turning.r_in * bx, c.at[1] - turning.r_in * by)
+    return sector(centre, turning.r_in, turning.r_out, _angle(c.out1), c.turn)
+
+
+def _wall_corner(c: _Corner, turning: Turning) -> Polygon:
+    if c.turn > 0:  # convex: the lane keeps its outer edge on both walls
+        bx, by = _bisector(c.out1, c.out2)
+        reach = turning.r_out / math.cos(c.turn / 2)
+        centre = (c.at[0] - reach * bx, c.at[1] - reach * by)
+        return sector(centre, turning.r_in, turning.r_out, _angle(c.out1), c.turn)
+    # reflex: the wall steps into the road and the lane goes round it like a block
+    m1, m2 = (-c.out1[0], -c.out1[1]), (-c.out2[0], -c.out2[1])
+    bx, by = _bisector(m1, m2)
+    centre = (c.at[0] - turning.r_in * bx, c.at[1] - turning.r_in * by)
+    return sector(centre, turning.r_in, turning.r_out, _angle(m1), c.turn)
+
+
 def around_block(block: Polygon, turning: Turning) -> list[Polygon]:
     """The swept sector at each convex corner of a block, for a lane going round it on the
-    outside with its inner edge on the corner."""
-    out = []
-    for c in _corners(block):
-        if c.turn <= 0:
-            continue  # a notch in the block: the lane does not go into it
-        bx, by = _bisector(c.out1, c.out2)
-        centre = (c.at[0] - turning.r_in * bx, c.at[1] - turning.r_in * by)
-        out.append(sector(centre, turning.r_in, turning.r_out, _angle(c.out1), c.turn))
-    return out
+    outside with its inner edge on the corner (a notch in the block: the lane does not go in)."""
+    return [_round_corner(c, turning) for c in _corners(block) if c.turn > 0]
 
 
 def along_wall(outline: Polygon, turning: Turning) -> list[Polygon]:
     """The swept sector at each bend of the outer wall of a road."""
-    out = []
-    for c in _corners(outline):
-        if c.turn > 0:  # convex: the lane keeps its outer edge on both walls
-            bx, by = _bisector(c.out1, c.out2)
-            reach = turning.r_out / math.cos(c.turn / 2)
-            centre = (c.at[0] - reach * bx, c.at[1] - reach * by)
-            out.append(sector(centre, turning.r_in, turning.r_out, _angle(c.out1), c.turn))
-        else:  # reflex: the wall steps into the road and the lane goes round it like a block
-            m1, m2 = (-c.out1[0], -c.out1[1]), (-c.out2[0], -c.out2[1])
-            bx, by = _bisector(m1, m2)
-            centre = (c.at[0] - turning.r_in * bx, c.at[1] - turning.r_in * by)
-            out.append(sector(centre, turning.r_in, turning.r_out, _angle(m1), c.turn))
-    return out
+    return [_wall_corner(c, turning) for c in _corners(outline)]
+
+
+def junction_turns(network: BaseGeometry, loop: BaseGeometry, boundary: BaseGeometry,
+                   turnings: Sequence[Turning], same_m: float, touch_m: float,
+                   lane_m: float) -> list[list[Polygon]]:
+    """For each reading of the turning radius, the swept sector at every corner of a road network
+    where one road joins another (C4-15): the corners of its outer wall and of the land it
+    encloses that are no bend of the loop road (within `same_m` of one; loop_turns sweeps those)
+    and not where it opens onto the street outside (within `touch_m` of the plot's boundary). A
+    corner either side of which is shorter than the lane is wide is a jog, not a wall a tender
+    drives along, and one that doubles back is the tip of a slit the union of the pieces left:
+    neither is swept."""
+    bends = [c.at for part in polygons(loop) for ring in (part.exterior, *part.interiors)
+             for c in _corners(Polygon(ring))]
+
+    def joins(c: _Corner) -> bool:
+        return abs(math.degrees(c.turn)) < 180 - MIN_TURN_DEG and min(c.sides) >= lane_m \
+            and all(math.dist(c.at, b) > same_m for b in bends) \
+            and boundary.distance(Point(c.at)) > touch_m
+
+    walls = [c for part in polygons(network) for c in _corners(Polygon(part.exterior))
+             if joins(c)]
+    holes = [c for part in polygons(network) for hole in part.interiors
+             for c in _corners(Polygon(hole)) if c.turn > 0 and joins(c)]
+    return [[*(_wall_corner(c, t) for c in walls), *(_round_corner(c, t) for c in holes)]
+            for t in turnings]
 
 
 def loop_turns(road: BaseGeometry, turnings: Sequence[Turning]) -> BaseGeometry:

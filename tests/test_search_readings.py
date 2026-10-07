@@ -31,7 +31,9 @@ def test_a_floor_count_is_open_to_every_reading_only_where_each_reading_leaves_i
     assert counted == low | {6, 7, 8, 9}  # 21 m to 30 m with the stilt counted
     # without it 21 m to 30 m; 6 floors are then 18 m, where no order gives a setback
     assert not_counted == low | {7, 8, 9, 10}
-    assert every == counted & not_counted == low | {7, 8, 9}
+    # built for every reading it takes no count below 21 m that NBC's own 15 m line holds to 4.6's
+    # fire access, which the search lays round no block that low: not 4 floors (15 m) or 5 (C4-06)
+    assert every == (counted & not_counted) - {4, 5} == {1, 2, 3, 7, 8, 9}
 
 
 def test_a_profile_asks_the_stricter_setback_and_gap_of_its_readings():

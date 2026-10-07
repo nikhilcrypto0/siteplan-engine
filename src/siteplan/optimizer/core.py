@@ -36,6 +36,7 @@ from siteplan.optimizer.guard import Rejection, Validated, guard, inputs_of, why
 from siteplan.optimizer.interfaces import Budget, SearchContext, Strategy, Validator
 from siteplan.optimizer.objective import measure
 from siteplan.optimizer.pareto import Scored, select
+from siteplan.optimizer.search.verdicts import rests_on
 
 
 @dataclass(frozen=True)
@@ -91,7 +92,7 @@ def optimize(site: CanonicalSiteModel, rules: ResolvedRules, brief: DesignBrief,
 
     scores = {c.candidate_id: measure(c, brief) for c in candidates}
     guarded = guard(candidates, validator, site, rules, brief, envelope)
-    selection = select([Scored(v.candidate, scores[v.candidate.candidate_id])
+    selection = select([Scored(v.candidate, scores[v.candidate.candidate_id], _rests(v.report))
                         for v in guarded.passed], brief)
 
     inputs = inputs_of(site, rules, brief)
@@ -110,6 +111,13 @@ def optimize(site: CanonicalSiteModel, rules: ResolvedRules, brief: DesignBrief,
         rejected=tuple(rejected), unfilled=selection.unfilled, notes=tuple(notes),
         budget_exhausted=exhausted, considered=len(candidates), seed=seed,
         proposed=guarded.passed)
+
+
+def _rests(report: ValidationReport) -> tuple[int, int]:
+    """The open questions of the rules a candidate rests on and the checks that depend on them,
+    from the guard's report: (0, 0) when it holds under every reading (C4-09)."""
+    found = rests_on(report)
+    return len(found.readings), len(found.checks)
 
 
 def _annotated(scored: Scored, point: ParetoPoint | None) -> CandidateLayout:

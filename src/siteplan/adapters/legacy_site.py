@@ -205,9 +205,10 @@ def amenity_request(item: AmenityItem) -> dict:
     """A facility of the firm's library as the brief asks for it. Its use and surface are the
     library's own words, or nothing: neither is read off its name, nor off where the generator
     may stand it."""
-    return {"name": item.name, "setting": AmenitySetting.OUTDOOR,
-            "footprint_m": (item.width_m, item.depth_m), "use": item.use,
-            "surface": item.surface}
+    asked = {"name": item.name, "setting": AmenitySetting.OUTDOOR,
+             "footprint_m": (item.width_m, item.depth_m), "use": item.use,
+             "surface": item.surface}
+    return {**asked, "priority": item.priority} if item.priority is not None else asked
 
 
 def design_margins(defaults: WorkspaceDefaults) -> dict:

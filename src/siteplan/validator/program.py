@@ -95,16 +95,22 @@ def _club_check(brief: DesignBrief, candidate: CandidateLayout, units: int,
 
 
 def _amenity_checks(brief: DesignBrief, candidate: CandidateLayout) -> list[Check]:
+    """Each facility the brief asks for (C4-08: two classes). One it REQUIRES is part of the
+    program, and a layout without it fails the program. One it PREFERS (what a firm's library
+    gives when it says nothing) or leaves OPTIONAL is a preference: said when it is not placed,
+    never a failure of the program, so no layout is held to the whole of a firm's library."""
     placed = {a.name.casefold() for a in candidate.program.amenities}
     out = []
     for asked in brief.program.amenities:
         there = asked.name.casefold() in placed
+        missed = asked.name in candidate.program.amenities_missed
         if there:
             status, measured = Status.PASS, "placed"
-        elif asked.priority is AmenityPriority.OPTIONAL:
-            status, measured = Status.INFO, "not placed (optional)"
+        elif asked.priority is not AmenityPriority.REQUIRED:
+            status = Status.INFO
+            measured = (f"not placed ({asked.priority.value.lower()})"
+                        + (": no room found for it" if missed else ""))
         else:
-            missed = asked.name in candidate.program.amenities_missed
             status = Status.FAIL
             measured = "no room found for it" if missed else "not placed"
         out.append(plain(Family.PROGRAM, f"Amenity: {asked.name}", status, measured,

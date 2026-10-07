@@ -4,6 +4,632 @@ A characterization test (tests/manifest.py) pins what the engine produces today.
 only together with a normative replacement test and an entry here: what changed, why, the
 evidence, and the test that now holds the behaviour. Newest first.
 
+## 2026-10-07: C4-16, the architect's soft preferences scored
+
+The brief has carried soft preferences all along (`Objectives.soft_preferences`: a kind, its
+parameters and a weight), and nothing read them: a wish given was dropped unsaid. The objective now
+scores them (`optimizer/preferences.py`) as an eighth axis, preference (`Priority.PREFERENCE`, the
+enum extended, contracts not bumped): the weighted mean of how well a layout meets each preference
+the engine understands, from 0 to 1, and 1 for every layout when the brief gives none, so that
+then nothing moves. The kinds: orientation (`axis_deg`: the blocks' long sides along a direction),
+max_towers (`towers`), keep_away_from_road (`m`: the share of blocks that far from the entrances)
+and club_near_entrance (`m`). A preference is never a rule: nothing fails for one, and the
+validator does not read them. One of another kind, or with a parameter missing or not a number, is
+not weighed, and the search's notes name it, as they name the ones weighed.
+
+Tests: `tests/test_objective_preferences.py` (normative: no preference scores every layout 1;
+each kind's score; a kind not understood is named and not weighed, the others still are; between
+two layouts equal on every other axis the balanced option follows an orientation preference; the
+search's notes name what was weighed and what was not). Characterization re-pinned: the service's
+made-up baseline (its brief gives no preference: the same proposals, the same four shown and the
+same answer; the shown digests move, each alternative's scores carrying the number).
+
+- Dhulapally, Run B prime's request (the C4 benchmark, 16-preferences): the brief gives none, and
+  the same layouts are judged, proposed and shown. Tried once with "at most four blocks" (an
+  experiment, not a benchmark): weighed and named in the notes; at its weight of 1, and with the
+  preference's priority at 4, the balanced option stays the five-block 383,302 sft layout (a 20%
+  shortfall on one axis of eight); with the priority at 20 it is a three-block layout of 388,908
+  sft. A soft preference nudges; the brief's priority says how hard.
+
+## 2026-10-07: C4-15, the turn at every road junction
+
+The validator swept the fire tender's turns at every corner of a block held to NBC 4.6 and at
+every bend of the loop road, never where a road joins another: the approach, a street or a link
+meeting the loop. A new check, "Fire access: turns at the road junctions" (`fire`,
+`turning.junction_turns`), sweeps every corner of the fire roads (loop, perimeter lane, street,
+approach, cul-de-sac; not a pathway or a driveway) that is no bend of the loop, under each reading
+of the 9 m as the loop check does: FAIL where something stands in a turn under every reading,
+UNVERIFIED under some. Three kinds of corner are no junction and are not swept: one on the plot's
+boundary (the gate, where the tender turns on the street outside), one that doubles back (the tip
+of a slit the drawing leaves) and one either side of which is shorter than the lane is wide (a
+jog, not a wall a tender drives along). The generator keeps its program (club house, ramp,
+facilities, tot-lots, bays) off every reading's junction turns, refuses a layout a block or the
+planted strip stands in one of under every reading, and the approach planner passes over a gate
+position whose turn into the ring is blocked so for the next (`network.find_entrance`).
+
+Measured first without the three exclusions, 13 of Dhulapally's 23 judged layouts had a junction
+turn blocked under the outer-edge reading and all 23 under the centreline one, and the generator
+refused 96 tries; every one of those came from the gate's corners, slit tips the union of the road
+pieces leaves, or a one-metre jog where an approach meets the loop. With them, no judged
+Dhulapally layout has a junction turn blocked and the search lays out the same layouts.
+
+Tests: `tests/test_junction_turns.py` (normative: on the made-up rectangle the turns at each end of
+its street are swept and no other, not at a loop bend, the gate or the approach's jog; a kiosk on
+the loop where the street joins it fails the junction check while the loop check still passes;
+the tip of a 15 m slit is swept by neither side; the approach planner takes the next gate when a
+block stands where the shortest approach turns into the ring). Characterization re-pinned: the
+service's made-up baseline (the same proposals, the same four shown and the same answer; two
+proposals not shown lay the same facilities off a junction turn).
+
+- Dhulapally, Run B prime's request (the C4 benchmark, 15-junctions): the same 23 layouts judged,
+  the same proposals and the same four shown; no junction turn blocked; one legal FAIL (the
+  validator's 9.00 m gap read as 8.9999989), unchanged; runtime 107 s to 108 s.
+
+## 2026-10-07: C4-14, an approach that crosses the open-space reserve when it must
+
+A configuration may keep one end of the plot for the open space (`Config.reserve`), and the
+approach was kept off that end as off a block. Where the end lay across every way in from the
+access road, no straight approach reached the ring and the configuration was lost: on the made-up
+plots 4 of 59 tries on the rectangle, 4 of 78 on the L-plot and 33 of 141 on the slim L-plot, every
+one of them this case (drawn: the reserve ran the whole width of the access side). Now the approach
+keeps off the reserve when it can and, when that end lies across every way in, crosses it, a road
+through the park, the open space then taken from the ground round it (`layout.lay_out`); blocks,
+water, the clusters and the other rings stay ground no approach crosses. No made-up plot loses a
+configuration to the approach now. The planner's straight approach found a way in every other try
+on every plot tested, Dhulapally included, so no bent or slanted approach was built.
+
+Tests: `tests/test_search_network.py` (normative: on the L-plot, blocks turned a quarter and the
+south end kept for the open space; kept off it no approach reaches the ring, and the configuration
+now lays out with its approach through the reserve; the same end kept with the blocks upright, the
+approach keeps off it). Characterization re-pinned: the service's made-up baseline (the
+configurations recovered are laid out among the others, so those after them are numbered on:
+balanced is the same 4 x S+10 as `-90`; maximum yield `-86` is now another 3 x S+10 of the same
+saleable area that leaves less ground to no use, 985 m² of its open space usable where 570; the
+open-space and robust ones the same); the road ground (eight proposals with their approach through
+the park, four road sets new).
+
+- Dhulapally, Run B prime's request (the C4 benchmark, 14-approach): unchanged, the same 23 layouts
+  judged, the same proposals and the same four shown; the approach found a way in every try.
+
+## 2026-10-07: C4-13, a cellar dug only as far as its need
+
+The full search's parking plan stacked whole cellar levels, each the whole plot under the rule
+13(c)(x) setback, until the need was met; one Dhulapally level holds about 15,000 m² of parking, so
+nearly every layout dug one whole level and the parking laid out ran a median 30% over Table V's
+need (the GHMC column, the conservative test mode), up to 106%. With no parking margin asked
+(`parking_extra_fraction`, 0), all of that was the last level's rounding. Now (`parking_plan`):
+
+- The fewest levels are found as before, on the whole outline. Then the outline is a rectangle
+  square to the configuration's turn grown round the ramp, the piece of the plot under the setback
+  inside it that the ramp reaches, the same on every level (`_sized`). Its size is placed for the
+  floor the need asks, by area and by the cars at the density the whole level was counted at, and
+  grown while the cars counted on it leave it short (at most four counts); the whole outline is
+  kept when no smaller piece holds the need. A cut square from one end of the cellar was tried
+  first and kept too much on Dhulapally's L-shaped plot (a ramp 50 m in from the end left 448 cars
+  where 300 were asked).
+- Before a ramp stands (the first pass, which only decides whether one is needed) the whole
+  outline is kept, as before.
+- The cellar setback a candidate reports (`LayerKind.CELLAR_SETBACK`) is the rule's band, the plot
+  less the plot eroded by the setback, whatever part of the plot the cellar takes. It was the plot
+  less the cellar, which a sized cellar would have turned into most of the plot labelled as law;
+  the validator's own layer was already the band.
+
+The validator is unchanged and measures the cellar as drawn (its floor, its cars, its setback from
+the plot line, the ramp reaching it, the NBC special building per piece under a block); every
+layout judged on Dhulapally passes its parking.
+
+Tests: `tests/test_search_parking.py` (normative, on the made-up rectangle: 4,000 m² asked takes a
+cellar of 4,808 m² by the ramp, providing 4,140 m², where the whole level of 22,116 m² provided
+19,440; the cellar lies at the ramp's end, west or east; two levels both sized; the setback layer
+the band for every proposal). Characterization re-pinned: the service's made-up baseline (the same
+proposals, the same four shown and the same answer; only the digests move).
+
+- Dhulapally, Run B prime's request (the C4 benchmark, 13-parking): the same layouts judged,
+  proposed and shown; parking laid out against the need, median 4.8% over (worst 9.9%) where it was
+  30.5% (106%); the alternatives shown: maximum yield 15,180 m² against 14,678 where 17,240,
+  balanced 13,860 against 13,365 where 16,100, open space 8,940 against 8,531 where 15,880, robust
+  10,680 against 10,237 where 15,240; one legal FAIL (the validator's 9.00 m gap read as
+  8.9999989), unchanged; runtime 104 s to 108 s (the cars counted on the pieces tried).
+
+## 2026-10-07: C4-12, the open space taken where it is usable
+
+The open space was taken biggest pocket first (`fit.choose_pockets`), so on Dhulapally it was
+most often the far arm of the plot or a long wedge (the open-space option's: one strip of 3,580 m²,
+64% of it within 30 m of a block), and the objective counted every square metre of it alike. One
+measure now (`objective.usable_open_sqm`): the part of the open space at least 12 m across
+(`OPEN_WIDE_M`: a lawn, a court or a play area fits) and within 30 m of a block (`OPEN_REACH_M`:
+its residents see and reach it), both engine design assumptions in constraints.py, never rules:
+the law's open space (rule 15's pockets 3 m wide and 50 m²) is the validator's and unchanged.
+
+- The generator takes the most usable pockets first, the biggest between equals, and cuts the
+  last from its more usable end (`choose_pockets`, `_trim`; given no value they work as before).
+- The objective's open-space axis scores the usable part (`Scores.open_space_usable_sqm`); the
+  whole area stays beside it, reported, and the hand-made scores of the pareto tests carry both.
+- The trade-off: far ground the open space used to take is left to the facilities or, beyond
+  them, unallocated. On the same Dhulapally layouts 0 to 416 m² more is unallocated; that ground
+  was open space in name, not ground residents reach.
+
+Tests: `tests/test_search_open_space.py` (normative: the measure, wide and near, a narrow strip and
+a far square none; the generator taking a pocket beside the blocks before a bigger far one; the
+last pocket cut from its usable end; the axis scoring the usable part and keeping the whole);
+`tests/test_optimizer_pareto.py` (its one test whose tower stood 50 m from the open space the
+helper draws at the origin stands it beside it). Characterization re-pinned: the service's made-up
+baseline (maximum yield `-86`, the 3 x S+10, 570 of its 1,836 m² of open space usable; balanced the
+4 x S+10 `-88`, 1,341 m² usable; the open-space option S+9, S+9 and five S+5 of 311,940 sft, 1,605
+m² usable, where it was S+9, S+9, S+5, S+5; the robust one the same); the road ground (two, two and
+four of the plots' proposals others, two road sets new).
+
+- Dhulapally, Run B prime's request (the C4 benchmark, 12-open-space): maximum yield the same 3 x
+  S+10 of 432,120 sft, 5 of 9 facilities where 4, 96 m² more unallocated; balanced 5 blocks (S+9 x
+  4, S+5) of 383,302 sft and 318 flats where it was 350,852 and 292, all its open space usable, 8 of
+  9 facilities where 3, 5,077 m² unallocated where 4,366, every block on a road along 26 m or more;
+  the open-space option 3 x S+10, two blocks of one core and one of two, 239,180 sft and 200 flats,
+  all of its 2,026 m² of open space usable, 7 of 9 facilities, where it was S+8 x 3 and S+5 of
+  302,484 sft and 252 flats, open space the far strip above; this one leaves 8,094 m² unallocated
+  (5,674 before), the most of the options shown, the price of single-core blocks; robust unchanged
+  (287,016 sft, holding under every reading); one legal FAIL, the validator's 9.00 m gap read as
+  8.9999989, unchanged.
+
+## 2026-10-07: C4-11, site use and the quality of a scheme scored
+
+The objective (`optimizer/objective.py`) scores two more numbers, both the search's, never rules
+(nothing fails for them; the validator is untouched), and the brief may weigh them
+(`Priority.SITE_USE`, `Priority.QUALITY`: the enum gains members, contracts not bumped):
+
+- Site use: 1 less the share of the net plot that no use takes and no rule keeps open, the
+  candidate's ledger's UNALLOCATED ground less its rule layers' setbacks, block gaps, fire bands,
+  turning ground, buffers and green strip (`KEPT_OPEN`; a cellar's setback, a no-ramp or no-bay
+  zone and the fire route keep nothing open at grade). Most of Dhulapally's unallocated ground is
+  such ground: among the layouts judged, 4,062 to 7,540 m² is left unallocated, of which 242 to
+  1,838 m² no rule explains.
+- Quality: the plain mean of five measures of an ordinary scheme, each 0 to 1: the share of the
+  plot not paved for roads; the share of the blocks of the commonest prototype; the share running
+  the commonest way (0 and 180 degrees one way); the share facing a road or pathway along at least
+  a pathway's width (rule 8(l)'s 6 m, the stricter reading of "opens onto", so a block a road meets
+  only at a corner counts against the layout whichever reading holds); and 1 over 1 and the
+  leftover pieces of 50 m² or more (`FRAGMENT_SQM`).
+
+How the alternatives are chosen (`optimizer/pareto.py`, `strategy._to_judge`):
+
+- The conventional open-space point weighs quality beside open space and conventionality; between
+  layouts a point's own measure ties on, maximum yield, robust and conventional take the one that
+  leaves less ground to no use (the compromise weighs site use already).
+- The objective reads its areas to 0.01 m² (`AREA_DECIMALS`): the last digit of a floating-point
+  area chose between twin layouts (the made-up baseline's `-86` dominated `-85` on 1836.0000000015675
+  m² of open space against ...567).
+- Each profile judges first the best of its front for each point the brief asks for (`pareto.leaders`;
+  all but ROBUST, whose readings only a report gives), then the rest of the front by yield. The
+  front of seven axes is wider than the six judged, and taken by yield alone it passed over
+  Dhulapally's open-space option (`not_counted-ALL-70`), whose place a 6-tower layout with a block
+  the ring road meets only at a corner took.
+- `frontage` moved from `optimizer.search.ground` to `siteplan.geometry`, shared by the search and
+  the objective (the validator keeps its own copy).
+
+Tests: `tests/test_objective_ground.py` (normative: which layers keep ground open and which do
+not, no ledger scoring nothing, quality's five parts, a corner touch against a road along a side
+and a pathway, the new axes on the front and in the weights, the conventional point's plainer
+scheme, the ties by site use, the last digits never choosing, the full search's candidates scored
+on their own ground); `tests/test_search_frontier.py` (the front's most open layout judged though
+yield would pass it by). Characterization re-pinned: the service's made-up baseline (maximum yield
+`-85`, the twin of `-86`; balanced S+9, S+9, S+5 of 374,440 sft and 3,612 m² of open space where
+it was 4 x S+10 of 440,800 sft and 1,836 m²; open space S+9, S+9, S+5, S+5 with 4,379 m², the most
+of any judged, where it was 4 x S+8 and S+3; robust the same 3 x S+7; every digest moves, each
+candidate's scores carrying the two numbers); the road ground of the three made-up plots (11 of 24
+proposals other layouts, five road sets new); the legacy nala plot's labels swap (equal yields go
+to C, which uses its ground; the open-space label to A, whose tower faces the loop road along its
+side where C's grazes its rounded corner).
+
+- Dhulapally, Run B prime's request (the C4 benchmark, 11-objective): maximum yield `-86`, the
+  same 432,120 sft as `-85` on 53 m² less unallocated ground (4 of 9 facilities where `-85` placed
+  5); balanced 5 towers (S+9 x 4, S+5), 350,852 sft and 292 flats, 4,366 m² unallocated, where it
+  was 6 towers of 362,678 sft and 302 flats on 5,747 m², one of whose blocks the ring road met only
+  at a corner (1.3 m of frontage; every block now faces a road along 24 m or more); the open-space
+  and robust alternatives the same; one legal FAIL, the validator's 9.00 m gap read as 8.9999989
+  (unchanged, a finding for the architect, not the search).
+
+## 2026-10-07: C4-10, the facilities laid in the order that places the most
+
+The facilities were laid first-fit in the order the firm lists them (since C4-08 what the brief
+requires first), each where the ground nearest the gate holds it, so one large facility laid
+early could leave no room for two others. The order is now searched (`ground.place_facilities`,
+`_orders`): the firm's own, each of its rotations (each facility first in turn) and the largest
+first, always within the classes (required, preferred, optional) in that order; the one that
+places the most required facilities, then preferred, then optional is kept, the firm's between
+equals, and the search stops at an order that places them all. Missed ones are named in the
+firm's order. Measured first over Dhulapally's 126 facility placements: rotations and the
+largest first place 53 more facilities in all than the firm's order (8 random shuffles: 54).
+
+- Made-up land (`tests/test_search_program_classes.py`, normative): in a 34 x 21 m room a 33 x 10
+  m deck listed first leaves no room for two 15 m courts, which side by side both stand: the two
+  courts are kept, the deck named; a required facility is still laid before preferred ones,
+  whatever order would place more. The quick search lays the same layouts; the service's made-up
+  baseline proposes and shows the same, and only the facilities of the most saleable layout move
+  (its digest and the answer re-pinned).
+- Dhulapally, Run B prime's request (the C4 benchmark): the same layouts judged, proposed and
+  shown; their facilities 152 where they were 144 (the 23 judged), 753 m² less ground left
+  unallocated among them; the open-space alternative places 5 of 9 where it placed 4.
+
+## 2026-10-07: C4-09, the frontier kept, and a robust alternative shown
+
+Two changes to what the search keeps and what the architect sees.
+
+- Judging (`strategy._to_judge`): each profile's six layouts the validator judges were its six
+  most saleable, which a profile filled with copies of one scheme a step apart (the made-up
+  baseline judged four 3 x S+9 of the same saleable area). Now the front of the objective's axes
+  comes first (the most saleable, the most open space, the most conventional, and every layout
+  nothing beats on all), then the rest by yield, and a layout that is the same idea as one
+  already taken (`pareto.same_idea`) waits until no other is left.
+- A fourth alternative (`ParetoPoint.ROBUST`, contracts extended, not bumped: the enum gains a
+  member, so every stored 1.3 contract still reads): the layout that rests on the fewest open
+  readings of the rules, none when it holds under every reading the validator evaluates, the most
+  saleable between equals. Its readings come from the guard's report (`core._rests`,
+  `Scored.rests`); a candidate whose report was not read never fills it. It is filled right after
+  the most saleable, a different idea as every alternative is, and is left unfilled, said, when a
+  layout chosen before it holds under every reading. It ranks by its own measure, not the front
+  of the other axes first as the other points do: that front is drawn over yield, open space and
+  the rest, none of them the readings, so the best layout that holds under every one may be one
+  it dominates (on Dhulapally it put a 244,070 sft layout before the 287,016 sft one). A brief
+  lists its points; one that lists none asks for all four. (A first version let it show the most
+  saleable scheme at a lower height; the real sites' tests hold every alternative to another
+  idea, the selector's rule, and it was put back.)
+
+- Made-up land: `tests/test_optimizer_pareto.py` (normative: ROBUST is the least dependent
+  different idea, the most saleable between equals, not the near-copy of a shown scheme; by its
+  own measure, not the front of the other axes; unfilled when the layout shown first holds or no
+  report was read; fewer open questions before fewer checks), `tests/test_search_frontier.py` (normative: the quota goes to different ideas
+  before copies; copies when nothing else is left; the front before a more saleable layout
+  another beats on every axis). The best proposal of every profile on the rectangles and the
+  L-plots is the same as on C4-08; which layouts are judged and proposed moves, and the road
+  ground is re-pinned. The service's tests count four alternatives shown and choose them again
+  with each proposal's readings; the real sites' tests (`tests/test_search_client.py`,
+  `tests/test_service_client.py`) allow one alternative a point, four.
+- The service's made-up baseline (re-pinned): 15 proposed where 10 were; shown the 4 x S+10
+  balanced layout again (440,800 sft, judged once more now that copies wait), and for the open
+  space 4 x S+8 + S+3 and for ROBUST 3 x S+7, both holding under every reading.
+- Dhulapally, Run B prime's request (the C4 benchmark): shown the most saleable 3 x S+10 (432,120
+  sft), balanced a six-block S+7, S+7, S+5 x 4 (362,678), conventional S+8 x 3 + S+5 (302,484) and
+  ROBUST the 4 towers S+9, S+9, S+3, S+3 (287,016 sft), which holds under every reading: the best
+  such layout the search found, now one of the alternatives the architect sees. 15 proposed where
+  12 were; the one layout the validator fails is still the micrometre gap of C4-07.
+
+## 2026-10-06: C4-08, what the law asks, what the program requires, what the firm prefers
+
+Three classes of constraint, kept apart. What the law asks (the validator's legal checks) is
+never traded. What the brief requires is the program, and a layout without it fails the program.
+What it prefers or leaves optional is a preference: said when it is not placed, never a failure.
+
+A facility of the firm's library came to the brief as PREFERRED (the library had no word for its
+priority), and the validator failed the program for every preferred facility with no room, so
+the whole library was held mandatory: on Dhulapally every layout's program was PARTLY_MET for want
+of facilities nobody had required.
+
+- A library item may now say REQUIRED, PREFERRED or OPTIONAL (`AmenityItem.priority`), passed to
+  the brief (`adapters.legacy_site.amenity_request`); one that says nothing stays PREFERRED.
+- The validator's program checks (`validator.program._amenity_checks`): a REQUIRED facility not
+  placed fails the program, as before; a PREFERRED one is INFO ("not placed (preferred): no room
+  found for it"), as an OPTIONAL one was. The legal checks are untouched.
+- The generator lays the facilities the brief requires before those it prefers, and those before
+  the optional ones, the firm's order within each (`ground.PRIORITY_ORDER`). A facility is laid
+  after the blocks and never displaces one.
+- Tried and not kept: reckoning in the cheap half's room estimate only the facilities the brief
+  requires, instead of a flat 300 m² (`layout.FACILITY_ROOM_SQM`). On made-up land the estimate
+  then promised blocks the exact half could not furnish, and the best of two profiles fell (the
+  L-plot's not_counted-ALL from 290,040 to 272,380 sft, the slim L-plot's from 304,440 to
+  272,380) while others rose 2-5%. The 300 m² stays a margin of the cheap half's; since C4-07
+  the exact half and the repair decide what the best layouts hold.
+
+- `tests/test_validator_program.py` (normative): a required facility with no room fails the
+  program; a preferred one is said with the reason, an optional one noted. It replaces the test
+  that failed the program for a preferred facility. `tests/test_search_program_classes.py`
+  (normative): with room for one, a required facility stands before a preferred one the firm
+  lists first; a library that says nothing leaves a facility preferred, one that says is heard.
+- The quick search lays the same layouts as on C4-07; the service's made-up baseline proposes and
+  shows the same, and only the program verdicts in the model's answer move (re-pinned).
+
+## 2026-10-06: C4-07, the layouts laid out are repaired
+
+The exact half (`layout.lay_out`) laid the program in one order and gave up at the first thing
+without room, and the search never went back to a layout it had laid. Four changes:
+
+- The club house stands where its own band allows (`layout._club_ground`): Table III's setbacks
+  for its height, as the validator holds it (rule 15(a)(x) makes it a building of its own), not
+  beyond the tallest tower's setback, a wider band, which kept it off an arm or a strip of the
+  plot it may use; and it turns to the plot's own directions too. On Dhulapally every "no room
+  for the club house" went (about 20 in a search), and the best layout places 4 of the 9
+  facilities where it placed 1.
+- When the ramp then finds no room, the program is laid again with the ramp first, since it has
+  the least choice of ground (beside a road, outside every setback), and the club house after it
+  (`RAMP_FIRST`); when the open space finds none, again with the club house kept off the ground
+  the open space may take (`CLUB_OFF_OPEN`). On Dhulapally 4 of 7 ramp failures lay out so.
+- The fringe draws no pathway longer than NBC 4.3.2.2's 30 m (`fringe._from_face`): it drew one
+  as long as the ring was far, which the validator failed (68 m) once the fringe was packed
+  harder. A generator gap, not new law: the validator has held the 30 m since contracts 1.3.
+- The parking plan counts the cars of a stilt only where a car can drive into it
+  (`layout._stilts`): a driveway's width of the block's outline (rule 13(c)(viii)) facing a road,
+  a fire lane or a pathway, as the validator has held it since contracts 1.3 (`ground.frontage`
+  is the generator's own copy of its measure). It counted every stilt: on Dhulapally a repaired
+  layout of six blocks planned 662 cars where the validator counted 626, short of Table V's 30%
+  column (UNVERIFIED while whose column applies is open; a FAIL where it is GHMC's). It now
+  plans the cellar that holds them.
+- The search repairs what it laid out (`FullSearchStrategy._improve`): the most valuable layouts
+  of each profile with blocks below 21 m are evaluated again with the fringe keeping no room for
+  the program (`Config.fringe_room`), the exact half alone saying whether the club house, the
+  ramp and the open space still have room, and a block of the fringe is given up at a time
+  (`strategy._cuts`) until one lays out or stands no more than the layout it came from. Those
+  are laid out after all the others; the validator judges them like any other.
+
+- Made-up land (`tests/test_search_repair.py`, normative): the club house's ground includes the
+  band between its own 5 m and the towers' 10 m; the ramp laid first stands clear of the club
+  house in layouts the validator does not fail; the repair lays out layouts worth more than
+  those of their profile after all the others, none twice, the others as without it, and the
+  validator fails none; a pathway is never drawn longer than 30 m
+  (`tests/test_search_fringe_search.py`). C4-04's test of the order laid reads the passes before
+  the repair.
+- The quick search: the rectangle's layouts 3-11% larger (the club house in the setback band
+  leaves the towers more ground); the L-plots' with blocks below 21 m 8-22% larger. Road ground
+  re-pinned (`tests/test_search_road_ground.py`).
+- The service's made-up baseline (re-pinned): 116 laid out where 112 were, 10 proposed, 3 of
+  them holding under every reading. More configurations lay out and fill each profile's quota
+  before some laid on C4-06 are reached, and the judge's six of each profile by yield take more
+  layouts of equal value; the balanced option shown is the repair's 5-block layout (371,440 sft)
+  where it was 4 x S+10 (440,800, laid out but not among the six judged), and the open-space one
+  is 4 x S+9 (rests on a reading) where it was 4 x S+8 (holds under every reading). The selector
+  weighs neither robustness nor variety yet (C4-09).
+- Dhulapally, Run B prime's request (the C4 benchmark): the best layout (3 x S+10, 432,120 sft)
+  unchanged, with 4-5 of 9 facilities where it had 1 and 5,160-5,213 m² unallocated where it had
+  5,490; the best that holds under every reading 287,016 sft (4 towers S+9, S+9, S+3, S+3) where
+  it was 266,474; not_counted-ALL's best 338,494 where it was 331,292; 126 laid out where 112.
+  One layout the validator failed: two blocks a street of exactly 9.000000 m apart, the gap their
+  floor count asks, which the validator measures 8.9999989 m after snapping its shapes to a
+  micrometre grid, a micrometre more than its 1e-6 m tolerance. Rejected, never offered; the
+  validator's tolerance is the firm's to decide, not changed here.
+
+## 2026-10-06: C4-06, floor counts kept on everything they ask and rest on
+
+Of two floor counts of a prototype the shorter was dropped whenever the taller asked the same
+setback and gap (`columns.choices_for`, and the fringe's `options`). That hid a shorter count that
+asks less of something else. Since contracts 1.3 the validator evaluates NBC's own 15 m high-rise
+line (the nbc_fire_height reading): under it a block of 15 m or more, stilt included, is held to
+4.6's fire access, which the search lays round no block below 21 m. So a five-floor block (18 m)
+stands only under the state's line, where a three-floor one (12 m) asking the same 6 m setback
+and gap stands under both, and the five-floor one hid it.
+
+- A count is now dropped only behind a taller one alike in all it asks and rests on
+  (`readings.resources`): the ground (the larger setback, the gap, the planting strip), the fire
+  access it is held to under some reading (a high-rise, or below one held by NBC's line,
+  `FloorClass.nbc_held`), and the unsettled inputs it rests on.
+- The profile built to hold under every reading (`Profile.every_reading`) takes no block below
+  21 m that NBC's line holds, so its layouts hold under that reading too, as readings.py promises
+  of it; it had rested on the state's line since contracts 1.3. The profiles built for a single
+  reading of the stilt or of circulation may still rest on the state's line, as they rest on
+  their own reading. No interpretation changes: the validator evaluates both lines as before.
+
+- Made-up land (`tests/test_search_floor_options.py`, normative): under a single reading of the
+  stilt, three floors are kept beside five, four and one are dropped; the profile built for every
+  reading offers one to three floors below 21 m, not four or five; and on the L-plot every layout
+  it judges holds under both lines, some with blocks below 21 m. `tests/test_search_readings.py`
+  and two tests of `tests/test_search_low_blocks.py` read the four- and five-floor counts under a
+  profile that may rest on a reading.
+- The quick search's proposals: the layouts meant for every reading on the L-plots and the
+  rectangle trade their five-floor blocks for three-floor ones (the rectangle's 348 flats are 324)
+  and hold under both lines; the others are as on C4-05. The L-plots' and the rectangle's road
+  ground is re-pinned (`tests/test_search_road_ground.py`).
+- The service's made-up baseline (re-pinned): 3 of the 12 proposals hold under every reading again
+  (C4-05: 1), and the open-space option shown is the 4 x S+8 layout that does, as on C4-04.
+- Dhulapally, Run B prime's request (the C4 benchmark): the first layout that holds under every
+  reading the validator evaluates, full-ALL-ALL-1: 4 towers, S+7, S+7, S+3, S+3, 222 flats,
+  266,474 sft, 10.6% open space, 7 of 9 amenities, no legal FAIL; it is the open-space option
+  shown. All six judged in that profile hold under every reading. The best layout (3 x S+10, 360
+  flats) and the balanced one are unchanged. The 7-5-5-5 layout Run C exported (316,888 sft) is
+  no longer built: under today's validator it holds only under the state's line, a reading added
+  after Run C.
+
+## 2026-10-06: C4-05, the fringe's search: every kind of block tried, and the plot's directions
+
+The blocks on the ground the ring road leaves (the fringe, stream C3) were placed by one greedy
+pass, upright in the configuration's direction, and three things kept it from blocks that fit:
+
+- its tries were shared by every kind of block: when the most valuable kind's nearest twelve
+  places all left too little room for the rest of the layout, or no pathway reached them, the
+  pass ended, and a smaller or a lower block that would have stood was never looked at. Each
+  kind now has its own twelve (`fringe._best`);
+- it stood blocks only in the configuration's direction, so a band of ground turned from the
+  columns took none it could not hold upright. The fringe is now also laid in the plot's own
+  directions, along and across its longest edges, two of them (`fringe.FRINGE_DIRECTIONS`), and
+  the most valuable is kept, the configuration's between equals; a block laid so carries its
+  frame (`Standing.frame`, as a turned cluster's do since C4-03);
+- its grid ran from the near edge of each piece of ground a metre at a time, so a block stood
+  flush against the far edge, where a ring road on that side is, only when the width came to a
+  whole number of metres. The far edge is now a place too (`fringe._steps`).
+
+Measured first on Dhulapally (Run B prime's request, every fringe the search laid, 671): separate
+tries beat the shared ones in 162 and the plot's directions in 268, and the two together add
+about 7.0 million sft over all of them, for about 35 s.
+
+- Made-up land (`tests/test_search_fringe_search.py`, normative): a kind none of whose places
+  leaves the room gives way to a smaller one; where the most valuable kind stands the search is as
+  before; a band turned 30° or 140° from the columns takes blocks turned with it, flush against
+  its road; a block stands flush against either edge of its ground.
+- The quick search's proposals: on the L-plot those with blocks below 21 m are 249,340, 241,960,
+  230,680 and 220,920 sft where they were 216,780, 210,400, 198,120 and 189,360 (15-17% more); on
+  the L-plot with the slim block 8-14% more; on the rectangles the same. The L-plots' road ground
+  is re-pinned (`tests/test_search_road_ground.py`).
+- The slim L-plot's arm: layouts with a block there are still laid out (two), and the note says
+  so, but the larger layouts that leave the arm outrank them, so none is proposed. Its test
+  (`tests/test_search_low_blocks.py`) asked that one be proposed, an outcome of the objective on
+  that land rather than a rule; it now judges every layout laid out with a block in the arm,
+  proposed or not, with the validator, and checks the block is low, served and passes.
+- The service's made-up baseline (`tests/test_service_proposals_baseline.py`, re-pinned): four
+  proposals of the lower profiles are others, none smaller (a 224-flat layout is now 232), and the
+  open-space option shown is 4 x S+9 (252 flats) where it was 4 x S+8 (224). 1 of the 12
+  proposals holds under every reading where 3 did: the 3 x S+7 layout that does is still judged,
+  unchanged, but an S+8, S+8, S+5 layout of the same flats and saleable area is proposed in its
+  place, since the selector has no robustness objective yet (C4-09).
+- Dhulapally, Run B prime's request (the C4 benchmark): no legal FAIL; the best layout (3 x S+10,
+  360 flats) and the three shown are those of C4-04, the best of the profiles with blocks below
+  21 m larger (ALL-ALL 309,686 to 316,888 sft, 264 flats, the 7-5-5-5 layout Run C exported;
+  not_counted-ALL 321,246 to 331,292), 12 proposed where 10 were; 79.6 s where it took 45.8.
+
+## 2026-10-06: C4-04, columns of more than one depth in a layout
+
+The columns took the kit's main depth (the one most of its prototypes come in); blocks of the
+kit's other depths stood only on the fringe. Each configuration is now searched once more, after
+all of the others and in an order of its own (`Config.mixed_depths`), with each column of
+whichever depth adds the most saleable area for the width it takes, its depth and the street
+beside it; that configuration keeps the main depth's columns where they add more, and counts as a
+layout of its own only when a column of another depth stands in it, else it is the same as the
+first. A kit of one depth (Dhulapally's, the made-up rectangle's and L-plot's) searches exactly as
+before.
+
+The first version let every configuration take the other depths. On the made-up L-plot with the
+slim block those configurations rated highest in the cheap half, by filling the strip the main
+depth leaves, and then failed the exact half, since that strip was where the club house went:
+every one of them ran out of room for the club house, the cellar ramp or the approach, and on the
+way one deep-only layout that had laid out before was no longer laid. So the configurations with
+other depths are laid out after all of the others, with quotas of their own: they take neither
+the others' place, nor their time, nor their numbers.
+
+- Made-up land (`tests/test_search_depths.py`, normative): on land as wide as two deep columns,
+  a slim one and their streets, a slim column stands beside the deep ones and the columns add
+  more than the deep ones alone; where only deep columns fit, they are as before; mixing never
+  adds less than the main depth alone; a configuration stands another depth in its columns only
+  when it lets it, and then always does; and on the slim L-plot every configuration of before is
+  laid out first, columns of the main depth alone, and layouts with columns of two depths reach
+  the exact half (22 on the slim L-plot, 20 on the slim rectangle, none before).
+- What they give there: the best of them is 16-23% below the best deep-only layout of each
+  profile, since the room a mixed plan needs for the club house is an end of the plot kept clear,
+  which takes more than its slim column adds; none is proposed, and the proposals and every
+  characterization pin are unchanged. A multi-depth kit takes about twice as long (4.4 to 8.1 s,
+  6.3 to 11.8 s), a kit of one depth no longer.
+- Dhulapally, Run B prime's request (the C4 benchmark): its kit is of one depth, so the search is
+  unchanged.
+
+## 2026-10-06: C4-03, a further cluster turned to its own ground
+
+A further cluster (C4-02) stood in its configuration's direction, so a wing turned from the plot's
+main lines took its blocks at an angle the wing does not run. It is now tried in that direction
+and in its own ground's (`layout.zone_angles`: the principal axis of the ground it would stand on,
+along and across its longest edges; no two within the turned frame's 5°, four at most), and the
+most valuable that can be joined is kept. Its blocks carry their frame (`Standing.frame`) to the
+placement, the fringe sees them turned, and the club house and the facilities may turn to any
+cluster's direction. Two refusals keep the layout what the validator holds it to:
+
+- a further cluster whose ring would run over a laid cluster, or a laid ring over it: a ring
+  turned to its own ground reaches further out at its mitred corners than along its sides, and on
+  Dhulapally such a corner stood 1-2 m² on a tower of the first cluster;
+- a further cluster whose ring meets a laid ring at an angle (joined where their pavements meet,
+  with no link road): where two rings overlap askew, the corner of one sticks out of the other in
+  a wedge the validator measures narrower than a road (6.65 m on one Dhulapally layout). A turned
+  cluster stands apart, joined by a link road. This refuses some askew meetings that would have
+  passed (two Dhulapally layouts of 352 and 340 flats); telling them apart needs the generator to
+  measure the joined rings as the validator does, left for later.
+
+A defect of C4-02 shows once three clusters stand more often: the ground left for a further
+cluster was the blocks' land less the laid clusters, not less the link roads laid between them,
+so a third cluster could stand over the link that joins the first two (117 m² of one on the
+made-up squares). The links, with a street's room round them, are taken out too.
+
+- Made-up land (`tests/test_search_orientation.py`, normative): on an L whose arm is turned 30°
+  from its body, a configuration at the body's angle stands its further cluster in the arm's own
+  direction, joined by a link road. The quick search on the long L proposes 620, 558, 522 and 464
+  flats where C4-02 proposed 560, 504, 498 and 460; the two squares joined by a neck and the
+  service's made-up baseline are unchanged.
+- Dhulapally, Run B prime's request (the C4 benchmark): no legal FAIL; the best layout and the
+  three shown are those of C4-02.
+
+## 2026-10-06: C4-02, more than one cluster of blocks, each round its own ring road
+
+The full search fitted the blocks into one convex outline with a ring road round it, so a plot of
+two wings one convex outline cannot take in (two squares joined by a narrow neck) left a wing
+empty; where the one cluster's ramp then had no road to stand beside, nothing was laid at all.
+Every configuration is now also tried with further clusters (`Config.more_clusters`): columns are
+laid on the ground the first cluster leaves (less every laid cluster grown by the street between
+two columns, so the blocks keep their gap and the rings stay off each other's blocks), fitted round
+a ring road of their own, and joined to a ring already laid by a link road (`network.link`, the
+shortest straight road between the two rings' centre lines that lies on ground a road may take,
+found every 2 m along the further ring). Where the two rings' pavements meet a road wide they are
+joined there, and the link is an edge of the network with no pavement of its own; a link shorter
+between the rings than a road is wide is no road (the validator would see its two ends as one
+junction) and that cluster is not laid. At most three clusters. The variants come after every
+other configuration, in an order of their own, so those are evaluated as before.
+
+- Made-up land (`tests/test_search_clusters.py`, normative): on two 120 m squares joined by a 50 m
+  neck the strictest profile, which proposed nothing, proposes layouts of two clusters joined by a
+  link; the others take both wings (540 flats where 444 were, under not_counted-allowed).
+- The service's made-up baseline: 768 configurations evaluated where 384 were, the same twelve
+  proposed and three shown; re-pinned.
+- Dhulapally, Run B prime's request (the C4 benchmark): 2,304 configurations, 112 laid out, 24
+  judged, no legal FAIL; four judged layouts stand two clusters joined where their rings meet, one
+  of them among the ten proposed; the best is unchanged (three towers of stilt + 10, 360 flats),
+  as the north arm leaves no ground a cluster with its ring fits (13 m of it, a block is 25.8 m).
+
+## 2026-10-06: C4-01, the full search draws every road from a centre-line graph
+
+`optimizer/search/road_graph.py`: the roads are a graph of nodes (an entrance, a junction, the
+block a pathway serves, the anchor of a loop) and edges along each road's centre line, and every
+road's pavement is drawn from its centre line, never the other way round. The ring's centre line
+runs half a road out from the cluster's outline, a street's down its corridor from the ring's
+centre line to the ring's, the approach's from the gate to the ring's, a pathway's from its block.
+The graph says whether the roads are one network with no road that stops with nowhere to go; a
+layout whose roads are not is refused, with the reason, before anything is built on it. The
+validator measures the pavement as before: the graph is the search's, not a claim it trusts.
+
+- The same ground: `tests/test_search_road_ground.py` (characterization, pinned on C4-01a) holds
+  every road of the 22 candidates the quick search proposes on made-up land to its area before
+  the graph, to 0.01 m². `tests/test_search_road_graph.py` (normative) holds the network: one
+  piece, the ring a loop cut at every junction, the streets between junctions on it, the approach
+  from the entrance, the pathways from the blocks they serve, the pavement moving with its line.
+- The generator's ledger is drawn on the validator's micrometre grid (`build.GRID_M`): with the
+  roads drawn from centre lines, a street's edge and a fire lane's met with other last digits,
+  and the contract's full-precision check read two Dhulapally layouts' street and fire lane as
+  overlapping by 232 m², so the guard failed them. On the grid their edge is exactly shared.
+- What still turns on the last digits, left to C4-09 and C4-10 (the frontier, the amenity
+  search): the open-space pockets taken largest first, where two are the same size; two layouts
+  the selector scores the same; the club house's and a facility's place, whose scanning grid
+  starts at the edge of the ground it scans. On made-up land `full-not_counted-ALL-61` is
+  proposed for `-62` (the same blocks, flats and saleable area) and `full-ALL-ALL-6` shown for
+  `-5` (the same blocks, flats, saleable area and open space); re-pinned.
+- Dhulapally, Run B prime's request (the C4 benchmark): the same 1,152 configurations, 112 laid
+  out, 24 judged and no legal FAIL as C4-01a, the same eleven proposed and the same three shown;
+  on two layouts that are not shown a facility or the club house moved.
+
+## 2026-10-06: C4-01a, the search's choices no longer turn on the last digits of its geometry
+
+Drawing the roads from centre lines (C4-01) lays the same ground with other last digits, and that
+alone changed what the full search laid out. Three defects were behind it, fixed here first:
+
+- **The ring road's narrowness** (`network.cluster_of`). The ring was opened at exactly a road's
+  width to find where the ground cuts it narrower than a road. A ring drawn at exactly that width
+  (the Dhulapally ASSUMPTION_TEST inputs give no firm margin over rule 8(m)'s 9 m) shrinks to a
+  line, and GEOS grows that line back unstably: at some turns the whole ring read as narrow when
+  the ground had cut only the 2 m tip of a mitred corner. The check now asks directly whether a
+  road a hair under the rule's width, laid against the cluster's outline with its turns rounded,
+  lies on the ring's ground. A cut deeper into a side than the ring's margin over a road is
+  refused as before; the tip of a corner beyond a road's width is no longer a narrowing.
+- **The fringe** (`fringe._best`, `fringe._grid`). Between equally valuable blocks the fringe took
+  the one nearest the ring, and a block the ring touches is 0 m or, by noise, 1e-13 m away: noise
+  chose. Distances and places now rank to the millimetre (`TIE_M`), and a block whose edge lies on
+  its ground's edge stands on it (`CONTAIN_TOL_M`, a micrometre), its bounds check included.
+- **The generator's ledger** (`build.partition`). Each claim went into a cascaded union with the
+  claims so far. On one Dhulapally layout GEOS 3.13 returned that union without a block lining the
+  ring road's hole, the ledger counted the block's 1,582 m² as UNALLOCATED too, and the
+  validator's partition cross-check failed the layout, rightly. One binary union at a time now.
+
+Evidence and tests:
+
+- `tests/test_search_ties.py` (normative): the corner-tip cut at the turns the old check refused
+  (14.4°, 25.8°, 27.3°), a 1 m cut into a side still refused, the fringe's tie and edge, and the
+  ledger counting every square metre once on made-up land. Five of its eleven fail on 1c4fd2e.
+- Made-up land: the service's twelve proposals, the three shown, the model's answer and the
+  approval page are unchanged; only the digests move (re-pinned). On the slim L-plot the quick
+  search proposes `full-not_counted-ALL-13`/`-14` and `full-ALL-ALL-2`/`-3` (five blocks, one
+  with a pathway) where it proposed `-12`/`-13` and `-1`/`-2` (four blocks, two with pathways);
+  `tests/test_search_road_ground.py` is pinned on C4-01a.
+- Dhulapally, Run B prime's request (the C4 benchmark, `out/dhulapally-C4-BENCHMARK-20261006/`):
+  the same 1,152 configurations, 112 laid out and 24 judged, no legal FAIL, 11 proposed where 12
+  were. The best layout is the same (three towers of stilt + 10, 360 flats, 432,120 sft); the
+  balanced and the open-space options shown are others.
+
 ## 2026-10-06: the agent loop and the service guard against the logged Qwen defects
 
 No characterization test changed: on a fresh out folder the approval page, the answer and the

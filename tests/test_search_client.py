@@ -20,6 +20,7 @@ from client_baseline import ANSWERS, SURVEY, WORKSPACE
 from search_compare import dhulapally, suchitra
 
 from siteplan.contracts.common import SourceKind, Status
+from siteplan.contracts.design_brief import ParetoPoint
 from siteplan.contracts.validation import LegalVerdict
 from siteplan.optimizer import optimize
 from siteplan.optimizer.guard import inputs_of, why_refused
@@ -57,7 +58,7 @@ def run(request):
 
 def test_the_search_finds_layouts_on_the_real_site(run):
     name, _, result = run
-    assert 1 <= len(result.alternatives) <= 3, name
+    assert 1 <= len(result.alternatives) <= len(ParetoPoint), name  # one a point at most
     assert all(a.candidate.strategy == "FULL" for a in result.alternatives)
 
 

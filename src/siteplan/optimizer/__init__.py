@@ -6,8 +6,9 @@
   heights, under every reading of the stilt; the whole set, never only the most.
 - interfaces.py: the Strategy and Validator protocols, the search context (site, rules, brief,
   envelope, prototypes, seed, budget) and the time budget every strategy keeps to.
-- objective.py and pareto.py: what a candidate is worth, the Pareto front, and the three
-  alternatives (maximum yield, balanced, conventional with open space) that are different ideas.
+- objective.py and pareto.py: what a candidate is worth, the Pareto front, and the alternatives
+  (maximum yield, balanced, conventional with open space, different ideas; and ROBUST, the layout
+  resting on the fewest open readings, C4-09).
 - guard.py: a candidate whose legal verdict is FAIL is never returned, whatever its score. The
   verdict is stream D's independent validator's (`siteplan.validator`), the default in `optimize`.
 - legacy.py: today's generator as one strategy. The full search over prototypes and positions

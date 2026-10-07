@@ -54,7 +54,16 @@ from siteplan.contracts import accounting as ledger
 from siteplan.contracts import design_brief, prototype, resolved_rules, site_model
 from siteplan.legal import frontage, widths
 from siteplan.optimizer import floors as optimizer_floors
-from siteplan.optimizer.search import build, columns, network, parking_plan, strategy
+from siteplan.optimizer import objective as optimizer_objective
+from siteplan.optimizer.search import (
+    build,
+    columns,
+    fringe,
+    network,
+    parking_plan,
+    road_graph,
+    strategy,
+)
 from siteplan.optimizer.search import fit as search_fit
 from siteplan.optimizer.search import ground as search_ground
 from siteplan.optimizer.search import land as search_land
@@ -655,6 +664,7 @@ REGISTRY: tuple[Constraint, ...] = (
         "and the validator's own copies)",
         ("access.END_M", "access.TOUCH_M", "towers.TOUCH_M", "access_checks.TOUCH_M",
          "optimizer.search.layout.TOUCH_M", "optimizer.search.network.TOUCH_M",
+         "optimizer.objective.TOUCH_M",
          "validator.network.TOUCH_M", "validator.parking.RAMP_TOUCH_M",
          "validator.fire.GATE_TOUCH_M", "validator.network.JOIN_SQM",
          "validator.fire.REACH_MIN_SQM", "validator.shapes.HEAL_M",
@@ -667,19 +677,26 @@ REGISTRY: tuple[Constraint, ...] = (
     Constraint(
         "Roads", "How the full search draws its roads from the blocks: the shortest street, how "
                  "much of a corner the ring road may lose to a slanted boundary, where the "
-                 "entrance is tried and how far the approach may run.",
+                 "entrance is tried and how far the approach may run, how many clusters of "
+                 "blocks stand round rings of their own and how a further one's ring is joined.",
         f"streets at least {network.MIN_STREET_LENGTH_M:g} m long; the ring may lose "
         f"{network.RING_TIP_SQM:g} m² at a corner; gates every {network.GATE_STEP_M:g} m, the "
         f"{network.ENTRANCES_TRIED} shortest approaches checked, each up to "
         f"{network.APPROACH_LONGEST_M:g} m deep and running {network.APPROACH_REACH_SQM:g} m² "
         f"into the ring; an approach of under {network.MIN_APPROACH_SQM:g} m² beyond the ring "
-        f"is the ring itself; the gate at least {network.GATE_DEPTH_M:g} m deep",
+        f"is the ring itself; the gate at least {network.GATE_DEPTH_M:g} m deep; at most "
+        f"{search_layout.MAX_CLUSTERS} clusters, a further one's ring joined by the shortest "
+        f"link found every {network.LINK_STEP_M:g} m along it, and tried in "
+        f"{search_layout.ZONE_ANGLES} directions at most (its configuration's and its own "
+        "ground's)",
         Basis.ENGINE_DESIGN_ASSUMPTION, "none (optimizer.search.network)",
         ("optimizer.search.network.MIN_STREET_LENGTH_M", "optimizer.search.network.RING_TIP_SQM",
          "optimizer.search.network.GATE_STEP_M", "optimizer.search.network.ENTRANCES_TRIED",
          "optimizer.search.network.APPROACH_LONGEST_M",
          "optimizer.search.network.APPROACH_REACH_SQM",
-         "optimizer.search.network.MIN_APPROACH_SQM", "optimizer.search.network.GATE_DEPTH_M"),
+         "optimizer.search.network.MIN_APPROACH_SQM", "optimizer.search.network.GATE_DEPTH_M",
+         "optimizer.search.layout.MAX_CLUSTERS", "optimizer.search.network.LINK_STEP_M",
+         "optimizer.search.layout.ZONE_ANGLES"),
         note="The shortest street is rule 8(m)'s 9 m road width and the gate's depth the 2 m "
              "planted strip, both read from rules.py; using them as a length and a depth is the "
              "engine's. The legacy layout tries its entrance its own way (access.ENTRANCE_STEP_M, "
@@ -968,6 +985,21 @@ REGISTRY: tuple[Constraint, ...] = (
         settles="Nothing: a search breadth; the count is what physically fits.",
     ),
     Constraint(
+        "Parking", "How the full search sizes a cellar to what the need asks (C4-13): a "
+                   "rectangle grown round the ramp, its size found by halving, for the floor the "
+                   "need asks and then, while the cars counted leave it short, for the floor that "
+                   "many cars ask at the density counted and a little more.",
+        f"{parking_plan.CUT_STEPS} halvings; at most {parking_plan.FIT_ROUNDS} car counts, each "
+        f"asking {_pct(parking_plan.FIT_MARGIN)} more floor", Basis.ENGINE_DESIGN_ASSUMPTION,
+        "none (optimizer.search.parking_plan._sized)",
+        ("optimizer.search.parking_plan.CUT_STEPS", "optimizer.search.parking_plan.FIT_ROUNDS",
+         "optimizer.search.parking_plan.FIT_MARGIN"),
+        note="A search precision, never a rule: the cellar the plan keeps holds the need by its "
+             "floor area and by the cars laid out in it, and the validator counts both again on "
+             "the outline as drawn.",
+        settles="Nothing that passes a layout: how close to the need a cellar is cut.",
+    ),
+    Constraint(
         "Parking", "The share of a parking floor that bays and aisles are expected to fill, for "
                    "sizing the cellars before the cars are counted.",
         _pct(grounds.LAYOUT_SHARE), Basis.ENGINE_DESIGN_ASSUMPTION, "none (grounds._attempt)",
@@ -1068,6 +1100,30 @@ REGISTRY: tuple[Constraint, ...] = (
         settles="Nothing: how the options are chosen for variety, not whether one passes.",
     ),
     Constraint(
+        "Towers", "What the objective counts as a leftover fragment when it scores a layout's "
+                  "quality: a piece of ground no use takes and no rule keeps open.",
+        f"{optimizer_objective.FRAGMENT_SQM:g} m² or more", Basis.ENGINE_DESIGN_ASSUMPTION,
+        "none (optimizer.objective._ground_scores)", ("optimizer.objective.FRAGMENT_SQM",),
+        note="A score of the search's (C4-11), never a rule: a layout with fragments fails "
+             "nothing; it ranks lower on quality.",
+        settles="Nothing that passes a layout: which layouts the search prefers.",
+    ),
+    Constraint(
+        "Open space", "What open space the search counts as usable (C4-12): wide enough for a "
+                      "lawn, a court or a play area, and near enough a block for its residents "
+                      "to see and reach it.",
+        f"at least {optimizer_objective.OPEN_WIDE_M:g} m across and within "
+        f"{optimizer_objective.OPEN_REACH_M:g} m of a block", Basis.ENGINE_DESIGN_ASSUMPTION,
+        "none (optimizer.objective.usable_open_sqm; the generator's pocket choice and the "
+        "objective's open-space axis)",
+        ("optimizer.objective.OPEN_WIDE_M", "optimizer.objective.OPEN_REACH_M"),
+        note="A score of the search's, never a rule: the open space the law asks for is any "
+             "pocket 3 m wide and 50 m² (rule 15), which the validator checks; these only decide "
+             "which pockets the generator takes first and how the alternatives rank.",
+        settles="The firm's own idea of a usable park: the width it plans a lawn or play area "
+                "to, and how far from the blocks it would put one.",
+    ),
+    Constraint(
         "Towers", "The three massing strategies shown: maximum yield with no limit; balanced, "
                   "medium blocks of up to this many cores and this length; conventional, "
                   "compact towers of this many cores.",
@@ -1128,7 +1184,9 @@ REGISTRY: tuple[Constraint, ...] = (
         f"up to {_lim.attempts_per_profile} tried, {_lim.judged_per_profile} judged and "
         f"{_lim.per_profile_proposed} proposed; evaluating stops at "
         f"{_pct(strategy.EVALUATE_SHARE)} of the time budget and laying out at "
-        f"{_pct(strategy.LAY_OUT_SHARE)}", Basis.ENGINE_DESIGN_ASSUMPTION,
+        f"{_pct(strategy.LAY_OUT_SHARE)}; the ground the ring road leaves laid with blocks in the "
+        f"configuration's direction and {fringe.FRINGE_DIRECTIONS} of the plot's own",
+        Basis.ENGINE_DESIGN_ASSUMPTION,
         "none (optimizer.search.strategy.Limits, optimizer.search.columns)",
         ("optimizer.search.strategy.Limits.offsets", "optimizer.search.strategy.Limits.heights",
          "optimizer.search.strategy.Limits.laid_per_profile",
@@ -1137,7 +1195,7 @@ REGISTRY: tuple[Constraint, ...] = (
          "optimizer.search.strategy.Limits.per_profile_proposed",
          "optimizer.search.strategy.PITCH_GAP_M", "optimizer.search.strategy.EVALUATE_SHARE",
          "optimizer.search.strategy.LAY_OUT_SHARE", "optimizer.search.columns.STEP_M",
-         "optimizer.search.columns.GAP_SLACK_M"),
+         "optimizer.search.columns.GAP_SLACK_M", "optimizer.search.fringe.FRINGE_DIRECTIONS"),
         note="Search bounds, never rules: a wider search can only add options, and the "
              "validator judges every candidate. A firm's design margin on the gap is added "
              "apart (design_margins.tower_gap_extra_m).",
@@ -1206,18 +1264,28 @@ REGISTRY: tuple[Constraint, ...] = (
         f"heights to {resolved_rules.HEIGHT_TOL_M:g} m; a block {search_layout.EPS_LAND_M:g} m "
         f"inside its ground; slivers under {build.SLIVER_SQM:g} m² to "
         f"{network.RING_CLIP_SQM:g} m² ignored; frontage under {frontage.MIN_ZONE_M:g} m is "
-        "noise", Basis.ENGINE_DESIGN_ASSUMPTION, "none",
+        f"noise; the objective's areas read to {10.0 ** -optimizer_objective.AREA_DECIMALS:g} m²",
+        Basis.ENGINE_DESIGN_ASSUMPTION, "none",
         ("contracts.resolved_rules.HEIGHT_TOL_M", "contracts.validation.TARGET_TOL",
          "legal.non_high_rise.WIDTH_TOL_M", "legal.frontage.MIN_ZONE_M",
          "optimizer.floors.EPS_M", "optimizer.search.build.SLIVER_SQM",
+         "optimizer.search.build.GRID_M",
          "optimizer.search.columns.EPS", "optimizer.search.fit.EPS_M",
          "optimizer.search.ground.MIN_PIECE_SQM", "optimizer.search.layout.EPS_LAND_M",
-         "optimizer.search.network.FILL_SLIVER_SQM", "optimizer.search.network.RING_CLIP_SQM",
+         "optimizer.search.fringe.TIE_M", "optimizer.search.fringe.CONTAIN_TOL_M",
+         "optimizer.search.road_graph.FILL_SLIVER_SQM",
+         "optimizer.search.road_graph.NODE_SNAP_M", "optimizer.search.network.RING_CLIP_SQM",
          "optimizer.search.network.APPROACH_OUTSIDE_SQM", "optimizer.search.network.EPS_M",
          "optimizer.search.parking_plan.EPS_M", "optimizer.search.parking_plan.EDGE_M",
-         "prototypes.legacy.SNAP_M", "adapters.legacy_layout.SLIVER_SQM"),
+         "prototypes.legacy.SNAP_M", "adapters.legacy_layout.SLIVER_SQM",
+         "optimizer.objective.AREA_DECIMALS"),
         note="A height sums floor heights, so 21.000000000000004 m is 21 m. A legacy tower is "
-             "snapped to a micrometre when it becomes a prototype, so shared edges are one.",
+             "snapped to a micrometre when it becomes a prototype, so shared edges are one. The "
+             f"fringe ranks distances and places within {fringe.TIE_M:g} m as equal and counts a "
+             f"block within {fringe.CONTAIN_TOL_M:g} m of its ground as on it, so the last digits "
+             "of the geometry never choose between equals. Two road ends within "
+             f"{road_graph.NODE_SNAP_M:g} m are one node of the full search's road graph. The "
+             f"search's ledger is drawn on the validator's {build.GRID_M:g} m grid.",
         settles="Nothing: tolerances, all well under a drawing's precision.",
     ),
     Constraint(

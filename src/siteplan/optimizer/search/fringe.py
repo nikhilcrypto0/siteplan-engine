@@ -20,20 +20,24 @@ Blocks are placed one at a time, the one that adds the most saleable area first 
 equals, the nearer the ring, until the fringe holds no more or the next would leave less free
 ground than the club house, the ramp, the open space and the facilities are expected to need
 (`Run.reserve_target_sqm`, the estimate the search keeps an end of the plot by): what the rules
-ask of the layout comes before another block. The work is done in the turned frame (frame.py),
-where every block stands upright as in a column; any prototype of the kit may stand on the
-fringe, whatever its depth, since no column has to take it.
+ask of the layout comes before another block. Of each kind of block only the nearest few places
+are tried; a kind none of whose places serves gives way to a smaller or a lower one. The work is
+done in a turned frame (frame.py), where every block stands upright as in a column: the
+configuration's and the plot's own directions, the most valuable fringe kept (C4-05). Any
+prototype of the kit may stand on the fringe, whatever its depth, since no column has to take
+it.
 """
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from itertools import groupby
 
 import numpy as np
 import shapely
-from shapely.geometry import Polygon, box
+from shapely.geometry import LineString, Polygon, box
 from shapely.geometry.base import BaseGeometry
 from shapely.ops import polylabel, unary_union
 
@@ -42,20 +46,39 @@ from siteplan.contracts.resolved_rules import HEIGHT_TOL_M
 from siteplan.geometry import opening
 from siteplan.optimizer.search.columns import STEP_M, Choice, Standing
 from siteplan.optimizer.search.fit import fit_rectangle
-from siteplan.optimizer.search.frame import Frame
+from siteplan.optimizer.search.frame import Frame, distinct_angles
 from siteplan.optimizer.search.land import EMPTY, Land, Plot, erode, grow, polygons, setback_land
-from siteplan.optimizer.search.network import ENTRANCES_TRIED, EPS_M, TOUCH_M, Cluster
+from siteplan.optimizer.search.network import ENTRANCES_TRIED, EPS_M, TOUCH_M
 from siteplan.optimizer.search.quantities import Quantities
-from siteplan.optimizer.search.readings import FloorClass
+from siteplan.optimizer.search.readings import FloorClass, resources
+from siteplan.towers import orientations
+
+TIE_M = 0.001  # distances and grid positions this close rank as equal
+CONTAIN_TOL_M = 1e-6  # a block whose edge lies on its ground's edge stands on it
+FRINGE_DIRECTIONS = 2  # the plot's own directions the fringe is laid in besides the
+# configuration's (C4-05)
+
+
+def _tied(value: float) -> int:
+    """A distance or a position as it is ranked: within TIE_M of another is the same, so the
+    last digits of the geometry never choose between equals."""
+    return round(value / TIE_M)
 
 
 @dataclass(frozen=True)
 class Fringed:
-    """A block on the fringe: where it stands (in the turned frame) and the pathway that reaches
-    it, in the survey's frame (empty when it stands against the ring road itself)."""
+    """A block on the fringe: where it stands (in the turned frame) and the centre line of the
+    pathway that reaches it, from the block's face to the end of its paving in the ring, in the
+    survey's frame (None when it stands against the ring road itself). The pathway is drawn from
+    it (network.pathway_road)."""
 
     standing: Standing
-    pathway: BaseGeometry
+    path: LineString | None
+
+
+def pathway_width_m(q: Quantities) -> float:
+    """The width a pathway is drawn at: the rule's, and a hair over, as every road here is."""
+    return q.pathway_m + 2 * EPS_M
 
 
 def pathway_serves(q: Quantities, cls: FloorClass) -> bool:
@@ -82,14 +105,15 @@ def options(kit: Sequence[TowerPrototype], classes: Mapping[str, Sequence[FloorC
             max_floors: int, q: Quantities) -> list[Choice]:
     """The blocks the fringe may take: every prototype of the kit, whatever its depth, at each
     floor count below the high-rise height the profile leaves open, up to the configuration's
-    tallest. Of the counts that ask the same of the ground only the tallest is kept, once among
-    those a pathway may reach and once among those only a road reaches."""
+    tallest. Of the counts that ask and rest on the same (`readings.resources`, and its front
+    setback) only the tallest is kept, once among those a pathway may reach and once among those
+    only a road reaches."""
     found = []
     for prototype in kit:
         best: dict[tuple, FloorClass] = {}
         for cls in classes.get(prototype.id, ()):  # lowest first: the tallest of a kind wins
             if not cls.high_rise and cls.floors <= max_floors:
-                best[(*_key(cls), pathway_serves(q, cls))] = cls
+                best[(*_key(cls), *resources(cls), pathway_serves(q, cls))] = cls
         found += [Choice(prototype, cls, prototype.length_m, prototype.depth_m,
                          prototype.per_floor.saleable_sqft * cls.floors) for cls in best.values()]
     return found
@@ -109,20 +133,50 @@ def own_lands(plot: Plot, q: Quantities, classes: Sequence[FloorClass]
                                         side + q.setback_margin_m) for front, side in kinds}
 
 
-def place(plot: Plot, q: Quantities, frame: Frame, land: Land, cluster: Cluster,
-          standing: Sequence[Standing], choices: Sequence[Choice], *,
+def place(plot: Plot, q: Quantities, frame: Frame, land: Land, rings: BaseGeometry,
+          hulls: BaseGeometry, standing: Sequence[Standing], choices: Sequence[Choice], *,
           own: Mapping[tuple[float, float], BaseGeometry], kept_clear: BaseGeometry | None,
           roads_in_setback: bool, eps_m: float, room_sqm: float) -> list[Fringed]:
     """The blocks the fringe of this layout holds, most valuable first, each with the pathway that
-    reaches it. `standing` are the blocks of the columns; `own` the ground each kind of block
-    stands on (`own_lands`); `roads_in_setback` whether the profile lets a road, and so a pathway,
-    run inside the setback; `eps_m` how far inside its ground a block stands, so no rounding puts
-    it over a line; `room_sqm` the free ground the rest of the layout is expected to need, which no
-    block takes."""
+    reaches it. `rings` are the ring roads' ground (and the links between them), `hulls` the
+    clusters' outlines; `standing` are the blocks of the columns; `own` the ground each kind of
+    block stands on (`own_lands`); `roads_in_setback` whether the profile lets a road, and so a
+    pathway, run inside the setback; `eps_m` how far inside its ground a block stands, so no
+    rounding puts it over a line; `room_sqm` the free ground the rest of the layout is expected
+    to need, which no block takes.
+
+    The fringe is laid in the configuration's direction and (C4-05) in up to FRINGE_DIRECTIONS of
+    the plot's own, along and across its longest edges, where the ground the columns leave often
+    runs; the most valuable is kept, the configuration's between equals, and a block laid in
+    another direction carries it (`Standing.frame`)."""
     if not choices:
         return []
-    ring = frame.to_turned(cluster.ring)
-    hull = frame.to_turned(cluster.hull)
+    given = dict(own=own, kept_clear=kept_clear, roads_in_setback=roads_in_setback, eps_m=eps_m,
+                 room_sqm=room_sqm)
+    best = _place_in(plot, q, frame, land, rings, hulls, standing, choices, **given)
+    framed = [s if s.frame is not None else replace(s, frame=frame) for s in standing]
+    for angle in distinct_angles([frame.angle_deg, *orientations(plot.net)])[
+            1:1 + FRINGE_DIRECTIONS]:
+        turned = Frame(angle)
+        found = _place_in(plot, q, turned, land, rings, hulls, framed, choices, **given)
+        if _value(found) > _value(best):
+            best = [replace(f, standing=replace(f.standing, frame=turned)) for f in found]
+    return best
+
+
+def _value(placed: Sequence[Fringed]) -> float:
+    """The saleable area a fringe adds, summed exactly, so the same blocks laid in another order
+    add the same."""
+    return math.fsum(f.standing.choice.value for f in placed)
+
+
+def _place_in(plot: Plot, q: Quantities, frame: Frame, land: Land, rings: BaseGeometry,
+              hulls: BaseGeometry, standing: Sequence[Standing], choices: Sequence[Choice], *,
+              own: Mapping[tuple[float, float], BaseGeometry], kept_clear: BaseGeometry | None,
+              roads_in_setback: bool, eps_m: float, room_sqm: float) -> list[Fringed]:
+    """The fringe laid upright in one frame, one block at a time, as `place` describes."""
+    ring = frame.to_turned(rings)
+    hull = frame.to_turned(hulls)
     water = [frame.to_turned(plot.excluded)] if not plot.excluded.is_empty else []
     free = frame.to_turned(plot.net).difference(unary_union(
         [frame.to_turned(land.zone), frame.to_turned(land.strip), hull, ring, *water]))
@@ -130,7 +184,7 @@ def place(plot: Plot, q: Quantities, frame: Frame, land: Land, cluster: Cluster,
         return []
     kept = [*water, *([frame.to_turned(kept_clear)] if kept_clear is not None else [])]
     taken = unary_union([hull, ring, *kept])
-    blocks = [(box(s.x0, s.y0, s.x1, s.y1), s.choice.cls) for s in standing]
+    blocks = [(_in_frame(s, frame), s.choice.cls) for s in standing]
     by_key = {_key(c.cls): c.cls for c in choices}
     lands = {}
     for key, cls in by_key.items():
@@ -147,16 +201,25 @@ def place(plot: Plot, q: Quantities, frame: Frame, land: Land, cluster: Cluster,
         pick = _best(choices, fits, ring, paths, q, free, room_sqm)
         if pick is None:
             return placed
-        footprint, choice, pathway = pick
+        footprint, choice, pathway, path = pick
         x0, y0, _, _ = footprint.bounds
         placed.append(Fringed(Standing(choice, -1, x0, y0),
-                              frame.to_survey(pathway) if not pathway.is_empty else EMPTY))
+                              frame.to_survey(path) if path is not None else None))
         lands = {key: ground.difference(unary_union([
             grow(footprint, need_m(q, choice.cls, by_key[key])), pathway]))
             for key, ground in lands.items()}
         fits = _Fits(lands, ring)
         paths = paths.difference(grow(footprint, eps_m))
         free = free.difference(_cost(footprint, choice, pathway))
+
+
+def _in_frame(standing: Standing, frame: Frame) -> Polygon:
+    """A block of the columns in this turned frame: upright when it was laid in it, turned when
+    its cluster was laid in a frame of its own."""
+    upright = box(standing.x0, standing.y0, standing.x1, standing.y1)
+    if standing.frame is None or standing.frame.angle_deg == frame.angle_deg:
+        return upright
+    return frame.to_turned(standing.frame.to_survey(upright))
 
 
 def _cost(footprint: Polygon, choice: Choice, pathway: BaseGeometry) -> BaseGeometry:
@@ -179,15 +242,16 @@ def _pathway_ground(plot: Plot, frame: Frame, land: Land, hull: BaseGeometry,
 
 def _best(choices: Sequence[Choice], fits: _Fits, ring: BaseGeometry, paths: BaseGeometry,
           q: Quantities, free: BaseGeometry, room_sqm: float
-          ) -> tuple[Polygon, Choice, BaseGeometry] | None:
+          ) -> tuple[Polygon, Choice, BaseGeometry, LineString | None] | None:
     """The most valuable block the fringe still holds that a road or a pathway reaches and that
     leaves the free ground the rest of the layout needs, the nearer the ring the better between
-    equals, and its pathway (empty when none is needed). Only the first few are tried, as the
-    entrance tries its nearest few, so the blocks of less value are looked at only while tries
-    are left."""
-    tried = 0
+    equals, and its pathway and the pathway's centre line (empty and None when none is needed).
+    Of each kind of block (each value) only the nearest few places are tried, as the entrance
+    tries its nearest few; a kind none of whose places serves gives way to the next, a smaller or
+    a lower block (C4-05), where the tries once ran out for all of them together."""
     by_value = sorted(range(len(choices)), key=lambda i: -choices[i].value)
     for _, same in groupby(by_value, key=lambda i: choices[i].value):
+        tried = 0
         found = []
         for index in same:
             boxes, distances = fits.of(choices[index])
@@ -195,17 +259,22 @@ def _best(choices: Sequence[Choice], fits: _Fits, ring: BaseGeometry, paths: Bas
             for footprint, distance in zip(boxes, distances, strict=True):
                 if distance <= TOUCH_M or by_path:
                     x0, y0, _, _ = footprint.bounds
-                    found.append((float(distance), y0, x0, index, footprint))
-        for distance, _, _, index, footprint in sorted(found, key=lambda f: f[:4]):
+                    found.append((_tied(float(distance)), _tied(y0), _tied(x0), index,
+                                  footprint, float(distance)))
+        for _, _, _, index, footprint, distance in sorted(found, key=lambda f: f[:4]):
             if tried >= ENTRANCES_TRIED:
-                return None
+                break
             tried += 1
-            pathway = EMPTY if distance <= TOUCH_M else _pathway(footprint, ring, paths, q)
-            if pathway is None:
-                continue
+            path: LineString | None = None
+            pathway: BaseGeometry = EMPTY
+            if distance > TOUCH_M:
+                found_path = _pathway(footprint, ring, paths, q)
+                if found_path is None:
+                    continue
+                pathway, path = found_path
             if free.difference(_cost(footprint, choices[index], pathway)).area < room_sqm:
                 continue
-            return footprint, choices[index], pathway
+            return footprint, choices[index], pathway, path
     return None
 
 
@@ -238,55 +307,69 @@ def _grid(ground: BaseGeometry, rooms: Sequence[Polygon], depth_m: float, length
           ) -> np.ndarray:
     """Every upright block of this size, on the search's grid, that lies wholly on the ground:
     `rooms` are the pieces of the ground at least the block's depth wide."""
+    on = ground.buffer(CONTAIN_TOL_M, join_style="mitre")
+    shapely.prepare(on)
     out = []
     for piece in rooms:
         minx, miny, maxx, maxy = piece.bounds
-        if maxx - minx < depth_m or maxy - miny < length_m:
+        if maxx - minx < depth_m - CONTAIN_TOL_M or maxy - miny < length_m - CONTAIN_TOL_M:
             continue
-        xs = np.arange(minx, maxx - depth_m + EPS_M, STEP_M)
-        ys = np.arange(miny, maxy - length_m + EPS_M, STEP_M)
+        xs = _steps(minx, maxx - depth_m)
+        ys = _steps(miny, maxy - length_m)
         x, y = (a.ravel() for a in np.meshgrid(xs, ys))
         boxes = shapely.box(x, y, x + depth_m, y + length_m)
-        shapely.prepare(ground)
-        out.append(boxes[shapely.contains(ground, boxes)])
+        out.append(boxes[shapely.contains(on, boxes)])
     return np.concatenate(out) if out else np.array([])
 
 
+def _steps(low: float, high: float) -> np.ndarray:
+    """A block's positions along one axis of its ground: every STEP_M from `low`, and `high`
+    itself, so it may stand flush against either edge (C4-05: against the far edge, a ring road
+    there was reached only when the ground's width came to a whole number of steps)."""
+    steps = np.arange(low, high + EPS_M, STEP_M)
+    return steps if len(steps) and high - steps[-1] <= TIE_M else np.append(steps, high)
+
+
 def _pathway(block: Polygon, ring: BaseGeometry, paths: BaseGeometry, q: Quantities
-             ) -> Polygon | None:
-    """The shortest straight pathway from a face of the block to the ring road on free ground:
-    as wide as the rule asks (a hair over, as every road here is drawn), and at least as long as
-    it is wide, running on into the ring where the ring is nearer than that, so that it measures
-    its width on its own. Tried at both ends and the middle of each face."""
-    width = q.pathway_m + 2 * EPS_M
+             ) -> tuple[Polygon, LineString] | None:
+    """The shortest straight pathway from a face of the block to the ring road on free ground,
+    and its centre line from the face: as wide as the rule asks (`pathway_width_m`), and at least
+    as long as it is wide, running on into the ring where the ring is nearer than that, so that it
+    measures its width on its own. Tried at both ends and the middle of each face."""
+    width = pathway_width_m(q)
     bounds = block.bounds
-    best: tuple[float, Polygon] | None = None
+    best: tuple[float, Polygon, LineString] | None = None
     for axis in (1, 0):  # off the faces across y, then those across x
         for sign in (1, -1):
-            found = _from_face(bounds, axis, sign, width, ring, paths)
+            found = _from_face(bounds, axis, sign, width, ring, paths, q.pathway_max_length_m)
             if found is not None and (best is None or found[0] < best[0]):
                 best = found
-    return best[1] if best else None
+    return (best[1], best[2]) if best else None
 
 
 def _from_face(bounds: tuple[float, float, float, float], axis: int, sign: int, width: float,
-               ring: BaseGeometry, paths: BaseGeometry) -> tuple[float, Polygon] | None:
+               ring: BaseGeometry, paths: BaseGeometry, longest_m: float
+               ) -> tuple[float, Polygon, LineString] | None:
     """The shortest pathway off one face of a block (the face whose outward normal runs `sign`
     along `axis`, 0 for x and 1 for y), at either end of the face or its middle, that runs on free
-    ground to the ring: how far the ring is, and the pathway."""
+    ground to the ring, no longer than `longest_m` (NBC 4.3.2.2's 30 m, short of it by the drawing
+    tolerance: C4-07, where the fringe once drew a pathway as long as the ring was far): how far
+    the ring is, the pathway and its centre line."""
     low, high = bounds[1 - axis], bounds[3 - axis]  # the face's own extent
     if high - low < width:
         return None
-    best: tuple[float, Polygon] | None = None
+    best: tuple[float, Polygon, LineString] | None = None
     for start in dict.fromkeys((low, (low + high - width) / 2, high - width)):
         found = _toward_ring(bounds, axis, sign, start, width, ring)
         if found is None:
             continue
-        gap, pathway = found
+        gap, pathway, _ = found
+        if gap > longest_m - EPS_M:
+            continue
         if pathway.difference(ring).difference(paths).area > EPS_M * width:
             continue
         if best is None or gap < best[0]:
-            best = (gap, pathway)
+            best = found
     return best
 
 
@@ -335,10 +418,11 @@ def _widest(ground: BaseGeometry) -> float:
 
 
 def _toward_ring(bounds: tuple[float, float, float, float], axis: int, sign: int, start: float,
-                 width: float, ring: BaseGeometry) -> tuple[float, Polygon] | None:
+                 width: float, ring: BaseGeometry) -> tuple[float, Polygon, LineString] | None:
     """A pathway `width` wide from one face of a block, at `start` along it, to the ring road:
-    how far the ring is from the face, and the pathway, which runs that far and on into the ring
-    (as long as it is wide at least). None when the ring is not that way."""
+    how far the ring is from the face, the pathway, which runs that far and on into the ring (as
+    long as it is wide at least), and its centre line from the face. None when the ring is not
+    that way."""
     x0, y0, x1, y1 = bounds
     rx0, ry0, rx1, ry1 = ring.bounds
     face = (y1 if sign > 0 else y0) if axis == 1 else (x1 if sign > 0 else x0)
@@ -356,4 +440,8 @@ def _toward_ring(bounds: tuple[float, float, float, float], axis: int, sign: int
     cx0, cy0, cx1, cy1 = cut.bounds
     near = (cy0 if sign > 0 else cy1) if axis == 1 else (cx0 if sign > 0 else cx1)
     gap = abs(near - face)
-    return gap, strip(max(gap + TOUCH_M, width + EPS_M))
+    length = max(gap + TOUCH_M, width + EPS_M)
+    middle, end = start + width / 2, face + sign * length
+    axis_line = LineString([(middle, face), (middle, end)] if axis == 1
+                           else [(face, middle), (end, middle)])
+    return gap, strip(length), axis_line

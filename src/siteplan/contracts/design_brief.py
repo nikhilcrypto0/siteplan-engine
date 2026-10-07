@@ -68,6 +68,7 @@ class ParetoPoint(StrEnum):
     MAX_YIELD = "MAX_YIELD"
     BALANCED = "BALANCED"
     CONVENTIONAL_OPEN_SPACE = "CONVENTIONAL_OPEN_SPACE"
+    ROBUST = "ROBUST"  # resting on the fewest open readings of the rules (C4-09)
 
 
 class Priority(StrEnum):
@@ -78,6 +79,9 @@ class Priority(StrEnum):
     OPEN_SPACE = "open_space"
     MIX_FIT = "mix_fit"
     CONVENTIONALITY = "conventionality"
+    SITE_USE = "site_use"  # the ground put to a use or kept open by a rule (C4-11)
+    QUALITY = "quality"  # simple roads, repeated blocks one way, few leftover pieces (C4-11)
+    PREFERENCE = "preference"  # how well the brief's soft preferences are met (C4-16)
 
 
 class UnitTarget(Part):

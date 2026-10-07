@@ -24,8 +24,9 @@ from shapely.geometry import box
 from shapely.geometry.base import BaseGeometry
 
 from siteplan.contracts import TowerPrototype
+from siteplan.optimizer.search.frame import Frame
 from siteplan.optimizer.search.land import polygons
-from siteplan.optimizer.search.readings import FloorClass
+from siteplan.optimizer.search.readings import FloorClass, resources
 
 STEP_M = 1.0  # the grid the positions along a column are searched on
 EPS = 1e-9
@@ -60,12 +61,15 @@ class Choice:
 
 @dataclass(frozen=True)
 class Standing:
-    """A block placed: its choice, its column and where it starts along y."""
+    """A block placed: its choice, its column and where it starts along y, in the turned frame of
+    the configuration, or in a frame of its own when its cluster is turned to its own ground
+    (C4-03)."""
 
     choice: Choice
     column: int
     x0: float  # the column's left edge, in the turned frame
     y0: float
+    frame: Frame | None = None  # the frame it was laid in, when not the configuration's
 
     @property
     def y1(self) -> float:
@@ -79,14 +83,15 @@ class Standing:
 def choices_for(prototypes: Sequence[TowerPrototype],
                 classes: Mapping[str, Sequence[FloorClass]]) -> list[Choice]:
     """Every block that may stand, for the prototypes and the floor counts each leaves open. Of the
-    floor counts that ask the same of the ground (the same setback and gap) only the tallest is
-    kept: the others add nothing but a lower yield."""
+    floor counts that ask and rest on the same (`readings.resources`) only the tallest is kept:
+    the others add nothing but a lower yield. (C4-06: the setback and gap alone once hid a shorter
+    count that NBC's own line does not hold to its fire access.)"""
     found = []
     for prototype in prototypes:
-        by_ground: dict[tuple[float, float], FloorClass] = {}
+        by_resources: dict[tuple, FloorClass] = {}
         for cls in classes[prototype.id]:
-            by_ground[(ground_key(cls), cls.gap_m)] = cls  # lowest first: the tallest wins
-        for cls in by_ground.values():
+            by_resources[resources(cls)] = cls  # lowest first: the tallest wins
+        for cls in by_resources.values():
             found.append(Choice(prototype, cls, prototype.length_m, prototype.depth_m,
                                 prototype.per_floor.saleable_sqft * cls.floors))
     return found
