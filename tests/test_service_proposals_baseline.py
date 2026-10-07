@@ -1,8 +1,9 @@
 """What the service's full search proposes on made-up land, which three it shows, what the
 architect is asked and what the model is answered: pinned on main (0e2ffa2) before a run kept
 every proposal, so that keeping them is shown to change none of it; re-pinned on contracts 1.3
-(2026-10-06), where NBC 4.6 holds a block over the cellar as a special building and the validator
-fails five layouts whose low blocks have no fire band (docs/behaviour-changes.md).
+(2026-10-06), where the search keeps its cellar out from under blocks below 21 m, so the same
+twelve are proposed and the model is answered as on main; only the digests move
+(docs/behaviour-changes.md).
 
 The values pin exact output on the locked dependencies (uv.lock). They move only with a normative
 replacement and an entry in docs/behaviour-changes.md.
@@ -26,21 +27,6 @@ TEST_CLASS = "characterization"
 PINNED = {
     "notes": [
         "FULL: 384 configurations evaluated, 112 laid out, 24 judged by the validator, 12 proposed",
-        "FULL: the validator failed 5 layout(s): full-not_counted-ALL-58: Fire access: T3: "
-        "something stands within 6 m of it (a tot-lot 661.0 m², the planted strip 35.4 m²); part "
-        "of the 6 m round it is not a road or fire lane; 4 of 4 corner turns blocked (a tot-lot "
-        "70.6 m², the planted strip 9.4 m², ground off the plot 4.4 m²); Organized open space "
-        "(tot-lot): counted+same_kind_only: 665.4 m² counts of 1,836.0 m² drawn and 168.0 m² of "
-        "facilities; counted+any_open_recreation: 1,262.1 m² counts of 1,836.0 m² drawn and 840.3 "
-        "m² of facilities; not_counted+same_kind_only: 1,017.2 m² counts of 1,836.0 m² drawn and "
-        "168.0 m² of facilities; not_counted+any_open_recreation: 1,649.5 m² counts of 1,836.0 m² "
-        "drawn and 840.3 m² of facilities; full-not_counted-ALL-59: Fire access: T3: something "
-        "stands within 6 m of it (a tot-lot 549.7 m², the planted strip 35.4 m²); part of the 6 m "
-        "round it is not a road or fire lane; 4 of 4 corner turns blocked (a tot-lot 61.6 m², the "
-        "planted strip 9.4 m², ground off the plot 4.4 m²); full-not_counted-ALL-60: Fire access: "
-        "T3: something stands within 6 m of it (the planted strip 123.4 m², ground off the plot "
-        "92.1 m²); part of the 6 m round it is not a road or fire lane; 3 of 4 corner turns "
-        "blocked (the planted strip 19.6 m², ground off the plot 18.3 m²)",
         "FULL: 3 of 12 proposed hold under every reading of the open questions; the others each "
         "name the readings they rest on",
         "FULL: every layout leaves the height above sea level and the 45 t loading of the paving "
@@ -54,20 +40,20 @@ PINNED = {
         "full-ALL-allowed-33",
         "full-not_counted-ALL-57",
         "full-ALL-allowed-31",
-        "full-not_counted-ALL-61",
         "full-not_counted-ALL-62",
         "full-ALL-ALL-1",
+        "full-not_counted-ALL-59",
         "full-ALL-ALL-5",
         "full-ALL-ALL-6",
     ],
-    "proposed_sha256": "d7e29f0dab8992c81736874edc5472281b3cdd34c903bfada08cf870bb0c4a5a",
+    "proposed_sha256": "d887917403f20ed2ac8e81350780a0f26af0c570378d130596970ac13cd11746",
     "shown": [
         ["full-not_counted-allowed-87", "BALANCED"],
         ["full-not_counted-allowed-85", "MAX_YIELD"],
         ["full-ALL-ALL-5", "CONVENTIONAL_OPEN_SPACE"],
     ],
     "shown_digests": ["ff6ec6e20473d155", "e721df66e0a346b3", "0e4781844015c539"],
-    "answer_sha256": "73a02f167db5240facc9176aacd8f02f132c1a0a246e163cd6efc7dfe7010b88",
+    "answer_sha256": "73c8a93310bdf108b43acd99987b14fe184fe004589b789bffbfc1f694e2aa54",
     "approval_page_sha256": "cd3ebee2af46849756df643999df9b16d2cbc91d92c45101983782cff1eb0181",
 }
 PROPOSALS: list = []
