@@ -1,5 +1,6 @@
-"""Small geometry helpers shared by the survey readers, and the one reading of a compass side
-that the envelope, the search and the validator all take (`faces`)."""
+"""Small geometry helpers shared by the survey readers, the one reading of a compass side that
+the envelope, the search and the validator all take (`faces`), and how much of a block faces a
+road (`frontage`), which the search and its objective share."""
 
 from __future__ import annotations
 
@@ -7,7 +8,8 @@ import math
 from dataclasses import dataclass
 
 from shapely.geometry import LineString, Point, Polygon
-from shapely.ops import unary_union
+from shapely.geometry.base import BaseGeometry
+from shapely.ops import linemerge, unary_union
 
 COMPASS_DEG = {"N": 0, "NE": 45, "E": 90, "SE": 135, "S": 180, "SW": 225, "W": 270, "NW": 315}
 # A stretch of boundary faces a compass side when its outward normal is within FACING_DEG of the
@@ -111,3 +113,17 @@ def strip_along_side(boundary: Polygon, side: str, width_m: float) -> Polygon:
     if not parts:
         raise ValueError(f"A {width_m:g} m strip off the {side} side leaves no plot.")
     return max(parts, key=lambda p: p.area)
+
+
+def frontage(footprint: Polygon, near: BaseGeometry, within_m: float) -> float:
+    """The longest unbroken stretch of a block's outline within `within_m` of the ground given (a
+    road, a fire lane, a pathway): how much of the block faces it, where a corner that only
+    touches it has almost none. The validator measures the same with its own copy."""
+    if footprint.is_empty or near.is_empty:
+        return 0.0
+    close = footprint.exterior.intersection(near.buffer(within_m))
+    runs = [g for g in getattr(close, "geoms", [close]) if isinstance(g, LineString) and g.length]
+    if not runs:
+        return 0.0
+    merged = linemerge(runs)  # a stretch over the ring's first point comes back in two pieces
+    return max(g.length for g in getattr(merged, "geoms", [merged]))

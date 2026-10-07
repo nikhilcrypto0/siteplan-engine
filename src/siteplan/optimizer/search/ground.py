@@ -19,9 +19,9 @@ import math
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from shapely.geometry import LineString, Point, Polygon
+from shapely.geometry import Point, Polygon
 from shapely.geometry.base import BaseGeometry
-from shapely.ops import linemerge, unary_union
+from shapely.ops import unary_union
 
 from siteplan.contracts import ResolvedRules
 from siteplan.contracts.common import Surface
@@ -76,20 +76,6 @@ def zones_of(footprints: Sequence[Polygon], gaps_m: Sequence[float], roads: Base
     return Zones(unary_union(list(footprints)) if footprints else EMPTY,
                  unary_union([grow(f, reach_m) for f in high]) if high else EMPTY,
                  roads, lanes, gap_zones(footprints, gaps_m), turns, pathways)
-
-
-def frontage(footprint: Polygon, near: BaseGeometry, within_m: float) -> float:
-    """The longest unbroken stretch of a block's outline within `within_m` of the ground given (a
-    road, a fire lane, a pathway): how much of the block faces it, where a corner that only
-    touches it has almost none. The validator measures the same with its own copy."""
-    if footprint.is_empty or near.is_empty:
-        return 0.0
-    close = footprint.exterior.intersection(near.buffer(within_m))
-    runs = [g for g in getattr(close, "geoms", [close]) if isinstance(g, LineString) and g.length]
-    if not runs:
-        return 0.0
-    merged = linemerge(runs)  # a stretch over the ring's first point comes back in two pieces
-    return max(g.length for g in getattr(merged, "geoms", [merged]))
 
 
 def open_ground(plot: Plot, land: Land, zones: Zones) -> BaseGeometry:

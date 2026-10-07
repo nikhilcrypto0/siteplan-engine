@@ -40,10 +40,10 @@ from shapely.geometry import Polygon
 from shapely.geometry.base import BaseGeometry
 
 from siteplan import validator as independent
-from siteplan.contracts import CandidateLayout, ValidationReport
+from siteplan.contracts import CandidateLayout, DesignBrief, ValidationReport
 from siteplan.optimizer.interfaces import Budget, Proposal, SearchContext, Validator
 from siteplan.optimizer.objective import Scores, measure
-from siteplan.optimizer.pareto import Scored, pareto_front, same_idea, select
+from siteplan.optimizer.pareto import Scored, leaders, pareto_front, same_idea, select
 from siteplan.optimizer.search import fringe
 from siteplan.optimizer.search.build import build_candidate
 from siteplan.optimizer.search.columns import Choice
@@ -341,7 +341,7 @@ class FullSearchStrategy:
         order = []
         for key in dict.fromkeys(profile.key for _, profile, _ in drawn):  # a quota each
             order += _to_judge([d for d in drawn if d[1].key == key],
-                               self.limits.judged_per_profile)
+                               self.limits.judged_per_profile, brief)
         order.sort(key=lambda d: (-d[0].yield_score, d[2].candidate_id))  # the best first
         judged: list[Judged] = []
         for scores, profile, candidate in order:
@@ -402,15 +402,20 @@ def _planning_notes(run: Run) -> list[str]:
     return []
 
 
-def _to_judge(pool: list[tuple], quota: int) -> list[tuple]:
+def _to_judge(pool: list[tuple], quota: int, brief: DesignBrief) -> list[tuple]:
     """Which of one profile's layouts the validator judges (C4-09): the front of the objective's
-    axes first (the most saleable, the most open space, the most conventional, and every layout
-    between them nothing beats on all), then the rest by yield; a layout that is the same idea as
-    one already taken (pareto.same_idea) waits until no other is left. The six judged were the six
-    most saleable, which a profile could fill with copies of one scheme a step apart."""
-    front = {id(s.candidate) for s in pareto_front([Scored(c, sc) for sc, _, c in pool])}
-    ranked = sorted(pool, key=lambda d: (id(d[2]) not in front, -d[0].yield_score,
-                                         d[2].candidate_id))
+    axes first, and of it first the best for each point the brief asks for (pareto.leaders: the
+    most saleable, the most open and conventional, the compromise; C4-11, where the front grew
+    wider than the quota), then the rest of the front by yield, then the rest by yield; a layout
+    that is the same idea as one already taken (pareto.same_idea) waits until no other is left.
+    The six judged were the six most saleable, which a profile could fill with copies of one
+    scheme a step apart."""
+    scored = [Scored(c, sc) for sc, _, c in pool]
+    front = {id(s.candidate) for s in pareto_front(scored)}
+    first = [id(s.candidate) for s in leaders(scored, brief)]
+    ranked = sorted(pool, key=lambda d: (first.index(id(d[2])) if id(d[2]) in first
+                                         else len(first), id(d[2]) not in front,
+                                         -d[0].yield_score, d[2].candidate_id))
     taken: list[tuple] = []
     waiting: list[tuple] = []
     for d in ranked:

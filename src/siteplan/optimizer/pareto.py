@@ -12,14 +12,18 @@ from those already chosen:
   candidate whose readings are known (its validation report read) may fill it, a different idea
   as every alternative is; it is left unfilled when a layout chosen before it already holds under
   every reading;
-- CONVENTIONAL_OPEN_SPACE: the most conventional blocks with the most open space;
+- CONVENTIONAL_OPEN_SPACE: the most conventional blocks with the most open space, in the plainest
+  scheme (the objective's quality: little road, blocks repeated and running one way, few leftover
+  pieces; C4-11);
 - BALANCED: the compromise nearest the best on every axis, weighted by the brief's priorities.
 
 The extremes are filled first, the layout of least legal dependency right after the most
 saleable so that no other point takes it first, and the compromise takes the best of what they
 leave, so it stands between them rather than beside the first of them. The alternatives come
 back in the order the brief lists its points. When the brief asks for more options than it has
-points, the best remaining different ideas by yield follow, untagged.
+points, the best remaining different ideas by yield follow, untagged. Between layouts a point's
+own measure ties on, the one leaving less ground to no use is taken (site use, C4-11); the
+compromise weighs site use already.
 
 Two layouts are one idea when they have as many towers running the same way on mostly the same
 ground, whatever their height: one floor less is not another scheme. A point nothing different
@@ -175,6 +179,23 @@ def select(pool: Sequence[Scored], brief: DesignBrief) -> Selection:
     return Selection(tuple(picks), tuple(unfilled), tuple(front))
 
 
+def leaders(pool: Sequence[Scored], brief: DesignBrief) -> list[Scored]:
+    """Before any layout is judged: for each point the brief asks for whose measure needs no
+    validation report (all but ROBUST), the front's best by that point's own measure, each once,
+    in fill order. The front of the objective's seven axes can be wider than a profile's quota of
+    judged layouts, and taking it by yield alone passes over the most open one (C4-11)."""
+    front = pareto_front(pool)
+    keys = _point_keys(pool, brief)
+    found: list[Scored] = []
+    for point in FILL_ORDER:
+        if point is ParetoPoint.ROBUST or point not in brief.objectives.pareto or not front:
+            continue
+        best = min(front, key=lambda s, key=keys[point]: (*key(s), s.candidate.candidate_id))
+        if not any(best is f for f in found):
+            found.append(best)
+    return found
+
+
 def _relabelled(picks: list[Pick], keys: dict[ParetoPoint, Key]) -> list[Pick]:
     """The same candidates under the labels that serve the points best, earlier points first.
     The fill gave each point its best candidate, so only an exact tie on an earlier point can
@@ -203,11 +224,14 @@ def _point_keys(pool: Sequence[Scored], brief: DesignBrief) -> dict[ParetoPoint,
         return sum(gaps) / sum(weights)
 
     open_space, conventional = AXES.index("open_space"), AXES.index("conventionality")
+    quality = AXES.index("quality")
     return {
-        ParetoPoint.MAX_YIELD: lambda s: (-s.scores.yield_score, -s.scores.units),
+        ParetoPoint.MAX_YIELD: lambda s: (-s.scores.yield_score, -s.scores.units,
+                                          -s.scores.site_use),
         ParetoPoint.ROBUST: lambda s: (s.rests is None, s.rests or (0, 0),
-                                       -s.scores.yield_score, -s.scores.units),
+                                       -s.scores.yield_score, -s.scores.units,
+                                       -s.scores.site_use),
         ParetoPoint.BALANCED: lambda s: (compromise(s), -s.scores.yield_score),
         ParetoPoint.CONVENTIONAL_OPEN_SPACE: lambda s: (
-            -(level(s)[open_space] + level(s)[conventional]), -s.scores.towers,
-            -s.scores.yield_score)}
+            -(level(s)[open_space] + level(s)[conventional] + level(s)[quality]),
+            -s.scores.towers, -s.scores.yield_score, -s.scores.site_use)}

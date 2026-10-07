@@ -18,6 +18,7 @@ from shapely.geometry import Point, box
 
 from siteplan import validator as independent
 from siteplan.contracts.validation import LegalVerdict
+from siteplan.geometry import frontage
 from siteplan.optimizer.search import FullSearchStrategy, ground
 from siteplan.optimizer.search import layout as layout_module
 from siteplan.optimizer.search import strategy as strategy_module
@@ -162,8 +163,8 @@ def test_a_stilt_holds_cars_only_where_a_car_can_drive_into_it():
     (C4-07: the generator counted every stilt's cars, the validator only the entered ones)."""
     road = box(0, 0, 100, 9)
     entered, corner = box(10, 9, 30, 40), box(100, 9, 120, 40)
-    assert ground.frontage(entered, road, 0.5) >= 20.0 - 1e-9
-    assert ground.frontage(corner, road, 0.5) < 4.5
+    assert frontage(entered, road, 0.5) >= 20.0 - 1e-9
+    assert frontage(corner, road, 0.5) < 4.5
     q = SimpleNamespace(driveway_m=4.5)
     assert layout_module._stilts([entered, corner], road, q) == [entered]
 

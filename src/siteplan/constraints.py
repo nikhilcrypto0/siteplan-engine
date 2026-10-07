@@ -54,6 +54,7 @@ from siteplan.contracts import accounting as ledger
 from siteplan.contracts import design_brief, prototype, resolved_rules, site_model
 from siteplan.legal import frontage, widths
 from siteplan.optimizer import floors as optimizer_floors
+from siteplan.optimizer import objective as optimizer_objective
 from siteplan.optimizer.search import (
     build,
     columns,
@@ -663,6 +664,7 @@ REGISTRY: tuple[Constraint, ...] = (
         "and the validator's own copies)",
         ("access.END_M", "access.TOUCH_M", "towers.TOUCH_M", "access_checks.TOUCH_M",
          "optimizer.search.layout.TOUCH_M", "optimizer.search.network.TOUCH_M",
+         "optimizer.objective.TOUCH_M",
          "validator.network.TOUCH_M", "validator.parking.RAMP_TOUCH_M",
          "validator.fire.GATE_TOUCH_M", "validator.network.JOIN_SQM",
          "validator.fire.REACH_MIN_SQM", "validator.shapes.HEAL_M",
@@ -1083,6 +1085,15 @@ REGISTRY: tuple[Constraint, ...] = (
         settles="Nothing: how the options are chosen for variety, not whether one passes.",
     ),
     Constraint(
+        "Towers", "What the objective counts as a leftover fragment when it scores a layout's "
+                  "quality: a piece of ground no use takes and no rule keeps open.",
+        f"{optimizer_objective.FRAGMENT_SQM:g} m² or more", Basis.ENGINE_DESIGN_ASSUMPTION,
+        "none (optimizer.objective._ground_scores)", ("optimizer.objective.FRAGMENT_SQM",),
+        note="A score of the search's (C4-11), never a rule: a layout with fragments fails "
+             "nothing; it ranks lower on quality.",
+        settles="Nothing that passes a layout: which layouts the search prefers.",
+    ),
+    Constraint(
         "Towers", "The three massing strategies shown: maximum yield with no limit; balanced, "
                   "medium blocks of up to this many cores and this length; conventional, "
                   "compact towers of this many cores.",
@@ -1223,7 +1234,8 @@ REGISTRY: tuple[Constraint, ...] = (
         f"heights to {resolved_rules.HEIGHT_TOL_M:g} m; a block {search_layout.EPS_LAND_M:g} m "
         f"inside its ground; slivers under {build.SLIVER_SQM:g} m² to "
         f"{network.RING_CLIP_SQM:g} m² ignored; frontage under {frontage.MIN_ZONE_M:g} m is "
-        "noise", Basis.ENGINE_DESIGN_ASSUMPTION, "none",
+        f"noise; the objective's areas read to {10.0 ** -optimizer_objective.AREA_DECIMALS:g} m²",
+        Basis.ENGINE_DESIGN_ASSUMPTION, "none",
         ("contracts.resolved_rules.HEIGHT_TOL_M", "contracts.validation.TARGET_TOL",
          "legal.non_high_rise.WIDTH_TOL_M", "legal.frontage.MIN_ZONE_M",
          "optimizer.floors.EPS_M", "optimizer.search.build.SLIVER_SQM",
@@ -1235,7 +1247,8 @@ REGISTRY: tuple[Constraint, ...] = (
          "optimizer.search.road_graph.NODE_SNAP_M", "optimizer.search.network.RING_CLIP_SQM",
          "optimizer.search.network.APPROACH_OUTSIDE_SQM", "optimizer.search.network.EPS_M",
          "optimizer.search.parking_plan.EPS_M", "optimizer.search.parking_plan.EDGE_M",
-         "prototypes.legacy.SNAP_M", "adapters.legacy_layout.SLIVER_SQM"),
+         "prototypes.legacy.SNAP_M", "adapters.legacy_layout.SLIVER_SQM",
+         "optimizer.objective.AREA_DECIMALS"),
         note="A height sums floor heights, so 21.000000000000004 m is 21 m. A legacy tower is "
              "snapped to a micrometre when it becomes a prototype, so shared edges are one. The "
              f"fringe ranks distances and places within {fringe.TIE_M:g} m as equal and counts a "

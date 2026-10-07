@@ -4,6 +4,63 @@ A characterization test (tests/manifest.py) pins what the engine produces today.
 only together with a normative replacement test and an entry here: what changed, why, the
 evidence, and the test that now holds the behaviour. Newest first.
 
+## 2026-10-07: C4-11, site use and the quality of a scheme scored
+
+The objective (`optimizer/objective.py`) scores two more numbers, both the search's, never rules
+(nothing fails for them; the validator is untouched), and the brief may weigh them
+(`Priority.SITE_USE`, `Priority.QUALITY`: the enum gains members, contracts not bumped):
+
+- Site use: 1 less the share of the net plot that no use takes and no rule keeps open, the
+  candidate's ledger's UNALLOCATED ground less its rule layers' setbacks, block gaps, fire bands,
+  turning ground, buffers and green strip (`KEPT_OPEN`; a cellar's setback, a no-ramp or no-bay
+  zone and the fire route keep nothing open at grade). Most of Dhulapally's unallocated ground is
+  such ground: among the layouts judged, 4,062 to 7,540 m² is left unallocated, of which 242 to
+  1,838 m² no rule explains.
+- Quality: the plain mean of five measures of an ordinary scheme, each 0 to 1: the share of the
+  plot not paved for roads; the share of the blocks of the commonest prototype; the share running
+  the commonest way (0 and 180 degrees one way); the share facing a road or pathway along at least
+  a pathway's width (rule 8(l)'s 6 m, the stricter reading of "opens onto", so a block a road meets
+  only at a corner counts against the layout whichever reading holds); and 1 over 1 and the
+  leftover pieces of 50 m² or more (`FRAGMENT_SQM`).
+
+How the alternatives are chosen (`optimizer/pareto.py`, `strategy._to_judge`):
+
+- The conventional open-space point weighs quality beside open space and conventionality; between
+  layouts a point's own measure ties on, maximum yield, robust and conventional take the one that
+  leaves less ground to no use (the compromise weighs site use already).
+- The objective reads its areas to 0.01 m² (`AREA_DECIMALS`): the last digit of a floating-point
+  area chose between twin layouts (the made-up baseline's `-86` dominated `-85` on 1836.0000000015675
+  m² of open space against ...567).
+- Each profile judges first the best of its front for each point the brief asks for (`pareto.leaders`;
+  all but ROBUST, whose readings only a report gives), then the rest of the front by yield. The
+  front of seven axes is wider than the six judged, and taken by yield alone it passed over
+  Dhulapally's open-space option (`not_counted-ALL-70`), whose place a 6-tower layout with a block
+  the ring road meets only at a corner took.
+- `frontage` moved from `optimizer.search.ground` to `siteplan.geometry`, shared by the search and
+  the objective (the validator keeps its own copy).
+
+Tests: `tests/test_objective_ground.py` (normative: which layers keep ground open and which do
+not, no ledger scoring nothing, quality's five parts, a corner touch against a road along a side
+and a pathway, the new axes on the front and in the weights, the conventional point's plainer
+scheme, the ties by site use, the last digits never choosing, the full search's candidates scored
+on their own ground); `tests/test_search_frontier.py` (the front's most open layout judged though
+yield would pass it by). Characterization re-pinned: the service's made-up baseline (maximum yield
+`-85`, the twin of `-86`; balanced S+9, S+9, S+5 of 374,440 sft and 3,612 m² of open space where
+it was 4 x S+10 of 440,800 sft and 1,836 m²; open space S+9, S+9, S+5, S+5 with 4,379 m², the most
+of any judged, where it was 4 x S+8 and S+3; robust the same 3 x S+7; every digest moves, each
+candidate's scores carrying the two numbers); the road ground of the three made-up plots (11 of 24
+proposals other layouts, five road sets new); the legacy nala plot's labels swap (equal yields go
+to C, which uses its ground; the open-space label to A, whose tower faces the loop road along its
+side where C's grazes its rounded corner).
+
+- Dhulapally, Run B prime's request (the C4 benchmark, 11-objective): maximum yield `-86`, the
+  same 432,120 sft as `-85` on 53 m² less unallocated ground (4 of 9 facilities where `-85` placed
+  5); balanced 5 towers (S+9 x 4, S+5), 350,852 sft and 292 flats, 4,366 m² unallocated, where it
+  was 6 towers of 362,678 sft and 302 flats on 5,747 m², one of whose blocks the ring road met only
+  at a corner (1.3 m of frontage; every block now faces a road along 24 m or more); the open-space
+  and robust alternatives the same; one legal FAIL, the validator's 9.00 m gap read as 8.9999989
+  (unchanged, a finding for the architect, not the search).
+
 ## 2026-10-07: C4-10, the facilities laid in the order that places the most
 
 The facilities were laid first-fit in the order the firm lists them (since C4-08 what the brief

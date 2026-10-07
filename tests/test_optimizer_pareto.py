@@ -11,7 +11,14 @@ from siteplan import layout
 from siteplan.contracts.common import Sourced
 from siteplan.contracts.design_brief import Objectives, ParetoPoint
 from siteplan.optimizer import pareto as pareto_module
-from siteplan.optimizer.objective import AXES, Scores, measure, mix_error, priority_weights
+from siteplan.optimizer.objective import (
+    AREA_DECIMALS,
+    AXES,
+    Scores,
+    measure,
+    mix_error,
+    priority_weights,
+)
 from siteplan.optimizer.pareto import Scored, dominates, pareto_front, same_idea, select
 
 TEST_CLASS = "normative"
@@ -92,7 +99,8 @@ def test_the_generators_own_measures_are_the_same_numbers():
         assert scores.units == option.total_flats
         assert scores.mix_fit == pytest.approx(1 - option.mix_error)
         assert scores.yield_score == pytest.approx(option.score)
-        assert scores.open_space_sqm == pytest.approx(option.open_space_sqm)
+        assert scores.open_space_sqm == pytest.approx(  # the objective reads areas to 0.01 m²
+            option.open_space_sqm, abs=10.0 ** -AREA_DECIMALS / 2)
 
 
 def test_the_architects_priorities_are_weights_and_a_misspelt_one_is_refused():

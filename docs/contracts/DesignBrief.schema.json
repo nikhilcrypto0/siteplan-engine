@@ -439,7 +439,9 @@
         "units",
         "open_space",
         "mix_fit",
-        "conventionality"
+        "conventionality",
+        "site_use",
+        "quality"
       ],
       "title": "Priority",
       "type": "string"

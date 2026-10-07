@@ -39,13 +39,13 @@ def test_the_quota_goes_to_different_ideas_before_copies_of_one():
     lower = _two_slabs("slabs-7", 7, 300, at=((41, 20), (109, 75)))
     singles = candidate("singles", [tower(f"T{i}", P1, 25 + 25 * i, 20 + 12 * (i % 3), 5)
                                     for i in range(5)], [P1], open_space_sqm=2400)
-    assert _ids(_to_judge(_pool(slabs, step, lower, singles), 2)) == ["slabs", "singles"]
+    assert _ids(_to_judge(_pool(slabs, step, lower, singles), 2, BRIEF)) == ["slabs", "singles"]
 
 
 def test_copies_are_judged_when_no_other_idea_is_left():
     slabs = _two_slabs("slabs", 9, 300)
     step = _two_slabs("slabs-8", 8, 300, at=((42, 21), (108, 74)))
-    assert _ids(_to_judge(_pool(slabs, step), 3)) == ["slabs", "slabs-8"]
+    assert _ids(_to_judge(_pool(slabs, step), 3, BRIEF)) == ["slabs", "slabs-8"]
 
 
 def test_a_layout_nothing_beats_on_every_axis_is_judged_before_a_more_saleable_one_beaten():
@@ -55,4 +55,16 @@ def test_a_layout_nothing_beats_on_every_axis_is_judged_before_a_more_saleable_o
     beaten = _two_slabs("beaten", 9, 2000, at=((140, 20), (200, 75)))  # best beats it on all
     open_ = candidate("open", [tower(f"T{i}", P1, 25 + 25 * i, 20, 4) for i in range(3)], [P1],
                       open_space_sqm=5000)  # less saleable, more open space: on the front
-    assert _ids(_to_judge(_pool(best, beaten, open_), 2)) == ["best", "open"]
+    assert _ids(_to_judge(_pool(best, beaten, open_), 2, BRIEF)) == ["best", "open"]
+
+
+def test_the_fronts_most_open_layout_is_judged_though_the_quota_by_yield_would_pass_it_by():
+    """Three ideas on the front, a quota of two: the slabs sell the most, three single cores
+    less, two single cores least with the most open space. By yield the open one was left
+    unjudged; it is the conventional point's best, so it is judged (C4-11)."""
+    slabs = _two_slabs("yield", 9, 300)
+    middle = candidate("middle", [tower(f"T{i}", P1, 25 + 30 * i, 20, 8) for i in range(3)],
+                       [P1], open_space_sqm=1000)
+    open_ = candidate("open", [tower(f"T{i}", P1, 25 + 30 * i, 80, 5) for i in range(2)], [P1],
+                      open_space_sqm=5000)
+    assert _ids(_to_judge(_pool(slabs, middle, open_), 2, BRIEF)) == ["yield", "open"]

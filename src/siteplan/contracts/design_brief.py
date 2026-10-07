@@ -79,6 +79,8 @@ class Priority(StrEnum):
     OPEN_SPACE = "open_space"
     MIX_FIT = "mix_fit"
     CONVENTIONALITY = "conventionality"
+    SITE_USE = "site_use"  # the ground put to a use or kept open by a rule (C4-11)
+    QUALITY = "quality"  # simple roads, repeated blocks one way, few leftover pieces (C4-11)
 
 
 class UnitTarget(Part):

@@ -128,7 +128,7 @@ COPIES = (
     ("access.MIN_TURN_DEG", "optimizer.search.turns.MIN_TURN_DEG",
      "validator.turning.MIN_TURN_DEG"),
     ("towers.TOUCH_M", "access_checks.TOUCH_M", "optimizer.search.layout.TOUCH_M",
-     "optimizer.search.network.TOUCH_M", "validator.network.TOUCH_M",
+     "optimizer.search.network.TOUCH_M", "optimizer.objective.TOUCH_M", "validator.network.TOUCH_M",
      "validator.parking.RAMP_TOUCH_M", "validator.fire.GATE_TOUCH_M"),
     ("optimizer.search.parking_plan.OFFSETS_ALONG", "validator.cars.OFFSETS_ALONG"),
     ("optimizer.search.parking_plan.OFFSETS_ACROSS", "validator.cars.OFFSETS_ACROSS"),

@@ -37,6 +37,7 @@ from siteplan.contracts import (
 )
 from siteplan.contracts.candidate import RoadKind
 from siteplan.contracts.design_brief import ClubSize
+from siteplan.geometry import frontage
 from siteplan.optimizer.search import fringe, ground, network
 from siteplan.optimizer.search.build import FIRE_ROADS, Laid, Placement, named_placements
 from siteplan.optimizer.search.columns import (
@@ -541,7 +542,7 @@ def _stilts(footprints: Sequence[Polygon], way_in: BaseGeometry, q: Quantities
     driveway's width of the outline (rule 13(c)(viii)) facing a road, a fire lane or a pathway, as
     the validator holds it, and a hair more. The parking plan counted every stilt."""
     return [f for f in footprints
-            if ground.frontage(f, way_in, TOUCH_M) >= q.driveway_m + network.EPS_M]
+            if frontage(f, way_in, TOUCH_M) >= q.driveway_m + network.EPS_M]
 
 
 NO_RAMP = "no room beside a road for the cellar ramp outside the clear ground"
