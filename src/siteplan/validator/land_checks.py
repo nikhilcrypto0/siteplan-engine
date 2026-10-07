@@ -177,9 +177,9 @@ def green_strip_check(ctx: Context) -> Check:
 
 def egress_check(ctx: Context) -> Check | None:
     """Exits inside a block (travel distance to a staircase, the number of stairs) are not
-    modelled, so a long slab's layout is not a full building-code check. Said on every high-rise
-    layout, never left out."""
-    high = ctx.high_rise_anywhere()
+    modelled, so a long slab's layout is not a full building-code check. Said on every layout with
+    a block NBC Part 4 covers (a high-rise or a special building), never left out."""
+    high = ctx.fire_held_anywhere()
     if not high:
         return None
     longest = max(sides_of(t.footprint)[0] for t in high)

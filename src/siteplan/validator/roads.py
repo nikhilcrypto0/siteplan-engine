@@ -9,6 +9,8 @@ readings of whether circulation may use it.
 
 from __future__ import annotations
 
+import math
+
 from shapely.geometry import Point, Polygon
 from shapely.geometry.base import BaseGeometry
 
@@ -18,19 +20,22 @@ from siteplan.contracts.common import Status
 from siteplan.contracts.resolved_rules import (
     APPROACH_WIDTH,
     CIRCULATION_IN_SETBACK,
+    OPENS_ONTO_ROAD,
     STILT_IN_RULE_HEIGHT,
 )
 from siteplan.contracts.validation import Check, Discrepancy, Family
 from siteplan.validator.context import Context
 from siteplan.validator.drawn import DrawnRoad
 from siteplan.validator.ground import Ground
-from siteplan.validator.measure import TOL_M
+from siteplan.validator.measure import TOL_M, TowerGeometry
 from siteplan.validator.network import TOUCH_M, dead_end_check, entrance_connection_check
 from siteplan.validator.readings import (
     ALLOWED,
     AUTHORITY_CHOICE,
+    FRONTAGE,
     MINIMUM_APPROACH,
     NOT_ALLOWED,
+    TOUCH,
     Assignment,
     Cell,
     basis_note,
@@ -45,6 +50,7 @@ from siteplan.validator.shapes import (
     bent,
     healed,
     inscribed_circle,
+    longest_frontage,
     opening,
     polygons_of,
     sides_of,
@@ -244,6 +250,25 @@ def _cul_de_sac_checks(ctx: Context, ground: Ground) -> list[Check]:
 # --- Blocks above 12 m open onto a road ------------------------------------------------------
 
 
+def opens_onto(t: TowerGeometry, land: BaseGeometry, reading: str,
+               frontage_m: float | None) -> bool | None:
+    """Whether a block opens onto this ground under a reading of opens_onto_road: any part of it
+    within half a metre (touch), or an unbroken stretch of its outline at least `frontage_m` long
+    facing it (frontage). None for a reading this validator cannot evaluate, or for frontage when
+    the rules give no pathway width to measure it by."""
+    if reading == TOUCH:
+        return not land.is_empty and t.footprint.distance(land) <= TOUCH_M
+    if reading == FRONTAGE and frontage_m is not None:
+        return longest_frontage(t.footprint, land, TOUCH_M) + TOL_M >= frontage_m
+    return None
+
+
+def _off_road(t: TowerGeometry, roads: BaseGeometry, reading: str) -> str:
+    """A block that does not open onto a road, and how little of it faces one."""
+    faces = longest_frontage(t.footprint, roads, TOUCH_M) if reading == FRONTAGE else 0.0
+    return f"{t.name} (faces a road for {faces:.1f} m)" if faces > 0 else t.name
+
+
 def _served_check(ctx: Context, ground: Ground) -> Check | None:
     circ = ctx.rules.circulation
     if not circ.block_over_12m_on_road.value:
@@ -254,27 +279,35 @@ def _served_check(ctx: Context, ground: Ground) -> Check | None:
         return None  # every block is low enough for a pathway: `_pathway_check` says what holds
     roads = _ground_of(ctx, ground, *ROAD_KINDS)
     lane = _ground_of(ctx, ground, RoadKind.PERIMETER_LANE)
+    paths = ctx.drawn.pathway_land
+    frontage = circ.pathway_width_m.value if circ.pathway_width_m else None
     required = f"every block above {limit:g} m on an internal road, not a pathway"
-    clause = circ.pathway_max_block_height_m.clause
-    off = [t for t in tall if roads.is_empty or t.footprint.distance(roads) > TOUCH_M]
-    cut_off = [t.name for t in off if lane.is_empty or t.footprint.distance(lane) > TOUCH_M]
-    lane_only = [t.name for t in off if t.name not in cut_off]
-    rule = "Internal roads: every block served"
-    basis = basis_note(circ.block_over_12m_on_road)
-    if cut_off:
-        paths = ctx.drawn.pathway_land
-        by_path = [t.name for t in off if t.name in cut_off and not paths.is_empty
-                   and t.footprint.distance(paths) <= TOUCH_M]
-        said = (f"; a pathway reaches {', '.join(by_path)}, and rule 8(l) allows one only for "
-                f"blocks up to {limit:g} m" if by_path else "")
-        return plain(Family.ROADS, rule, Status.FAIL,
-                     f"not on a road: {', '.join(cut_off)}{said}", required, clause, basis)
-    if lane_only:
-        return plain(Family.ROADS, rule, Status.UNVERIFIED,
-                     f"on the perimeter lane only: {', '.join(lane_only)}", required, clause,
-                     " ".join(("The perimeter lane is not established as an 8(m) road.", basis)))
-    return plain(Family.ROADS, rule, Status.PASS, f"all {len(tall)} blocks", required, clause,
-                 basis)
+
+    def cell(a: Assignment) -> Cell:
+        reading = a[OPENS_ONTO_ROAD]
+        on = {t.name: opens_onto(t, roads, reading, frontage) for t in tall}
+        if None in on.values():
+            return unknown_reading(OPENS_ONTO_ROAD, reading)
+        off = [t for t in tall if not on[t.name]]
+        cut_off = [t for t in off if not opens_onto(t, lane, reading, frontage)]
+        lane_only = [t for t in off if t not in cut_off]
+        if cut_off:
+            by_path = [t.name for t in cut_off if not paths.is_empty
+                       and t.footprint.distance(paths) <= TOUCH_M]
+            said = (f"; a pathway reaches {', '.join(by_path)}, and rule 8(l) allows one only "
+                    f"for blocks up to {limit:g} m" if by_path else "")
+            shown = ", ".join(_off_road(t, roads, reading) for t in cut_off)
+            return Cell(Status.FAIL, f"not on a road: {shown}{said}", required)
+        if lane_only:
+            return Cell(Status.UNVERIFIED,
+                        f"on the perimeter lane only: {', '.join(t.name for t in lane_only)}",
+                        required, "The perimeter lane is not established as an 8(m) road.")
+        return Cell(Status.PASS, f"all {len(tall)} blocks", required)
+
+    return check_from(run(ctx.rules, [OPENS_ONTO_ROAD], cell), family=Family.ROADS,
+                      rule="Internal roads: every block served",
+                      clause=circ.pathway_max_block_height_m.clause,
+                      note=basis_note(circ.block_over_12m_on_road))
 
 
 def _pathway_check(ctx: Context, ground: Ground) -> Check | None:
@@ -308,33 +341,91 @@ def _pathway_check(ctx: Context, ground: Ground) -> Check | None:
             serving[path.id] = usable
     if wide is None and paths:
         doubts.append("the rules give no pathway width yet, so a pathway's width is not held")
-    by_path = 0
-    for t in short:
-        if not roads.is_empty and t.footprint.distance(roads) <= TOUCH_M:
-            continue
-        reaching = [i for i, g in serving.items() if t.footprint.distance(g) <= TOUCH_M]
-        if reaching:
-            by_path += 1
-        elif any(t.footprint.distance(_usable(p, ground)) <= TOUCH_M for p in paths):
-            problems.append(f"{t.name}'s pathway does not meet rule 8(l)")
-        elif not lane.is_empty and t.footprint.distance(lane) <= TOUCH_M:
-            doubts.append(f"{t.name} is on the perimeter lane only, which is not established "
-                          "as an 8(m) road")
-        else:
-            problems.append(f"{t.name} is reached by no road or pathway")
-    rule = f"Internal roads: blocks up to {limit:g} m (pathways)"
+    frontage = wide.value if wide else None
     width_text = (f"at least {wide.value:g} m wide " if wide else "")
     required = (f"every block up to {limit:g} m on an internal road, or reached by a pathway "
                 f"{width_text}branching out of one")
+
+    def cell(a: Assignment) -> Cell:
+        reading = a[OPENS_ONTO_ROAD]
+        found, unsure, by_path = list(problems), list(doubts), 0
+        for t in short:
+            on = opens_onto(t, roads, reading, frontage)
+            if on is None:
+                return unknown_reading(OPENS_ONTO_ROAD, reading)
+            if on:
+                continue
+            reaching = [i for i, g in serving.items() if t.footprint.distance(g) <= TOUCH_M]
+            if reaching:
+                by_path += 1
+            elif any(t.footprint.distance(_usable(p, ground)) <= TOUCH_M for p in paths):
+                found.append(f"{t.name}'s pathway does not meet rule 8(l)")
+            elif opens_onto(t, lane, reading, frontage):
+                unsure.append(f"{t.name} is on the perimeter lane only, which is not "
+                              "established as an 8(m) road")
+            else:
+                found.append(f"{_off_road(t, roads, reading)} is reached by no road or pathway")
+        status = Status.FAIL if found else Status.UNVERIFIED if unsure else Status.PASS
+        if status is Status.PASS:
+            shown = (f"all {len(short)} on an internal road" if not by_path else
+                     f"all {len(short)} served, {by_path} by a pathway")
+            return Cell(status, shown, required)
+        return Cell(status, "; ".join(found + unsure), required)
+
     clause = "; ".join(dict.fromkeys(
         [circ.pathway_max_block_height_m.clause, *([wide.clause] if wide else [])]))
-    basis = basis_note(circ.block_over_12m_on_road)
-    status = Status.FAIL if problems else Status.UNVERIFIED if doubts else Status.PASS
-    if status is Status.PASS:
-        shown = (f"all {len(short)} on an internal road" if not by_path else
-                 f"all {len(short)} served, {by_path} by a pathway")
-        return plain(Family.ROADS, rule, status, shown, required, clause, basis)
-    return plain(Family.ROADS, rule, status, "; ".join(problems + doubts), required, clause, basis)
+    return check_from(run(ctx.rules, [OPENS_ONTO_ROAD], cell), family=Family.ROADS,
+                      rule=f"Internal roads: blocks up to {limit:g} m (pathways)", clause=clause,
+                      note=basis_note(circ.block_over_12m_on_road))
+
+
+def _walk(t: TowerGeometry, path: Polygon, roads: BaseGeometry) -> tuple[float, float]:
+    """How far it is from a road to a block along a pathway, as (at least, at most). The straight
+    line from the road to the block is the least it can be; on a convex pathway (a straight run,
+    as the generator draws one) that line lies on it, so it is the length. On any other shape a
+    walk along the pathway's outline from the road to the block is never longer than half of it;
+    with a hole in the pathway nothing bounds it from above."""
+    start = roads.intersection(path.buffer(TOUCH_M))
+    least = t.footprint.distance(start) if not start.is_empty else t.footprint.distance(roads)
+    if path.convex_hull.area - path.area <= NOISE_SQM:
+        return least, least
+    return least, (path.exterior.length / 2 if not path.interiors else math.inf)
+
+
+def _pathway_length_check(ctx: Context, ground: Ground) -> Check | None:
+    """NBC 2016 Part 3 4.3.2.2, brought to a block below the high-rise height by rule 15(a)(i):
+    the paved pathway from a road to a building is no longer than 30 m. Measured for every block
+    that stands on no road and is reached by a pathway joined to one (`_walk`); a pathway whose
+    length falls between what it must be at least and what it can be at most is UNVERIFIED."""
+    circ = ctx.rules.circulation
+    most = circ.pathway_max_length_m.value
+    roads = _ground_of(ctx, ground, *ROAD_KINDS)
+    pieces = polygons_of(_ground_of(ctx, ground, RoadKind.PATHWAY))
+    if roads.is_empty or not pieces:
+        return None
+    rows = []
+    for t in ctx.towers:
+        if t.footprint.distance(roads) <= TOUCH_M:
+            continue  # on a road: there is no pathway to walk
+        walks = [_walk(t, p, roads) for p in pieces
+                 if p.distance(t.footprint) <= TOUCH_M and p.distance(roads) <= TOUCH_M]
+        if walks:
+            rows.append((t.name, *min(walks, key=lambda w: (w[1], w[0]))))
+    if not rows:
+        return None
+    long = [f"{name} at least {least:.1f} m" for name, least, _ in rows if least > most + TOL_M]
+    unsure = [f"{name} between {least:.1f} and " + (f"{upto:.1f} m" if upto < math.inf
+                                                      else "an unknown length")
+              for name, least, upto in rows if least <= most + TOL_M < upto]
+    status = Status.FAIL if long else Status.UNVERIFIED if unsure else Status.PASS
+    shown = "; ".join(long + unsure) if long or unsure else ", ".join(
+        f"{name} {least:.1f} m" for name, least, _ in rows)
+    return plain(Family.ROADS, "Internal roads: pathway length (NBC 4.3.2.2)", status, shown,
+                 f"a pathway of at most {most:g} m from a road to each block it serves",
+                 circ.pathway_max_length_m.clause,
+                 "A pathway that is not one straight run is measured between the straight line "
+                 "and half its outline; its true length is for a person to check." if unsure
+                 else "")
 
 
 # --- Driveways -------------------------------------------------------------------------------
@@ -478,8 +569,10 @@ def road_checks(ctx: Context, ground: Ground) -> list[Check]:
         served, pathways = _served_check(ctx, ground), _pathway_check(ctx, ground)
         joined = entrance_connection_check(ctx, ground)
         out += [dead_end_check(ctx, ground)] + ([joined] if joined else [])
+        length = _pathway_length_check(ctx, ground)
         out += [served] if served else []
         out += [pathways] if pathways else []
+        out += [length] if length else []
     drive = driveway_check(ctx, ground, circ.applies.value or by_the_site)
     out += [drive] if drive else []
     return out

@@ -1,5 +1,5 @@
 {
- "schema_version": "1.2",
+ "schema_version": "1.3",
  "net_area_sqm": 15000.0,
  "tolerance": 0.005,
  "entries": [

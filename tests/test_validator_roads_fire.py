@@ -6,7 +6,6 @@ from shapely.ops import unary_union
 from validator_helpers import (
     check,
     fixture,
-    move_tower,
     rectangle,
     select,
     set_floors,
@@ -22,6 +21,8 @@ from siteplan.contracts.resolved_rules import (
     APPROACH_WIDTH,
     CIRCULATION_IN_SETBACK,
     FIRE_TURNING_RADIUS,
+    NBC_FIRE_HEIGHT,
+    OPENS_ONTO_ROAD,
     STILT_IN_RULE_HEIGHT,
 )
 
@@ -32,6 +33,21 @@ LOOP_ROADS = "Internal roads: loop and other roads"
 
 def _road(candidate, kind):
     return next(r for r in candidate.circulation.roads if r.kind.value == kind)
+
+
+def _touch(rules):
+    """'Opens onto a road' read as any part within half a metre: how much of a block must face
+    the road is test_validator_access_law.py's question, not these tests'."""
+    select(rules, OPENS_ONTO_ROAD, "touch")
+
+
+def _no_cellar(candidate):
+    candidate.program.cellars = None
+
+
+def _cabin_beside_t3(candidate):
+    candidate.program.amenities.append(
+        PlacedAmenity(name="SECURITY CABIN", shape=rectangle(134.5, 40.0, 137.0, 42.5)))
 
 
 def _shrink(road, metres):
@@ -81,7 +97,7 @@ def test_how_wide_the_authority_wants_the_approach_is_an_open_reading():
 def test_a_driveway_is_never_counted_as_an_internal_road():
     def demote(candidate):
         _road(candidate, "INTERNAL").kind = RoadKind.DRIVEWAY
-    report = fixture("rectangle").edited(demote).report()
+    report = fixture("rectangle").with_rules(_touch).edited(demote).report()
     served = check(report, "Internal roads: every block served")
     assert served.finding.status is Z.FAIL  # T3 reaches only the driveway; T1 and T2 the loop
     assert served.finding.measured == "not on a road: T3"
@@ -100,7 +116,7 @@ def test_every_block_above_12_m_must_open_onto_a_road():
     def cut_off(candidate):
         candidate.circulation.roads = [r for r in candidate.circulation.roads
                                        if r.kind.value != "INTERNAL"]
-    served = check(fixture("rectangle").edited(cut_off).report(),
+    served = check(fixture("rectangle").with_rules(_touch).edited(cut_off).report(),
                    "Internal roads: every block served")
     assert served.finding.status is Z.FAIL and served.finding.measured == "not on a road: T3"
     assert status(fixture("rectangle").report(), "Internal roads: every block served") is Z.PASS
@@ -276,13 +292,24 @@ def test_the_45_tonne_loading_is_always_unverified():
     assert status(fixture("rectangle").report(), "Fire access: 45 t hard surface") is Z.UNVERIFIED
 
 
-def test_a_block_that_is_high_rise_only_if_the_stilt_counts_has_its_fire_access_unverified():
+def test_a_block_that_is_high_rise_only_if_the_stilt_counts_is_judged_where_4_6_holds_it():
+    """6 floors on a 3 m stilt, over no cellar: 21 m if the stilt counts (a high-rise), 18 m if
+    not, when NBC 4.6 holds it only from NBC's own 15 m (nbc_line). Where nothing holds it nothing
+    is asked; passing wherever it is held it passes, and failing there it is UNVERIFIED, since
+    under one reading nothing is asked of it."""
     def lower(candidate):
+        _no_cellar(candidate)
         set_floors(candidate, "T3", 6)  # exactly 21 m with the stilt, 18 m without
-        move_tower(candidate, "T3", 0.0, 0.0)
-    inputs = fixture("rectangle").edited(lower)
-    c = check(inputs.report(), "Fire access: T3")
-    assert c.by_reading[STILT_IN_RULE_HEIGHT]["not_counted"] is Z.NOT_CHECKED
+    c = check(fixture("rectangle").edited(lower).report(), "Fire access: T3")
+    assert c.by_reading[STILT_IN_RULE_HEIGHT] == {"counted": Z.PASS, "not_counted": Z.PASS}
+    assert c.finding.status is Z.PASS
+
+    def crowded(candidate):
+        lower(candidate)
+        _cabin_beside_t3(candidate)
+    c = check(fixture("rectangle").edited(crowded).report(), "Fire access: T3")
+    assert c.by_reading[STILT_IN_RULE_HEIGHT] == {"counted": Z.FAIL, "not_counted": Z.UNVERIFIED}
+    assert c.by_reading[NBC_FIRE_HEIGHT] == {"state_line": Z.UNVERIFIED, "nbc_line": Z.FAIL}
     assert c.finding.status is Z.UNVERIFIED
 
 

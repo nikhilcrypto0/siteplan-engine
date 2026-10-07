@@ -1,6 +1,6 @@
 {
- "schema_version": "1.2",
- "site_ref": "4a06f936f6a9cd4c",
+ "schema_version": "1.3",
+ "site_ref": "7bc4a4095a89216b",
  "rules_digest": "rules.py at P0",
  "orders": [
   {
@@ -711,7 +711,16 @@
    "status": "UNVERIFIED",
    "note": "rule 8(l) read as every block above 12 m opening onto a road"
   },
-  "in_setback_interpretation": "circulation_in_setback"
+  "in_setback_interpretation": "circulation_in_setback",
+  "opens_onto_interpretation": "opens_onto_road",
+  "pathway_max_length_m": {
+   "value": 30.0,
+   "unit": "m",
+   "clause": "G.O.168 rule 15(a)(i) as substituted by G.O.Ms.No.50 of 2019, bringing in NBC 2016 Part 3 4.3.2.2 (the paved pathway from a road to a building no longer than 30 m)",
+   "basis": "LEGAL_RULE",
+   "status": "VERIFIED",
+   "note": ""
+  }
  },
  "fire": {
   "applies_from_m": {
@@ -778,7 +787,32 @@
    "basis": "LEGAL_RULE",
    "status": "VERIFIED",
    "note": ""
-  }
+  },
+  "special_basement_sqm": {
+   "value": 500.0,
+   "unit": "m²",
+   "clause": "G.O.168 rule 15(a)(i) as substituted by G.O.Ms.No.50 of 2019, bringing in NBC 2016 Part 3 4.6 for special buildings, which Part 4 1.2(b)(6) makes of a building with two basements or more, or one basement of more than 500 m²",
+   "basis": "LEGAL_RULE",
+   "status": "VERIFIED",
+   "note": ""
+  },
+  "special_basement_levels": {
+   "value": 2,
+   "unit": "levels",
+   "clause": "G.O.168 rule 15(a)(i) as substituted by G.O.Ms.No.50 of 2019, bringing in NBC 2016 Part 3 4.6 for special buildings, which Part 4 1.2(b)(6) makes of a building with two basements or more, or one basement of more than 500 m²",
+   "basis": "LEGAL_RULE",
+   "status": "VERIFIED",
+   "note": ""
+  },
+  "nbc_high_rise_m": {
+   "value": 15.0,
+   "unit": "m",
+   "clause": "NBC 2016 Part 4 2.38 (a high rise building is 15 m or above in height, measured as Part 4 2.6 does, the stilt included), through G.O.168 rule 15(a)(i) as substituted by G.O.Ms.No.50 of 2019",
+   "basis": "LEGAL_RULE",
+   "status": "VERIFIED",
+   "note": ""
+  },
+  "nbc_height_interpretation": "nbc_fire_height"
  },
  "electrical": {
   "ht_clearance_m": {
@@ -1113,6 +1147,37 @@
     "G.O.168 rule 7(a)(vii): 'greenery, tot lot or soft landscaping, etc.'"
    ],
    "settles": "the organised open space a sanctioned plan's area statement counts"
+  },
+  {
+   "id": "nbc_fire_height",
+   "question": "Does NBC 4.6 reach a block of 15 to 21 m the state calls non-high-rise?",
+   "alternatives": {
+    "state_line": "no: only as a special building (over a large or deep cellar)",
+    "nbc_line": "yes: NBC's own 15 m line, the stilt included"
+   },
+   "selected": "ALL",
+   "basis": "UNRESOLVED_INTERPRETATION",
+   "status": "UNVERIFIED",
+   "sources": [
+    "NBC 2016 Part 4 2.38 (a high rise building is 15 m or above in height, measured as Part 4 2.6 does, the stilt included), through G.O.168 rule 15(a)(i) as substituted by G.O.Ms.No.50 of 2019",
+    "G.O.168 rule 15(a)(i) as substituted by G.O.Ms.No.50 of 2019, Amendment-1 (a non-high-rise building keeps the National Building Code 2016's requirements other than heights and setbacks; IGBC Green Homes norms for the ventilation of rooms)"
+   ],
+   "settles": "the fire department's reading"
+  },
+  {
+   "id": "opens_onto_road",
+   "question": "Does a block that only touches a road at a corner open onto it?",
+   "alternatives": {
+    "touch": "any part within half a metre of the road",
+    "frontage": "a pathway's width of its outline faces the road"
+   },
+   "selected": "ALL",
+   "basis": "UNRESOLVED_INTERPRETATION",
+   "status": "UNVERIFIED",
+   "sources": [
+    "G.O.168 rule 8(l) (6 m pathways only for blocks up to 12 m high)"
+   ],
+   "settles": "the authority's reading of rule 8(l)"
   }
  ]
 }

@@ -119,7 +119,7 @@ def qualifying(ctx: Context, reading: str, spacing: str, take_out: frozenset[int
     if not rules.buffer_may_count.value:
         remaining = _take_out(remaining, ctx.land.keep_out, "in a water buffer", removed)
     lane = ctx.rules.fire.clear_width_m.value
-    bands = union_of_all([clear_band(t.footprint, lane) for t in ctx.high_rise(reading)])
+    bands = union_of_all([clear_band(t.footprint, lane) for t in ctx.fire_held(reading)])
     remaining = _take_out(remaining, bands, "in a fire lane's clear ground", removed)
     other_uses = union_of_all([
         *(t.footprint for t in ctx.towers), d.club, d.paved_land, d.fire_hardstanding,

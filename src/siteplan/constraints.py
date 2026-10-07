@@ -575,7 +575,28 @@ REGISTRY: tuple[Constraint, ...] = (
         ("rules.PATHWAY_MAX_BLOCK_HEIGHT_M",),
         note="Rule 8(l): 'In case of blocks up to 12m height, access through pathways of 6m "
              "width branching out from the internal roads / loop road would be allowed.' The "
-             "permission stops at 12 m. 'Opens onto' is measured as within 0.5 m of a road.",
+             "permission stops at 12 m. What 'opens onto' a road means is the next entry.",
+    ),
+    Constraint(
+        "Roads", "How much of a block must face a road for it to open onto one.",
+        f"a touch (within {validator_network.TOUCH_M:g} m), or an unbroken "
+        f"{_m(rules.PATHWAY_WIDTH_M)} of the block, the pathway's width",
+        Basis.UNRESOLVED_INTERPRETATION, rules.PATHWAY_CLAUSE,
+        note="Rule 8(l) and (m) give a taller block its access from a road without saying how "
+             "much of it must face one: a block that only touches a road at a corner opens onto "
+             "it under one reading and not the other. Both are evaluated (opens_onto_road). The "
+             "6 m is the least access the rule gives any block, a pathway; using it as a length "
+             "of frontage is the reading's.",
+        settles="A sanctioned plan with a block that only touches a road at a corner, or the "
+                "authority's reading of rule 8(l) and (m).",
+    ),
+    Constraint(
+        "Roads", "The paved pathway from a road to a building it serves is no longer than this.",
+        _m(rules.PATHWAY_MAX_LENGTH_M), Basis.LEGAL_RULE, rules.PATHWAY_LENGTH_CLAUSE,
+        ("rules.PATHWAY_MAX_LENGTH_M",),
+        note="NBC 2016 Part 3 4.3.2.2, brought to a block below 21 m by rule 15(a)(i). Measured "
+             "along a straight pathway; one of any other shape is bounded between the straight "
+             "line and half its outline, UNVERIFIED in between.",
     ),
     Constraint(
         "Roads", "Minimum driveway width, where one is drawn; never counted as an internal road.",
@@ -683,6 +704,30 @@ REGISTRY: tuple[Constraint, ...] = (
          "access.LANE_M", "access.R_OUT", "access_checks.LANE_M"),
         note="NBC 2016 Part 3 4.6, brought in by rule 15(b)(iv); read from the page images. The "
              "45 t surface is a specification and is reported UNVERIFIED.",
+    ),
+    Constraint(
+        "Fire access", "NBC 4.6 holds a special building whatever its height: a block over a "
+                       "cellar of more than this area, or of this many levels or more.",
+        f"one level over {rules.NBC_SPECIAL_BASEMENT_SQM:g} m², or "
+        f"{rules.NBC_SPECIAL_BASEMENT_LEVELS} levels", Basis.LEGAL_RULE,
+        rules.NBC_SPECIAL_BUILDING_CLAUSE,
+        ("rules.NBC_SPECIAL_BASEMENT_SQM", "rules.NBC_SPECIAL_BASEMENT_LEVELS"),
+        note="NBC 2016 Part 4 1.2(b)(6) with Part 3 4.6, brought to a block below 21 m by rule "
+             "15(a)(i): read as law on 2026-10-06, 4.6 being a provision of means of access and "
+             "neither a height nor a setback. A block over a shared cellar has it as its "
+             "basement. The generator's cellar is the plot inset by its setback, so a layout "
+             "with a cellar holds every block to 4.6.",
+    ),
+    Constraint(
+        "Fire access", "NBC's own high-rise line, the stilt included: whether 4.6 reaches a block "
+                       "of this height that the state calls non-high-rise.",
+        _m(rules.NBC_HIGH_RISE_M), Basis.UNRESOLVED_INTERPRETATION, rules.NBC_HIGH_RISE_CLAUSE,
+        ("rules.NBC_HIGH_RISE_M",),
+        note="NBC 2016 Part 4 2.38 gives 15 m; the state's line is 21 m. Both readings are "
+             "evaluated (nbc_fire_height): a block of 15 to 21 m over no large cellar that fails "
+             "4.6 is UNVERIFIED, never FAIL.",
+        settles="The fire NOC of a sanctioned 15 to 21 m block over no large cellar, or the fire "
+                "department's written reading.",
     ),
     Constraint(
         "Fire access", "Where the 9 m turning radius is measured, and the clear band beside each "
@@ -820,6 +865,17 @@ REGISTRY: tuple[Constraint, ...] = (
         note="A second test the law does not set: Table V asks for parking area. It can make a "
              "layout stricter than the rule.",
         settles="The firm, deciding whether to keep the physical-fit test.",
+    ),
+    Constraint(
+        "Parking", "A stilt counts as parking only where a car can drive in: an unbroken "
+                   "driveway's width of the block faces a road, a fire lane or a pathway.",
+        f"{_m(rules.DRIVEWAY_MIN_WIDTH_M)} of unbroken frontage on motorable ground",
+        Basis.ENGINE_DESIGN_ASSUMPTION, "none (validator.parking.stilt_reached)",
+        note="No order says how a stilt is entered; the driveway width (rule 13(c)(viii)) is the "
+             "least a car needs, and a rule 8(l) pathway, 6 m wide, is the block's access. Only "
+             "the validator applies it: the generator still counts every stilt, so a layout it "
+             "plans can fall short here.",
+        settles="The firm's stilt entrances on a sanctioned plan.",
     ),
     Constraint(
         "Parking", "Visitors' parking share, read as parking at ground level.",

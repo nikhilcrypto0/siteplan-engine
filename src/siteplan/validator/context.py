@@ -7,6 +7,7 @@ can lean on it.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import cached_property
 
 from shapely.geometry import Polygon
 from shapely.geometry.base import BaseGeometry
@@ -20,7 +21,7 @@ from siteplan.validator import drawn as drawing
 from siteplan.validator import site_geometry
 from siteplan.validator.drawn import Drawn, Gate
 from siteplan.validator.measure import HeightClass, TowerGeometry, classify_block, tower_geometries
-from siteplan.validator.shapes import union_of_all
+from siteplan.validator.shapes import NOISE_SQM, polygons_of, union_of_all
 from siteplan.validator.site_geometry import SiteGeometry
 
 GATE_ON_BOUNDARY_M = 0.5  # a gate this close to the boundary stands in it
@@ -77,6 +78,38 @@ class Context:
 
     def low_rise_anywhere(self) -> list[TowerGeometry]:
         names = {t.name for r in self.stilt_readings for t in self.low_rise(r)}
+        return [t for t in self.towers if t.name in names]
+
+    @cached_property
+    def special(self) -> dict[str, bool | None]:
+        """NBC's special buildings by their basements (Part 4 1.2(b)(6)), block by block: True
+        for a block over a cellar of two levels or more, or over one whose level is larger than
+        the area the rules give; False for a block over none such; None when cellar levels are
+        drawn but not where they lie, so which blocks stand over them is not known."""
+        d, fire = self.drawn, self.rules.fire
+        if not d.cellar_levels:
+            return {t.name: False for t in self.towers}
+        if d.cellar_outline.is_empty:
+            return {t.name: None for t in self.towers}
+        deep = d.cellar_levels >= fire.special_basement_levels.value
+        pieces = polygons_of(d.cellar_outline)
+        out: dict[str, bool | None] = {}
+        for t in self.towers:
+            under = [p for p in pieces if p.intersection(t.footprint).area > NOISE_SQM]
+            out[t.name] = bool(under) and (
+                deep or any(p.area > fire.special_basement_sqm.value for p in under))
+        return out
+
+    def fire_held(self, reading: str) -> list[TowerGeometry]:
+        """The blocks NBC 4.6 holds by law under a reading of the stilt: every high-rise (rule
+        15(b)(iv)) and every special building (rule 15(a)(i)). NBC's own 15 m line is an open
+        reading, which the fire checks evaluate themselves."""
+        names = ({t.name for t in self.high_rise(reading)}
+                 | {name for name, special in self.special.items() if special})
+        return [t for t in self.towers if t.name in names]
+
+    def fire_held_anywhere(self) -> list[TowerGeometry]:
+        names = {t.name for r in self.stilt_readings for t in self.fire_held(r)}
         return [t for t in self.towers if t.name in names]
 
     def low_rise_judged(self) -> list[TowerGeometry]:

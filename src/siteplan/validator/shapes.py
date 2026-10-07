@@ -13,7 +13,7 @@ import shapely
 from shapely.affinity import rotate
 from shapely.geometry import LineString, Point, Polygon, box
 from shapely.geometry.base import BaseGeometry
-from shapely.ops import polylabel, unary_union
+from shapely.ops import linemerge, polylabel, unary_union
 from shapely.validation import explain_validity, make_valid
 
 from siteplan.contracts.common import Shape
@@ -161,6 +161,21 @@ def width_of(shape: BaseGeometry, ceiling_m: float) -> float:
 def healed(shape: BaseGeometry, gap_m: float = HEAL_M) -> BaseGeometry:
     """The shape with hairline cracks closed: pieces drawn to meet can miss by a hair."""
     return mitred(mitred(shape, gap_m), -gap_m)
+
+
+def longest_frontage(footprint: Polygon, ground: BaseGeometry, within_m: float) -> float:
+    """The longest unbroken stretch of a block's outline that lies within `within_m` of the
+    ground: how much of the block faces a road, where a corner that only touches it has almost
+    none."""
+    if footprint.is_empty or ground.is_empty:
+        return 0.0
+    near = footprint.exterior.intersection(ground.buffer(within_m))
+    runs = [g for g in getattr(near, "geoms", [near])
+            if isinstance(g, LineString) and g.length > 0]
+    if not runs:
+        return 0.0
+    merged = linemerge(runs)  # a stretch over the ring's first point comes back in two pieces
+    return max(g.length for g in getattr(merged, "geoms", [merged]))
 
 
 def oriented_box(polygon: Polygon) -> tuple[float, float, float]:

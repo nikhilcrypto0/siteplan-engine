@@ -5,10 +5,20 @@ only if it counts as a lane. Each pins a survivor of a mutation test of the firs
 import pytest
 from shapely.geometry import Point, box
 from shapely.ops import unary_union
-from validator_helpers import check, fixture, move_tower, rectangle, set_floors, shapes, status
+from validator_helpers import (
+    check,
+    fixture,
+    move_tower,
+    rectangle,
+    select,
+    set_floors,
+    shapes,
+    status,
+)
 
 from siteplan.contracts.candidate import PlacedAmenity, RoadKind, RoadPiece, SiteProgram
 from siteplan.contracts.common import Status
+from siteplan.contracts.resolved_rules import OPENS_ONTO_ROAD
 from siteplan.validator.fire import clear_band
 
 TEST_CLASS = "normative"
@@ -59,17 +69,18 @@ def test_a_cul_de_sac_over_100_m_long_or_with_a_head_under_9_m_radius_fails(trou
 
 
 def test_a_block_of_exactly_12_m_is_not_above_12_m_and_needs_no_road():
+    # read with a touch: how much of a block must face the road is another test's question
+    touch = fixture("rectangle").with_rules(lambda r: select(r, OPENS_ONTO_ROAD, "touch"))
+
     def low(candidate):
         _without_internal_road(candidate)
         set_floors(candidate, "T3", 3)  # 3 m stilt + 9 m = 12 m exactly
-    assert check(fixture("rectangle").edited(low).report(), SERVED).finding.measured == (
-        "all 2 blocks")
+    assert check(touch.edited(low).report(), SERVED).finding.measured == "all 2 blocks"
 
     def higher(candidate):
         low(candidate)
         set_floors(candidate, "T3", 4)  # 15 m
-    assert check(fixture("rectangle").edited(higher).report(), SERVED).finding.measured == (
-        "not on a road: T3")
+    assert check(touch.edited(higher).report(), SERVED).finding.measured == "not on a road: T3"
 
 
 def test_a_block_2_m_from_a_road_is_not_on_it():

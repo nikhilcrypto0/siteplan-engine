@@ -14,6 +14,7 @@ from validator_helpers import move_tower
 
 from siteplan.contracts import digest
 from siteplan.contracts.common import Line, Status
+from siteplan.contracts.resolved_rules import OPENS_ONTO_ROAD
 
 TEST_CLASS = "characterization"
 WORKSPACE = Path(__file__).parent.parent / "fixtures" / "workspace"
@@ -29,6 +30,12 @@ LAYOUTS = {"counted": {"floors": 7}, "not_counted": {"floors": 8, "stilt_in_rule
 SILL_M2 = 0.01  # the buffer the validator builds may differ from the generator's by this much
 
 # Where the validator says UNVERIFIED and today's checker says PASS, and why.
+# Rules today's checker reads one way where the validator evaluates more than one reading:
+# compared under the reading the checker takes.
+AS_THE_CHECKER_READS = {
+    "Internal roads: every block served": (OPENS_ONTO_ROAD, "touch"),
+    "Internal roads: blocks up to 12 m (pathways)": (OPENS_ONTO_ROAD, "touch"),
+}
 STRICTER = {
     "Abutting road width (for T1)":
         "the 12.4 m is a value read off the drawing and never confirmed; the checker takes it as "
@@ -103,12 +110,16 @@ def test_the_validator_agrees_with_todays_checker_on_the_real_options(suchitra):
 
     _, _, _, site, rules, design, candidates = suchitra
     for candidate in candidates:
-        ours = {c.finding.rule: c.finding.status for c in validate(
-            site, rules, design, candidate).legal}
+        ours = {c.finding.rule: c for c in validate(site, rules, design, candidate).legal}
         for claim in candidate.generator_claims:
             if claim.rule in STRICTER or claim.status is Status.INFO:
                 continue
-            assert ours.get(claim.rule) is claim.status, claim.rule
+            c = ours.get(claim.rule)
+            if claim.rule in AS_THE_CHECKER_READS and c is not None:
+                interpretation, reading = AS_THE_CHECKER_READS[claim.rule]
+                assert c.by_reading[interpretation][reading] is claim.status, claim.rule
+            else:
+                assert (c.finding.status if c else None) is claim.status, claim.rule
 
 
 def test_without_the_surfaces_of_its_facilities_the_open_space_is_unverified_not_passed(suchitra):

@@ -227,6 +227,43 @@ FIRE_STREET_CLAUSE = (
 )
 ENTRANCE_CLEAR_HEIGHT_M = 4.5  # 4.6(d): under anything built over the main entrance
 
+# 4.6 opens: "For high rise buildings and special buildings (see Part 4 'Fire and Life Safety' of
+# the Code), the following additional provisions of means of access shall be ensured". NBC 2016
+# Part 4 1.2(b)(6) makes a special building of "buildings with two basements or more, or with one
+# basement of area more than 500 m²", at any height and in any occupancy (both read on the OCR of
+# the page images, fixtures/rules/sources/nbc, on 2026-10-06). Rule 15(a)(i), as substituted by
+# G.O.Ms.No.50 of 2019, holds a building below the state's high-rise height to NBC 2016's
+# requirements "other than heights and setbacks"; 4.6 is a provision of means of access, neither a
+# height nor a setback, so a block standing over such a cellar is held to all of 4.6 whatever its
+# height. Read as law (decided 2026-10-06), not as an open question.
+NBC_SPECIAL_BASEMENT_SQM = 500.0
+NBC_SPECIAL_BASEMENT_LEVELS = 2
+NBC_SPECIAL_BUILDING_CLAUSE = (
+    "G.O.168 rule 15(a)(i) as substituted by G.O.Ms.No.50 of 2019, bringing in NBC 2016 Part 3 "
+    "4.6 for special buildings, which Part 4 1.2(b)(6) makes of a building with two basements or "
+    "more, or one basement of more than 500 m²"
+)
+# Part 4 2.38: "High Rise Building - A building 15 m or above in height (irrespective of its
+# occupancy)", its height NBC's own (Part 4 2.6: from the ground to the terrace of the last
+# livable floor, so the stilt counts). The state draws its line at 21 m (rule 2(f) as substituted
+# by G.O.Ms.No.95 of 2026). Whether 4.6's "high rise buildings" reaches a block of 15 to 21 m that
+# the state calls non-high-rise is open: the nbc_fire_height interpretation carries both lines.
+NBC_HIGH_RISE_M = 15.0
+NBC_HIGH_RISE_CLAUSE = (
+    "NBC 2016 Part 4 2.38 (a high rise building is 15 m or above in height, measured as Part 4 "
+    "2.6 does, the stilt included), through G.O.168 rule 15(a)(i) as substituted by G.O.Ms.No.50 "
+    "of 2019"
+)
+# Part 3 4.3.2.2 (p0122 of the NBC page images): "The approach to the buildings from road/street/
+# internal means of access shall be through paved pathway complying with requirements in B-2. The
+# length of the pathway shall not be more than 30 m." Brought to a block below the high-rise
+# height by rule 15(a)(i), like 4.6 above.
+PATHWAY_MAX_LENGTH_M = 30.0
+PATHWAY_LENGTH_CLAUSE = (
+    "G.O.168 rule 15(a)(i) as substituted by G.O.Ms.No.50 of 2019, bringing in NBC 2016 Part 3 "
+    "4.3.2.2 (the paved pathway from a road to a building no longer than 30 m)"
+)
+
 # Rule 8(m), read from the 2012 text on 2026-09-30 (G.O.Ms.No.7 of 2016 substituted 8(k) and
 # 8(n), not 8(m)): "9m to 18m for main internal approach roads; 9m for other internal roads and
 # also for looped roads. 8m for cul-de-sacs roads (with a minimum radius 9m.) between 50-100m
