@@ -135,11 +135,9 @@ def write_run(folder: Path, record: RunRecord, inputs: Inputs,
     (folder / "reports").mkdir()
     (folder / PROPOSED / "candidates").mkdir(parents=True)
     (folder / PROPOSED / "reports").mkdir()
-    digests = {}
     for key, (name, _) in INPUTS.items():
-        model = getattr(inputs, key)
-        (folder / name).write_text(model.model_dump_json(indent=1))
-        digests[key] = digest(model)
+        (folder / name).write_text(getattr(inputs, key).model_dump_json(indent=1))
+    digests = input_digests(inputs)
     for candidate, report in judged:
         (folder / "candidates" / f"{candidate.candidate_id}.json").write_text(
             candidate.model_dump_json(indent=1))
@@ -153,6 +151,30 @@ def write_run(folder: Path, record: RunRecord, inputs: Inputs,
     record = record.model_copy(update={"digests": digests})
     (folder / RECORD).write_text(record.model_dump_json(indent=1))
     return record
+
+
+def input_digests(inputs: Inputs) -> dict[str, str]:
+    """The digests a run's record keeps of the inputs it searched."""
+    return {key: digest(getattr(inputs, key)) for key in INPUTS}
+
+
+def approved_runs_of(out: Path, digests: dict[str, str]) -> list[tuple[str, str]]:
+    """Every run in `out` approved and searched on exactly these inputs, with when it was
+    approved, oldest first: a request that repeats one is said to before it is approved again,
+    so a second identical search is never asked for, or reported, as if it were the first."""
+    found = []
+    for path in out.glob(f"*/{RECORD}"):
+        try:
+            record = RunRecord.model_validate_json(path.read_text())
+        except (OSError, ValidationError):
+            continue
+        if record.digests != digests:
+            continue
+        approval = next((a for a in record.approvals if a.asked is Asked.PROPOSAL
+                         and a.decision is Decision.APPROVED), None)
+        if approval is not None:
+            found.append((approval.at, record.run_id))
+    return [(run_id, at) for at, run_id in sorted(found)]
 
 
 def read_record(out: Path, run_id: str) -> RunRecord:
