@@ -252,7 +252,8 @@ def test_a_label_never_moves_off_a_layout_that_beats_the_others_on_the_earlier_p
 
 
 def test_more_options_than_points_are_more_different_ideas_by_yield():
-    brief = _brief(options=4)
+    # one more than the brief's points; ROBUST (C4-09) is left unfilled here, no report read
+    brief = _brief(options=len(ParetoPoint) + 1)
     picks = select(_scored(*_pool(), brief=brief), brief).picks
     assert [p.point for p in picks][:3] == [ParetoPoint.MAX_YIELD, ParetoPoint.BALANCED,
                                             ParetoPoint.CONVENTIONAL_OPEN_SPACE]
@@ -295,3 +296,40 @@ def test_the_selection_does_not_depend_on_the_order_the_pool_was_made_in():
         random.Random(seed).shuffle(shuffled)
         assert [(p.point, p.scored.candidate.candidate_id)
                 for p in select(_scored(*shuffled), BRIEF).picks] == expected
+
+
+# --- ROBUST: the layout that rests on the fewest open readings (C4-09) -------------------------
+
+
+EVERY_POINT = _brief(pareto=list(ParetoPoint))  # a brief that asks for every point, ROBUST too
+
+
+def _rested(rests: dict[str, tuple[int, int]], brief=EVERY_POINT):
+    """The pool, each candidate with the readings it rests on (as the guard's report gives)."""
+    return [Scored(c, measure(c, brief), rests.get(c.candidate_id, (2, 3))) for c in _pool()]
+
+
+def test_robust_is_the_layout_resting_on_the_fewest_readings_the_most_saleable_between_equals():
+    """The most saleable layouts rest on readings; of those that hold under every one, the most
+    saleable is ROBUST, even the near-copy of the scheme shown for MAX_YIELD: that version of a
+    scheme is what the point is for."""
+    picks = select(_rested({"near-copy": (0, 0), "conventional": (0, 0)}), EVERY_POINT).picks
+    by_point = {p.point: p.scored.candidate.candidate_id for p in picks}
+    assert by_point[ParetoPoint.MAX_YIELD] == "yield"
+    assert by_point[ParetoPoint.ROBUST] == "near-copy"  # more saleable than conventional
+    assert len(set(by_point.values())) == len(by_point)  # never one layout twice
+
+
+def test_robust_is_left_unfilled_when_the_layout_shown_first_holds_or_no_report_was_read():
+    selection = select(_rested({"yield": (0, 0), "near-copy": (0, 0)}), EVERY_POINT)
+    assert ParetoPoint.ROBUST not in {p.point for p in selection.picks}
+    assert (ParetoPoint.ROBUST, "a layout already chosen holds under every reading") in \
+        selection.unfilled
+    unread = select(_scored(*_pool(), brief=EVERY_POINT), EVERY_POINT)
+    assert (ParetoPoint.ROBUST, "no candidate's validation report was read") in unread.unfilled
+
+
+def test_the_fewer_open_questions_rank_first_then_the_fewer_checks():
+    picks = select(_rested({"balanced": (1, 4), "turned": (1, 1)}), EVERY_POINT).picks
+    assert {p.point: p.scored.candidate.candidate_id for p in picks}[ParetoPoint.ROBUST] == \
+        "turned"

@@ -4,6 +4,43 @@ A characterization test (tests/manifest.py) pins what the engine produces today.
 only together with a normative replacement test and an entry here: what changed, why, the
 evidence, and the test that now holds the behaviour. Newest first.
 
+## 2026-10-07: C4-09, the frontier kept, and a robust alternative shown
+
+Two changes to what the search keeps and what the architect sees.
+
+- Judging (`strategy._to_judge`): each profile's six layouts the validator judges were its six
+  most saleable, which a profile filled with copies of one scheme a step apart (the made-up
+  baseline judged four 3 x S+9 of the same saleable area). Now the front of the objective's axes
+  comes first (the most saleable, the most open space, the most conventional, and every layout
+  nothing beats on all), then the rest by yield, and a layout that is the same idea as one
+  already taken (`pareto.same_idea`) waits until no other is left.
+- A fourth alternative (`ParetoPoint.ROBUST`, contracts extended, not bumped: the enum gains a
+  member, so every stored 1.3 contract still reads): the layout that rests on the fewest open
+  readings of the rules, none when it holds under every reading the validator evaluates, the most
+  saleable between equals. Its readings come from the guard's report (`core._rests`,
+  `Scored.rests`); a candidate whose report was not read never fills it. It is filled right after
+  the most saleable, may be a scheme already shown at another height (that version of it is what
+  the point is for) and is left unfilled, said, when a layout chosen before it holds under every
+  reading. A brief lists its points; one that lists none asks for all four.
+
+- Made-up land: `tests/test_optimizer_pareto.py` (normative: ROBUST is the least dependent, the
+  most saleable between equals, the near-copy of a shown scheme allowed, never one layout twice;
+  unfilled when the layout shown first holds or no report was read; fewer open questions before
+  fewer checks), `tests/test_search_frontier.py` (normative: the quota goes to different ideas
+  before copies; copies when nothing else is left; the front before a more saleable layout
+  another beats on every axis). The best proposal of every profile on the rectangles and the
+  L-plots is the same as on C4-08; which layouts are judged and proposed moves, and the road
+  ground is re-pinned. The service's tests count four alternatives shown and choose them again
+  with each proposal's readings.
+- The service's made-up baseline (re-pinned): 15 proposed where 10 were; shown the 4 x S+10
+  balanced layout again (440,800 sft, judged once more now that copies wait), and for the open
+  space 4 x S+8 + S+3 and for ROBUST 3 x S+7, both holding under every reading.
+- Dhulapally, Run B prime's request (the C4 benchmark): shown the most saleable 3 x S+10 (432,120
+  sft), balanced a six-block S+7, S+7, S+5 x 4 (362,678), conventional S+8 x 3 + S+5 (302,484) and
+  ROBUST the 4 towers S+9, S+9, S+3, S+3 (287,016 sft), which holds under every reading: the best
+  such layout the search found, now one of the alternatives the architect sees. 15 proposed where
+  12 were; the one layout the validator fails is still the micrometre gap of C4-07.
+
 ## 2026-10-06: C4-08, what the law asks, what the program requires, what the firm prefers
 
 Three classes of constraint, kept apart. What the law asks (the validator's legal checks) is

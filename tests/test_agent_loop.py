@@ -809,7 +809,7 @@ def test_every_parameter_the_model_is_offered_carries_its_own_type(ws, tmp_path)
                                          "massing"}
     assert intent["default"] == propose["properties"]["intent"]["default"]
     assert intent["properties"]["massing"]["anyOf"][0]["enum"] == [
-        "MAX_YIELD", "BALANCED", "CONVENTIONAL_OPEN_SPACE"]
+        "MAX_YIELD", "BALANCED", "CONVENTIONAL_OPEN_SPACE", "ROBUST"]  # ROBUST: C4-09
     assert "$defs" in propose  # the host's own schema is left as it is
 
 

@@ -43,7 +43,7 @@ from siteplan import validator as independent
 from siteplan.contracts import CandidateLayout, ValidationReport
 from siteplan.optimizer.interfaces import Budget, Proposal, SearchContext, Validator
 from siteplan.optimizer.objective import Scores, measure
-from siteplan.optimizer.pareto import Scored, select
+from siteplan.optimizer.pareto import Scored, pareto_front, same_idea, select
 from siteplan.optimizer.search import fringe
 from siteplan.optimizer.search.build import build_candidate
 from siteplan.optimizer.search.columns import Choice
@@ -338,13 +338,11 @@ class FullSearchStrategy:
                 candidate_id=f"{NAME.lower()}-{profile.key}-{number}", seed=context.seed,
                 notes=_planning_notes(run))
             drawn.append((measure(candidate, brief), profile, candidate))
-        drawn.sort(key=lambda d: (-d[0].yield_score, d[2].candidate_id))
-        taken: Counter = Counter()
         order = []
-        for scores, profile, candidate in drawn:  # each profile has its own quota
-            if taken[profile.key] < self.limits.judged_per_profile:
-                taken[profile.key] += 1
-                order.append((scores, profile, candidate))
+        for key in dict.fromkeys(profile.key for _, profile, _ in drawn):  # a quota each
+            order += _to_judge([d for d in drawn if d[1].key == key],
+                               self.limits.judged_per_profile)
+        order.sort(key=lambda d: (-d[0].yield_score, d[2].candidate_id))  # the best first
         judged: list[Judged] = []
         for scores, profile, candidate in order:
             if stage.expired() and judged:
@@ -371,7 +369,9 @@ class FullSearchStrategy:
         for key in dict.fromkeys(j.profile.key for j in found):
             pool = [j for j in found if j.profile.key == key]
             by_id = {j.candidate.candidate_id: j for j in pool}
-            selection = select([Scored(j.candidate, j.scores) for j in pool], brief)
+            selection = select([Scored(j.candidate, j.scores,
+                                       (len(j.rests.readings), len(j.rests.checks)))
+                                for j in pool], brief)
             chosen += [by_id[p.scored.candidate.candidate_id]
                        for p in selection.picks][:self.limits.per_profile_proposed]
         robust = [j for j in found if j.rests.holds_under_every_reading]
@@ -400,6 +400,24 @@ def _planning_notes(run: Run) -> list[str]:
         return ["ASSUMED: nobody has said which side the access road runs along, so the entrance "
                 "stands where the approach to the ring road is shortest; the architect confirms it"]
     return []
+
+
+def _to_judge(pool: list[tuple], quota: int) -> list[tuple]:
+    """Which of one profile's layouts the validator judges (C4-09): the front of the objective's
+    axes first (the most saleable, the most open space, the most conventional, and every layout
+    between them nothing beats on all), then the rest by yield; a layout that is the same idea as
+    one already taken (pareto.same_idea) waits until no other is left. The six judged were the six
+    most saleable, which a profile could fill with copies of one scheme a step apart."""
+    front = {id(s.candidate) for s in pareto_front([Scored(c, sc) for sc, _, c in pool])}
+    ranked = sorted(pool, key=lambda d: (id(d[2]) not in front, -d[0].yield_score,
+                                         d[2].candidate_id))
+    taken: list[tuple] = []
+    waiting: list[tuple] = []
+    for d in ranked:
+        if len(taken) >= quota:
+            break
+        (waiting if any(same_idea(d[2], t[2]) for t in taken) else taken).append(d)
+    return (taken + waiting)[:quota]
 
 
 def _cuts(ev: Evaluation, least: float) -> Iterator[Evaluation]:

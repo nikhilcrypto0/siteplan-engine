@@ -1,4 +1,5 @@
-"""The Pareto front, and the three alternatives an architect is shown.
+"""The Pareto front, and the alternatives an architect is shown, one for each of the brief's
+points.
 
 A candidate is on the front when no other is at least as good on every axis of the objective
 (objective.py) and better on one. From the candidates that survived the guard, the brief's Pareto
@@ -6,13 +7,19 @@ points are each filled with the best candidate for that point that is a genuinel
 from those already chosen:
 
 - MAX_YIELD: the most saleable area, less what the mix misses by (the legacy generator's score);
+- ROBUST: the layout that rests on the fewest open readings of the rules (none: it holds under
+  every reading the validator evaluates), the most saleable between equals (C4-09). Only a
+  candidate whose readings are known (its validation report read) may fill it, and it may be a
+  scheme already shown at another height (that version of it is what the point is for); it is
+  left unfilled when a layout chosen before it already holds under every reading;
 - CONVENTIONAL_OPEN_SPACE: the most conventional blocks with the most open space;
 - BALANCED: the compromise nearest the best on every axis, weighted by the brief's priorities.
 
-The two extremes are filled first and the compromise takes the best of what they leave, so it
-stands between them rather than beside the first of them. The alternatives come back in the
-order the brief lists its points. When the brief asks for more options than it has points, the
-best remaining different ideas by yield follow, untagged.
+The extremes are filled first, the layout of least legal dependency right after the most
+saleable so that no other point takes it first, and the compromise takes the best of what they
+leave, so it stands between them rather than beside the first of them. The alternatives come
+back in the order the brief lists its points. When the brief asks for more options than it has
+points, the best remaining different ideas by yield follow, untagged.
 
 Two layouts are one idea when they have as many towers running the same way on mostly the same
 ground, whatever their height: one floor less is not another scheme. A point nothing different
@@ -39,13 +46,17 @@ from siteplan.optimizer.objective import AXES, Scores, priority_weights
 
 SAME_IDEA_OVERLAP = 0.5  # two layouts sharing this much tower ground are one idea
 ANGLE_FAMILY_DEG = 10.0  # towers running within this of each other run the same way
-FILL_ORDER = (ParetoPoint.MAX_YIELD, ParetoPoint.CONVENTIONAL_OPEN_SPACE, ParetoPoint.BALANCED)
+FILL_ORDER = (ParetoPoint.MAX_YIELD, ParetoPoint.ROBUST, ParetoPoint.CONVENTIONAL_OPEN_SPACE,
+              ParetoPoint.BALANCED)
 
 
 @dataclass(frozen=True)
 class Scored:
     candidate: CandidateLayout
     scores: Scores
+    # the open questions of the rules it rests on and the checks that depend on them (0, 0: it
+    # holds under every reading); None while its validation report has not been read
+    rests: tuple[int, int] | None = None
 
 
 Key = Callable[[Scored], tuple]  # how well a candidate serves a point: smaller is better
@@ -127,11 +138,24 @@ def select(pool: Sequence[Scored], brief: DesignBrief) -> Selection:
     if unknown:
         raise ValueError(f"the optimizer has no ranking for {unknown}")
     unfilled = []
+    def least_dependent(order: list[Scored]) -> tuple[Scored | None, str]:
+        """ROBUST's candidate: the one that rests on the least, another than those chosen, the
+        same scheme at another height included (that version of a scheme already shown is what
+        the point is for); none when a layout chosen already holds under every reading."""
+        if any(p.scored.rests == (0, 0) for p in picks):
+            return None, "a layout already chosen holds under every reading"
+        known = [s for s in order if s.rests is not None and not any(s is p.scored
+                                                                     for p in picks)]
+        return (known[0], "") if known else (None, "no candidate's validation report was read")
+
     for point in (p for p in FILL_ORDER if p in listed):
-        found = next_different(ranked[point])
+        if point is ParetoPoint.ROBUST:
+            found, why = least_dependent(ranked[point])
+        else:
+            found, why = next_different(ranked[point]), (
+                "no candidate left that is a different idea from those already chosen")
         if found is None:
-            unfilled.append((point, "no candidate left that is a different idea from those "
-                                    "already chosen" if pool else "no candidate passed"))
+            unfilled.append((point, why if pool else "no candidate passed"))
         else:
             picks.append(Pick(point, found, id(found) in on_front))
     picks = _relabelled(picks, keys)
@@ -175,6 +199,8 @@ def _point_keys(pool: Sequence[Scored], brief: DesignBrief) -> dict[ParetoPoint,
     open_space, conventional = AXES.index("open_space"), AXES.index("conventionality")
     return {
         ParetoPoint.MAX_YIELD: lambda s: (-s.scores.yield_score, -s.scores.units),
+        ParetoPoint.ROBUST: lambda s: (s.rests is None, s.rests or (0, 0),
+                                       -s.scores.yield_score, -s.scores.units),
         ParetoPoint.BALANCED: lambda s: (compromise(s), -s.scores.yield_score),
         ParetoPoint.CONVENTIONAL_OPEN_SPACE: lambda s: (
             -(level(s)[open_space] + level(s)[conventional]), -s.scores.towers,

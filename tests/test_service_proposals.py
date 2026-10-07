@@ -146,7 +146,8 @@ def test_every_layout_the_search_proposed_is_kept_with_the_report_the_guard_made
         assert entry.basis == candidate.interpretation_basis != {}
         assert entry.holds_under_every_reading is rests_on(report).holds_under_every_reading
         assert entry.shown is (entry.candidate_id in shown)
-    assert sum(p.shown for p in record.proposed_candidates) == len(record.candidates) == 3
+    # the brief's four points (ROBUST since C4-09), each filled here
+    assert sum(p.shown for p in record.proposed_candidates) == len(record.candidates) == 4
     assert len(record.proposed_candidates) > len(record.candidates)  # some were not shown
     held = sum(p.holds_under_every_reading for p in record.proposed_candidates)
     assert any(f"{held} of {len(ran.proposals)} proposed hold under every reading" in note
@@ -154,15 +155,20 @@ def test_every_layout_the_search_proposed_is_kept_with_the_report_the_guard_made
 
 
 def test_the_three_shown_are_what_select_chooses_from_the_proposals_kept(ran):
-    """Choosing again over the kept proposals gives the alternatives the run shows, each at its
-    point, and the model is answered with those three and no other."""
+    """Choosing again over the kept proposals, each with the readings its kept report says it
+    rests on, gives the alternatives the run shows, each at its point, and the model is answered
+    with those and no other."""
     record = _record(ran)
     folder = _out(ran) / ran.proposed.run_id
     brief = DesignBrief.model_validate_json((folder / "brief.json").read_text())
     kept = [CandidateLayout.model_validate_json(_proposed_file(
         ran, ran.proposed.run_id, "candidates", p.candidate_id).read_text())
         for p in record.proposed_candidates]
-    picks = select([Scored(c, measure(c, brief)) for c in kept], brief).picks
+    reports = [ValidationReport.model_validate_json(_proposed_file(
+        ran, ran.proposed.run_id, "reports", p.candidate_id).read_text())
+        for p in record.proposed_candidates]
+    picks = select([Scored(c, measure(c, brief), core._rests(r))
+                    for c, r in zip(kept, reports, strict=True)], brief).picks
     chosen = {p.scored.candidate.candidate_id: p.point.value for p in picks}
     assert chosen == {c.candidate_id: c.point for c in record.candidates}
     assert {c.candidate_id: c.pareto_point for c in ran.proposed.candidates} == chosen

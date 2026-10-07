@@ -68,6 +68,7 @@ class ParetoPoint(StrEnum):
     MAX_YIELD = "MAX_YIELD"
     BALANCED = "BALANCED"
     CONVENTIONAL_OPEN_SPACE = "CONVENTIONAL_OPEN_SPACE"
+    ROBUST = "ROBUST"  # resting on the fewest open readings of the rules (C4-09)
 
 
 class Priority(StrEnum):

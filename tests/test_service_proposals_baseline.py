@@ -30,7 +30,11 @@ it was 4 x S+10 (440,800, laid out but no longer among the six judged), and the 
 4 x S+9 (335,880), which rests on a reading, where it was the 4 x S+8 that holds under every
 reading (the selector weighs no robustness yet, C4-09). Re-pinned on C4-08, where a facility the
 brief prefers is a preference, not a failure of the program: the same proposals and the same three
-shown; only the program verdicts in the model's answer move.
+shown; only the program verdicts in the model's answer move. Re-pinned on C4-09, where each
+profile's judged six are its front and different ideas before copies, and a fourth alternative is
+shown, ROBUST, the layout resting on the fewest open readings: 15 proposed where 10 were; shown
+the 4 x S+10 balanced one again (440,800 sft), and for the open space the S+8 x 4 + S+3 and for
+ROBUST the 3 x S+7, both holding under every reading.
 
 The values pin exact output on the locked dependencies (uv.lock). They move only with a normative
 replacement and an entry in docs/behaviour-changes.md.
@@ -53,32 +57,39 @@ TEST_CLASS = "characterization"
 
 PINNED = {
     "notes": [
-        "FULL: 768 configurations evaluated, 116 laid out, 24 judged by the validator, 10 proposed",
-        "FULL: 3 of 10 proposed hold under every reading of the open questions; the others each "
+        "FULL: 768 configurations evaluated, 116 laid out, 24 judged by the validator, 15 proposed",
+        "FULL: 3 of 15 proposed hold under every reading of the open questions; the others each "
         "name the readings they rest on",
         "FULL: every layout leaves the height above sea level and the 45 t loading of the paving "
         "UNVERIFIED",
     ],
     "proposed": [
         "full-not_counted-allowed-86",
+        "full-ALL-allowed-29",
         "full-ALL-allowed-31",
-        "full-not_counted-allowed-89",
-        "full-ALL-allowed-35",
+        "full-not_counted-allowed-87",
         "full-not_counted-ALL-58",
         "full-not_counted-ALL-116",
-        "full-not_counted-ALL-63",
+        "full-ALL-allowed-33",
+        "full-not_counted-ALL-115",
         "full-ALL-ALL-1",
-        "full-ALL-ALL-2",
-        "full-ALL-ALL-113",
+        "full-not_counted-ALL-61",
+        "full-not_counted-allowed-111",
+        "full-not_counted-allowed-112",
+        "full-ALL-ALL-7",
+        "full-ALL-allowed-55",
+        "full-ALL-ALL-114",
     ],
-    "proposed_sha256": "f4525f37b0b94551316ed700c849c5659b4d95ef13fe3bdadc12cecf7996a3ff",
+    "proposed_sha256": "6600dfffbef1b234bc3a3b151e6a32f951389799ae846aa5fff142d2f053f3f7",
     "shown": [
-        ["full-not_counted-ALL-116", "BALANCED"],
+        ["full-not_counted-allowed-87", "BALANCED"],
         ["full-not_counted-allowed-86", "MAX_YIELD"],
-        ["full-not_counted-ALL-63", "CONVENTIONAL_OPEN_SPACE"],
+        ["full-ALL-ALL-114", "CONVENTIONAL_OPEN_SPACE"],
+        ["full-ALL-ALL-1", "ROBUST"],
     ],
-    "shown_digests": ["5c3453602ceeca21", "937ceaa1cf326f7f", "b1702e526473122c"],
-    "answer_sha256": "95ed55a1edace777cbfb17476b21c9115e208636b0d6012b46310acc0b73de47",
+    "shown_digests": ["f221bdd69a4af9be", "159177f104623eb7", "cfae9011d83df020",
+                      "e81bd7dba6563362"],
+    "answer_sha256": "6eda374e1b32925fea8be94d7cf1fcd779bddc2bcfdc6a48564825f361ee97dd",
     "approval_page_sha256": "cd3ebee2af46849756df643999df9b16d2cbc91d92c45101983782cff1eb0181",
 }
 PROPOSALS: list = []
