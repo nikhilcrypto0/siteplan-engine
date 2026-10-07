@@ -19,22 +19,25 @@ Two changes to what the search keeps and what the architect sees.
   readings of the rules, none when it holds under every reading the validator evaluates, the most
   saleable between equals. Its readings come from the guard's report (`core._rests`,
   `Scored.rests`); a candidate whose report was not read never fills it. It is filled right after
-  the most saleable, may be a scheme already shown at another height (that version of it is what
-  the point is for) and is left unfilled, said, when a layout chosen before it holds under every
-  reading. A brief lists its points; one that lists none asks for all four.
+  the most saleable, a different idea as every alternative is, and is left unfilled, said, when a
+  layout chosen before it holds under every reading. A brief lists its points; one that lists
+  none asks for all four. (A first version let it show the most saleable scheme at a lower height;
+  the real sites' tests hold every alternative to another idea, the selector's rule, and it was
+  put back.)
 
-- Made-up land: `tests/test_optimizer_pareto.py` (normative: ROBUST is the least dependent, the
-  most saleable between equals, the near-copy of a shown scheme allowed, never one layout twice;
-  unfilled when the layout shown first holds or no report was read; fewer open questions before
-  fewer checks), `tests/test_search_frontier.py` (normative: the quota goes to different ideas
+- Made-up land: `tests/test_optimizer_pareto.py` (normative: ROBUST is the least dependent
+  different idea, the most saleable between equals, not the near-copy of a shown scheme; unfilled
+  when the layout shown first holds or no report was read; fewer open questions before fewer
+  checks), `tests/test_search_frontier.py` (normative: the quota goes to different ideas
   before copies; copies when nothing else is left; the front before a more saleable layout
   another beats on every axis). The best proposal of every profile on the rectangles and the
   L-plots is the same as on C4-08; which layouts are judged and proposed moves, and the road
   ground is re-pinned. The service's tests count four alternatives shown and choose them again
-  with each proposal's readings.
+  with each proposal's readings; the real sites' tests (`tests/test_search_client.py`,
+  `tests/test_service_client.py`) allow one alternative a point, four.
 - The service's made-up baseline (re-pinned): 15 proposed where 10 were; shown the 4 x S+10
   balanced layout again (440,800 sft, judged once more now that copies wait), and for the open
-  space 4 x S+8 + S+3 and for ROBUST 3 x S+7, both holding under every reading.
+  space 4 x S+8 + S+3 and for ROBUST 4 x S+8, both holding under every reading.
 - Dhulapally, Run B prime's request (the C4 benchmark): shown the most saleable 3 x S+10 (432,120
   sft), balanced a six-block S+7, S+7, S+5 x 4 (362,678), conventional S+8 x 3 + S+5 (302,484) and
   ROBUST the 4 towers S+9, S+9, S+3, S+3 (287,016 sft), which holds under every reading: the best

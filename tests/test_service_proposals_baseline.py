@@ -34,7 +34,8 @@ shown; only the program verdicts in the model's answer move. Re-pinned on C4-09,
 profile's judged six are its front and different ideas before copies, and a fourth alternative is
 shown, ROBUST, the layout resting on the fewest open readings: 15 proposed where 10 were; shown
 the 4 x S+10 balanced one again (440,800 sft), and for the open space the S+8 x 4 + S+3 and for
-ROBUST the 3 x S+7, both holding under every reading.
+ROBUST the 4 x S+8, both holding under every reading (the 3 x S+7, which also holds and sells
+more, is the scheme of the most saleable at a lower height, not another idea).
 
 The values pin exact output on the locked dependencies (uv.lock). They move only with a normative
 replacement and an entry in docs/behaviour-changes.md.
@@ -65,7 +66,6 @@ PINNED = {
     ],
     "proposed": [
         "full-not_counted-allowed-86",
-        "full-ALL-allowed-29",
         "full-ALL-allowed-31",
         "full-not_counted-allowed-87",
         "full-not_counted-ALL-58",
@@ -73,6 +73,7 @@ PINNED = {
         "full-ALL-allowed-33",
         "full-not_counted-ALL-115",
         "full-ALL-ALL-1",
+        "full-ALL-allowed-40",
         "full-not_counted-ALL-61",
         "full-not_counted-allowed-111",
         "full-not_counted-allowed-112",
@@ -80,16 +81,16 @@ PINNED = {
         "full-ALL-allowed-55",
         "full-ALL-ALL-114",
     ],
-    "proposed_sha256": "6600dfffbef1b234bc3a3b151e6a32f951389799ae846aa5fff142d2f053f3f7",
+    "proposed_sha256": "831bb3fcdf7cc3e497a1b653d81fce7f879bfd483a9ecaca2286e88afeb5c245",
     "shown": [
         ["full-not_counted-allowed-87", "BALANCED"],
         ["full-not_counted-allowed-86", "MAX_YIELD"],
         ["full-ALL-ALL-114", "CONVENTIONAL_OPEN_SPACE"],
-        ["full-ALL-ALL-1", "ROBUST"],
+        ["full-ALL-ALL-7", "ROBUST"],
     ],
     "shown_digests": ["f221bdd69a4af9be", "159177f104623eb7", "cfae9011d83df020",
-                      "e81bd7dba6563362"],
-    "answer_sha256": "6eda374e1b32925fea8be94d7cf1fcd779bddc2bcfdc6a48564825f361ee97dd",
+                      "756e4a5b3200cd91"],
+    "answer_sha256": "49eeab9fc8ae0e5423a72831b1d3c86200f0c5ccb09b09bbed7a3ff347478877",
     "approval_page_sha256": "cd3ebee2af46849756df643999df9b16d2cbc91d92c45101983782cff1eb0181",
 }
 PROPOSALS: list = []

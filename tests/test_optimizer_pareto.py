@@ -309,15 +309,16 @@ def _rested(rests: dict[str, tuple[int, int]], brief=EVERY_POINT):
     return [Scored(c, measure(c, brief), rests.get(c.candidate_id, (2, 3))) for c in _pool()]
 
 
-def test_robust_is_the_layout_resting_on_the_fewest_readings_the_most_saleable_between_equals():
+def test_robust_is_the_different_idea_resting_on_the_fewest_readings_the_most_saleable():
     """The most saleable layouts rest on readings; of those that hold under every one, the most
-    saleable is ROBUST, even the near-copy of the scheme shown for MAX_YIELD: that version of a
-    scheme is what the point is for."""
+    saleable different idea is ROBUST: not the near-copy of the scheme shown for MAX_YIELD, which
+    holds too and sells more, since every alternative is another idea."""
     picks = select(_rested({"near-copy": (0, 0), "conventional": (0, 0)}), EVERY_POINT).picks
     by_point = {p.point: p.scored.candidate.candidate_id for p in picks}
     assert by_point[ParetoPoint.MAX_YIELD] == "yield"
-    assert by_point[ParetoPoint.ROBUST] == "near-copy"  # more saleable than conventional
-    assert len(set(by_point.values())) == len(by_point)  # never one layout twice
+    assert by_point[ParetoPoint.ROBUST] == "conventional"
+    for a, b in combinations([p.scored.candidate for p in picks], 2):
+        assert not same_idea(a, b)
 
 
 def test_robust_is_left_unfilled_when_the_layout_shown_first_holds_or_no_report_was_read():

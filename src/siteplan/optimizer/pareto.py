@@ -9,9 +9,9 @@ from those already chosen:
 - MAX_YIELD: the most saleable area, less what the mix misses by (the legacy generator's score);
 - ROBUST: the layout that rests on the fewest open readings of the rules (none: it holds under
   every reading the validator evaluates), the most saleable between equals (C4-09). Only a
-  candidate whose readings are known (its validation report read) may fill it, and it may be a
-  scheme already shown at another height (that version of it is what the point is for); it is
-  left unfilled when a layout chosen before it already holds under every reading;
+  candidate whose readings are known (its validation report read) may fill it, a different idea
+  as every alternative is; it is left unfilled when a layout chosen before it already holds under
+  every reading;
 - CONVENTIONAL_OPEN_SPACE: the most conventional blocks with the most open space;
 - BALANCED: the compromise nearest the best on every axis, weighted by the brief's priorities.
 
@@ -139,14 +139,16 @@ def select(pool: Sequence[Scored], brief: DesignBrief) -> Selection:
         raise ValueError(f"the optimizer has no ranking for {unknown}")
     unfilled = []
     def least_dependent(order: list[Scored]) -> tuple[Scored | None, str]:
-        """ROBUST's candidate: the one that rests on the least, another than those chosen, the
-        same scheme at another height included (that version of a scheme already shown is what
-        the point is for); none when a layout chosen already holds under every reading."""
+        """ROBUST's candidate: the different idea that rests on the least; none when a layout
+        chosen already holds under every reading."""
         if any(p.scored.rests == (0, 0) for p in picks):
             return None, "a layout already chosen holds under every reading"
-        known = [s for s in order if s.rests is not None and not any(s is p.scored
-                                                                     for p in picks)]
-        return (known[0], "") if known else (None, "no candidate's validation report was read")
+        known = [s for s in order if s.rests is not None]
+        if not known:
+            return None, "no candidate's validation report was read"
+        found = next_different(known)
+        return (found, "") if found is not None else (None, (
+            "no candidate left that is a different idea from those already chosen"))
 
     for point in (p for p in FILL_ORDER if p in listed):
         if point is ParetoPoint.ROBUST:
