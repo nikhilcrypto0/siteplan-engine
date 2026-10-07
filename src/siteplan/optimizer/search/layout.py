@@ -464,6 +464,12 @@ def lay_out(run: Run, ev: Evaluation) -> tuple[Laid | None, str]:
     blocked = unary_union([blocks, ev.kept_clear]) if ev.kept_clear is not None else blocks
     entrance, why = network.find_entrance(plot, clusters, blocked, q.approach_m,
                                           land_strip(land, q))
+    if entrance is None and ev.kept_clear is not None:
+        # C4-14: the approach keeps off the end kept for the open space when it can; when that
+        # end lies across every way in, it crosses it, a road through the park, and the open
+        # space is taken from the ground round it
+        entrance, why = network.find_entrance(plot, clusters, blocks, q.approach_m,
+                                              land_strip(land, q))
     if entrance is None:
         return None, why
     serving = _pathway_roads(ev, q)

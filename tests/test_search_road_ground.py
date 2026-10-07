@@ -10,7 +10,10 @@ out, the larger ones laid after all the others; C4-09 judges each profile's fron
 ideas first; C4-11 scores site use and the quality of a scheme and judges each point's best of
 the front first, so four, three and four of the three plots' eight proposals were other layouts;
 C4-12 takes the open space where it is usable, which leaves other ground to the program, and two,
-two and four are others again, two of their road sets new (L_RING_PATH_B, SLIM_THREE_B),
+two and four are others again, two of their road sets new (L_RING_PATH_B, SLIM_THREE_B); C4-14
+lets an approach cross the end kept for the open space when nothing else reaches the ring, so the
+configurations that end shut off lay out, those after them are numbered on, and eight proposals
+have their approach run through the park (the road sets ending _PARK and SLIM_PARK_PATH, new),
 docs/behaviour-changes.md.)
 
 The values pin exact output on the locked dependencies (uv.lock). They move only with a normative
@@ -48,17 +51,19 @@ RECTANGLE_B = [(*RING, 4183.02), *_streets(1220.0, 1220.0), (*APPROACH, 86.46)]
 RECTANGLE_D = [(*RING, 4504.68), *_streets(1740.0), (*APPROACH, 82.58)]
 RECTANGLE_G = [(*RING, 4270.68), *_streets(1458.0), (*APPROACH, 340.23)]
 L_THREE = [(*RING, 3339.36), *_streets(410.0, 410.0, 410.0), (*APPROACH, 36.25)]
+L_THREE_PARK = [(*RING, 3339.36), *_streets(410.0, 410.0, 410.0), (*APPROACH, 348.57)]
 L_RING = [(*RING, 2711.34), (*APPROACH, 253.44)]
-L_RING_WIDE = [(*RING, 2954.34), (*APPROACH, 260.13)]
 L_ONE_PATH = [(*RING, 2425.68), *_streets(585.0), (*APPROACH, 108.43), _pathway(1, 36.3)]
 L_RING_PATH_B = [(*RING, 2729.34), (*APPROACH, 244.44), _pathway(1, 36.3)]
-SLIM_ONE = [(*RING, 2830.68), *_streets(738.0), (*APPROACH, 222.97)]
-SLIM_THREE_B = [(*RING, 2907.36), *_streets(279.0, 279.0, 279.0), (*APPROACH, 99.43)]
+SLIM_PARK_PATH = [(*RING, 3339.36), *_streets(410.0, 410.0, 410.0), (*APPROACH, 348.57),
+                  _pathway(1, 36.3)]
+SLIM_PARK = [(*RING, 3068.19), *_streets(410.0, 410.0, 410.0), (*APPROACH, 348.57)]
+SLIM_THREE_B_PARK = [(*RING, 2907.36), *_streets(279.0, 279.0, 279.0), (*APPROACH, 335.77)]
 
 PINNED = {
     "rectangle": {
-        "full-not_counted-allowed-19": RECTANGLE_D,
-        "full-ALL-allowed-7": RECTANGLE_D,
+        "full-not_counted-allowed-20": RECTANGLE_D,
+        "full-ALL-allowed-8": RECTANGLE_D,
         "full-not_counted-ALL-13": RECTANGLE_A,
         "full-not_counted-allowed-21": RECTANGLE_B,
         "full-ALL-ALL-1": RECTANGLE_A,
@@ -67,24 +72,24 @@ PINNED = {
         "full-ALL-ALL-3": RECTANGLE_G,
     },
     "l_plot": {
-        "full-not_counted-allowed-18": L_THREE,
-        "full-not_counted-allowed-29": L_RING_WIDE,
-        "full-not_counted-ALL-27": L_RING,
+        "full-not_counted-allowed-19": L_THREE,
+        "full-not_counted-allowed-20": L_THREE_PARK,
+        "full-not_counted-ALL-29": L_RING,
         "full-ALL-allowed-7": L_THREE,
-        "full-ALL-allowed-25": L_RING_WIDE,
-        "full-not_counted-ALL-28": L_ONE_PATH,
-        "full-ALL-ALL-23": L_ONE_PATH,
+        "full-ALL-allowed-8": L_THREE_PARK,
+        "full-not_counted-ALL-30": L_ONE_PATH,
+        "full-ALL-ALL-25": L_ONE_PATH,
         "full-ALL-ALL-3": L_RING_PATH_B,
     },
     "l_plot_slim": {
-        "full-not_counted-allowed-18": L_THREE,
-        "full-not_counted-allowed-19": SLIM_ONE,
-        "full-not_counted-ALL-47": L_RING,
-        "full-ALL-allowed-7": L_THREE,
-        "full-ALL-allowed-46": L_RING_WIDE,
-        "full-ALL-ALL-45": L_ONE_PATH,
-        "full-not_counted-ALL-36": SLIM_THREE_B,
-        "full-ALL-ALL-23": SLIM_THREE_B,
+        "full-not_counted-allowed-19": SLIM_PARK_PATH,
+        "full-not_counted-ALL-50": L_RING,
+        "full-ALL-allowed-7": SLIM_PARK_PATH,
+        "full-not_counted-allowed-45": SLIM_PARK,
+        "full-ALL-allowed-33": SLIM_PARK,
+        "full-ALL-ALL-49": L_ONE_PATH,
+        "full-not_counted-ALL-41": SLIM_THREE_B_PARK,
+        "full-ALL-ALL-27": SLIM_THREE_B_PARK,
     },
 }
 

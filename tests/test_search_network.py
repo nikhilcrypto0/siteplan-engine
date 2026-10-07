@@ -10,13 +10,21 @@ import ast
 from functools import cache
 from pathlib import Path
 
-from search_support import made_up, rectangle
+from search_support import l_plot, made_up, rectangle
 from shapely.geometry import Polygon
 from shapely.ops import unary_union
 
 from siteplan.optimizer.search import network
 from siteplan.optimizer.search.land import erode, grow, polygons
-from siteplan.optimizer.search.layout import Config, Failure, evaluate, lay_out, make_run
+from siteplan.optimizer.search.layout import (
+    Config,
+    Failure,
+    evaluate,
+    land_strip,
+    lay_out,
+    make_run,
+    named_placements,
+)
 from siteplan.optimizer.search.readings import profiles
 
 TEST_CLASS = "normative"
@@ -200,3 +208,28 @@ def test_the_search_never_imports_the_legacy_loop_road_or_frame():
             if isinstance(node, ast.Import):
                 for alias in node.names:
                     assert alias.name not in banned, f"{path.name} imports {alias.name}"
+
+
+def test_the_approach_crosses_the_open_space_reserve_only_when_it_lies_across_every_way_in():
+    """On the L-plot, blocks turned a quarter and the south end kept for the open space: kept off
+    that end, no approach from the access road reaches the ring, and the configuration was lost.
+    The approach keeps off a reserve when it can (the same end kept, the blocks upright: it does);
+    here it crosses it, a road through the park, and the open space is laid round it (C4-14)."""
+    made = l_plot()
+    found = profiles(made.rules, made.brief, list(made.kit))
+    run = make_run(made.site, made.rules, made.brief, made.envelope, made.kit, found)
+    profile = next(p for p in found if p.key == "ALL-ALL")
+    ev = evaluate(run, Config(profile, 90.0, 0.0, 8, "S", low_blocks=True))
+    blocks = unary_union([p.footprint for p in named_placements(
+        ev.standing, ev.frame, [f.standing for f in ev.fringe])])
+    kept_off, _ = network.find_entrance(run.plot, ev.clusters,
+                                        unary_union([blocks, ev.kept_clear]), run.q.approach_m,
+                                        land_strip(ev.land, run.q))
+    assert kept_off is None
+    laid, why = lay_out(run, ev)
+    assert laid is not None, why
+    assert laid.entrance.approach.intersection(ev.kept_clear).area > 0
+    upright = evaluate(run, Config(profile, 0.0, 0.0, 8, "S"))
+    laid_upright, why = lay_out(run, upright)
+    assert laid_upright is not None, why
+    assert laid_upright.entrance.approach.intersection(upright.kept_clear).area < 1.0

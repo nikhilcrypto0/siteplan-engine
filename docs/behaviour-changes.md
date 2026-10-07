@@ -4,6 +4,32 @@ A characterization test (tests/manifest.py) pins what the engine produces today.
 only together with a normative replacement test and an entry here: what changed, why, the
 evidence, and the test that now holds the behaviour. Newest first.
 
+## 2026-10-07: C4-14, an approach that crosses the open-space reserve when it must
+
+A configuration may keep one end of the plot for the open space (`Config.reserve`), and the
+approach was kept off that end as off a block. Where the end lay across every way in from the
+access road, no straight approach reached the ring and the configuration was lost: on the made-up
+plots 4 of 59 tries on the rectangle, 4 of 78 on the L-plot and 33 of 141 on the slim L-plot, every
+one of them this case (drawn: the reserve ran the whole width of the access side). Now the approach
+keeps off the reserve when it can and, when that end lies across every way in, crosses it, a road
+through the park, the open space then taken from the ground round it (`layout.lay_out`); blocks,
+water, the clusters and the other rings stay ground no approach crosses. No made-up plot loses a
+configuration to the approach now. The planner's straight approach found a way in every other try
+on every plot tested, Dhulapally included, so no bent or slanted approach was built.
+
+Tests: `tests/test_search_network.py` (normative: on the L-plot, blocks turned a quarter and the
+south end kept for the open space; kept off it no approach reaches the ring, and the configuration
+now lays out with its approach through the reserve; the same end kept with the blocks upright, the
+approach keeps off it). Characterization re-pinned: the service's made-up baseline (the
+configurations recovered are laid out among the others, so those after them are numbered on:
+balanced is the same 4 x S+10 as `-90`; maximum yield `-86` is now another 3 x S+10 of the same
+saleable area that leaves less ground to no use, 985 m² of its open space usable where 570; the
+open-space and robust ones the same); the road ground (eight proposals with their approach through
+the park, four road sets new).
+
+- Dhulapally, Run B prime's request (the C4 benchmark, 14-approach): unchanged, the same 23 layouts
+  judged, the same proposals and the same four shown; the approach found a way in every try.
+
 ## 2026-10-07: C4-13, a cellar dug only as far as its need
 
 The full search's parking plan stacked whole cellar levels, each the whole plot under the rule
