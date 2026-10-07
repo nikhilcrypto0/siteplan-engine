@@ -985,6 +985,21 @@ REGISTRY: tuple[Constraint, ...] = (
         settles="Nothing: a search breadth; the count is what physically fits.",
     ),
     Constraint(
+        "Parking", "How the full search sizes a cellar to what the need asks (C4-13): a "
+                   "rectangle grown round the ramp, its size found by halving, for the floor the "
+                   "need asks and then, while the cars counted leave it short, for the floor that "
+                   "many cars ask at the density counted and a little more.",
+        f"{parking_plan.CUT_STEPS} halvings; at most {parking_plan.FIT_ROUNDS} car counts, each "
+        f"asking {_pct(parking_plan.FIT_MARGIN)} more floor", Basis.ENGINE_DESIGN_ASSUMPTION,
+        "none (optimizer.search.parking_plan._sized)",
+        ("optimizer.search.parking_plan.CUT_STEPS", "optimizer.search.parking_plan.FIT_ROUNDS",
+         "optimizer.search.parking_plan.FIT_MARGIN"),
+        note="A search precision, never a rule: the cellar the plan keeps holds the need by its "
+             "floor area and by the cars laid out in it, and the validator counts both again on "
+             "the outline as drawn.",
+        settles="Nothing that passes a layout: how close to the need a cellar is cut.",
+    ),
+    Constraint(
         "Parking", "The share of a parking floor that bays and aisles are expected to fill, for "
                    "sizing the cellars before the cars are counted.",
         _pct(grounds.LAYOUT_SHARE), Basis.ENGINE_DESIGN_ASSUMPTION, "none (grounds._attempt)",

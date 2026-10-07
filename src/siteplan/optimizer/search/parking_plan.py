@@ -1,13 +1,17 @@
 """Parking that physically fits: the stilt, the cellars and what Table V asks.
 
 Table V asks a share of the built-up area as parking floor; rule 13(b) lets it be met in the stilt,
-the open space beyond the setbacks and the cellars. The cellars take the whole plot less the cellar
+the open space beyond the setbacks and the cellars. A cellar may take the plot less the cellar
 setback of rule 13(c)(x), which grows with every level, less the cores, the ramp and the share
-rule 13(c)(xi) allows for utilities, and run under no block the search lays no fire band for: a
+rule 13(c)(xi) allows for utilities, and runs under no block the search lays no fire band for: a
 block over a cellar of more than 500 m², or of two levels, is an NBC special building (Part 4
-1.2(b)(6)), held to 4.6's fire access whatever its height. The area is not enough: the cars laid
-out in bays and aisles on every floor have to meet it too, and that count is made here the way a
-floor is really laid out.
+1.2(b)(6)), held to 4.6's fire access whatever its height. It takes only what the need asks
+(C4-13): once the fewest levels are known, its outline is a rectangle square to the configuration's
+turn grown round the ramp, the piece of the plot under the setback inside it that the ramp reaches
+and that holds the need, the same on every level; a level of the whole plot dug for a few cars was
+the rule before. The area is not
+enough: the cars laid out in bays and aisles on every floor have to meet it too, and that count is
+made here the way a floor is really laid out.
 
 The count is deliberately a little shy of the validator's (fewer offsets are tried), so a plan
 that meets the need here meets it there.
@@ -35,6 +39,9 @@ EDGE_M = 1e-4
 OFFSETS_ALONG = (0.0, 1.25)
 OFFSETS_ACROSS = (0.0, 2.7, 5.3, 8.0, 10.7, 13.3)
 SAFETY_SQM = 1.0  # what the plan keeps above the need, so rounding never leaves it short
+CUT_STEPS = 12  # halvings that size a cellar round its ramp: to 1/4096 of the plot (C4-13)
+FIT_ROUNDS = 4  # car counts a cellar is grown by at most, before the whole is kept
+FIT_MARGIN = 0.02  # each growth asks this much more floor than the cars counted suggest
 
 
 def cars_on_floor(floor: BaseGeometry, turns_deg: Sequence[float], bay: tuple[float, float],
@@ -140,19 +147,107 @@ def plan_parking(net: Polygon, excluded: BaseGeometry, rules: ResolvedRules, q: 
             outline = outline.difference(clear_of)
         if outline.is_empty:
             return None, "no ground is left for a cellar inside its setback"
-        floor = outline.difference(unary_union([core_land, *ramps]) if ramps else core_land)
-        per_level = floor.area * (1 - q.utilities_share)
-        cars_per_level = int(cars_on_floor(floor, turns, q.bay_m, q.aisle_m)
-                             * (1 - q.utilities_share))
-        area = stilt_sqm + levels * per_level
-        laid_out = (stilt_cars + levels * cars_per_level) * q.sqm_per_car
-        provided = min(area, laid_out)
-        if provided >= need + SAFETY_SQM:
+        level = _Level(unary_union([core_land, *ramps]) if ramps else core_land, levels,
+                       stilt_sqm, stilt_cars, tuple(turns), q, need + SAFETY_SQM)
+        per_level, cars_per_level, provided = level.counted(outline)
+        if provided >= level.target:
+            if ramps:
+                density = cars_per_level / max(level.floor_of(outline), 1.0)
+                sized = _sized(outline, unary_union(ramps), turn_deg, level, density)
+                if sized is not None:
+                    outline, (per_level, cars_per_level, provided) = sized
             return ParkingPlan(need, stilt_sqm, stilt_cars,
                                Cellars(levels, outline, setback, per_level, cars_per_level),
                                stilt_cars + levels * cars_per_level, provided), ""
     return None, (f"Table V asks {need:,.0f} m² of parking; the stilt and {q.max_cellars} "
                   "cellar level(s) hold fewer cars than that")
+
+
+@dataclass(frozen=True)
+class _Level:
+    """What the cellars of so many levels must give, and how a part of their outline counts."""
+
+    taken: BaseGeometry  # the cores and the ramps, which take floor on every level
+    levels: int
+    stilt_sqm: float
+    stilt_cars: int
+    turns: tuple[float, ...]
+    q: Quantities
+    target: float  # the need and the safety kept above it
+
+    def counted(self, part: BaseGeometry) -> tuple[float, int, float]:
+        """A level's floor and cars on this part of the outline, and what the plan provides."""
+        q = self.q
+        floor = part.difference(self.taken)
+        per_level = floor.area * (1 - q.utilities_share)
+        cars = int(cars_on_floor(floor, self.turns, q.bay_m, q.aisle_m) * (1 - q.utilities_share))
+        return per_level, cars, min(self.stilt_sqm + self.levels * per_level,
+                                    (self.stilt_cars + self.levels * cars) * q.sqm_per_car)
+
+    def floor_of(self, part: BaseGeometry) -> float:
+        """A level's parking floor on this part of the outline: cheap, no car counted."""
+        return part.difference(self.taken).area * (1 - self.q.utilities_share)
+
+    @property
+    def floor_needed(self) -> float:
+        """The floor a level must give for the area the need asks."""
+        return (self.target - self.stilt_sqm) / self.levels
+
+    @property
+    def cars_needed(self) -> float:
+        """The cars a level must hold for the need, at so much floor a car."""
+        return (self.target / self.q.sqm_per_car - self.stilt_cars) / self.levels
+
+
+def _sized(outline: BaseGeometry, ramps: BaseGeometry, turn_deg: float, level: _Level,
+           density: float) -> tuple[BaseGeometry, tuple[float, int, float]] | None:
+    """The part of a cellar's outline the need takes (C4-13): a rectangle square to the turn grown
+    round the ramps, the piece of the outline inside it the ramps reach. The growth is placed for
+    the floor the need asks, by area and by its cars at the `density` the whole level was counted
+    at, and a little more (FIT_MARGIN); then, while the cars counted leave it short, for the floor
+    that many cars ask at the density counted on the piece, at most FIT_ROUNDS counts. The piece
+    and its count (`_Level.counted`); None, for the whole outline, when no smaller piece holds the
+    need."""
+    turned = rotate(outline, -turn_deg, origin=(0, 0))
+    down = rotate(ramps, -turn_deg, origin=(0, 0))
+    rx0, ry0, rx1, ry1 = down.bounds
+    x0, y0, x1, y1 = turned.bounds
+    whole = max(rx0 - x0, x1 - rx1, ry0 - y0, y1 - ry1, 0.0)  # the growth that takes it all
+
+    def piece(grown: float) -> BaseGeometry:
+        parts = polygons(turned.intersection(
+            shapely.box(rx0 - grown, ry0 - grown, rx1 + grown, ry1 + grown)))
+        if not parts:
+            return EMPTY
+        near = min(parts, key=lambda p: p.distance(down))
+        return rotate(near, turn_deg, origin=(0, 0))
+
+    most = level.floor_of(piece(whole))
+
+    def grown_for(floor_sqm: float) -> float:
+        """The least growth whose piece gives this much floor a level (all of it if none does)."""
+        if most < floor_sqm:
+            return whole
+        short, enough = 0.0, whole
+        for _ in range(CUT_STEPS):
+            middle = (short + enough) / 2
+            short, enough = (short, middle) if level.floor_of(piece(middle)) >= floor_sqm \
+                else (middle, enough)
+        return enough
+
+    grown = grown_for(max(level.floor_needed,
+                          level.cars_needed / max(density, 1e-9) * (1 + FIT_MARGIN)))
+    for _ in range(FIT_ROUNDS):
+        part = piece(grown)
+        counted = level.counted(part)
+        if counted[2] >= level.target:
+            return part, counted
+        if grown >= whole:
+            break
+        floor = level.floor_of(part)
+        grown = grown_for(floor * max(level.cars_needed / max(counted[1], 1), 1.0)
+                          * (1 + FIT_MARGIN))
+    return None
 
 
 def ramp_length_m(q: Quantities) -> float:

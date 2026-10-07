@@ -4,6 +4,46 @@ A characterization test (tests/manifest.py) pins what the engine produces today.
 only together with a normative replacement test and an entry here: what changed, why, the
 evidence, and the test that now holds the behaviour. Newest first.
 
+## 2026-10-07: C4-13, a cellar dug only as far as its need
+
+The full search's parking plan stacked whole cellar levels, each the whole plot under the rule
+13(c)(x) setback, until the need was met; one Dhulapally level holds about 15,000 m² of parking, so
+nearly every layout dug one whole level and the parking laid out ran a median 30% over Table V's
+need (the GHMC column, the conservative test mode), up to 106%. With no parking margin asked
+(`parking_extra_fraction`, 0), all of that was the last level's rounding. Now (`parking_plan`):
+
+- The fewest levels are found as before, on the whole outline. Then the outline is a rectangle
+  square to the configuration's turn grown round the ramp, the piece of the plot under the setback
+  inside it that the ramp reaches, the same on every level (`_sized`). Its size is placed for the
+  floor the need asks, by area and by the cars at the density the whole level was counted at, and
+  grown while the cars counted on it leave it short (at most four counts); the whole outline is
+  kept when no smaller piece holds the need. A cut square from one end of the cellar was tried
+  first and kept too much on Dhulapally's L-shaped plot (a ramp 50 m in from the end left 448 cars
+  where 300 were asked).
+- Before a ramp stands (the first pass, which only decides whether one is needed) the whole
+  outline is kept, as before.
+- The cellar setback a candidate reports (`LayerKind.CELLAR_SETBACK`) is the rule's band, the plot
+  less the plot eroded by the setback, whatever part of the plot the cellar takes. It was the plot
+  less the cellar, which a sized cellar would have turned into most of the plot labelled as law;
+  the validator's own layer was already the band.
+
+The validator is unchanged and measures the cellar as drawn (its floor, its cars, its setback from
+the plot line, the ramp reaching it, the NBC special building per piece under a block); every
+layout judged on Dhulapally passes its parking.
+
+Tests: `tests/test_search_parking.py` (normative, on the made-up rectangle: 4,000 m² asked takes a
+cellar of 4,808 m² by the ramp, providing 4,140 m², where the whole level of 22,116 m² provided
+19,440; the cellar lies at the ramp's end, west or east; two levels both sized; the setback layer
+the band for every proposal). Characterization re-pinned: the service's made-up baseline (the same
+proposals, the same four shown and the same answer; only the digests move).
+
+- Dhulapally, Run B prime's request (the C4 benchmark, 13-parking): the same layouts judged,
+  proposed and shown; parking laid out against the need, median 4.8% over (worst 9.9%) where it was
+  30.5% (106%); the alternatives shown: maximum yield 15,180 m² against 14,678 where 17,240,
+  balanced 13,860 against 13,365 where 16,100, open space 8,940 against 8,531 where 15,880, robust
+  10,680 against 10,237 where 15,240; one legal FAIL (the validator's 9.00 m gap read as
+  8.9999989), unchanged; runtime 104 s to 108 s (the cars counted on the pieces tried).
+
 ## 2026-10-07: C4-12, the open space taken where it is usable
 
 The open space was taken biggest pocket first (`fit.choose_pockets`), so on Dhulapally it was

@@ -51,7 +51,9 @@ where the open space is taken where it is usable (at least 12 m across, within 3
 and the open-space axis scores that part: maximum yield is `-86`, the 3 x S+10 (570 m² of its
 1,836 m² of open space usable); balanced the 4 x S+10 `-88` (1,341 m² usable); the open-space
 option S+9, S+9 and five S+5 (311,940 sft, 1,605 m² usable), where it was S+9, S+9, S+5, S+5;
-the robust one the same 3 x S+7.
+the robust one the same 3 x S+7. Re-pinned on C4-13, where a cellar is dug only as far as its need
+takes it, a rectangle grown round its ramp, and the cellar setback a candidate reports is the
+rule's band: the same proposals, the same four shown and the same answer; only the digests move.
 
 The values pin exact output on the locked dependencies (uv.lock). They move only with a normative
 replacement and an entry in docs/behaviour-changes.md.
@@ -97,15 +99,15 @@ PINNED = {
         "full-ALL-allowed-54",
         "full-ALL-ALL-20",
     ],
-    "proposed_sha256": "b1528ba7c0d06248f7f0ea7f4dee739547eec066324f6cc15f59961a89049038",
+    "proposed_sha256": "e8f8895f184de0e2008f8e1a6d8e45054ac48e4fa422469b3b29b329f910db9e",
     "shown": [
         ["full-not_counted-allowed-88", "BALANCED"],
         ["full-not_counted-allowed-86", "MAX_YIELD"],
         ["full-not_counted-ALL-65", "CONVENTIONAL_OPEN_SPACE"],
         ["full-ALL-ALL-1", "ROBUST"],
     ],
-    "shown_digests": ["8f274f40eb4b7f7b", "c72ef2c1e1001f54", "d6476a637a39b30c",
-                      "b0df348af436ba15"],
+    "shown_digests": ["214d3704825b6f3d", "7bd5365a2941fa8b", "28c2bd46f11e8c4b",
+                      "a6fc1bef3f890cf4"],
     "answer_sha256": "c0ca6ceb539d7d1673a200a7cd7ac74f313dd22c7600a7e37f5c8c16d274f05a",
     "approval_page_sha256": "cd3ebee2af46849756df643999df9b16d2cbc91d92c45101983782cff1eb0181",
 }

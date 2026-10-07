@@ -404,10 +404,9 @@ def _layers(laid: Laid, rules: ResolvedRules, envelope: BuildableEnvelope, plot:
                applies_to="the open space drawn",
                basis={"basis": Basis.UNRESOLVED_INTERPRETATION, "status": Provenance.UNVERIFIED}),
     ]
-    if laid.cellars is not None:
-        under = unary_union([laid.cellars.outline, plot.excluded]) if not plot.excluded.is_empty \
-            else laid.cellars.outline
-        added.append(_layer("cellar setback", LayerKind.CELLAR_SETBACK, plot.net.difference(under),
+    if laid.cellars is not None:  # the rule's band, whatever part of the plot the cellar takes
+        band = plot.net.difference(erode(plot.net, laid.cellars.setback_m))
+        added.append(_layer("cellar setback", LayerKind.CELLAR_SETBACK, band,
                             rules.parking.cellar_setback_by_site_sqm.clause,
                             applies_to=f"{laid.cellars.levels} cellar level(s)"))
     layers += [layer for layer in added if layer is not None and layer["id"] not in taken]
