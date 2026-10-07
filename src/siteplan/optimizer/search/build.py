@@ -11,8 +11,9 @@ as the claim that lost, not as two uses of one square metre.
 from __future__ import annotations
 
 from collections.abc import Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
+import shapely
 from shapely import affinity
 from shapely.geometry import Polygon
 from shapely.geometry.base import BaseGeometry
@@ -28,6 +29,7 @@ from siteplan.contracts import (
     digest,
 )
 from siteplan.contracts.accounting import LayerKind, Permit, PhysicalUse
+from siteplan.contracts.candidate import RoadKind
 from siteplan.contracts.common import Basis, Provenance, Shape, Surface, shapes_from
 from siteplan.contracts.resolved_rules import STILT_IN_RULE_HEIGHT
 from siteplan.optimizer.objective import mix_error
@@ -40,9 +42,11 @@ from siteplan.optimizer.search.network import Entrance
 from siteplan.optimizer.search.parking_plan import Cellars
 from siteplan.optimizer.search.quantities import Quantities
 from siteplan.optimizer.search.readings import Profile
+from siteplan.optimizer.search.road_graph import RoadGraph
 from siteplan.units import sqm_to_sqft
 
 SLIVER_SQM = 0.01
+GRID_M = 1e-6  # the ledger is drawn on a micrometre grid, as the validator's shapes are
 OPEN_SPACE_CLAIM = 0.999  # what is claimed of the open space drawn: never more than counts
 ON_POCKET_SHARE = 0.5  # a soft facility more than this much on a pocket is the pocket's own ground
 STRATEGY_NAME = "FULL"
@@ -102,27 +106,39 @@ def named_placements(standing: Sequence[Standing], frame: Frame,
 def partition(plot: Plot, claims: dict[PhysicalUse, list[tuple[str, BaseGeometry, list[str]]]]
               ) -> dict:
     """The net plot, every square metre once: where two shapes claim the same ground the earlier
-    use in PARTITION_ORDER keeps it, and the rest of the plot is UNALLOCATED with its reason."""
+    use in PARTITION_ORDER keeps it, and the rest of the plot is UNALLOCATED with its reason.
+
+    Drawn on a micrometre grid (GRID_M), as the validator draws its own shapes: pieces that meet
+    share their edge exactly, so no set operation reads float noise along it as ground counted
+    twice. Off the grid, GEOS 3.13 read a street's edge against a fire lane's as a 232 m²
+    overlap, and dropped a block lining the ring road's hole from a cascaded union (Dhulapally,
+    2026-10-06)."""
     net = plot.net
     entries, taken = [], Polygon()
     for use in PARTITION_ORDER:
         for ref, shape, tags in claims.get(use, []):
-            piece = polygons(shape.intersection(net).difference(taken), SLIVER_SQM)
+            on_net = _areal(shapely.intersection(_areal(shape), net, grid_size=GRID_M))
+            piece = polygons(shapely.difference(on_net, taken, grid_size=GRID_M), SLIVER_SQM)
             if not piece:
                 continue
-            ground = unary_union(piece)
-            # one union at a time: GEOS 3.13's cascaded union of the claims so far and a ring
-            # road whose hole a block lines was seen to drop the block (Dhulapally, 2026-10-06)
-            taken = taken.union(ground)
+            ground = shapely.union_all(piece, grid_size=GRID_M)
+            taken = _areal(shapely.union(taken, ground, grid_size=GRID_M))
             entries.append({"use": use, "shapes": shapes_from(ground), "area_sqm": ground.area,
                             "ref": ref, "tags": tags})
-    left = polygons(net.difference(taken), SLIVER_SQM)
+    left = polygons(shapely.difference(net, taken, grid_size=GRID_M), SLIVER_SQM)
     if left:
-        ground = unary_union(left)
+        ground = shapely.union_all(left, grid_size=GRID_M)
         entries.append({"use": PhysicalUse.UNALLOCATED, "shapes": shapes_from(ground),
                         "area_sqm": ground.area,
                         "reason": "ground the full search left without a use"})
     return {"net_area_sqm": net.area, "entries": entries}
+
+
+def _areal(geometry: BaseGeometry) -> BaseGeometry:
+    """A geometry's polygons alone: the grid's overlay takes no line or point, and where two
+    pieces only touch an overlay on the grid leaves the line they touch along."""
+    parts = polygons(geometry)
+    return shapely.multipolygons(parts) if parts else EMPTY
 
 
 # --- The candidate ----------------------------------------------------------------------------
@@ -134,8 +150,7 @@ class Laid:
 
     frame: Frame
     placements: list[Placement]
-    ring: BaseGeometry
-    streets: list[Polygon]
+    graph: RoadGraph  # every road: its centre line, its junctions, the pavement drawn from them
     entrance: Entrance
     lanes: BaseGeometry
     pockets: list[Polygon]
@@ -150,7 +165,19 @@ class Laid:
     cars: dict[str, int]
     zones: Zones
     land: Land
-    pathways: list[BaseGeometry] = field(default_factory=list)  # rule 8(l), to blocks up to 12 m
+
+    @property
+    def ring(self) -> BaseGeometry:
+        return self.graph.road("ring").ground
+
+    @property
+    def streets(self) -> list[BaseGeometry]:
+        return [r.ground for r in self.graph.of_kind(RoadKind.INTERNAL)]
+
+    @property
+    def pathways(self) -> list[BaseGeometry]:
+        """Rule 8(l)'s, to blocks up to 12 m."""
+        return [r.ground for r in self.graph.of_kind(RoadKind.PATHWAY)]
 
 
 def build_candidate(laid: Laid, *, site: CanonicalSiteModel, rules: ResolvedRules,

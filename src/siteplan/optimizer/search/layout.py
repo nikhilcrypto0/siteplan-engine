@@ -6,10 +6,11 @@ high-rise height may stand (C3) and, when the plot has no room to spare, the end
 for the open space. `evaluate` is the cheap half: it places the blocks in columns (columns.py) on
 the ground their heights allow, then, where blocks below 21 m may stand, on the ground the ring
 road leaves (fringe.py), and says what they add. `lay_out` is the exact half: it draws the streets
-and the ring road from the blocks that stand, finds the entrance, and gives the club house, the
-ramp, the open space and the facilities their ground, the cellars their levels. A configuration
-whose ground cannot give one of them what the rules ask is not laid: it returns why, and nothing is
-built over the shortfall.
+and the ring road from the blocks that stand, finds the entrance, joins every road into one
+network of centre lines (road_graph.py) whose pavement is the layout's roads, and gives the club
+house, the ramp, the open space and the facilities their ground, the cellars their levels. A
+configuration whose ground cannot give one of them what the rules ask is not laid: it returns why,
+and nothing is built over the shortfall.
 
 A block below 21 m is not a high-rise: no fire lane or turning room is laid round it (rule
 15(a)(i) gives no figure for it), it keeps the gap and the setback of its Table III band, and the
@@ -33,6 +34,7 @@ from siteplan.contracts import (
     ResolvedRules,
     TowerPrototype,
 )
+from siteplan.contracts.candidate import RoadKind
 from siteplan.contracts.design_brief import ClubSize
 from siteplan.optimizer.search import fringe, ground, network
 from siteplan.optimizer.search.build import Laid, Placement, named_placements
@@ -58,6 +60,7 @@ from siteplan.optimizer.search.land import (
 from siteplan.optimizer.search.parking_plan import plan_parking, ramp_length_m
 from siteplan.optimizer.search.quantities import Quantities, quantities
 from siteplan.optimizer.search.readings import FloorClass, Profile, floor_classes
+from siteplan.optimizer.search.road_graph import Road
 from siteplan.optimizer.search.turns import Turning, loop_turns
 
 EPS_LAND_M = 0.02  # ground a block must stand this far inside, so no rounding puts it over a line
@@ -69,6 +72,8 @@ RAMP_RESERVE_SQM = 280.0
 CLUB_ASSUMED_SHARE_OF_NET = 0.0375  # built-up area over the plot, times the club's share
 CLUB_FLOORS = 2  # the club house's storeys when the brief gives none
 SIDES = ("N", "S", "E", "W")
+# The roads a vehicle uses; a rule 8(l) pathway serves only the block it reaches.
+MOTOR_ROADS = (RoadKind.LOOP, RoadKind.INTERNAL, RoadKind.APPROACH)
 
 
 @dataclass(frozen=True)
@@ -154,7 +159,7 @@ class Evaluation:
     land: Land
     street_m: float
     standing: tuple[Standing, ...]  # the blocks the ground holds, with the ring road round them
-    streets: tuple[Polygon, ...]
+    streets: tuple[Road, ...]
     cluster: network.Cluster
     value: float  # saleable sqft of the blocks that stand
     kept_clear: BaseGeometry | None  # the end of the plot reserved, in the survey's frame
@@ -255,25 +260,31 @@ def _columns(run: Run, config: Config, frame: Frame, land: Land, choices: list[C
 
 def lay_out(run: Run, ev: Evaluation) -> tuple[Laid | None, str]:
     q, plot, rules, brief = run.q, run.plot, run.rules, run.brief
-    frame, land, streets, cluster = ev.frame, ev.land, list(ev.streets), ev.cluster
+    frame, land, cluster = ev.frame, ev.land, ev.cluster
     placements = named_placements(ev.standing, frame, [f.standing for f in ev.fringe])
     footprints = [p.footprint for p in placements]
     gaps = [p.standing.choice.cls.gap_m for p in placements]
     high = [p.standing.choice.cls.high_rise for p in placements]
-    pathways = [f.pathway for f in ev.fringe if not f.pathway.is_empty]
     blocks = unary_union(footprints)
     blocked = unary_union([blocks, ev.kept_clear]) if ev.kept_clear is not None else blocks
     entrance, why = network.find_entrance(plot, cluster, blocked, q.approach_m,
                                           land_strip(land, q))
     if entrance is None:
         return None, why
-    roads = unary_union([cluster.ring, *streets, entrance.approach])
+    serving = _pathway_roads(ev, q)
+    graph = network.road_graph(cluster, ev.streets, entrance,
+                               [p for p in serving if p is not None])
+    problems = graph.problems()
+    if problems:
+        return None, f"the roads are not one network: {'; '.join(problems)}"
+    roads = graph.ground(MOTOR_ROADS)
+    pathways = [r.ground for r in graph.of_kind(RoadKind.PATHWAY)]
     lanes = network.fire_lanes([f for f, tall in zip(footprints, high, strict=True) if tall],
                                roads, plot.net, q.lane_m, blocks)
     reason = _lanes_misplaced(lanes, land)
     if reason:
         return None, reason
-    ways = [EMPTY] * len(ev.standing) + [f.pathway for f in ev.fringe]
+    ways = [EMPTY] * len(ev.standing) + [p.ground if p is not None else EMPTY for p in serving]
     unserved = [p.name for p, way in zip(placements, ways, strict=True)
                 if not _served(p, roads, way)]
     if unserved:
@@ -335,12 +346,22 @@ def lay_out(run: Run, ev: Evaluation) -> tuple[Laid | None, str]:
     strip = land.strip.difference(unary_union([entrance.gate, entrance.approach.buffer(0.01)])) \
         if not land.strip.is_empty else EMPTY
     laid = Laid(
-        frame=frame, placements=placements, ring=cluster.ring, streets=streets, entrance=entrance,
+        frame=frame, placements=placements, graph=graph, entrance=entrance,
         lanes=lanes, pockets=pockets, strip=strip, club=club, club_floors=club_floors,
         facilities=facilities, facilities_missed=missed, ramps=ramps,
         ring_clipped=cluster.clipped, cellars=plan.cellars,
-        cars=_cars(plan), zones=zones, land=land, pathways=pathways)
+        cars=_cars(plan), zones=zones, land=land)
     return laid, ""
+
+
+def _pathway_roads(ev: Evaluation, q: Quantities) -> list[Road | None]:
+    """The rule 8(l) pathway that reaches each block on the fringe, numbered in their order; None
+    for a block that stands against the ring road itself."""
+    out: list[Road | None] = []
+    for f in ev.fringe:
+        out.append(None if f.path is None else network.pathway_road(
+            sum(p is not None for p in out) + 1, f.path, fringe.pathway_width_m(q), ev.cluster))
+    return out
 
 
 def _served(placement: Placement, roads: BaseGeometry, pathway: BaseGeometry) -> bool:

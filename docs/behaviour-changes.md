@@ -4,6 +4,36 @@ A characterization test (tests/manifest.py) pins what the engine produces today.
 only together with a normative replacement test and an entry here: what changed, why, the
 evidence, and the test that now holds the behaviour. Newest first.
 
+## 2026-10-06: C4-01, the full search draws every road from a centre-line graph
+
+`optimizer/search/road_graph.py`: the roads are a graph of nodes (an entrance, a junction, the
+block a pathway serves, the anchor of a loop) and edges along each road's centre line, and every
+road's pavement is drawn from its centre line, never the other way round. The ring's centre line
+runs half a road out from the cluster's outline, a street's down its corridor from the ring's
+centre line to the ring's, the approach's from the gate to the ring's, a pathway's from its block.
+The graph says whether the roads are one network with no road that stops with nowhere to go; a
+layout whose roads are not is refused, with the reason, before anything is built on it. The
+validator measures the pavement as before: the graph is the search's, not a claim it trusts.
+
+- The same ground: `tests/test_search_road_ground.py` (characterization, pinned on C4-01a) holds
+  every road of the 22 candidates the quick search proposes on made-up land to its area before
+  the graph, to 0.01 m². `tests/test_search_road_graph.py` (normative) holds the network: one
+  piece, the ring a loop cut at every junction, the streets between junctions on it, the approach
+  from the entrance, the pathways from the blocks they serve, the pavement moving with its line.
+- The generator's ledger is drawn on the validator's micrometre grid (`build.GRID_M`): with the
+  roads drawn from centre lines, a street's edge and a fire lane's met with other last digits,
+  and the contract's full-precision check read two Dhulapally layouts' street and fire lane as
+  overlapping by 232 m², so the guard failed them. On the grid their edge is exactly shared.
+- What still turns on the last digits, left to C4-09 and C4-10 (the frontier, the amenity
+  search): the open-space pockets taken largest first, where two are the same size; two layouts
+  the selector scores the same; the club house's and a facility's place, whose scanning grid
+  starts at the edge of the ground it scans. On made-up land `full-not_counted-ALL-61` is
+  proposed for `-62` (the same blocks, flats and saleable area) and `full-ALL-ALL-6` shown for
+  `-5` (the same blocks, flats, saleable area and open space); re-pinned.
+- Dhulapally, Run B prime's request (the C4 benchmark): the same 1,152 configurations, 112 laid
+  out, 24 judged and no legal FAIL as C4-01a, the same eleven proposed and the same three shown;
+  on two layouts that are not shown a facility or the club house moved.
+
 ## 2026-10-06: C4-01a, the search's choices no longer turn on the last digits of its geometry
 
 Drawing the roads from centre lines (C4-01) lays the same ground with other last digits, and that

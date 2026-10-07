@@ -5,6 +5,11 @@ every proposal, so that keeping them is shown to change none of it; re-pinned on
 twelve are proposed and the model is answered as on main; only the digests move
 (docs/behaviour-changes.md). Re-pinned on C4-01a, where the generator's ledger takes its claims one
 union at a time: the same twelve, the same three and the same answer; only the digests move.
+Re-pinned on C4-01, where every road is drawn from its centre line: the same ground to 0.01 m², but
+where two open-space pockets are the same size or two layouts score the same, the last digits
+still choose, so `full-not_counted-ALL-61` is proposed for `-62` (the same blocks, flats and
+saleable area) and `full-ALL-ALL-6` is shown for `-5` (the same blocks, flats, saleable area and
+open space).
 
 The values pin exact output on the locked dependencies (uv.lock). They move only with a normative
 replacement and an entry in docs/behaviour-changes.md.
@@ -41,20 +46,20 @@ PINNED = {
         "full-ALL-allowed-33",
         "full-not_counted-ALL-57",
         "full-ALL-allowed-31",
-        "full-not_counted-ALL-62",
+        "full-not_counted-ALL-61",
         "full-ALL-ALL-1",
         "full-not_counted-ALL-59",
         "full-ALL-ALL-5",
         "full-ALL-ALL-6",
     ],
-    "proposed_sha256": "04a8ef1de9f059d6b54a39a8553007f2d25632fc0cddf8abfe2a6247f9f9c8e1",
+    "proposed_sha256": "a62489382a306e993040f3ca1b5a1cd537f98efb3ea98aa5774aa8f0ebbab0c9",
     "shown": [
         ["full-not_counted-allowed-87", "BALANCED"],
         ["full-not_counted-allowed-85", "MAX_YIELD"],
-        ["full-ALL-ALL-5", "CONVENTIONAL_OPEN_SPACE"],
+        ["full-ALL-ALL-6", "CONVENTIONAL_OPEN_SPACE"],
     ],
-    "shown_digests": ["bbb9e5b4405f4a9d", "0996ee91d920d560", "8462b9949b1923f0"],
-    "answer_sha256": "73c8a93310bdf108b43acd99987b14fe184fe004589b789bffbfc1f694e2aa54",
+    "shown_digests": ["13d6b77dcd83853e", "5f9926f7bb81930f", "2b7c2b1c529bb28c"],
+    "answer_sha256": "e30cd31fd9bda956ade66baf179bfb7ea57e35cea75957684b7a9018f02ba701",
     "approval_page_sha256": "cd3ebee2af46849756df643999df9b16d2cbc91d92c45101983782cff1eb0181",
 }
 PROPOSALS: list = []

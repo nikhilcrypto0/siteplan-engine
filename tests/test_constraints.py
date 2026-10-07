@@ -133,6 +133,7 @@ COPIES = (
     ("optimizer.search.parking_plan.OFFSETS_ALONG", "validator.cars.OFFSETS_ALONG"),
     ("optimizer.search.parking_plan.OFFSETS_ACROSS", "validator.cars.OFFSETS_ACROSS"),
     ("parking_checks.AREA_SLACK_SQM", "validator.parking.AREA_SLACK_SQM"),
+    ("validator.shapes.GRID_M", "optimizer.search.build.GRID_M"),
     ("checks.WATER_OVERLAP_SQM", "validator.land_checks.WATER_OVERLAP_SQM"),
     ("contracts.design_brief.MIX_SUM_TOLERANCE", "prototypes.compose.MIX_SUM_TOLERANCE"),
     ("validator.accounting.PLAY_SHARE", "optimizer.search.build.ON_POCKET_SHARE",

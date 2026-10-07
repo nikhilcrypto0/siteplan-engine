@@ -33,7 +33,7 @@ from itertools import groupby
 
 import numpy as np
 import shapely
-from shapely.geometry import Polygon, box
+from shapely.geometry import LineString, Polygon, box
 from shapely.geometry.base import BaseGeometry
 from shapely.ops import polylabel, unary_union
 
@@ -60,11 +60,18 @@ def _tied(value: float) -> int:
 
 @dataclass(frozen=True)
 class Fringed:
-    """A block on the fringe: where it stands (in the turned frame) and the pathway that reaches
-    it, in the survey's frame (empty when it stands against the ring road itself)."""
+    """A block on the fringe: where it stands (in the turned frame) and the centre line of the
+    pathway that reaches it, from the block's face to the end of its paving in the ring, in the
+    survey's frame (None when it stands against the ring road itself). The pathway is drawn from
+    it (network.pathway_road)."""
 
     standing: Standing
-    pathway: BaseGeometry
+    path: LineString | None
+
+
+def pathway_width_m(q: Quantities) -> float:
+    """The width a pathway is drawn at: the rule's, and a hair over, as every road here is."""
+    return q.pathway_m + 2 * EPS_M
 
 
 def pathway_serves(q: Quantities, cls: FloorClass) -> bool:
@@ -156,10 +163,10 @@ def place(plot: Plot, q: Quantities, frame: Frame, land: Land, cluster: Cluster,
         pick = _best(choices, fits, ring, paths, q, free, room_sqm)
         if pick is None:
             return placed
-        footprint, choice, pathway = pick
+        footprint, choice, pathway, path = pick
         x0, y0, _, _ = footprint.bounds
         placed.append(Fringed(Standing(choice, -1, x0, y0),
-                              frame.to_survey(pathway) if not pathway.is_empty else EMPTY))
+                              frame.to_survey(path) if path is not None else None))
         lands = {key: ground.difference(unary_union([
             grow(footprint, need_m(q, choice.cls, by_key[key])), pathway]))
             for key, ground in lands.items()}
@@ -188,12 +195,12 @@ def _pathway_ground(plot: Plot, frame: Frame, land: Land, hull: BaseGeometry,
 
 def _best(choices: Sequence[Choice], fits: _Fits, ring: BaseGeometry, paths: BaseGeometry,
           q: Quantities, free: BaseGeometry, room_sqm: float
-          ) -> tuple[Polygon, Choice, BaseGeometry] | None:
+          ) -> tuple[Polygon, Choice, BaseGeometry, LineString | None] | None:
     """The most valuable block the fringe still holds that a road or a pathway reaches and that
     leaves the free ground the rest of the layout needs, the nearer the ring the better between
-    equals, and its pathway (empty when none is needed). Only the first few are tried, as the
-    entrance tries its nearest few, so the blocks of less value are looked at only while tries
-    are left."""
+    equals, and its pathway and the pathway's centre line (empty and None when none is needed).
+    Only the first few are tried, as the entrance tries its nearest few, so the blocks of less
+    value are looked at only while tries are left."""
     tried = 0
     by_value = sorted(range(len(choices)), key=lambda i: -choices[i].value)
     for _, same in groupby(by_value, key=lambda i: choices[i].value):
@@ -210,12 +217,16 @@ def _best(choices: Sequence[Choice], fits: _Fits, ring: BaseGeometry, paths: Bas
             if tried >= ENTRANCES_TRIED:
                 return None
             tried += 1
-            pathway = EMPTY if distance <= TOUCH_M else _pathway(footprint, ring, paths, q)
-            if pathway is None:
-                continue
+            path: LineString | None = None
+            pathway: BaseGeometry = EMPTY
+            if distance > TOUCH_M:
+                found_path = _pathway(footprint, ring, paths, q)
+                if found_path is None:
+                    continue
+                pathway, path = found_path
             if free.difference(_cost(footprint, choices[index], pathway)).area < room_sqm:
                 continue
-            return footprint, choices[index], pathway
+            return footprint, choices[index], pathway, path
     return None
 
 
@@ -264,40 +275,41 @@ def _grid(ground: BaseGeometry, rooms: Sequence[Polygon], depth_m: float, length
 
 
 def _pathway(block: Polygon, ring: BaseGeometry, paths: BaseGeometry, q: Quantities
-             ) -> Polygon | None:
-    """The shortest straight pathway from a face of the block to the ring road on free ground:
-    as wide as the rule asks (a hair over, as every road here is drawn), and at least as long as
-    it is wide, running on into the ring where the ring is nearer than that, so that it measures
-    its width on its own. Tried at both ends and the middle of each face."""
-    width = q.pathway_m + 2 * EPS_M
+             ) -> tuple[Polygon, LineString] | None:
+    """The shortest straight pathway from a face of the block to the ring road on free ground,
+    and its centre line from the face: as wide as the rule asks (`pathway_width_m`), and at least
+    as long as it is wide, running on into the ring where the ring is nearer than that, so that it
+    measures its width on its own. Tried at both ends and the middle of each face."""
+    width = pathway_width_m(q)
     bounds = block.bounds
-    best: tuple[float, Polygon] | None = None
+    best: tuple[float, Polygon, LineString] | None = None
     for axis in (1, 0):  # off the faces across y, then those across x
         for sign in (1, -1):
             found = _from_face(bounds, axis, sign, width, ring, paths)
             if found is not None and (best is None or found[0] < best[0]):
                 best = found
-    return best[1] if best else None
+    return (best[1], best[2]) if best else None
 
 
 def _from_face(bounds: tuple[float, float, float, float], axis: int, sign: int, width: float,
-               ring: BaseGeometry, paths: BaseGeometry) -> tuple[float, Polygon] | None:
+               ring: BaseGeometry, paths: BaseGeometry
+               ) -> tuple[float, Polygon, LineString] | None:
     """The shortest pathway off one face of a block (the face whose outward normal runs `sign`
     along `axis`, 0 for x and 1 for y), at either end of the face or its middle, that runs on free
-    ground to the ring: how far the ring is, and the pathway."""
+    ground to the ring: how far the ring is, the pathway and its centre line."""
     low, high = bounds[1 - axis], bounds[3 - axis]  # the face's own extent
     if high - low < width:
         return None
-    best: tuple[float, Polygon] | None = None
+    best: tuple[float, Polygon, LineString] | None = None
     for start in dict.fromkeys((low, (low + high - width) / 2, high - width)):
         found = _toward_ring(bounds, axis, sign, start, width, ring)
         if found is None:
             continue
-        gap, pathway = found
+        gap, pathway, _ = found
         if pathway.difference(ring).difference(paths).area > EPS_M * width:
             continue
         if best is None or gap < best[0]:
-            best = (gap, pathway)
+            best = found
     return best
 
 
@@ -346,10 +358,11 @@ def _widest(ground: BaseGeometry) -> float:
 
 
 def _toward_ring(bounds: tuple[float, float, float, float], axis: int, sign: int, start: float,
-                 width: float, ring: BaseGeometry) -> tuple[float, Polygon] | None:
+                 width: float, ring: BaseGeometry) -> tuple[float, Polygon, LineString] | None:
     """A pathway `width` wide from one face of a block, at `start` along it, to the ring road:
-    how far the ring is from the face, and the pathway, which runs that far and on into the ring
-    (as long as it is wide at least). None when the ring is not that way."""
+    how far the ring is from the face, the pathway, which runs that far and on into the ring (as
+    long as it is wide at least), and its centre line from the face. None when the ring is not
+    that way."""
     x0, y0, x1, y1 = bounds
     rx0, ry0, rx1, ry1 = ring.bounds
     face = (y1 if sign > 0 else y0) if axis == 1 else (x1 if sign > 0 else x0)
@@ -367,4 +380,8 @@ def _toward_ring(bounds: tuple[float, float, float, float], axis: int, sign: int
     cx0, cy0, cx1, cy1 = cut.bounds
     near = (cy0 if sign > 0 else cy1) if axis == 1 else (cx0 if sign > 0 else cx1)
     gap = abs(near - face)
-    return gap, strip(max(gap + TOUCH_M, width + EPS_M))
+    length = max(gap + TOUCH_M, width + EPS_M)
+    middle, end = start + width / 2, face + sign * length
+    axis_line = LineString([(middle, face), (middle, end)] if axis == 1
+                           else [(face, middle), (end, middle)])
+    return gap, strip(length), axis_line

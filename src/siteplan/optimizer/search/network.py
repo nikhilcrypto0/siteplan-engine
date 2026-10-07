@@ -16,8 +16,12 @@ is drawn here follows from where the blocks stand:
 - the *fire lanes*: whatever of the 6 m round each block no road covers, which is the ground between
   two blocks of a column.
 
-A configuration whose ring does not close, whose cluster falls in two, or whose approach cannot
-reach the ring is not offered: the reason is returned, never worked round.
+Each road is drawn from its centre line (road_graph.py): the ring's runs half a road out from the
+cluster's outline, a street's down the middle of its corridor from the ring's centre line to the
+ring's centre line again, the approach's from the gate to the ring's; `road_graph` joins them,
+with the pathways to the blocks below 21 m, into one network whose junctions and loops can be
+counted. A configuration whose ring does not close, whose cluster falls in two, or whose approach
+cannot reach the ring is not offered: the reason is returned, never worked round.
 """
 
 from __future__ import annotations
@@ -32,15 +36,25 @@ from shapely.geometry.base import BaseGeometry
 from shapely.ops import unary_union
 
 from siteplan import rules as law
+from siteplan.contracts.candidate import RoadKind
 from siteplan.geometry import opening
 from siteplan.optimizer.search.columns import Standing
 from siteplan.optimizer.search.frame import Frame
 from siteplan.optimizer.search.land import EMPTY, Land, Plot, grow, polygons
+from siteplan.optimizer.search.road_graph import (
+    FILL_SLIVER_SQM,
+    Builder,
+    NodeKind,
+    Road,
+    RoadGraph,
+    crossings,
+    nearest_on,
+    pavement,
+)
 
 # A street shorter than its own width (rule 8(m)'s 9 m, read from rules.py) is no street.
 MIN_STREET_LENGTH_M = law.INTERNAL_ROAD_M
 STREET_REACH_M = 100_000.0  # far enough that a street meets the hull's edge at both ends
-FILL_SLIVER_SQM = 0.05
 RING_CLIP_SQM = 0.5  # drawing noise: ground this small off a shape is nothing
 RING_TIP_SQM = 40.0  # the ring may lose the tip of a corner to a slanted boundary, no more
 APPROACH_REACH_SQM = 18.0  # the approach runs this much into the ring, so the two join
@@ -78,18 +92,33 @@ def street_slots(standing: Sequence[Standing], street_width_m: float
     return slots
 
 
-def street_pieces(standing: Sequence[Standing], frame: Frame, street_width_m: float,
-                  hull: Polygon | None = None) -> list[Polygon]:
-    """The streets, in the survey's frame. Before the cluster is known a street runs the length of
-    the two columns it lies between; given the hull it runs on to the hull's edge at both ends,
-    where the ring road is, so no street stops short of everything."""
-    out: list[Polygon] = []
-    for x0, x1, low, high in street_slots(standing, street_width_m):
-        if hull is None:
-            out.append(frame.to_survey(box(x0, low, x1, high)))
-        else:
-            piece = frame.to_survey(box(x0, -STREET_REACH_M, x1, STREET_REACH_M))
-            out += polygons(piece.intersection(hull), FILL_SLIVER_SQM)
+def street_pieces(standing: Sequence[Standing], frame: Frame, street_width_m: float
+                  ) -> list[Polygon]:
+    """The streets before the cluster is known, in the survey's frame: each runs the length of
+    the two columns it lies between. The cluster is drawn round them (`street_roads` gives the
+    streets once it is)."""
+    return [frame.to_survey(box(x0, low, x1, high))
+            for x0, x1, low, high in street_slots(standing, street_width_m)]
+
+
+def street_roads(standing: Sequence[Standing], frame: Frame, street_width_m: float,
+                 cluster: Cluster) -> list[Road]:
+    """The streets once the cluster is known: each the centre line of its corridor from where it
+    crosses the ring road's centre line to where it crosses it again, paved across the corridor
+    and on to the hull's edge at both ends, where the ring road is, so no street stops short of
+    everything."""
+    out: list[Road] = []
+    for x0, x1, _, _ in street_slots(standing, street_width_m):
+        middle = (x0 + x1) / 2
+        corridor = frame.to_survey(LineString([(middle, -STREET_REACH_M),
+                                               (middle, STREET_REACH_M)]))
+        ends = crossings(corridor, cluster.road.line)
+        if len(ends) < 2:
+            ends = list(corridor.intersection(cluster.hull).coords)  # a dead end, said so
+        road = Road(f"street-{len(out) + 1}", RoadKind.INTERNAL, LineString([ends[0], ends[-1]]),
+                    x1 - x0, cluster.hull, paved=corridor)
+        if not road.ground.is_empty:
+            out.append(road)
     return out
 
 
@@ -98,13 +127,24 @@ class Cluster:
     """The blocks and streets as one convex piece of ground, and the ring road round it."""
 
     hull: Polygon  # the convex hull of the blocks and the streets
-    ring: BaseGeometry  # the road round the hull, on the roadable ground
+    road: Road  # the ring road: its centre line round the hull, paved on the roadable ground
     clipped: bool = False  # the ground cut the tip of a corner off the ring: it is still a road
     # wide, but not as wide as the band that was asked for
+
+    @property
+    def ring(self) -> BaseGeometry:
+        """The ring road's ground."""
+        return self.road.ground
 
 
 def _hull_of(pieces: Sequence[BaseGeometry]) -> Polygon:
     return unary_union(list(pieces)).convex_hull
+
+
+def ring_centre(hull: Polygon, ring_width_m: float) -> LineString:
+    """The ring road's centre line: half a road out from the hull all round, its corners square
+    (the hull is convex, so the band the line paves is the hull grown by a road, less the hull)."""
+    return LineString(grow(hull, ring_width_m / 2).exterior.coords)
 
 
 def cluster_of(footprints: Sequence[Polygon], streets: Sequence[Polygon], land: Land,
@@ -123,18 +163,18 @@ def cluster_of(footprints: Sequence[Polygon], streets: Sequence[Polygon], land: 
     if outside.area > RING_CLIP_SQM:
         return None, ("the cluster does not stand wholly where the ring road can run round it "
                       f"({outside.area:,.0f} m² off)")
-    wanted = grow(hull, ring_width_m).difference(hull)
-    ring = wanted.intersection(land.roadable)
-    lost = wanted.area - ring.area
+    road = Road("ring", RoadKind.LOOP, ring_centre(hull, ring_width_m), ring_width_m,
+                land.roadable)
+    wanted = pavement(road.line, ring_width_m)
+    lost = wanted.area - wanted.intersection(land.roadable).area
     if lost > RING_TIP_SQM:
         return None, f"the ring road is cut short by the ground that bounds it ({lost:,.0f} m²)"
-    parts = polygons(ring, FILL_SLIVER_SQM)
-    if not [p for p in parts if p.interiors]:
+    whole = road.ground
+    if not [p for p in polygons(whole) if p.interiors]:
         return None, "the ring road does not close round the cluster"
-    whole = unary_union(parts)
     if lost > RING_CLIP_SQM and _narrower_than_a_road(hull, whole, road_width_m):
         return None, "the ring road is narrower than a road in places, where the ground cuts it"
-    return Cluster(hull, whole, lost > RING_CLIP_SQM), ""
+    return Cluster(hull, road, lost > RING_CLIP_SQM), ""
 
 
 def _narrower_than_a_road(hull: Polygon, ring: BaseGeometry, road_width_m: float) -> bool:
@@ -143,8 +183,8 @@ def _narrower_than_a_road(hull: Polygon, ring: BaseGeometry, road_width_m: float
     ring's ground. The ground cuts the ring only from outside, so a cut within the ring's margin
     over a road leaves the road whole. (Opening the ring at the road's width instead shrinks a ring
     exactly that wide to a line, whose last digits decide what grows back.)"""
-    centre = LineString(grow(hull, road_width_m / 2).exterior.coords)
-    road = centre.buffer(road_width_m / 2 - EPS_M, cap_style="flat", join_style="round")
+    road = ring_centre(hull, road_width_m).buffer(road_width_m / 2 - EPS_M, cap_style="flat",
+                                                  join_style="round")
     return road.difference(ring).area > RING_CLIP_SQM
 
 
@@ -152,17 +192,18 @@ def _violation(hull: Polygon, land: Land, ring_width_m: float) -> float:
     """How much of the hull, and of the ring road round it, falls off the ground that may hold
     them."""
     off = hull.difference(land.cluster_land.buffer(EPS_M)).area
-    ring = grow(hull, ring_width_m).difference(hull)
+    ring = pavement(ring_centre(hull, ring_width_m), ring_width_m)
     return off + max(0.0, ring.difference(land.roadable).area - RING_TIP_SQM)
 
 
 def fit_cluster(standing: Sequence[Standing], frame: Frame, street_m: float, land: Land,
                 ring_width_m: float, road_width_m: float, values: Sequence[float]
-                ) -> tuple[list[Standing], list[Polygon], Cluster | None, str]:
+                ) -> tuple[list[Standing], list[Road], Cluster | None, str]:
     """The blocks, with the fewest taken away, whose cluster the ground holds with the ring road
-    round it. The columns are laid on ground where each block fits; the convex hull of them all
-    may not (a plot with an arm, a notch). Of the blocks that make the hull stand off the ground,
-    the one whose removal leaves least of it off, and then the least valuable, goes first."""
+    round it, and the streets between them. The columns are laid on ground where each block fits;
+    the convex hull of them all may not (a plot with an arm, a notch). Of the blocks that make the
+    hull stand off the ground, the one whose removal leaves least of it off, and then the least
+    valuable, goes first."""
     value = {id(s): v for s, v in zip(standing, values, strict=True)}
     current = list(standing)
     why = "no block stands"
@@ -171,7 +212,7 @@ def fit_cluster(standing: Sequence[Standing], frame: Frame, street_m: float, lan
         cluster, why = cluster_of(footprints, street_pieces(current, frame, street_m), land,
                                   ring_width_m, road_width_m)
         if cluster is not None:
-            return current, street_pieces(current, frame, street_m, cluster.hull), cluster, ""
+            return current, street_roads(current, frame, street_m, cluster), cluster, ""
         if len(current) == 1:
             break
         cost = partial(_cost_of_dropping, current, frame, street_m, land, ring_width_m, value)
@@ -193,10 +234,16 @@ def _cost_of_dropping(current: Sequence[Standing], frame: Frame, street_m: float
 @dataclass(frozen=True)
 class Entrance:
     gate: Polygon  # the opening in the boundary
-    approach: BaseGeometry  # the main approach road, from the gate to the ring; empty when the
-    # ring road itself meets the gate
+    road: Road | None  # the main approach, from the gate to the ring; None when the ring road
+    # itself meets the gate
     width_m: float
     side: str | None
+    at: tuple[float, float]  # where the entrance's centre line crosses the boundary
+
+    @property
+    def approach(self) -> BaseGeometry:
+        """The main approach road's ground; empty when the ring road itself meets the gate."""
+        return self.road.ground if self.road is not None else EMPTY
 
 
 def find_entrance(plot: Plot, cluster: Cluster, blocked: BaseGeometry, width_m: float,
@@ -209,31 +256,37 @@ def find_entrance(plot: Plot, cluster: Cluster, blocked: BaseGeometry, width_m: 
     if not plot.gate_runs:
         return None, "the access side gives no stretch of boundary a gate may open in"
     half = width_m / 2 + EPS_M
-    found: list[tuple[float, float, Polygon, Polygon]] = []
+    found: list[tuple[float, float, Polygon, BaseGeometry, LineString]] = []
     for line in plot.gate_runs:
         for at, along, inward in _gate_points(plot.net, line, half):
             depth = _depth_to_ring(plot.net, at, along, inward, half, cluster.ring)
             if depth is None:
                 continue
-            rectangle = _rectangle(at, along, inward, half, depth)
-            approach = rectangle.intersection(plot.net)
-            if (rectangle.difference(plot.net.buffer(EPS_M)).area > APPROACH_OUTSIDE_SQM
+            paved = LineString([at, (at[0] + inward[0] * depth, at[1] + inward[1] * depth)])
+            approach = pavement(paved, 2 * half, plot.net)
+            if (pavement(paved, 2 * half).difference(plot.net.buffer(EPS_M)).area
+                    > APPROACH_OUTSIDE_SQM
                     or approach.intersection(blocked).area > RING_CLIP_SQM
                     or approach.intersection(plot.excluded).area > RING_CLIP_SQM
                     or approach.intersection(cluster.hull).area > RING_CLIP_SQM):
                 continue
             gate = _rectangle(at, along, inward, half, max(GATE_DEPTH_M, strip_width_m, 1.0)
                               ).intersection(plot.net)
-            found.append((depth, abs(line.project(Point(at)) - line.length / 2), gate, approach))
+            found.append((depth, abs(line.project(Point(at)) - line.length / 2), gate, approach,
+                          paved))
     if not found:
         return None, "no approach from the access side reaches the ring road clear of everything"
-    for _, _, gate, approach in sorted(found, key=lambda f: f[:2])[:ENTRANCES_TRIED]:
+    for _, _, gate, approach, paved in sorted(found, key=lambda f: f[:2])[:ENTRANCES_TRIED]:
+        at = paved.coords[0]
         if approach.difference(cluster.ring).area < MIN_APPROACH_SQM \
                 and gate.buffer(TOUCH_M).intersection(cluster.ring).area >= APPROACH_REACH_SQM / 2:
-            approach = EMPTY  # the ring road itself meets the gate: no road is left to call one
-        elif _sliver(approach, cluster.ring, width_m):
+            # the ring road itself meets the gate: no road is left to call one
+            return Entrance(gate, None, width_m, plot.access_side, at), ""
+        if _sliver(approach, cluster.ring, width_m):
             continue
-        return Entrance(gate, approach, width_m, plot.access_side), ""
+        road = Road("approach", RoadKind.APPROACH, joining(paved, cluster.road.line), 2 * half,
+                    plot.net, paved=paved)
+        return Entrance(gate, road, width_m, plot.access_side, at), ""
     return None, "no approach meets the ring road as a road 9 m wide all along it"
 
 
@@ -287,6 +340,50 @@ def _depth_to_ring(net: Polygon, at, along, inward, half: float, ring: BaseGeome
         middle = (low + high) / 2
         low, high = (low, middle) if overlap(middle) >= APPROACH_REACH_SQM else (middle, high)
     return high
+
+
+def joining(paved: LineString, ring: LineString) -> LineString:
+    """The centre line of a road that branches off the ring road, from its start to the ring's
+    centre line: along its paved line to where that crosses the ring's centre line, or else on
+    from the end of its pavement (inside the ring's) to the nearest point of the ring's centre
+    line."""
+    start, end = paved.coords[0], paved.coords[-1]
+    crossed = crossings(paved, ring)
+    if crossed:
+        return LineString([start, crossed[0]])
+    return LineString([start, end, nearest_on(ring, end)])
+
+
+def pathway_road(number: int, paved: LineString, width_m: float, cluster: Cluster) -> Road:
+    """A rule 8(l) pathway as a road: paved from the face of the block it serves into the ring,
+    its centre line on to the ring's."""
+    return Road(f"pathway-{number}", RoadKind.PATHWAY, joining(paved, cluster.road.line), width_m,
+                paved=paved)
+
+
+def road_graph(cluster: Cluster, streets: Sequence[Road], entrance: Entrance,
+               pathways: Sequence[Road]) -> RoadGraph:
+    """Every road of a layout as one network: the ring cut at every point another road meets it,
+    each street between its two junctions on it, the approach from the entrance, and each pathway
+    from the block it serves. Where the ring road itself meets the gate, the entrance is a node of
+    the ring."""
+    builder = Builder()
+    ring = cluster.road.line
+    branches = [*streets, *([entrance.road] if entrance.road is not None else []), *pathways]
+    meets = [c for road in branches for c in (road.line.coords[0], road.line.coords[-1])
+             if Point(c).distance(ring) <= EPS_M]
+    if entrance.road is None:
+        meets.append(nearest_on(ring, entrance.at))
+    builder.loop(cluster.road, meets)
+    for street in streets:
+        builder.road(street)
+    if entrance.road is not None:
+        builder.road(entrance.road, start=NodeKind.ENTRANCE)
+    else:
+        builder.node(nearest_on(ring, entrance.at), NodeKind.ENTRANCE)
+    for pathway in pathways:
+        builder.road(pathway, start=NodeKind.SERVICE)
+    return builder.graph()
 
 
 def fire_lanes(footprints: Sequence[Polygon], roads: BaseGeometry, net: Polygon,

@@ -54,7 +54,15 @@ from siteplan.contracts import accounting as ledger
 from siteplan.contracts import design_brief, prototype, resolved_rules, site_model
 from siteplan.legal import frontage, widths
 from siteplan.optimizer import floors as optimizer_floors
-from siteplan.optimizer.search import build, columns, fringe, network, parking_plan, strategy
+from siteplan.optimizer.search import (
+    build,
+    columns,
+    fringe,
+    network,
+    parking_plan,
+    road_graph,
+    strategy,
+)
 from siteplan.optimizer.search import fit as search_fit
 from siteplan.optimizer.search import ground as search_ground
 from siteplan.optimizer.search import land as search_land
@@ -1210,10 +1218,12 @@ REGISTRY: tuple[Constraint, ...] = (
         ("contracts.resolved_rules.HEIGHT_TOL_M", "contracts.validation.TARGET_TOL",
          "legal.non_high_rise.WIDTH_TOL_M", "legal.frontage.MIN_ZONE_M",
          "optimizer.floors.EPS_M", "optimizer.search.build.SLIVER_SQM",
+         "optimizer.search.build.GRID_M",
          "optimizer.search.columns.EPS", "optimizer.search.fit.EPS_M",
          "optimizer.search.ground.MIN_PIECE_SQM", "optimizer.search.layout.EPS_LAND_M",
          "optimizer.search.fringe.TIE_M", "optimizer.search.fringe.CONTAIN_TOL_M",
-         "optimizer.search.network.FILL_SLIVER_SQM", "optimizer.search.network.RING_CLIP_SQM",
+         "optimizer.search.road_graph.FILL_SLIVER_SQM",
+         "optimizer.search.road_graph.NODE_SNAP_M", "optimizer.search.network.RING_CLIP_SQM",
          "optimizer.search.network.APPROACH_OUTSIDE_SQM", "optimizer.search.network.EPS_M",
          "optimizer.search.parking_plan.EPS_M", "optimizer.search.parking_plan.EDGE_M",
          "prototypes.legacy.SNAP_M", "adapters.legacy_layout.SLIVER_SQM"),
@@ -1221,7 +1231,9 @@ REGISTRY: tuple[Constraint, ...] = (
              "snapped to a micrometre when it becomes a prototype, so shared edges are one. The "
              f"fringe ranks distances and places within {fringe.TIE_M:g} m as equal and counts a "
              f"block within {fringe.CONTAIN_TOL_M:g} m of its ground as on it, so the last digits "
-             "of the geometry never choose between equals.",
+             "of the geometry never choose between equals. Two road ends within "
+             f"{road_graph.NODE_SNAP_M:g} m are one node of the full search's road graph. The "
+             f"search's ledger is drawn on the validator's {build.GRID_M:g} m grid.",
         settles="Nothing: tolerances, all well under a drawing's precision.",
     ),
     Constraint(
