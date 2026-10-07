@@ -283,10 +283,13 @@ class Service:
         if not kit:
             return ProposeResult(status=ProposeStatus.STOPPED, notes=left_out, next=NO_PROTOTYPE)
         title = f"Generate layout options for {loaded.project.name}"
-        lines = brief.approval_lines(
+        inputs = Inputs(site, rules, design, env)
+        repeats = [_repeats(run_id, at) for run_id, at in
+                   store.approved_runs_of(self._out, store.input_digests(inputs))]
+        lines = [*brief.approval_lines(
             debug=self._mode is Mode.DEBUG, finished=loaded.finished, project_file=loaded.file,
             survey=loaded.survey, project=loaded.project, standards=loaded.standards,
-            left_out=left_out, site=site, brief=design, intent=request.intent)
+            left_out=left_out, site=site, brief=design, intent=request.intent), *repeats]
         run_id = uuid.uuid4().hex[:RUN_ID_CHARS]
         decision = self._decision(title, lines)
         approved = decision is Decision.APPROVED
@@ -298,7 +301,6 @@ class Service:
         # siteplan.validator, and every alternative is judged again below.
         result = optimize(site, rules, design, [FullSearchStrategy()], envelope=env,
                           prototypes=kit)
-        inputs = Inputs(site, rules, design, env)
         judged, rejected = _judged_again(inputs, result)
         shown = {c.candidate_id for c, _ in judged}
         record = RunRecord(
@@ -309,7 +311,7 @@ class Service:
             candidates=[store.StoredCandidate(candidate_id=c.candidate_id, digest=digest(c),
                                               point=c.pareto_tag) for c, _ in judged],
             proposed_candidates=[_proposed(p, shown) for p in result.proposed],
-            notes=[*left_out, *result.notes], rejected=rejected,
+            notes=[*repeats, *left_out, *result.notes], rejected=rejected,
             unfilled=[f"{point.value}: {why}" for point, why in result.unfilled])
         record = store.write_run(self._out / record.run_id, record, inputs, judged,
                                  [(p.candidate, p.report) for p in result.proposed])
@@ -545,6 +547,14 @@ class Service:
 
     def _debug(self, record: RunRecord) -> bool:
         return Mode.DEBUG in (record.mode, self._mode)
+
+
+def _repeats(run_id: str, at: str) -> str:
+    """Said on the approval page and in the answer's notes when the request repeats an approved
+    run: the same inputs searched again find the same layouts."""
+    when = at[:16].replace("T", " ")
+    return (f"The same request as run {run_id}, approved {when} UTC: approving this searches the "
+            "same inputs again")
 
 
 def _kit(library: FlatLibrary, design: DesignBrief) -> tuple[list[TowerPrototype], list[str]]:

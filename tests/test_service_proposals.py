@@ -11,6 +11,7 @@ approval page is pinned against main in test_service_proposals_baseline.py.
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import uuid
 from dataclasses import dataclass
@@ -365,3 +366,27 @@ def test_a_run_kept_before_the_proposals_were_behaves_as_it_did(ran):
     assert exported.status is ExportStatus.EXPORTED
     with pytest.raises(ServiceError, match="has no candidate"):
         _validate(ran.service, run_id, hidden.candidate_id)
+
+
+# --- 5. A request that repeats an approved run --------------------------------------------------
+
+
+def test_a_request_that_repeats_an_approved_run_says_so_before_it_is_approved(tmp_path):
+    """D1 (KNOWN_QWEN_DEFECTS.md): a model searched again "to get a clean run id", the person
+    approved a second, identical page, and the second run was reported as if it were the only
+    one. A request on exactly the inputs of an approved run now says so on its page, before it is
+    approved, and in its notes; a rejected request was never a run and is not named."""
+    ws = make_workspace(tmp_path)
+    rejected = _propose(Service(ws, ws / "out", Approver(answer=False)))
+    approver = Approver()
+    service = Service(ws, ws / "out", approver)
+    first, second = _propose(service), _propose(service)
+    assert rejected.run_id is None and first.run_id and second.run_id != first.run_id
+    (_, first_lines), (_, second_lines) = approver.asked
+    said = [line for line in second_lines if line.startswith("The same request as run")]
+    assert [line for line in first_lines if line.startswith("The same request")] == []
+    assert len(said) == 1 and re.fullmatch(
+        rf"The same request as run {first.run_id}, approved \d{{4}}-\d\d-\d\d \d\d:\d\d UTC: "
+        "approving this searches the same inputs again", said[0]), said
+    assert said[0] in second.notes and not any(n.startswith("The same request")
+                                               for n in first.notes)

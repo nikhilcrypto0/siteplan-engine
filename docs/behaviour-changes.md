@@ -630,6 +630,33 @@ Evidence and tests:
   were. The best layout is the same (three towers of stilt + 10, 360 flats, 432,120 sft); the
   balanced and the open-space options shown are others.
 
+## 2026-10-06: the agent loop and the service guard against the logged Qwen defects
+
+No characterization test changed: on a fresh out folder the approval page, the answer and the
+search are as before. KNOWN_QWEN_DEFECTS.md (the assumption-test and workflow folders) logged
+three defects of qwen3.8-27b-sglang as the orchestrator; each now has an engine-side guard, since
+words in a prompt alone had not held:
+
+- D1, an opaque id copied wrong and a duplicate search hidden: the loop refuses, and never sends,
+  a call naming a run_id or candidate_id that no tool result and not the brief has given, and
+  tells the model the ones that were (`loop.unknown_identifier`); a proposal on exactly the inputs
+  of an approved run says so on its approval page, before the person approves it again, and in
+  the answer's notes (`store.approved_runs_of`). The system message says to copy identifiers
+  exactly, never to search again for a new id, and to name every run_id in the answer.
+- D2, counts in prose: every result reaches the model beside the count of each list in it
+  (`loop.counts`), and the system message says never to count a list itself.
+- D3, invented browser steps: the system message names the only two approval pages (before a
+  search, before each export) and says choosing among candidates happens in the conversation.
+
+Tests: `test_every_list_in_a_result_comes_with_its_count_so_the_model_never_counts`,
+`test_an_identifier_no_result_or_brief_gave_is_refused_with_the_ones_that_were`,
+`test_the_system_message_names_the_two_approval_points_and_the_identifier_rules`,
+`test_a_wrong_identifier_is_refused_by_the_loop_and_never_sent` (tests/test_agent_loop.py) and
+`test_a_request_that_repeats_an_approved_run_says_so_before_it_is_approved`
+(tests/test_service_proposals.py). Two loop tests now expect the counts beside a result, and the
+export test's new session names its run and candidate in the brief, as an architect would. Not yet
+seen on a live Qwen run (the GB10 is down): the next run is audited against all three.
+
 ## 2026-10-06: the search keeps its cellar out from under blocks below 21 m
 
 The full search lays fire lanes round its high-rise blocks only, and its cellar was the whole plot

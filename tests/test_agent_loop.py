@@ -161,13 +161,13 @@ class Ran:
 
 def run_loop(ws: Path, folder: Path, steps: list, *, decisions: tuple[str, ...] = (),
              limits: dict | None = None, endpoint: str | None = None,
-             on_request: Callable[[int], None] | None = None) -> Ran:
+             on_request: Callable[[int], None] | None = None, brief: str = ASK) -> Ran:
     """One run of the loop through the launcher against the scripted model; the architect
     answers the pages that open with `decisions`, in order."""
     folder.mkdir(parents=True, exist_ok=True)
     out = folder / "out"
     before = hashes(ws)
-    settings = Settings.build({}, ASK, model_id=MODEL_ID, limits=limits or {})
+    settings = Settings.build({}, brief, model_id=MODEL_ID, limits=limits or {})
     view = io.StringIO()
     with FakeModel(steps, on_request) as model, \
             OutOfBandBrowser(folder, out, list(decisions)) as browser:
@@ -476,7 +476,73 @@ def test_one_tool_call_runs_once_and_its_whole_result_reaches_the_model(ws, tmp_
     (host,) = ran.host_results()
     (tool,) = [m for m in ran.model.bodies()[1]["messages"] if m["role"] == "tool"]
     assert tool["tool_call_id"] == ran.events("tool_call")[0]["id"]
-    assert json.loads(tool["content"]) == {"ok": True, "result": host["structuredContent"]}
+    told = json.loads(tool["content"])
+    assert told == {"ok": True, "result": host["structuredContent"],
+                    "counts": loop.counts(host["structuredContent"])}
+    assert told["counts"]["prototypes"] == len(host["structuredContent"]["prototypes"]) > 1
+
+
+def test_every_list_in_a_result_comes_with_its_count_so_the_model_never_counts():
+    """D2 (KNOWN_QWEN_DEFECTS.md): the model miscounted lists in its prose ("six" standards for
+    seven, "15 bands" for 16). Each result now carries how many items each of its lists holds."""
+    result = {"questions": ["a", "b", "c"], "one": ["x"], "none": [],
+              "candidates": [{"candidate_id": "full-1", "unverified": ["p", "q"]},
+                             {"candidate_id": "full-2", "unverified": ["p"]}]}
+    assert loop.counts(result) == {"questions": 3, "candidates": 2,
+                                   "candidates[full-1].unverified": 2}
+    assert loop._counted({"a": 1}) == {"ok": True, "result": {"a": 1}}
+    many = {f"list{i}": [1, 2] for i in range(loop.MOST_COUNTS + 5)}
+    shown = loop._counted(many)["counts"]
+    assert len(shown) == loop.MOST_COUNTS + 1 and shown["(lists not counted here)"] == 5
+
+
+def test_an_identifier_no_result_or_brief_gave_is_refused_with_the_ones_that_were():
+    """D1 (KNOWN_QWEN_DEFECTS.md): the model copied run_id 303161fb656e as 303161656e, was
+    refused three times, and searched again "to get a clean run id". The loop now refuses a run_id
+    or candidate_id that no tool result and not the brief has given, naming the ones that were."""
+    given = {"run_id": {"303161fb656e"}, "candidate_id": {"full-ALL-ALL-1", "full-ALL-ALL-5"}}
+    brief = set(loop.TOKEN.findall("The brief says: validate full-x-9 from run 9cca0ec05912."))
+    wrong = loop.unknown_identifier({"run_id": "303161656e", "candidate_id": "full-ALL-ALL-1"},
+                                    given, brief)
+    assert wrong == ("run_id '303161656e' is not one a tool result or the brief has given. The "
+                     "run_ids given so far: 303161fb656e. Copy one exactly; do not call "
+                     "propose_layouts again only to get a new one.")
+    assert loop.unknown_identifier({"run_id": "303161fb656e", "candidate_id": "full-ALL-ALL-1"},
+                                   given, brief) is None
+    assert loop.unknown_identifier({"run_id": "9cca0ec05912", "candidate_id": "full-x-9"},
+                                   given, brief) is None  # named in the brief
+    assert "candidate_ids 'full-ALL-ALL-2'" in loop.unknown_identifier(
+        {"run_id": "303161fb656e", "candidate_ids": ["full-ALL-ALL-1", "full-ALL-ALL-2"]},
+        given, brief)
+    assert "given so far: none yet" in loop.unknown_identifier(
+        {"run_id": "abcdef012345", "candidate_id": "c"}, {"run_id": set(), "candidate_id": set()},
+        set())
+    assert loop.unknown_identifier({"project_file": "x"}, given, brief) is None
+    found = {"run_id": set(), "candidate_id": set()}
+    loop.ids_given({"run_id": "r1", "candidates": [{"candidate_id": "c1"}, {"candidate_id": "c2"}],
+                    "notes": ["run_id r9 is not a field"]}, found)
+    assert found == {"run_id": {"r1"}, "candidate_id": {"c1", "c2"}}
+
+
+def test_the_system_message_names_the_two_approval_points_and_the_identifier_rules():
+    """D3 (KNOWN_QWEN_DEFECTS.md): the model invented browser steps ("the architect picks a
+    candidate in the browser"). The system message names the only two approval pages, says that
+    choosing happens in the conversation, and states D1's and D2's rules."""
+    for words in ("exactly two places", "before a search runs (propose_layouts)",
+                  "before each export (export_candidate", "not in a browser",
+                  "character for character", "never call propose_layouts again",
+                  "name every run_id you were given", "Never count the items of a list"):
+        assert words in loop.SYSTEM, words
+
+
+def test_a_wrong_identifier_is_refused_by_the_loop_and_never_sent(ws, tmp_path):
+    ran = run_loop(ws, tmp_path, [
+        act(call("validate_candidate", {"run_id": "303161656e00", "candidate_id": "full-1"})),
+        say("I need the exact run id.")])
+    (refused,) = ran.events("tool_refused")
+    assert refused["name"] == "validate_candidate" and "given so far: none yet" in (
+        refused["reason"])
+    assert ran.sent() == [] and ran.stop["reason"] == "answered"
 
 
 def test_a_model_message_that_is_not_valid_unicode_neither_stops_the_run_nor_the_record(
@@ -496,7 +562,7 @@ def test_an_oversized_tool_result_is_cut_with_a_visible_marker(ws, tmp_path):
                    limits={"max_tool_result_chars": 1000})
     (event,) = ran.events("tool_result")
     (host,) = ran.host_results()
-    whole = json.dumps({"ok": True, "result": host["structuredContent"]}, ensure_ascii=False,
+    whole = json.dumps(loop._counted(host["structuredContent"]), ensure_ascii=False,
                        separators=(",", ":"))
     (tool,) = [m for m in ran.model.bodies()[1]["messages"] if m["role"] == "tool"]
     sent = tool["content"]
@@ -606,8 +672,10 @@ def test_a_fail_candidate_cannot_be_exported_through_the_loop(journey, ws, tmp_p
     _tower_into_the_setback(tmp_path / "out", run_id, candidate_id)
     export = {"run_id": run_id, "candidate_id": candidate_id,
               "acknowledged_unresolved": [item["item"] for item in checked["unverified"]]}
+    # a new session: the architect names the run and the candidate in the brief
     ran = run_loop(ws, tmp_path, [act(call("export_candidate", export)),
-                                  say("The export was refused.")], decisions=("approve",))
+                                  say("The export was refused.")], decisions=("approve",),
+                   brief=f"{ASK} Export {candidate_id} from run {run_id}.")
     result = ran.results()[0]["result"]
     assert result["status"] == "REFUSED" and result["legal_verdict"] == "FAIL"
     assert any(r.startswith("FAIL All-round setback") for r in result["reasons"]), result

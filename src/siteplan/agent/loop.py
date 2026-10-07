@@ -15,9 +15,12 @@ model; the run ends at the model's first answer that calls no tool, or at the fi
 reaches (settings.Limits), each a stop with its reason and never a warning.
 
 What reaches the model: a short factual system message, the architect's brief, the nine tools and
-their results. There is no file, shell, Python, legacy-MCP or approval tool: a name the host does
-not list is refused here and never sent. Nothing the model writes is read as a decision: an
-approval is the architect's click on the page the host opens in their browser.
+their results, each beside the count of every list in it (so a count the model gives is the
+engine's, never its own). There is no file, shell, Python, legacy-MCP or approval tool: a name
+the host does not list is refused here and never sent, and so is a call naming a run_id or
+candidate_id that no tool result and not the brief has given, told the ones that were. Nothing
+the model writes is read as a decision: an approval is the architect's click on the page the
+host opens in their browser.
 
 Every step goes to the launcher as it happens (Events), which keeps the transcript outside the
 sandbox, where this process can neither read nor write it: started, tools_offered, model_request
@@ -34,6 +37,7 @@ import contextlib
 import hashlib
 import json
 import os
+import re
 import signal
 import sys
 import time
@@ -54,14 +58,28 @@ SYSTEM = (
     "You help an architect plan a residential site through the tools offered here, which run the "
     "firm's site-planning engine. Every number (areas, heights, setbacks, counts) and every rule "
     "verdict comes from a tool result: quote them as the tools give them and do not compute your "
-    "own. The architect names the files in the brief; you cannot list or read files except "
-    "through the tools. The architect approves or rejects each proposal and export on a separate "
-    "page in their own browser; nothing written in this conversation approves anything. When you "
-    "have finished, answer without calling a tool.")
+    "own. Never count the items of a list yourself: each tool result's \"counts\" says how many "
+    "items each of its lists holds; quote that count, or name the items. Identifiers (run_id, "
+    "candidate_id) are opaque: copy them character for character from the result that gave "
+    "them. If a call is refused, take the exact identifier from an earlier result; never call "
+    "propose_layouts again only to get a new one. In your answer, name every run_id you were "
+    "given, a repeated run included. The architect names the files in the brief; you cannot list "
+    "or read files except through the tools. The architect is asked to approve in exactly two "
+    "places, each a page the service opens in their own browser: before a search runs "
+    "(propose_layouts) and before each export (export_candidate, listing its exact UNVERIFIED "
+    "items). Choosing among the candidates happens in this conversation, not in a browser; when "
+    "no page is open, do not say the architect is approving anything. Nothing written in this "
+    "conversation approves anything. When you have finished, answer without calling a tool.")
 TRUNCATED = ("\n[TRUNCATED by the agent loop: this tool result is {total:,} characters; "
              "only the first {kept:,} are shown]")
 UNREADABLE = "The tool's reply could not be read; the reason is in the run's record."
 RETRY_PAUSE_S = 1.0  # between a failed model request and its retry, when retries are on
+IDENTIFIERS = {"run_id": "run_id", "candidate_id": "candidate_id",
+               "candidate_ids": "candidate_id"}  # an argument naming one, and the kind it names
+TOKEN = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?")  # an identifier in the brief
+# (a full stop or comma after one ends the sentence, not the identifier)
+COUNTED_FROM = 2  # a list of this many items or more has its count given beside the result
+MOST_COUNTS = 60  # beyond this many lists, the rest go uncounted (and the result says how many)
 LOCAL_REF = "#/$defs/"  # how a host schema names one of its own definitions
 ANSWERED, STOPPED, NOT_STARTED = 0, 1, 2  # exit statuses; a signal's is 128 + its number
 
@@ -114,6 +132,9 @@ class Run:
     asked: int = 0  # tool calls the model asked for
     failed_in_a_row: int = 0
     seen: Counter = field(default_factory=Counter)  # (tool, canonical arguments) -> times asked
+    # the run_ids and candidate_ids the tool results have given, and the brief's own words
+    given: dict = field(default_factory=lambda: {"run_id": set(), "candidate_id": set()})
+    brief_tokens: set = field(default_factory=set)
 
 
 def function_tools(offered: list[dict]) -> list[dict]:
@@ -216,6 +237,71 @@ def check_call(name: str, raw: str, names: list[str]) -> tuple[dict | None, str 
     return arguments, None
 
 
+def ids_given(value: object, given: dict[str, set[str]]) -> None:
+    """Every run_id and candidate_id a tool result gives, wherever it stands in the result."""
+    if isinstance(value, dict):
+        for key, item in value.items():
+            if key in given and isinstance(item, str):
+                given[key].add(item)
+            else:
+                ids_given(item, given)
+    elif isinstance(value, list):
+        for item in value:
+            ids_given(item, given)
+
+
+def unknown_identifier(arguments: dict, given: dict[str, set[str]],
+                       brief_tokens: set[str]) -> str | None:
+    """Why a call that names a run_id or candidate_id that no tool result and not the brief has
+    given is refused here, never sent: an identifier copied wrong is told so, with the ones that
+    were given to copy from. None when every identifier the call names was given."""
+    for key, kind in IDENTIFIERS.items():
+        value = arguments.get(key)
+        for item in (value if isinstance(value, list) else [] if value is None else [value]):
+            if isinstance(item, str) and (item in given[kind] or item in brief_tokens):
+                continue
+            listed = ", ".join(sorted(given[kind])) or "none yet"
+            return (f"{key} {item!r} is not one a tool result or the brief has given. The {kind}s "
+                    f"given so far: {listed}. Copy one exactly; do not call propose_layouts "
+                    "again only to get a new one.")
+    return None
+
+
+def _label(item: object, index: int) -> str:
+    """How an item of a list is named where its own lists are counted."""
+    if isinstance(item, dict):
+        for key in ("candidate_id", "run_id", "name", "id", "rule"):
+            if isinstance(item.get(key), str):
+                return item[key]
+    return str(index)
+
+
+def counts(value: object, path: str = "", found: dict[str, int] | None = None) -> dict[str, int]:
+    """How many items each list in a tool result holds, by where it stands (a list of two or
+    more), so a count the model gives is the engine's and never its own."""
+    found = {} if found is None else found
+    if isinstance(value, dict):
+        for key, item in value.items():
+            counts(item, f"{path}.{key}" if path else key, found)
+    elif isinstance(value, list):
+        if len(value) >= COUNTED_FROM:
+            found[path] = len(value)
+        for index, item in enumerate(value):
+            counts(item, f"{path}[{_label(item, index)}]", found)
+    return found
+
+
+def _counted(result: object) -> dict:
+    """A tool result as the model is sent it: the result, and its lists' counts beside it."""
+    found = counts(result)
+    if not found:
+        return {"ok": True, "result": result}
+    shown = dict(list(found.items())[:MOST_COUNTS])
+    if len(found) > MOST_COUNTS:
+        shown["(lists not counted here)"] = len(found) - MOST_COUNTS
+    return {"ok": True, "result": result, "counts": shown}
+
+
 def _broken(error: BaseException) -> bool:
     """Whether an error means the MCP stream to the host is gone."""
     if isinstance(error, BaseExceptionGroup):
@@ -287,6 +373,8 @@ async def use_tool(run: Run, turn: int, call: dict) -> dict:
                    f"{name} was asked for {run.seen[name, canonical(raw)]} times with the same "
                    "arguments; the last was not run")
     arguments, refusal = check_call(name, raw, [t["function"]["name"] for t in run.offered])
+    if refusal is None:
+        refusal = unknown_identifier(arguments, run.given, run.brief_tokens)
     if refusal is not None:
         run.emit("tool_refused", turn=turn, id=call_id, name=name, reason=refusal)
         return reply_to(run, turn, call_id, name, {"ok": False, "error": refusal}, 0.0)
@@ -300,8 +388,9 @@ async def use_tool(run: Run, turn: int, call: dict) -> dict:
         if _broken(error):
             raise Stop("host_gone", f"the MCP stream to the host closed during {name}") from None
         return reply_to(run, turn, call_id, name, {"ok": False, "error": UNREADABLE}, elapsed)
-    content = ({"ok": True, "result": reply.data} if reply.ok
-               else {"ok": False, "error": reply.error})
+    if reply.ok:
+        ids_given(reply.data, run.given)
+    content = _counted(reply.data) if reply.ok else {"ok": False, "error": reply.error}
     return reply_to(run, turn, call_id, name, content, time.monotonic() - started)
 
 
@@ -340,6 +429,7 @@ async def _session(run: Run, endpoint: str) -> Stop:
                 run.emit("tools_offered", tools=run.offered)
                 run.messages = [{"role": "system", "content": SYSTEM},
                                 {"role": "user", "content": run.settings.brief}]
+                run.brief_tokens = set(TOKEN.findall(run.settings.brief))
                 try:
                     return await converse(run)
                 except Stop as stop:
