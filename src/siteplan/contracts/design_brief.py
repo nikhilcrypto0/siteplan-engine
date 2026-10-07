@@ -81,6 +81,7 @@ class Priority(StrEnum):
     CONVENTIONALITY = "conventionality"
     SITE_USE = "site_use"  # the ground put to a use or kept open by a rule (C4-11)
     QUALITY = "quality"  # simple roads, repeated blocks one way, few leftover pieces (C4-11)
+    PREFERENCE = "preference"  # how well the brief's soft preferences are met (C4-16)
 
 
 class UnitTarget(Part):

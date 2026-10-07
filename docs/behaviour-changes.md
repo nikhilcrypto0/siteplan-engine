@@ -4,6 +4,33 @@ A characterization test (tests/manifest.py) pins what the engine produces today.
 only together with a normative replacement test and an entry here: what changed, why, the
 evidence, and the test that now holds the behaviour. Newest first.
 
+## 2026-10-07: C4-16, the architect's soft preferences scored
+
+The brief has carried soft preferences all along (`Objectives.soft_preferences`: a kind, its
+parameters and a weight), and nothing read them: a wish given was dropped unsaid. The objective now
+scores them (`optimizer/preferences.py`) as an eighth axis, preference (`Priority.PREFERENCE`, the
+enum extended, contracts not bumped): the weighted mean of how well a layout meets each preference
+the engine understands, from 0 to 1, and 1 for every layout when the brief gives none, so that
+then nothing moves. The kinds: orientation (`axis_deg`: the blocks' long sides along a direction),
+max_towers (`towers`), keep_away_from_road (`m`: the share of blocks that far from the entrances)
+and club_near_entrance (`m`). A preference is never a rule: nothing fails for one, and the
+validator does not read them. One of another kind, or with a parameter missing or not a number, is
+not weighed, and the search's notes name it, as they name the ones weighed.
+
+Tests: `tests/test_objective_preferences.py` (normative: no preference scores every layout 1;
+each kind's score; a kind not understood is named and not weighed, the others still are; between
+two layouts equal on every other axis the balanced option follows an orientation preference; the
+search's notes name what was weighed and what was not). Characterization re-pinned: the service's
+made-up baseline (its brief gives no preference: the same proposals, the same four shown and the
+same answer; the shown digests move, each alternative's scores carrying the number).
+
+- Dhulapally, Run B prime's request (the C4 benchmark, 16-preferences): the brief gives none, and
+  the same layouts are judged, proposed and shown. Tried once with "at most four blocks" (an
+  experiment, not a benchmark): weighed and named in the notes; at its weight of 1, and with the
+  preference's priority at 4, the balanced option stays the five-block 383,302 sft layout (a 20%
+  shortfall on one axis of eight); with the priority at 20 it is a three-block layout of 388,908
+  sft. A soft preference nudges; the brief's priority says how hard.
+
 ## 2026-10-07: C4-15, the turn at every road junction
 
 The validator swept the fire tender's turns at every corner of a block held to NBC 4.6 and at

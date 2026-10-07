@@ -61,7 +61,9 @@ same saleable area that leaves less ground to no use, 985 m² of its open space 
 had 570; the open-space and robust ones are the same. Re-pinned on C4-15, where the generator keeps
 its program off the turns at the road junctions: the same proposals, the same four shown and the
 same answer; two proposals not shown (`ALL-allowed-29`, `-91`) lay the same facilities off a
-junction turn, so the proposals' digest moves.
+junction turn, so the proposals' digest moves. Re-pinned on C4-16, where the objective scores the
+brief's soft preferences: this brief gives none, so every layout scores 1 on that axis and nothing
+is chosen otherwise; the shown digests move, each alternative's scores carrying the number.
 
 The values pin exact output on the locked dependencies (uv.lock). They move only with a normative
 replacement and an entry in docs/behaviour-changes.md.
@@ -114,8 +116,8 @@ PINNED = {
         ["full-not_counted-ALL-65", "CONVENTIONAL_OPEN_SPACE"],
         ["full-ALL-ALL-1", "ROBUST"],
     ],
-    "shown_digests": ["d9cb756eb78a5bab", "8487aadc62f6f1c8", "28c2bd46f11e8c4b",
-                      "a6fc1bef3f890cf4"],
+    "shown_digests": ["a295f377c8dfcbe6", "1426152de8125fde", "34e67c9f8ea64723",
+                      "8df5f989b32756d4"],
     "answer_sha256": "de9f8db367744b2e03350c9910f08c742f6b0183327f11b94658b4fb629d7440",
     "approval_page_sha256": "cd3ebee2af46849756df643999df9b16d2cbc91d92c45101983782cff1eb0181",
 }

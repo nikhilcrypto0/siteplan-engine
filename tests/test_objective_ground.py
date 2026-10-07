@@ -121,7 +121,7 @@ def test_a_block_a_road_meets_only_at_a_corner_counts_against_the_layout():
 
 def test_site_use_and_quality_are_axes_of_the_front_and_weights_a_brief_may_set():
     """The same blocks with less left over dominate; the brief may weigh either number."""
-    assert AXES[-2:] == (Priority.SITE_USE.value, Priority.QUALITY.value)
+    assert AXES[5:7] == (Priority.SITE_USE.value, Priority.QUALITY.value)  # C4-16's after them
     tidy = measure(_on(_blocks("blocks"), _ledger(left=[box(0, 0, 100, 5)])), BRIEF)
     loose = measure(_on(_blocks("blocks"), _ledger(left=[STRIP])), BRIEF)
     by_axis = dict(zip(AXES, tidy.vector, strict=True))

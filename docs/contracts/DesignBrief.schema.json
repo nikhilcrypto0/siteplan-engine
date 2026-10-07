@@ -441,7 +441,8 @@
         "mix_fit",
         "conventionality",
         "site_use",
-        "quality"
+        "quality",
+        "preference"
       ],
       "title": "Priority",
       "type": "string"

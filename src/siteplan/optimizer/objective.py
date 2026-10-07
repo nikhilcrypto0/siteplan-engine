@@ -1,4 +1,4 @@
-"""What a candidate is worth to the architect: seven numbers, each worked out from the candidate's
+"""What a candidate is worth to the architect: eight numbers, each worked out from the candidate's
 own prototypes, placements and ground, never from the generator's claims (`metrics` may be
 wrong).
 
@@ -22,7 +22,9 @@ wrong).
   running its most used way; the share facing a road or pathway along at least a pathway's width
   (rule 8(l)'s 6 m, the stricter reading of "opens onto", so a block a road meets only at a
   corner counts against the layout under both readings); and 1 over 1 and the residual's pieces
-  of FRAGMENT_SQM or more. A score of the search's, never a rule: nothing fails for it.
+  of FRAGMENT_SQM or more. A score of the search's, never a rule: nothing fails for it;
+- preference (C4-16): how well the brief's soft preferences are met (preferences.py), 1 for every
+  layout when it gives none, so the axis then moves nothing.
 
 All are bigger-is-better, so a Pareto front over them (pareto.py) means what it says.
 The architect's priorities (DesignBrief.objectives.priorities) are weights over these, used only
@@ -44,6 +46,7 @@ from siteplan.contracts import CandidateLayout, DesignBrief
 from siteplan.contracts.accounting import LayerKind, PartitionLedger, PhysicalUse, RuleLayers
 from siteplan.contracts.design_brief import Priority
 from siteplan.geometry import frontage, opening
+from siteplan.optimizer.preferences import preference_score
 
 AXES = tuple(priority.value for priority in Priority)  # the brief names its priorities by these
 FRAGMENT_SQM = 50.0  # a piece of leftover ground this big counts as a fragment (C4-11)
@@ -73,6 +76,7 @@ class Scores:
     site_use: float = 0.0  # 0 where the candidate draws no ledger: unknown is not good
     quality: float = 0.0
     open_space_usable_sqm: float = 0.0  # the open-space axis (C4-12); open_space_sqm is the whole
+    preference: float = 1.0  # the soft preferences met (C4-16); 1 when the brief gives none
 
     @property
     def yield_score(self) -> float:
@@ -81,9 +85,9 @@ class Scores:
 
     @property
     def vector(self) -> tuple[float, ...]:
-        """The seven bigger-is-better numbers, in AXES order."""
+        """The eight bigger-is-better numbers, in AXES order."""
         return (self.saleable_sqft, float(self.units), self.open_space_usable_sqm, self.mix_fit,
-                self.conventionality, self.site_use, self.quality)
+                self.conventionality, self.site_use, self.quality, self.preference)
 
     def as_dict(self) -> dict[str, float]:
         return {"saleable_sqft": self.saleable_sqft, "units": float(self.units),
@@ -91,6 +95,7 @@ class Scores:
                 "conventionality": self.conventionality, "towers": float(self.towers),
                 "site_use": self.site_use, "quality": self.quality,
                 "open_space_usable_sqm": self.open_space_usable_sqm,
+                "preference": self.preference,
                 "yield_score": self.yield_score}
 
 
@@ -116,7 +121,8 @@ def measure(candidate: CandidateLayout, brief: DesignBrief) -> Scores:
         mix_fit=1 - mix_error(dict(flats), brief.program.unit_mix.value),
         conventionality=sum(conventionality) / towers if towers else 0.0, towers=towers,
         site_use=site_use, quality=quality,
-        open_space_usable_sqm=usable_open_sqm(open_space, reach))
+        open_space_usable_sqm=usable_open_sqm(open_space, reach),
+        preference=preference_score(candidate, brief.objectives.soft_preferences))
 
 
 def reach_of(blocks: BaseGeometry) -> BaseGeometry:

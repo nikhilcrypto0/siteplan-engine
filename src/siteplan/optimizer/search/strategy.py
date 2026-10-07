@@ -44,6 +44,7 @@ from siteplan.contracts import CandidateLayout, DesignBrief, ValidationReport
 from siteplan.optimizer.interfaces import Budget, Proposal, SearchContext, Validator
 from siteplan.optimizer.objective import Scores, measure
 from siteplan.optimizer.pareto import Scored, leaders, pareto_front, same_idea, select
+from siteplan.optimizer.preferences import not_weighed
 from siteplan.optimizer.search import fringe
 from siteplan.optimizer.search.build import build_candidate
 from siteplan.optimizer.search.columns import Choice
@@ -503,6 +504,15 @@ def _notes(run: Run | None, tally: Tally, found: Sequence[Judged], chosen: Seque
                  "; the others each name the readings they rest on")
     notes.append("every layout leaves the height above sea level and the 45 t loading of the "
                  "paving UNVERIFIED")
+    wished = run.brief.objectives.soft_preferences
+    if wished:  # C4-16: what of the architect's soft preferences was weighed, and what was not
+        weighed = [p.kind for p in wished if p.kind not in not_weighed([p])]
+        if weighed:
+            notes.append("soft preferences weighed (a score, never a rule): " + ", ".join(weighed))
+        unknown = not_weighed(wished)
+        if unknown:
+            notes.append("soft preferences not weighed (a kind the engine does not know, or a "
+                         "parameter missing): " + ", ".join(unknown))
     return notes
 
 
