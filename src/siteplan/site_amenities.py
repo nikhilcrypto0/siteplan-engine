@@ -21,6 +21,7 @@ from shapely.geometry import Point, Polygon
 from shapely.ops import unary_union
 
 from siteplan.contracts.common import FacilityUse, Surface
+from siteplan.contracts.design_brief import AmenityPriority
 
 SCAN_STEP_M = 2.0
 CLEARANCE_M = 1.5  # walking room between one facility and the next
@@ -44,6 +45,11 @@ class AmenityItem(BaseModel):
     # out of the organized open space as UNVERIFIED rather than counting it.
     use: FacilityUse | None = Field(None, description="What the facility is for")
     surface: Surface | None = Field(None, description="SOFT, HARD or BUILT, as the firm states")
+    # How much the firm wants it (C4-08): REQUIRED is part of the program, a layout without it
+    # fails the program; PREFERRED (unstated) and OPTIONAL are preferences, never a failure.
+    priority: AmenityPriority | None = Field(
+        None, description="REQUIRED, PREFERRED or OPTIONAL, as the firm states; unstated is "
+                          "PREFERRED")
 
     @property
     def area_sqm(self) -> float:

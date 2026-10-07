@@ -25,13 +25,14 @@ from shapely.ops import linemerge, unary_union
 
 from siteplan.contracts import ResolvedRules
 from siteplan.contracts.common import Surface
-from siteplan.contracts.design_brief import AmenityRequest, AmenitySetting
+from siteplan.contracts.design_brief import AmenityPriority, AmenityRequest, AmenitySetting
 from siteplan.optimizer.search.fit import choose_pockets, fit_rectangle
 from siteplan.optimizer.search.land import EMPTY, Land, Plot, grow, polygons
 from siteplan.optimizer.search.quantities import Quantities
 from siteplan.parking import place_ramp
 
 CLEARANCE_M = 1.5  # walking room between the club house, the ramp, the open space and a facility
+PRIORITY_ORDER = (AmenityPriority.REQUIRED, AmenityPriority.PREFERRED, AmenityPriority.OPTIONAL)
 CLUB_ASPECT = 1.6
 CLUB_SIZE_SLACK_SQM = 0.2  # over the size the share asks, so rounding never leaves it under
 MIN_PIECE_SQM = 0.05
@@ -159,6 +160,9 @@ def place_facilities(requests: Sequence[AmenityRequest], rules: ResolvedRules,
     rule names counts as open space, so it may stand on the open space; every other stands beside
     it. A facility meant for the club house stands inside it."""
     named = set(rules.open_space.qualifying_uses.value)
+    # C4-08: what the brief requires before what it prefers, and that before what is optional;
+    # the firm's own order within each
+    requests = sorted(requests, key=lambda r: PRIORITY_ORDER.index(r.priority))
     pockets = unary_union(list(open_pockets)) if open_pockets else EMPTY
     outside = room.difference(pockets) if not pockets.is_empty else room
     inside_club = club

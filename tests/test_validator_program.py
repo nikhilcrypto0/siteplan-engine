@@ -123,12 +123,22 @@ def test_an_amenity_asked_for_is_placed_or_it_is_not():
     assert check(placed.report(), "Amenity: SWIMMING POOL").finding.status is Z.PASS
 
 
-def test_an_amenity_with_no_room_says_so_and_an_optional_one_is_only_noted():
+def test_a_required_amenity_with_no_room_fails_the_program_a_preferred_one_is_only_said():
+    """C4-08: a facility the brief requires is part of its program; one it prefers (what a firm's
+    library gives when it says nothing) or leaves optional is a preference, said and never a
+    failure, so no layout is held to the whole of a firm's library."""
     def missed(candidate):
         candidate.program.amenities_missed = ["SWIMMING POOL"]
-    pool = fixture("rectangle").with_brief(_amenity("SWIMMING POOL", AmenityPriority.PREFERRED))
-    c = check(pool.edited(missed).report(), "Amenity: SWIMMING POOL")
+    required = fixture("rectangle").with_brief(_amenity("SWIMMING POOL",
+                                                        AmenityPriority.REQUIRED))
+    c = check(required.edited(missed).report(), "Amenity: SWIMMING POOL")
     assert c.finding.status is Z.FAIL and "no room found" in c.finding.measured
+    preferred = fixture("rectangle").with_brief(_amenity("SWIMMING POOL",
+                                                         AmenityPriority.PREFERRED))
+    report = preferred.edited(missed).report()
+    c = check(report, "Amenity: SWIMMING POOL")
+    assert c.finding.status is Z.INFO and "preferred" in c.finding.measured
+    assert "no room found" in c.finding.measured
     optional = fixture("rectangle").with_brief(_amenity("JOGGING TRACK",
                                                         AmenityPriority.OPTIONAL))
     assert check(optional.report(), "Amenity: JOGGING TRACK").finding.status is Z.INFO

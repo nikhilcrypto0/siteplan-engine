@@ -28,7 +28,9 @@ reached, and the judge's six of each profile by yield take more layouts of equal
 3 x S+9). The balanced option shown is the repair's S+9, S+9, S+5, S+5, S+5 (371,440 sft) where
 it was 4 x S+10 (440,800, laid out but no longer among the six judged), and the open-space one
 4 x S+9 (335,880), which rests on a reading, where it was the 4 x S+8 that holds under every
-reading (the selector weighs no robustness yet, C4-09).
+reading (the selector weighs no robustness yet, C4-09). Re-pinned on C4-08, where a facility the
+brief prefers is a preference, not a failure of the program: the same proposals and the same three
+shown; only the program verdicts in the model's answer move.
 
 The values pin exact output on the locked dependencies (uv.lock). They move only with a normative
 replacement and an entry in docs/behaviour-changes.md.
@@ -76,7 +78,7 @@ PINNED = {
         ["full-not_counted-ALL-63", "CONVENTIONAL_OPEN_SPACE"],
     ],
     "shown_digests": ["5c3453602ceeca21", "937ceaa1cf326f7f", "b1702e526473122c"],
-    "answer_sha256": "7cc2c9eeb2eafb00c47cad89c007da469c67b007f6f16d498c501e73ec53d1f8",
+    "answer_sha256": "95ed55a1edace777cbfb17476b21c9115e208636b0d6012b46310acc0b73de47",
     "approval_page_sha256": "cd3ebee2af46849756df643999df9b16d2cbc91d92c45101983782cff1eb0181",
 }
 PROPOSALS: list = []

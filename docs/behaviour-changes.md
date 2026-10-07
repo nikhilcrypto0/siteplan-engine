@@ -4,6 +4,40 @@ A characterization test (tests/manifest.py) pins what the engine produces today.
 only together with a normative replacement test and an entry here: what changed, why, the
 evidence, and the test that now holds the behaviour. Newest first.
 
+## 2026-10-06: C4-08, what the law asks, what the program requires, what the firm prefers
+
+Three classes of constraint, kept apart. What the law asks (the validator's legal checks) is
+never traded. What the brief requires is the program, and a layout without it fails the program.
+What it prefers or leaves optional is a preference: said when it is not placed, never a failure.
+
+A facility of the firm's library came to the brief as PREFERRED (the library had no word for its
+priority), and the validator failed the program for every preferred facility with no room, so
+the whole library was held mandatory: on Dhulapally every layout's program was PARTLY_MET for want
+of facilities nobody had required.
+
+- A library item may now say REQUIRED, PREFERRED or OPTIONAL (`AmenityItem.priority`), passed to
+  the brief (`adapters.legacy_site.amenity_request`); one that says nothing stays PREFERRED.
+- The validator's program checks (`validator.program._amenity_checks`): a REQUIRED facility not
+  placed fails the program, as before; a PREFERRED one is INFO ("not placed (preferred): no room
+  found for it"), as an OPTIONAL one was. The legal checks are untouched.
+- The generator lays the facilities the brief requires before those it prefers, and those before
+  the optional ones, the firm's order within each (`ground.PRIORITY_ORDER`). A facility is laid
+  after the blocks and never displaces one.
+- Tried and not kept: reckoning in the cheap half's room estimate only the facilities the brief
+  requires, instead of a flat 300 m² (`layout.FACILITY_ROOM_SQM`). On made-up land the estimate
+  then promised blocks the exact half could not furnish, and the best of two profiles fell (the
+  L-plot's not_counted-ALL from 290,040 to 272,380 sft, the slim L-plot's from 304,440 to
+  272,380) while others rose 2-5%. The 300 m² stays a margin of the cheap half's; since C4-07
+  the exact half and the repair decide what the best layouts hold.
+
+- `tests/test_validator_program.py` (normative): a required facility with no room fails the
+  program; a preferred one is said with the reason, an optional one noted. It replaces the test
+  that failed the program for a preferred facility. `tests/test_search_program_classes.py`
+  (normative): with room for one, a required facility stands before a preferred one the firm
+  lists first; a library that says nothing leaves a facility preferred, one that says is heard.
+- The quick search lays the same layouts as on C4-07; the service's made-up baseline proposes and
+  shows the same, and only the program verdicts in the model's answer move (re-pinned).
+
 ## 2026-10-06: C4-07, the layouts laid out are repaired
 
 The exact half (`layout.lay_out`) laid the program in one order and gave up at the first thing
