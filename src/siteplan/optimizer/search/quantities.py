@@ -68,6 +68,7 @@ class Quantities:
     pathway_max_height_m: float
     pathway_any_block: bool
     pathway_max_length_m: float  # NBC 4.3.2.2 through rule 15(a)(i): from the road to the block
+    driveway_m: float  # rule 13(c)(viii): the least way into a stilt, as the validator reads it
 
 
 def quantities(site: CanonicalSiteModel, rules: ResolvedRules, brief: DesignBrief,
@@ -119,7 +120,8 @@ def quantities(site: CanonicalSiteModel, rules: ResolvedRules, brief: DesignBrie
                    if rules.circulation.pathway_width_m is not None else None),
         pathway_max_height_m=rules.circulation.pathway_max_block_height_m.value,
         pathway_any_block=not rules.circulation.block_over_12m_on_road.value,
-        pathway_max_length_m=rules.circulation.pathway_max_length_m.value)
+        pathway_max_length_m=rules.circulation.pathway_max_length_m.value,
+        driveway_m=rules.circulation.driveway_min_m.value)
 
 
 def _turnings(rules: ResolvedRules, lane: float) -> list[tuple[float, float]]:

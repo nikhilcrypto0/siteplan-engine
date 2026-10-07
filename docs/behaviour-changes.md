@@ -22,6 +22,13 @@ without room, and the search never went back to a layout it had laid. Four chang
 - The fringe draws no pathway longer than NBC 4.3.2.2's 30 m (`fringe._from_face`): it drew one
   as long as the ring was far, which the validator failed (68 m) once the fringe was packed
   harder. A generator gap, not new law: the validator has held the 30 m since contracts 1.3.
+- The parking plan counts the cars of a stilt only where a car can drive into it
+  (`layout._stilts`): a driveway's width of the block's outline (rule 13(c)(viii)) facing a road,
+  a fire lane or a pathway, as the validator has held it since contracts 1.3 (`ground.frontage`
+  is the generator's own copy of its measure). It counted every stilt: on Dhulapally a repaired
+  layout of six blocks planned 662 cars where the validator counted 626, short of Table V's 30%
+  column (UNVERIFIED while whose column applies is open; a FAIL where it is GHMC's). It now
+  plans the cellar that holds them.
 - The search repairs what it laid out (`FullSearchStrategy._improve`): the most valuable layouts
   of each profile with blocks below 21 m are evaluated again with the fringe keeping no room for
   the program (`Config.fringe_room`), the exact half alone saying whether the club house, the

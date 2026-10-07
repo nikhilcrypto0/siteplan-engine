@@ -511,6 +511,7 @@ def lay_out(run: Run, ev: Evaluation) -> tuple[Laid | None, str]:
                               *(s.frame.angle_deg for s in ev.standing if s.frame)])
     program = _Program(
         land=land, open_land=open_land, buildable=buildable, zones=zones, placements=placements,
+        stilts=_stilts(footprints, unary_union([roads, lanes, *pathways]), q),
         roads=roads, tower_sqm=tower_sqm, units=units, angles=angles, angle_deg=frame.angle_deg,
         anchor=entrance.gate.centroid, cores=_cores(placements),
         # no fire band is laid round a block below the high-rise height, so no cellar runs under
@@ -534,6 +535,15 @@ def lay_out(run: Run, ev: Evaluation) -> tuple[Laid | None, str]:
     return laid, ""
 
 
+def _stilts(footprints: Sequence[Polygon], way_in: BaseGeometry, q: Quantities
+            ) -> list[Polygon]:
+    """The blocks whose stilt a car can drive into, the only stilts that hold cars (C4-07): a
+    driveway's width of the outline (rule 13(c)(viii)) facing a road, a fire lane or a pathway, as
+    the validator holds it, and a hair more. The parking plan counted every stilt."""
+    return [f for f in footprints
+            if ground.frontage(f, way_in, TOUCH_M) >= q.driveway_m + network.EPS_M]
+
+
 NO_RAMP = "no room beside a road for the cellar ramp outside the clear ground"
 NO_OPEN = "open space:"
 RAMP_FIRST, CLUB_OFF_OPEN = "ramp first", "club house off the open space"  # C4-07's repairs
@@ -549,6 +559,7 @@ class _Program:
     buildable: BaseGeometry
     zones: ground.Zones
     placements: list[Placement]
+    stilts: list[Polygon]  # the blocks whose stilt a car can drive into
     roads: BaseGeometry
     tower_sqm: float
     units: int
@@ -579,11 +590,10 @@ def _furnish(run: Run, program: _Program, repair: str | None = None
     the club house, which may stand in any of the directions and anywhere its own band allows;
     `CLUB_OFF_OPEN` keeps the club house off the ground the open space may take."""
     q, plot, rules, p = run.q, run.plot, run.rules, program
-    footprints = [x.footprint for x in p.placements]
     angle = p.angle_deg
 
     def parking(club_sqm: float, ramps: list[Polygon]):
-        return plan_parking(plot.net, plot.excluded, rules, q, footprints, p.cores, ramps,
+        return plan_parking(plot.net, plot.excluded, rules, q, p.stilts, p.cores, ramps,
                             p.tower_sqm + club_sqm, angle, p.low)
 
     ramps: list[Polygon] = []

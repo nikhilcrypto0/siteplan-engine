@@ -10,10 +10,11 @@ the independent validator.
 from __future__ import annotations
 
 from functools import cache
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from search_support import l_plot, rectangle, strategy
-from shapely.geometry import Point
+from shapely.geometry import Point, box
 
 from siteplan import validator as independent
 from siteplan.contracts.validation import LegalVerdict
@@ -153,3 +154,25 @@ def test_the_repair_is_a_pass_of_its_own_the_others_keep_their_numbers():
             patch.object(strategy_module, "lay_out", watched):
         strategy().propose(l_plot().context())
     assert seen == before
+
+
+def test_a_stilt_holds_cars_only_where_a_car_can_drive_into_it():
+    """Rule 13(c)(viii)'s 4.5 m driveway, as the validator reads the way into a stilt: a block
+    with 20 m of its outline on a road is entered, one that meets the road at a corner is not
+    (C4-07: the generator counted every stilt's cars, the validator only the entered ones)."""
+    road = box(0, 0, 100, 9)
+    entered, corner = box(10, 9, 30, 40), box(100, 9, 120, 40)
+    assert ground.frontage(entered, road, 0.5) >= 20.0 - 1e-9
+    assert ground.frontage(corner, road, 0.5) < 4.5
+    q = SimpleNamespace(driveway_m=4.5)
+    assert layout_module._stilts([entered, corner], road, q) == [entered]
+
+
+def test_the_validator_counts_every_stilt_the_generator_counted():
+    """On the made-up rectangle and L-plot, no layout the validator judges leaves a stilt out of
+    its parking that the generator's plan counted."""
+    for name in ("rectangle", "l_plot"):
+        _, _, _, reports, _ = _laid_on(name)
+        for report in reports:
+            parking = next(c for c in report.legal if c.finding.rule == "Parking (Table V)")
+            assert "not counted, the stilt of" not in parking.finding.measured
