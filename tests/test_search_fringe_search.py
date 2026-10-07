@@ -18,7 +18,7 @@ from siteplan.optimizer.search.land import EMPTY, Land, Plot
 TEST_CLASS = "normative"
 
 Q = SimpleNamespace(pathway_m=6.0, pathway_any_block=False, pathway_max_height_m=12.0,
-                    gap_margin_m=0.0, lane_m=6.0, reach_m=6.88)
+                    pathway_max_length_m=30.0, gap_margin_m=0.0, lane_m=6.0, reach_m=6.88)
 UPRIGHT = Frame(90.0)  # the turned frame is the survey's own: the blocks' long axis along y
 LOW = SimpleNamespace(front=0.0, setback_m=0.0, gap_m=5.0, high_rise=False, physical_m=18.0)
 
@@ -85,3 +85,20 @@ def test_a_block_may_stand_flush_against_either_edge_of_its_ground():
     ground = box(0, 0, 33.5, 40)
     xs = sorted(round(b.bounds[0], 6) for b in fringe._grid(ground, [ground], 20.0, 40.0))
     assert xs[0] == 0.0 and xs[-1] == 13.5
+
+
+def test_no_pathway_is_drawn_longer_than_nbcs_30_m():
+    """A block of 12 m is reached by a rule 8(l) pathway, which NBC 4.3.2.2 keeps to 30 m from the
+    road (C4-07: the fringe drew one as long as the ring was far, 68 m on one layout the validator
+    failed). Ground 21 m from the ring takes the block and its pathway; ground 36 m away takes
+    none."""
+    low = SimpleNamespace(front=0.0, setback_m=0.0, gap_m=5.0, high_rise=False, physical_m=12.0)
+    block = SimpleNamespace(prototype=SimpleNamespace(id="low"), cls=low, depth_m=20.0,
+                            length_m=20.0, value=10.0)
+    net, ring = box(0, 0, 100, 140), box(0, 0, 100, 9)
+    near = _place(net, ring, box(0, 30, 100, 60), [block])
+    assert near
+    for f in near:
+        footprint = box(f.standing.x0, f.standing.y0, f.standing.x1, f.standing.y1)
+        assert f.path is not None and footprint.distance(ring) <= 30.0
+    assert _place(net, ring, box(0, 45, 100, 140), [block]) == []

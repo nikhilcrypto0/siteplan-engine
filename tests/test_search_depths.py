@@ -107,14 +107,15 @@ def test_no_block_lays_no_column():
 @cache
 def _laid_on_the_slim_l_plot() -> list[tuple[bool, set[float]]]:
     """Every layout the quick search lays out on the L-plot with the slim block in its kit, in the
-    order laid: whether its configuration let the kit's other depths stand in columns, and the
-    depths its columns hold."""
+    order laid, but those its iterative repair (C4-07) lays after all of them: whether its
+    configuration let the kit's other depths stand in columns, and the depths its columns
+    hold."""
     laid = []
     real = strategy_module.lay_out
 
     def watched(run, ev):
         result, why = real(run, ev)
-        if result is not None:
+        if result is not None and ev.config.fringe_room:
             laid.append((ev.config.mixed_depths,
                          {round(s.choice.depth_m, 2) for s in ev.standing}))
         return result, why

@@ -58,6 +58,7 @@ from siteplan.optimizer.search.land import (
     plot_of,
     polygons,
     reserve_end,
+    setback_land,
 )
 from siteplan.optimizer.search.parking_plan import plan_parking, ramp_length_m
 from siteplan.optimizer.search.quantities import Quantities, quantities
@@ -90,12 +91,14 @@ class Config:
     low_blocks: bool = False  # blocks below the high-rise height may stand (Table III)
     more_clusters: bool = False  # further clusters stand on the land the first leaves (C4-02)
     mixed_depths: bool = False  # columns may be of the kit's other depths too (C4-04)
+    fringe_room: bool = True  # the fringe keeps the room the program is reckoned to need; False:
+    # the exact half alone says whether the program still has room (C4-07)
 
     @property
     def key(self) -> tuple:
         return (self.profile.key, round(self.angle_deg, 3), round(self.offset_m, 3),
                 self.max_floors, self.reserve or "", self.reserve_scale, self.low_blocks,
-                self.more_clusters, self.mixed_depths)
+                self.more_clusters, self.mixed_depths, self.fringe_room)
 
 
 @dataclass(frozen=True)
@@ -256,7 +259,9 @@ def evaluate(run: Run, config: Config) -> Evaluation | Failure:
     extra = fringe.place(plot, q, frame, land, rings, hulls, fitted, beyond, own=run.own_lands,
                          kept_clear=kept_clear,
                          roads_in_setback=config.profile.roads_may_use_setback,
-                         eps_m=EPS_LAND_M, room_sqm=run.reserve_target_sqm) if beyond else []
+                         eps_m=EPS_LAND_M,
+                         room_sqm=run.reserve_target_sqm if config.fringe_room else 0.0) \
+        if beyond else []
     if config.low_blocks and not extra and all(s.choice.cls.high_rise for s in fitted):
         return Failure("no block below 21 m stands in this configuration")
     return Evaluation(
@@ -448,7 +453,7 @@ def _lay_columns(run: Run, config: Config, lands: dict[float, BaseGeometry], min
 
 
 def lay_out(run: Run, ev: Evaluation) -> tuple[Laid | None, str]:
-    q, plot, rules, brief = run.q, run.plot, run.rules, run.brief
+    q, plot = run.q, run.plot
     frame, land, clusters = ev.frame, ev.land, ev.clusters
     placements = named_placements(ev.standing, frame, [f.standing for f in ev.fringe])
     footprints = [p.footprint for p in placements]
@@ -504,50 +509,126 @@ def lay_out(run: Run, ev: Evaluation) -> tuple[Laid | None, str]:
                 for p in placements)
     angles = distinct_angles([frame.angle_deg,
                               *(s.frame.angle_deg for s in ev.standing if s.frame)])
-    anchor = entrance.gate.centroid
-    club, club_floors, why = _club(run, buildable, zones, placements, tower_sqm, units, angles,
-                                   anchor)
-    if why:
+    program = _Program(
+        land=land, open_land=open_land, buildable=buildable, zones=zones, placements=placements,
+        roads=roads, tower_sqm=tower_sqm, units=units, angles=angles, angle_deg=frame.angle_deg,
+        anchor=entrance.gate.centroid, cores=_cores(placements),
+        # no fire band is laid round a block below the high-rise height, so no cellar runs under
+        # one
+        low=unary_union([f for f, tall in zip(footprints, high, strict=True) if not tall]))
+    furnished, why = _furnish(run, program)
+    repair = RAMP_FIRST if why == NO_RAMP else CLUB_OFF_OPEN if why.startswith(NO_OPEN) else None
+    if furnished is None and repair is not None:  # C4-07: the same blocks, the program laid again
+        furnished = _furnish(run, program, repair)[0]
+    if furnished is None:
         return None, why
-    club_sqm = club.area * club_floors if club is not None else 0.0
-    cores = _cores(placements)
-    # no fire band is laid round a block below the high-rise height, so no cellar runs under one
-    low = unary_union([f for f, tall in zip(footprints, high, strict=True) if not tall])
-    plan, why = plan_parking(plot.net, plot.excluded, rules, q, footprints, cores, [],
-                             tower_sqm + club_sqm, frame.angle_deg, low)
-    if plan is None:
-        return None, why
-    ramps: list[Polygon] = []
-    after_club = buildable.difference(club.buffer(ground.CLEARANCE_M, join_style="mitre")) \
-        if club is not None else buildable
-    if plan.levels:
-        ramp = ground.place_ramp_beside_road(after_club, roads, q, ramp_length_m(q), anchor)
-        if ramp is None:
-            return None, "no room beside a road for the cellar ramp outside the clear ground"
-        ramps = [ramp]
-        plan, why = plan_parking(plot.net, plot.excluded, rules, q, footprints, cores, ramps,
-                                 tower_sqm + club_sqm, frame.angle_deg, low)
-        if plan is None:
-            return None, why
-    keep_off = [g.buffer(ground.CLEARANCE_M, join_style="mitre") for g in [club, *ramps]
-                if g is not None]
-    pocket_room = open_land.difference(unary_union(keep_off)) if keep_off else open_land
-    pockets, total = ground.choose_open_space(pocket_room, q, frame.angle_deg)
-    if total + 1e-6 < q.open_space_sqm:
-        return None, (f"open space: {total:,.0f} m² of pockets 3 m wide, "
-                      f"{q.open_space_sqm:,.0f} m² needed")
-    room = buildable.difference(unary_union(keep_off)) if keep_off else buildable
-    facilities, missed = ground.place_facilities(brief.program.amenities, rules, pockets, room,
-                                                 club, angles, club.centroid if club else anchor)
     strip = land.strip.difference(unary_union([entrance.gate, entrance.approach.buffer(0.01)])) \
         if not land.strip.is_empty else EMPTY
     laid = Laid(
         frame=frame, placements=placements, graph=graph, entrance=entrance,
-        lanes=lanes, pockets=pockets, strip=strip, club=club, club_floors=club_floors,
-        facilities=facilities, facilities_missed=missed, ramps=ramps,
-        clipped_rings=frozenset(c.road.id for c in clusters if c.clipped), cellars=plan.cellars,
-        cars=_cars(plan), zones=zones, land=land)
+        lanes=lanes, pockets=furnished.pockets, strip=strip, club=furnished.club,
+        club_floors=furnished.club_floors, facilities=furnished.facilities,
+        facilities_missed=furnished.missed, ramps=furnished.ramps,
+        clipped_rings=frozenset(c.road.id for c in clusters if c.clipped),
+        cellars=furnished.plan.cellars, cars=_cars(furnished.plan), zones=zones, land=land)
     return laid, ""
+
+
+NO_RAMP = "no room beside a road for the cellar ramp outside the clear ground"
+NO_OPEN = "open space:"
+RAMP_FIRST, CLUB_OFF_OPEN = "ramp first", "club house off the open space"  # C4-07's repairs
+
+
+@dataclass(frozen=True)
+class _Program:
+    """What the program (the club house, the cellars and their ramp, the open space and the
+    facilities) is laid on, once the blocks and the roads stand."""
+
+    land: Land
+    open_land: BaseGeometry
+    buildable: BaseGeometry
+    zones: ground.Zones
+    placements: list[Placement]
+    roads: BaseGeometry
+    tower_sqm: float
+    units: int
+    angles: list[float]
+    angle_deg: float  # the configuration's direction: the cellars' and the pockets' grid
+    anchor: Point
+    cores: list[BaseGeometry]
+    low: BaseGeometry
+
+
+@dataclass(frozen=True)
+class _Furnished:
+    club: Polygon | None
+    club_floors: int
+    plan: object
+    ramps: list[Polygon]
+    pockets: list[Polygon]
+    facilities: list
+    missed: list[str]
+
+
+def _furnish(run: Run, program: _Program, repair: str | None = None
+             ) -> tuple[_Furnished | None, str]:
+    """The program on the ground the blocks and roads leave: the club house first, nearest the
+    gate; the cellars and, when they are needed, their ramp beside a road; the open space; the
+    facilities. Or (C4-07) one of two repairs, tried when that order left no room for the ramp or
+    for the open space: `RAMP_FIRST` lays the ramp, which has the least choice of ground, before
+    the club house, which may stand in any of the directions and anywhere its own band allows;
+    `CLUB_OFF_OPEN` keeps the club house off the ground the open space may take."""
+    q, plot, rules, p = run.q, run.plot, run.rules, program
+    footprints = [x.footprint for x in p.placements]
+    angle = p.angle_deg
+
+    def parking(club_sqm: float, ramps: list[Polygon]):
+        return plan_parking(plot.net, plot.excluded, rules, q, footprints, p.cores, ramps,
+                            p.tower_sqm + club_sqm, angle, p.low)
+
+    ramps: list[Polygon] = []
+    avoid = p.open_land if repair == CLUB_OFF_OPEN else EMPTY
+    if repair == RAMP_FIRST:
+        plan, why = parking(_club_size(run, p.tower_sqm, p.units), [])
+        if plan is None:
+            return None, why
+        if plan.levels:
+            ramp = ground.place_ramp_beside_road(p.buildable, p.roads, q, ramp_length_m(q),
+                                                 p.anchor)
+            if ramp is None:
+                return None, NO_RAMP
+            ramps = [ramp]
+            avoid = ramp.buffer(ground.CLEARANCE_M, join_style="mitre")
+    club, club_floors, why = _club(run, p.land, p.buildable, p.zones, p.placements, p.tower_sqm,
+                                   p.units, p.angles, p.anchor, avoid)
+    if why:
+        return None, why
+    club_sqm = club.area * club_floors if club is not None else 0.0
+    plan, why = parking(club_sqm, ramps)
+    if plan is None:
+        return None, why
+    if plan.levels and not ramps:
+        after_club = p.buildable.difference(club.buffer(ground.CLEARANCE_M, join_style="mitre")) \
+            if club is not None else p.buildable
+        ramp = ground.place_ramp_beside_road(after_club, p.roads, q, ramp_length_m(q), p.anchor)
+        if ramp is None:
+            return None, NO_RAMP
+        ramps = [ramp]
+        plan, why = parking(club_sqm, ramps)
+        if plan is None:
+            return None, why
+    keep_off = [g.buffer(ground.CLEARANCE_M, join_style="mitre") for g in [club, *ramps]
+                if g is not None]
+    pocket_room = p.open_land.difference(unary_union(keep_off)) if keep_off else p.open_land
+    pockets, total = ground.choose_open_space(pocket_room, q, angle)
+    if total + 1e-6 < q.open_space_sqm:
+        return None, (f"{NO_OPEN} {total:,.0f} m² of pockets 3 m wide, "
+                      f"{q.open_space_sqm:,.0f} m² needed")
+    room = p.buildable.difference(unary_union(keep_off)) if keep_off else p.buildable
+    facilities, missed = ground.place_facilities(run.brief.program.amenities, rules, pockets,
+                                                 room, club, p.angles,
+                                                 club.centroid if club else p.anchor)
+    return _Furnished(club, club_floors, plan, ramps, pockets, facilities, missed), ""
 
 
 def _pathway_roads(ev: Evaluation, q: Quantities) -> list[Road | None]:
@@ -585,26 +666,56 @@ def _lanes_misplaced(lanes: BaseGeometry, land: Land) -> str:
     return ""
 
 
-def _club(run: Run, buildable: BaseGeometry, zones: ground.Zones, placements: list[Placement],
-          tower_sqm: float, units: int, turns: Sequence[float], anchor: Point
-          ) -> tuple[Polygon | None, int, str]:
+def _club_size(run: Run, tower_sqm: float, units: int) -> float:
+    """The club house's built-up area: rule 15(a)(x)'s share, or the size the brief states where
+    that is larger."""
     asked = run.brief.program.club_house
-    floors = asked.floors or CLUB_FLOORS
     size = ground.club_size_sqm(run.q, tower_sqm, units)
     if asked.wanted.value and asked.size is ClubSize.STATED and asked.sqm:
         size = max(size, asked.sqm)
+    return size
+
+
+def _club(run: Run, land: Land, buildable: BaseGeometry, zones: ground.Zones,
+          placements: list[Placement], tower_sqm: float, units: int, turns: Sequence[float],
+          anchor: Point, avoid: BaseGeometry = EMPTY) -> tuple[Polygon | None, int, str]:
+    floors = run.brief.program.club_house.floors or CLUB_FLOORS
+    size = _club_size(run, tower_sqm, units)
     if size <= 0:
         return None, floors, ""
     own = _club_gap_m(run.rules, floors * run.q.floor_m)
     keep = unary_union([grow(p.footprint, max(
         p.standing.choice.cls.gap_m, own,
         run.q.reach_m if p.standing.choice.cls.high_rise else 0.0)) for p in placements])
-    room = buildable.difference(keep)
-    club = ground.place_club(room, size / floors, turns, anchor)
+    room = _club_ground(run, land, zones, floors, buildable).difference(
+        unary_union([keep, avoid]))
+    # C4-07: in the plot's own directions too, where the ground the towers leave often runs
+    club = ground.place_club(room, size / floors,
+                             distinct_angles([*turns, *orientations(run.plot.net)]), anchor)
     if club is None:
         return None, floors, (f"no room for a {size:,.0f} m² club house (rule 15(a)(x)) a block "
                               "gap from every block, outside the roads and the clear ground")
     return club, floors, ""
+
+
+def _club_ground(run: Run, land: Land, zones: ground.Zones, floors: int,
+                 buildable: BaseGeometry) -> BaseGeometry:
+    """Ground the club house may stand on (C4-07): what its own band's setbacks leave, Table III's
+    for its height as the validator holds it (rule 15(a)(x) makes it a building of its own), less
+    the planted strip, the roads, pathways and lanes, the clear ground and the turns round the
+    high-rises, the blocks and the gaps between them, and the statutory exclusions. It stood only
+    beyond the setback of the tallest tower, a wider band than its own, which kept it off an arm
+    or a strip of the plot it may use. Where the rules model no band for its height, as before."""
+    q = run.q
+    band = run.rules.height.band_for_block(floors * q.floor_m, 0.0, stilt_counted=False)
+    if band is None or not band.modelled or band.setback_m is None:
+        return buildable
+    front = band.front_m if band.front_setback_m is not None else band.setback_m
+    own = setback_land(run.plot, front + q.setback_margin_m, band.setback_m + q.setback_margin_m)
+    taken = [g for g in (land.strip, zones.nogo, zones.roads, zones.lanes, zones.gap_zones,
+                         zones.blocks, zones.turns, zones.pathways, run.plot.excluded)
+             if not g.is_empty]
+    return own.difference(unary_union(taken)) if taken else own
 
 
 def _club_gap_m(rules: ResolvedRules, height_m: float) -> float:

@@ -4,6 +4,57 @@ A characterization test (tests/manifest.py) pins what the engine produces today.
 only together with a normative replacement test and an entry here: what changed, why, the
 evidence, and the test that now holds the behaviour. Newest first.
 
+## 2026-10-06: C4-07, the layouts laid out are repaired
+
+The exact half (`layout.lay_out`) laid the program in one order and gave up at the first thing
+without room, and the search never went back to a layout it had laid. Four changes:
+
+- The club house stands where its own band allows (`layout._club_ground`): Table III's setbacks
+  for its height, as the validator holds it (rule 15(a)(x) makes it a building of its own), not
+  beyond the tallest tower's setback, a wider band, which kept it off an arm or a strip of the
+  plot it may use; and it turns to the plot's own directions too. On Dhulapally every "no room
+  for the club house" went (about 20 in a search), and the best layout places 4 of the 9
+  facilities where it placed 1.
+- When the ramp then finds no room, the program is laid again with the ramp first, since it has
+  the least choice of ground (beside a road, outside every setback), and the club house after it
+  (`RAMP_FIRST`); when the open space finds none, again with the club house kept off the ground
+  the open space may take (`CLUB_OFF_OPEN`). On Dhulapally 4 of 7 ramp failures lay out so.
+- The fringe draws no pathway longer than NBC 4.3.2.2's 30 m (`fringe._from_face`): it drew one
+  as long as the ring was far, which the validator failed (68 m) once the fringe was packed
+  harder. A generator gap, not new law: the validator has held the 30 m since contracts 1.3.
+- The search repairs what it laid out (`FullSearchStrategy._improve`): the most valuable layouts
+  of each profile with blocks below 21 m are evaluated again with the fringe keeping no room for
+  the program (`Config.fringe_room`), the exact half alone saying whether the club house, the
+  ramp and the open space still have room, and a block of the fringe is given up at a time
+  (`strategy._cuts`) until one lays out or stands no more than the layout it came from. Those
+  are laid out after all the others; the validator judges them like any other.
+
+- Made-up land (`tests/test_search_repair.py`, normative): the club house's ground includes the
+  band between its own 5 m and the towers' 10 m; the ramp laid first stands clear of the club
+  house in layouts the validator does not fail; the repair lays out layouts worth more than
+  those of their profile after all the others, none twice, the others as without it, and the
+  validator fails none; a pathway is never drawn longer than 30 m
+  (`tests/test_search_fringe_search.py`). C4-04's test of the order laid reads the passes before
+  the repair.
+- The quick search: the rectangle's layouts 3-11% larger (the club house in the setback band
+  leaves the towers more ground); the L-plots' with blocks below 21 m 8-22% larger. Road ground
+  re-pinned (`tests/test_search_road_ground.py`).
+- The service's made-up baseline (re-pinned): 116 laid out where 112 were, 10 proposed, 3 of
+  them holding under every reading. More configurations lay out and fill each profile's quota
+  before some laid on C4-06 are reached, and the judge's six of each profile by yield take more
+  layouts of equal value; the balanced option shown is the repair's 5-block layout (371,440 sft)
+  where it was 4 x S+10 (440,800, laid out but not among the six judged), and the open-space one
+  is 4 x S+9 (rests on a reading) where it was 4 x S+8 (holds under every reading). The selector
+  weighs neither robustness nor variety yet (C4-09).
+- Dhulapally, Run B prime's request (the C4 benchmark): the best layout (3 x S+10, 432,120 sft)
+  unchanged, with 4-5 of 9 facilities where it had 1 and 5,160-5,213 m² unallocated where it had
+  5,490; the best that holds under every reading 287,016 sft (4 towers S+9, S+9, S+3, S+3) where
+  it was 266,474; not_counted-ALL's best 338,494 where it was 331,292; 126 laid out where 112.
+  One layout the validator failed: two blocks a street of exactly 9.000000 m apart, the gap their
+  floor count asks, which the validator measures 8.9999989 m after snapping its shapes to a
+  micrometre grid, a micrometre more than its 1e-6 m tolerance. Rejected, never offered; the
+  validator's tolerance is the firm's to decide, not changed here.
+
 ## 2026-10-06: C4-06, floor counts kept on everything they ask and rest on
 
 Of two floor counts of a prototype the shorter was dropped whenever the taller asked the same

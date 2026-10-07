@@ -341,18 +341,20 @@ def _pathway(block: Polygon, ring: BaseGeometry, paths: BaseGeometry, q: Quantit
     best: tuple[float, Polygon, LineString] | None = None
     for axis in (1, 0):  # off the faces across y, then those across x
         for sign in (1, -1):
-            found = _from_face(bounds, axis, sign, width, ring, paths)
+            found = _from_face(bounds, axis, sign, width, ring, paths, q.pathway_max_length_m)
             if found is not None and (best is None or found[0] < best[0]):
                 best = found
     return (best[1], best[2]) if best else None
 
 
 def _from_face(bounds: tuple[float, float, float, float], axis: int, sign: int, width: float,
-               ring: BaseGeometry, paths: BaseGeometry
+               ring: BaseGeometry, paths: BaseGeometry, longest_m: float
                ) -> tuple[float, Polygon, LineString] | None:
     """The shortest pathway off one face of a block (the face whose outward normal runs `sign`
     along `axis`, 0 for x and 1 for y), at either end of the face or its middle, that runs on free
-    ground to the ring: how far the ring is, the pathway and its centre line."""
+    ground to the ring, no longer than `longest_m` (NBC 4.3.2.2's 30 m, short of it by the drawing
+    tolerance: C4-07, where the fringe once drew a pathway as long as the ring was far): how far
+    the ring is, the pathway and its centre line."""
     low, high = bounds[1 - axis], bounds[3 - axis]  # the face's own extent
     if high - low < width:
         return None
@@ -362,6 +364,8 @@ def _from_face(bounds: tuple[float, float, float, float], axis: int, sign: int, 
         if found is None:
             continue
         gap, pathway, _ = found
+        if gap > longest_m - EPS_M:
+            continue
         if pathway.difference(ring).difference(paths).area > EPS_M * width:
             continue
         if best is None or gap < best[0]:

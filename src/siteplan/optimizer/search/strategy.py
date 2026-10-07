@@ -19,6 +19,9 @@ The search is staged so a run stays within the brief's time budget:
    and heights for each, the cluster the ground holds;
 2. the best of each profile are *laid out* exactly (roads, entrance, club house, ramp, open space,
    cellars) and drawn as candidates, the next best taking the place of any the ground cannot hold;
+   then the most valuable with blocks below 21 m are *repaired* (C4-07): evaluated again with the
+   fringe keeping no room for the program, a block given up at a time until the exact half lays
+   them out, each a layout of its own;
 3. the candidates are *judged* by the independent validator: nothing it fails is proposed, and each
    proposal says which of its UNVERIFIED items rest on which reading.
 
@@ -29,8 +32,8 @@ from __future__ import annotations
 
 import heapq
 from collections import Counter
-from collections.abc import Sequence
-from dataclasses import dataclass, field
+from collections.abc import Iterator, Sequence
+from dataclasses import dataclass, field, replace
 
 from shapely.errors import GEOSException, TopologicalError
 from shapely.geometry import Polygon
@@ -159,6 +162,7 @@ class FullSearchStrategy:
         budget = context.budget
         queues = self._evaluate(context, run, wanted, tally, _Stage(budget, EVALUATE_SHARE))
         laid = self._lay_out(context, run, queues, tally, _Stage(budget, LAY_OUT_SHARE))
+        laid += self._improve(run, laid, tally, _Stage(budget, LAY_OUT_SHARE))
         return self._judge(context, run, laid, tally, _Stage(budget, 1.0))
 
     def _evaluate(self, context: SearchContext, run: Run, wanted: Sequence[Profile],
@@ -224,6 +228,47 @@ class FullSearchStrategy:
                     run, by_key[key], [ev for ev in evaluations
                                        if ev.config.mixed_depths == mixed], tally, stage)
         return laid
+
+    def _improve(self, run: Run, laid: list[tuple[Profile, Config, object]], tally: Tally,
+                 stage: _Stage) -> list[tuple[Profile, Config, object]]:
+        """Iterative repair of what was laid out (C4-07). The most valuable layouts of each
+        profile whose configuration lets blocks below 21 m stand are evaluated again with the
+        fringe keeping no room for the program, so that the exact half alone says whether the club
+        house, the ramp and the open space still have room; one that has none gives up its last
+        block on the fringe, then the next, until it lays out or stands no more than the layout it
+        came from. What lays out is a layout of its own, after all the others, and the validator
+        judges it like any other."""
+        found: list[tuple[Profile, Config, object]] = []
+        seen = {_signature(ev) for _, _, (ev, _) in laid}
+        by_profile: dict[str, list[tuple[Profile, Config, Evaluation]]] = {}
+        for profile, config, (ev, _) in laid:
+            if config.low_blocks and config.fringe_room:
+                by_profile.setdefault(profile.key, []).append((profile, config, ev))
+        for items in by_profile.values():
+            items.sort(key=lambda item: -item[2].value)  # stable: between equals, as laid
+            for profile, config, ev in items[:self.limits.judged_per_profile]:
+                if stage.expired():
+                    tally.exhausted = True
+                    return found
+                more = _guarded(evaluate, run, replace(config, fringe_room=False))
+                if isinstance(more, Failure):
+                    continue
+                for cut in _cuts(more, ev.value):
+                    signature = _signature(cut)
+                    if signature in seen:
+                        break
+                    seen.add(signature)
+                    result, why = _guarded(lay_out, run, cut, failed=(None, ""))
+                    if result is not None:
+                        tally.laid += 1
+                        tally.low_blocks.append([p.footprint for p in result.placements
+                                                 if not p.standing.choice.cls.high_rise])
+                        found.append((profile, cut.config, (cut, result)))
+                        break
+                    tally.reasons[why] += 1
+                    if not why.startswith(ROOM_FAILURES):
+                        break
+        return found
 
     def _lay_out_profile(self, run: Run, profile: Profile, evaluations: list[Evaluation],
                          tally: Tally, stage: _Stage) -> list[tuple[Profile, Config, object]]:
@@ -357,10 +402,21 @@ def _planning_notes(run: Run) -> list[str]:
     return []
 
 
+def _cuts(ev: Evaluation, least: float) -> Iterator[Evaluation]:
+    """The evaluation, then the same with its last block on the fringe given up, and the next,
+    while it stands more than `least` (C4-07)."""
+    columns = sum(s.choice.value for s in ev.standing)
+    for kept in range(len(ev.fringe), -1, -1):
+        value = columns + sum(f.standing.choice.value for f in ev.fringe[:kept])
+        if value <= least:
+            return
+        yield replace(ev, fringe=ev.fringe[:kept], value=value)
+
+
 def _reserved(config: Config, side: str, scale: float, low_blocks: bool | None = None) -> Config:
     return Config(config.profile, config.angle_deg, config.offset_m, config.max_floors, side,
                   scale, config.low_blocks if low_blocks is None else low_blocks,
-                  config.more_clusters, config.mixed_depths)
+                  config.more_clusters, config.mixed_depths, config.fringe_room)
 
 
 def _low_blocks(run: Run, profile: Profile) -> tuple[bool, ...]:
