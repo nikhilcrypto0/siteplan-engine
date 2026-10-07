@@ -24,6 +24,7 @@ from shapely.geometry import box
 from shapely.geometry.base import BaseGeometry
 
 from siteplan.contracts import TowerPrototype
+from siteplan.optimizer.search.frame import Frame
 from siteplan.optimizer.search.land import polygons
 from siteplan.optimizer.search.readings import FloorClass
 
@@ -60,12 +61,15 @@ class Choice:
 
 @dataclass(frozen=True)
 class Standing:
-    """A block placed: its choice, its column and where it starts along y."""
+    """A block placed: its choice, its column and where it starts along y, in the turned frame of
+    the configuration, or in a frame of its own when its cluster is turned to its own ground
+    (C4-03)."""
 
     choice: Choice
     column: int
     x0: float  # the column's left edge, in the turned frame
     y0: float
+    frame: Frame | None = None  # the frame it was laid in, when not the configuration's
 
     @property
     def y1(self) -> float:

@@ -4,6 +4,39 @@ A characterization test (tests/manifest.py) pins what the engine produces today.
 only together with a normative replacement test and an entry here: what changed, why, the
 evidence, and the test that now holds the behaviour. Newest first.
 
+## 2026-10-06: C4-03, a further cluster turned to its own ground
+
+A further cluster (C4-02) stood in its configuration's direction, so a wing turned from the plot's
+main lines took its blocks at an angle the wing does not run. It is now tried in that direction
+and in its own ground's (`layout.zone_angles`: the principal axis of the ground it would stand on,
+along and across its longest edges; no two within the turned frame's 5°, four at most), and the
+most valuable that can be joined is kept. Its blocks carry their frame (`Standing.frame`) to the
+placement, the fringe sees them turned, and the club house and the facilities may turn to any
+cluster's direction. Two refusals keep the layout what the validator holds it to:
+
+- a further cluster whose ring would run over a laid cluster, or a laid ring over it: a ring
+  turned to its own ground reaches further out at its mitred corners than along its sides, and on
+  Dhulapally such a corner stood 1-2 m² on a tower of the first cluster;
+- a further cluster whose ring meets a laid ring at an angle (joined where their pavements meet,
+  with no link road): where two rings overlap askew, the corner of one sticks out of the other in
+  a wedge the validator measures narrower than a road (6.65 m on one Dhulapally layout). A turned
+  cluster stands apart, joined by a link road. This refuses some askew meetings that would have
+  passed (two Dhulapally layouts of 352 and 340 flats); telling them apart needs the generator to
+  measure the joined rings as the validator does, left for later.
+
+A defect of C4-02 shows once three clusters stand more often: the ground left for a further
+cluster was the blocks' land less the laid clusters, not less the link roads laid between them,
+so a third cluster could stand over the link that joins the first two (117 m² of one on the
+made-up squares). The links, with a street's room round them, are taken out too.
+
+- Made-up land (`tests/test_search_orientation.py`, normative): on an L whose arm is turned 30°
+  from its body, a configuration at the body's angle stands its further cluster in the arm's own
+  direction, joined by a link road. The quick search on the long L proposes 620, 558, 522 and 464
+  flats where C4-02 proposed 560, 504, 498 and 460; the two squares joined by a neck and the
+  service's made-up baseline are unchanged.
+- Dhulapally, Run B prime's request (the C4 benchmark): no legal FAIL; the best layout and the
+  three shown are those of C4-02.
+
 ## 2026-10-06: C4-02, more than one cluster of blocks, each round its own ring road
 
 The full search fitted the blocks into one convex outline with a ring road round it, so a plot of

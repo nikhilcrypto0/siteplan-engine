@@ -19,6 +19,7 @@ planting strip that band asks is drawn round the plot whenever such a block may 
 
 from __future__ import annotations
 
+import math
 from collections.abc import Sequence
 from dataclasses import dataclass, field, replace
 
@@ -46,7 +47,7 @@ from siteplan.optimizer.search.columns import (
     ground_key,
     plan_column,
 )
-from siteplan.optimizer.search.frame import Frame
+from siteplan.optimizer.search.frame import Frame, distinct_angles
 from siteplan.optimizer.search.land import (
     EMPTY,
     Land,
@@ -55,6 +56,7 @@ from siteplan.optimizer.search.land import (
     grow,
     make_land,
     plot_of,
+    polygons,
     reserve_end,
 )
 from siteplan.optimizer.search.parking_plan import plan_parking, ramp_length_m
@@ -62,6 +64,7 @@ from siteplan.optimizer.search.quantities import Quantities, quantities
 from siteplan.optimizer.search.readings import FloorClass, Profile, floor_classes
 from siteplan.optimizer.search.road_graph import NODE_SNAP_M, Road
 from siteplan.optimizer.search.turns import Turning, loop_turns
+from siteplan.towers import orientations
 
 EPS_LAND_M = 0.02  # ground a block must stand this far inside, so no rounding puts it over a line
 TOUCH_M = 0.5
@@ -73,6 +76,7 @@ CLUB_ASSUMED_SHARE_OF_NET = 0.0375  # built-up area over the plot, times the clu
 CLUB_FLOORS = 2  # the club house's storeys when the brief gives none
 SIDES = ("N", "S", "E", "W")
 MAX_CLUSTERS = 3  # the first cluster of blocks and at most two more, each round its own ring road
+ZONE_ANGLES = 4  # a further cluster is tried in its configuration's direction and three of its own
 
 
 @dataclass(frozen=True)
@@ -255,36 +259,105 @@ def _more_clusters(run: Run, config: Config, frame: Frame, land: Land, choices: 
                    clusters: list[network.Cluster]
                    ) -> tuple[list[Standing], list[Road], list[network.Cluster], list[Road]]:
     """Further clusters on the ground the first leaves (an arm, a wing the first one's convex
-    outline cannot take in): the blocks' land less every cluster laid, grown by the street between
-    two columns (a ring road and a block gap, so a further cluster's blocks and ring keep clear of
-    those laid), its columns fitted round with a ring road of their own, which a link joins to a
-    ring already laid; until MAX_CLUSTERS stand, or the ground holds no more, or no link can be
-    laid."""
+    outline cannot take in): the blocks' land less every cluster and link laid, grown by the
+    street between two columns (a ring road and a block gap, so a further cluster's blocks and
+    ring keep clear of those laid), its columns fitted round with a ring road of their own, which
+    a link joins to a ring already laid; until MAX_CLUSTERS stand, or the ground holds no more, or
+    no link can be laid."""
     q = run.q
     fitted, streets, clusters, links = list(fitted), list(streets), list(clusters), []
+    angles = [frame.angle_deg] * len(clusters)  # the direction each cluster's blocks run
     spacing = max(street, q.road_m + 2 * NODE_SNAP_M)  # the links' centre lines never touch
     while len(clusters) < MAX_CLUSTERS:
-        taken = unary_union([grow(c.hull, spacing) for c in clusters])
+        # the laid clusters and the links laid between them, each with a street's room round it
+        taken = unary_union([*(grow(c.hull, spacing) for c in clusters),
+                             *(grow(r.ground, spacing) for r in links if not r.ground.is_empty)])
         rest = replace(land, cluster_land=land.cluster_land.difference(taken))
         if rest.cluster_land.is_empty:
             break
-        standing, _ = _columns(run, config, frame, rest, choices, street)
-        if not standing:
+        best: tuple | None = None
+        smallest = min(c.depth_m * c.length_m for c in choices)
+        for angle in zone_angles(rest.cluster_land, frame.angle_deg, smallest):  # C4-03
+            turned = Frame(angle)
+            standing, _ = _columns(run, config, turned, rest, choices, street)
+            if not standing:
+                continue
+            more, more_streets, cluster, _ = network.fit_cluster(
+                standing, turned, street, rest, q.road_m, q.legal_road_m,
+                [s.choice.value for s in standing], ring_id=f"ring-{len(clusters) + 1}",
+                first_street=len(streets) + 1)
+            if cluster is None or _rings_cross_clusters(cluster, clusters):
+                continue
+            joined = network.link(cluster, clusters, land.roadable, q.road_m, len(links) + 1)
+            if joined is None or _meets_askew(joined, turned, clusters, angles):
+                continue
+            value = sum(s.choice.value for s in more)
+            if best is None or value > best[0]:
+                best = (value, turned, more, more_streets, cluster, joined)
+        if best is None:
             break
-        more, more_streets, cluster, _ = network.fit_cluster(
-            standing, frame, street, rest, q.road_m, q.legal_road_m,
-            [s.choice.value for s in standing], ring_id=f"ring-{len(clusters) + 1}",
-            first_street=len(streets) + 1)
-        if cluster is None:
-            break
-        joined = network.link(cluster, clusters, land.roadable, q.road_m, len(links) + 1)
-        if joined is None:
-            break
-        fitted += more
+        _, turned, more, more_streets, cluster, joined = best
+        fitted += [s if turned.angle_deg == frame.angle_deg else replace(s, frame=turned)
+                   for s in more]
         streets += more_streets
         clusters.append(cluster)
+        angles.append(turned.angle_deg)
         links.append(joined)
     return fitted, streets, clusters, links
+
+
+def _meets_askew(joined: Road, turned: Frame, laid: Sequence[network.Cluster],
+                 angles: Sequence[float]) -> bool:
+    """Whether a further cluster's ring meets the ring it is joined to (their pavements overlap,
+    the link has none of its own) while running another way: where two rings overlap at an angle
+    the corner of one sticks out of the other in a wedge narrower than a road. A cluster turned to
+    its own ground stands apart, joined by a link road."""
+    if not joined.ground.is_empty:
+        return False
+    far = Point(joined.line.coords[-1])
+    nearest = min(range(len(laid)), key=lambda i: laid[i].road.line.distance(far))
+    return turned.angle_deg != angles[nearest]
+
+
+def _rings_cross_clusters(cluster: network.Cluster, laid: Sequence[network.Cluster]) -> bool:
+    """Whether a further cluster's ring road runs over a laid cluster, or a laid ring over it: the
+    clusters keep a street apart, but a ring turned to its own ground reaches further out at its
+    mitred corners than along its sides."""
+    return any(cluster.ring.intersection(other.hull).area > network.RING_CLIP_SQM
+               or other.ring.intersection(cluster.hull).area > network.RING_CLIP_SQM
+               for other in laid)
+
+
+def zone_angles(zone: BaseGeometry, given_deg: float, min_sqm: float) -> list[float]:
+    """The directions a further cluster is tried in (C4-03): the configuration's own first, then
+    along the principal axis of the ground it would stand on and along and across that ground's
+    longest edges, no two within the turned frame's tolerance, ZONE_ANGLES at most. Ground too
+    small for a block (`min_sqm`) is tried in the configuration's direction alone."""
+    pieces = polygons(zone, min_sqm)
+    if not pieces:
+        return [given_deg]
+    piece = max(pieces, key=lambda p: p.area)
+    return distinct_angles([given_deg, _principal_axis_deg(piece),
+                            *orientations(piece)])[:ZONE_ANGLES]
+
+
+def _principal_axis_deg(piece: Polygon) -> float:
+    """The direction of the long side of the smallest rectangle round a piece of ground: each
+    edge of its convex hull gives a direction to try, the rectangle of least area wins (as
+    legal/widths.py measures a region's length)."""
+    hull = list(piece.convex_hull.exterior.coords)[:-1]
+    best: tuple[float, float] | None = None
+    for (x0, y0), (x1, y1) in zip(hull, [*hull[1:], hull[0]], strict=True):
+        edge = math.hypot(x1 - x0, y1 - y0)
+        if edge == 0:
+            continue
+        ux, uy = (x1 - x0) / edge, (y1 - y0) / edge
+        along = [x * ux + y * uy for x, y in hull]
+        across = [y * ux - x * uy for x, y in hull]
+        a, b = max(along) - min(along), max(across) - min(across)
+        if best is None or a * b < best[0]:
+            best = (a * b, math.atan2(uy, ux) if a >= b else math.atan2(ux, -uy))
+    return math.degrees(best[1]) % 180 if best else 0.0
 
 
 def _columns(run: Run, config: Config, frame: Frame, land: Land, choices: list[Choice],
@@ -378,7 +451,8 @@ def lay_out(run: Run, ev: Evaluation) -> tuple[Laid | None, str]:
     tower_sqm = sum(p.footprint.area * p.standing.choice.cls.floors for p in placements)
     units = sum(p.standing.choice.prototype.per_floor.flats * p.standing.choice.cls.floors
                 for p in placements)
-    angles = [frame.angle_deg]
+    angles = distinct_angles([frame.angle_deg,
+                              *(s.frame.angle_deg for s in ev.standing if s.frame)])
     anchor = entrance.gate.centroid
     club, club_floors, why = _club(run, buildable, zones, placements, tower_sqm, units, angles,
                                    anchor)

@@ -75,9 +75,11 @@ class Placement:
 
 
 def placement_of(standing: Standing, name: str, frame: Frame) -> Placement:
-    """The contract placement that puts this block's footprint exactly where the column holds it.
-    In the turned frame the prototype stands a quarter turn, its origin an offset from the centre of
-    its own footprint."""
+    """The contract placement that puts this block's footprint exactly where the column holds it,
+    in the block's own frame when it has one (a cluster turned to its own ground). In the turned
+    frame the prototype stands a quarter turn, its origin an offset from the centre of its own
+    footprint."""
+    frame = standing.frame or frame
     prototype = standing.choice.prototype
     local = prototype.footprint.to_shapely()
     minx, miny, maxx, maxy = local.bounds

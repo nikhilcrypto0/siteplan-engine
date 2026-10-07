@@ -147,7 +147,7 @@ def place(plot: Plot, q: Quantities, frame: Frame, land: Land, rings: BaseGeomet
         return []
     kept = [*water, *([frame.to_turned(kept_clear)] if kept_clear is not None else [])]
     taken = unary_union([hull, ring, *kept])
-    blocks = [(box(s.x0, s.y0, s.x1, s.y1), s.choice.cls) for s in standing]
+    blocks = [(_in_frame(s, frame), s.choice.cls) for s in standing]
     by_key = {_key(c.cls): c.cls for c in choices}
     lands = {}
     for key, cls in by_key.items():
@@ -174,6 +174,15 @@ def place(plot: Plot, q: Quantities, frame: Frame, land: Land, rings: BaseGeomet
         fits = _Fits(lands, ring)
         paths = paths.difference(grow(footprint, eps_m))
         free = free.difference(_cost(footprint, choice, pathway))
+
+
+def _in_frame(standing: Standing, frame: Frame) -> Polygon:
+    """A block of the columns in this turned frame: upright when it was laid in it, turned when
+    its cluster was laid in a frame of its own."""
+    upright = box(standing.x0, standing.y0, standing.x1, standing.y1)
+    if standing.frame is None or standing.frame.angle_deg == frame.angle_deg:
+        return upright
+    return frame.to_turned(standing.frame.to_survey(upright))
 
 
 def _cost(footprint: Polygon, choice: Choice, pathway: BaseGeometry) -> BaseGeometry:

@@ -684,14 +684,17 @@ REGISTRY: tuple[Constraint, ...] = (
         f"into the ring; an approach of under {network.MIN_APPROACH_SQM:g} m² beyond the ring "
         f"is the ring itself; the gate at least {network.GATE_DEPTH_M:g} m deep; at most "
         f"{search_layout.MAX_CLUSTERS} clusters, a further one's ring joined by the shortest "
-        f"link found every {network.LINK_STEP_M:g} m along it",
+        f"link found every {network.LINK_STEP_M:g} m along it, and tried in "
+        f"{search_layout.ZONE_ANGLES} directions at most (its configuration's and its own "
+        "ground's)",
         Basis.ENGINE_DESIGN_ASSUMPTION, "none (optimizer.search.network)",
         ("optimizer.search.network.MIN_STREET_LENGTH_M", "optimizer.search.network.RING_TIP_SQM",
          "optimizer.search.network.GATE_STEP_M", "optimizer.search.network.ENTRANCES_TRIED",
          "optimizer.search.network.APPROACH_LONGEST_M",
          "optimizer.search.network.APPROACH_REACH_SQM",
          "optimizer.search.network.MIN_APPROACH_SQM", "optimizer.search.network.GATE_DEPTH_M",
-         "optimizer.search.layout.MAX_CLUSTERS", "optimizer.search.network.LINK_STEP_M"),
+         "optimizer.search.layout.MAX_CLUSTERS", "optimizer.search.network.LINK_STEP_M",
+         "optimizer.search.layout.ZONE_ANGLES"),
         note="The shortest street is rule 8(m)'s 9 m road width and the gate's depth the 2 m "
              "planted strip, both read from rules.py; using them as a length and a depth is the "
              "engine's. The legacy layout tries its entrance its own way (access.ENTRANCE_STEP_M, "

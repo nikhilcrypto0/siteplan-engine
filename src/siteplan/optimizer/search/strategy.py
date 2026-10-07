@@ -354,7 +354,8 @@ def _signature(ev: Evaluation) -> tuple:
     blocks = [*ev.standing, *(f.standing for f in ev.fringe)]
     return (round(ev.config.angle_deg, 2), ev.config.reserve, ev.config.reserve_scale,
             ev.config.low_blocks,
-            tuple(sorted((round(s.x0, 1), round(s.y0, 1), s.choice.key) for s in blocks)))
+            tuple(sorted((round(s.x0, 1), round(s.y0, 1), s.choice.key,
+                          round(s.frame.angle_deg, 2) if s.frame else -1.0) for s in blocks)))
 
 
 def _cannot_run(context: SearchContext) -> str | None:
