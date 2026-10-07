@@ -180,14 +180,21 @@ class FullSearchStrategy:
                             configs[low].append((profile, angle, tallest, step, low))
         context.rng("evaluate").shuffle(configs[False])
         context.rng("evaluate-low").shuffle(configs[True])
+        # each again with further clusters on the ground the first leaves (C4-02), after all of
+        # the others and in an order of its own, so those are evaluated as they were before
+        more = [*configs[False], *configs[True]]
+        context.rng("evaluate-clusters").shuffle(more)
         queues: dict[str, list[Evaluation]] = {p.key: [] for p in wanted}
-        for profile, angle, tallest, step, low in [*configs[False], *configs[True]]:
+        for (profile, angle, tallest, step, low), clusters in [
+                *((c, False) for c in [*configs[False], *configs[True]]),
+                *((c, True) for c in more)]:
             if stage.expired():
                 tally.exhausted = True
                 break
             pitch = run.depth_m + max(run.q.road_m, PITCH_GAP_M)
             ev = _guarded(evaluate, run, Config(profile, angle, step * pitch / self.limits.offsets,
-                                                tallest, None, low_blocks=low))
+                                                tallest, None, low_blocks=low,
+                                                more_clusters=clusters))
             tally.evaluated += 1
             if isinstance(ev, Failure):
                 tally.reasons[ev.reason] += 1
@@ -331,7 +338,8 @@ def _planning_notes(run: Run) -> list[str]:
 
 def _reserved(config: Config, side: str, scale: float, low_blocks: bool | None = None) -> Config:
     return Config(config.profile, config.angle_deg, config.offset_m, config.max_floors, side,
-                  scale, config.low_blocks if low_blocks is None else low_blocks)
+                  scale, config.low_blocks if low_blocks is None else low_blocks,
+                  config.more_clusters)
 
 
 def _low_blocks(run: Run, profile: Profile) -> tuple[bool, ...]:

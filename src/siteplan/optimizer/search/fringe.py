@@ -44,7 +44,7 @@ from siteplan.optimizer.search.columns import STEP_M, Choice, Standing
 from siteplan.optimizer.search.fit import fit_rectangle
 from siteplan.optimizer.search.frame import Frame
 from siteplan.optimizer.search.land import EMPTY, Land, Plot, erode, grow, polygons, setback_land
-from siteplan.optimizer.search.network import ENTRANCES_TRIED, EPS_M, TOUCH_M, Cluster
+from siteplan.optimizer.search.network import ENTRANCES_TRIED, EPS_M, TOUCH_M
 from siteplan.optimizer.search.quantities import Quantities
 from siteplan.optimizer.search.readings import FloorClass
 
@@ -125,20 +125,21 @@ def own_lands(plot: Plot, q: Quantities, classes: Sequence[FloorClass]
                                         side + q.setback_margin_m) for front, side in kinds}
 
 
-def place(plot: Plot, q: Quantities, frame: Frame, land: Land, cluster: Cluster,
-          standing: Sequence[Standing], choices: Sequence[Choice], *,
+def place(plot: Plot, q: Quantities, frame: Frame, land: Land, rings: BaseGeometry,
+          hulls: BaseGeometry, standing: Sequence[Standing], choices: Sequence[Choice], *,
           own: Mapping[tuple[float, float], BaseGeometry], kept_clear: BaseGeometry | None,
           roads_in_setback: bool, eps_m: float, room_sqm: float) -> list[Fringed]:
     """The blocks the fringe of this layout holds, most valuable first, each with the pathway that
-    reaches it. `standing` are the blocks of the columns; `own` the ground each kind of block
-    stands on (`own_lands`); `roads_in_setback` whether the profile lets a road, and so a pathway,
-    run inside the setback; `eps_m` how far inside its ground a block stands, so no rounding puts
-    it over a line; `room_sqm` the free ground the rest of the layout is expected to need, which no
-    block takes."""
+    reaches it. `rings` are the ring roads' ground (and the links between them), `hulls` the
+    clusters' outlines; `standing` are the blocks of the columns; `own` the ground each kind of
+    block stands on (`own_lands`); `roads_in_setback` whether the profile lets a road, and so a
+    pathway, run inside the setback; `eps_m` how far inside its ground a block stands, so no
+    rounding puts it over a line; `room_sqm` the free ground the rest of the layout is expected
+    to need, which no block takes."""
     if not choices:
         return []
-    ring = frame.to_turned(cluster.ring)
-    hull = frame.to_turned(cluster.hull)
+    ring = frame.to_turned(rings)
+    hull = frame.to_turned(hulls)
     water = [frame.to_turned(plot.excluded)] if not plot.excluded.is_empty else []
     free = frame.to_turned(plot.net).difference(unary_union(
         [frame.to_turned(land.zone), frame.to_turned(land.strip), hull, ring, *water]))

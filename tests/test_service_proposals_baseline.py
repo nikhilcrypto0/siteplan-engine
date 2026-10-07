@@ -9,7 +9,8 @@ Re-pinned on C4-01, where every road is drawn from its centre line: the same gro
 where two open-space pockets are the same size or two layouts score the same, the last digits
 still choose, so `full-not_counted-ALL-61` is proposed for `-62` (the same blocks, flats and
 saleable area) and `full-ALL-ALL-6` is shown for `-5` (the same blocks, flats, saleable area and
-open space).
+open space). Re-pinned on C4-02, where every configuration is also tried with further clusters:
+768 evaluated where 384 were, and the same twelve proposed, the same three shown.
 
 The values pin exact output on the locked dependencies (uv.lock). They move only with a normative
 replacement and an entry in docs/behaviour-changes.md.
@@ -32,7 +33,7 @@ TEST_CLASS = "characterization"
 
 PINNED = {
     "notes": [
-        "FULL: 384 configurations evaluated, 112 laid out, 24 judged by the validator, 12 proposed",
+        "FULL: 768 configurations evaluated, 112 laid out, 24 judged by the validator, 12 proposed",
         "FULL: 3 of 12 proposed hold under every reading of the open questions; the others each "
         "name the readings they rest on",
         "FULL: every layout leaves the height above sea level and the 45 t loading of the paving "
@@ -59,7 +60,7 @@ PINNED = {
         ["full-ALL-ALL-6", "CONVENTIONAL_OPEN_SPACE"],
     ],
     "shown_digests": ["13d6b77dcd83853e", "5f9926f7bb81930f", "2b7c2b1c529bb28c"],
-    "answer_sha256": "e30cd31fd9bda956ade66baf179bfb7ea57e35cea75957684b7a9018f02ba701",
+    "answer_sha256": "6490670e2a430e8dbf7232f53ac0eda60e7b20e91c0c3a36079b2d779216453d",
     "approval_page_sha256": "cd3ebee2af46849756df643999df9b16d2cbc91d92c45101983782cff1eb0181",
 }
 PROPOSALS: list = []

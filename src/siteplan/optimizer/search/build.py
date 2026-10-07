@@ -42,11 +42,12 @@ from siteplan.optimizer.search.network import Entrance
 from siteplan.optimizer.search.parking_plan import Cellars
 from siteplan.optimizer.search.quantities import Quantities
 from siteplan.optimizer.search.readings import Profile
-from siteplan.optimizer.search.road_graph import RoadGraph
+from siteplan.optimizer.search.road_graph import Road, RoadGraph
 from siteplan.units import sqm_to_sqft
 
 SLIVER_SQM = 0.01
 GRID_M = 1e-6  # the ledger is drawn on a micrometre grid, as the validator's shapes are
+FIRE_ROADS = (RoadKind.LOOP, RoadKind.INTERNAL, RoadKind.APPROACH)  # the roads a fire tender uses
 OPEN_SPACE_CLAIM = 0.999  # what is claimed of the open space drawn: never more than counts
 ON_POCKET_SHARE = 0.5  # a soft facility more than this much on a pocket is the pocket's own ground
 STRATEGY_NAME = "FULL"
@@ -160,7 +161,7 @@ class Laid:
     facilities: list[PlacedFacility]
     facilities_missed: list[str]
     ramps: list[Polygon]
-    ring_clipped: bool
+    clipped_rings: frozenset[str]  # the ring roads the ground cut the tip of a corner off
     cellars: Cellars | None
     cars: dict[str, int]
     zones: Zones
@@ -168,7 +169,9 @@ class Laid:
 
     @property
     def ring(self) -> BaseGeometry:
-        return self.graph.road("ring").ground
+        """Every ring road's ground (one cluster's ring, or each of them)."""
+        loops = [r.ground for r in self.graph.of_kind(RoadKind.LOOP)]
+        return loops[0] if len(loops) == 1 else unary_union(loops)
 
     @property
     def streets(self) -> list[BaseGeometry]:
@@ -225,21 +228,24 @@ def _prototypes_used(placements: Sequence[Placement]) -> list[TowerPrototype]:
     return list(seen.values())
 
 
+def _declared_m(road: Road, laid: Laid, q: Quantities) -> float:
+    """The width a road declares: the rule's and the firm's margin, the rule's alone for a ring
+    the ground cut the tip of a corner off, the entrance's for the approach, the rule's for a
+    pathway."""
+    if road.kind is RoadKind.LOOP:
+        return q.legal_road_m if road.id in laid.clipped_rings else q.road_m
+    if road.kind is RoadKind.APPROACH:
+        return laid.entrance.width_m
+    return q.pathway_m if road.kind is RoadKind.PATHWAY else q.road_m
+
+
 def _roads(laid: Laid, q: Quantities) -> list[dict]:
-    """Each road declares the width it is drawn at (the rule's, and the firm's margin where the
-    ring is whole): the validator measures the drawing and a declaration wider than the road is a
-    claim it holds against the layout."""
-    ring_declared = q.legal_road_m if laid.ring_clipped else q.road_m
-    roads = [{"id": "ring", "kind": "LOOP", "shapes": shapes_from(laid.ring),
-              "declared_width_m": ring_declared, "tags": ["FIRE_ACCESS"]}]
-    roads += [{"id": f"street-{i}", "kind": "INTERNAL", "shapes": shapes_from(s),
-               "declared_width_m": q.road_m, "tags": ["FIRE_ACCESS"]}
-              for i, s in enumerate(laid.streets, 1)]
-    roads.append({"id": "approach", "kind": "APPROACH",
-                  "shapes": shapes_from(laid.entrance.approach),
-                  "declared_width_m": laid.entrance.width_m, "tags": ["FIRE_ACCESS"]})
-    roads += [{"id": f"pathway-{i}", "kind": "PATHWAY", "shapes": shapes_from(p),
-               "declared_width_m": q.pathway_m} for i, p in enumerate(laid.pathways, 1)]
+    """Every road of the graph, each declaring the width it is drawn at: the validator measures
+    the drawing and a declaration wider than the road is a claim it holds against the layout."""
+    roads = [{"id": r.id, "kind": r.kind.value, "shapes": shapes_from(r.ground),
+              "declared_width_m": _declared_m(r, laid, q),
+              **({"tags": ["FIRE_ACCESS"]} if r.kind in FIRE_ROADS else {})}
+             for r in laid.graph.roads]
     return [r for r in roads if r["shapes"]]
 
 
@@ -254,12 +260,9 @@ def _claims(laid: Laid, plot: Plot, q: Quantities
     for i, ramp in enumerate(laid.ramps, 1):
         claims[PhysicalUse.RAMP].append((f"ramp {i}", ramp, []))
     fire = ["FIRE_ACCESS"]
-    claims[PhysicalUse.ROAD].append(("ring LOOP", laid.ring, fire))
-    for i, street in enumerate(laid.streets, 1):
-        claims[PhysicalUse.ROAD].append((f"street-{i} INTERNAL", street, fire))
-    claims[PhysicalUse.ROAD].append(("approach APPROACH", laid.entrance.approach, fire))
-    for i, pathway in enumerate(laid.pathways, 1):
-        claims[PhysicalUse.ROAD].append((f"pathway-{i} PATHWAY", pathway, []))
+    for road in laid.graph.roads:
+        claims[PhysicalUse.ROAD].append((f"{road.id} {road.kind.value}", road.ground,
+                                         fire if road.kind in FIRE_ROADS else []))
     if not laid.lanes.is_empty:
         claims[PhysicalUse.FIRE_HARDSTANDING].append(("fire lanes", laid.lanes, fire))
     pockets = unary_union(laid.pockets) if laid.pockets else EMPTY
@@ -382,7 +385,9 @@ def _layers(laid: Laid, rules: ResolvedRules, envelope: BuildableEnvelope, plot:
                permits=_forbid(PhysicalUse.TOWER, PhysicalUse.CLUB_HOUSE, PhysicalUse.OTHER_BUILT,
                                PhysicalUse.SURFACE_PARKING, PhysicalUse.HARD_AMENITY)),
         _layer("fire access routes", LayerKind.FIRE_ACCESS_ROUTE,
-               unary_union([laid.ring, laid.entrance.approach, *laid.streets,
+               unary_union([*(r.ground for r in laid.graph.of_kind(RoadKind.LOOP)),
+                            laid.entrance.approach,
+                            *(r.ground for r in laid.graph.of_kind(RoadKind.INTERNAL)),
                             laid.lanes]), rules.fire.clear_width_m.clause,
                applies_to="the roads and lanes a fire tender uses"),
         _layer("turning room", LayerKind.TURNING_SECTOR,

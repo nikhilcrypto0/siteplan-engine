@@ -4,6 +4,32 @@ A characterization test (tests/manifest.py) pins what the engine produces today.
 only together with a normative replacement test and an entry here: what changed, why, the
 evidence, and the test that now holds the behaviour. Newest first.
 
+## 2026-10-06: C4-02, more than one cluster of blocks, each round its own ring road
+
+The full search fitted the blocks into one convex outline with a ring road round it, so a plot of
+two wings one convex outline cannot take in (two squares joined by a narrow neck) left a wing
+empty; where the one cluster's ramp then had no road to stand beside, nothing was laid at all.
+Every configuration is now also tried with further clusters (`Config.more_clusters`): columns are
+laid on the ground the first cluster leaves (less every laid cluster grown by the street between
+two columns, so the blocks keep their gap and the rings stay off each other's blocks), fitted round
+a ring road of their own, and joined to a ring already laid by a link road (`network.link`, the
+shortest straight road between the two rings' centre lines that lies on ground a road may take,
+found every 2 m along the further ring). Where the two rings' pavements meet a road wide they are
+joined there, and the link is an edge of the network with no pavement of its own; a link shorter
+between the rings than a road is wide is no road (the validator would see its two ends as one
+junction) and that cluster is not laid. At most three clusters. The variants come after every
+other configuration, in an order of their own, so those are evaluated as before.
+
+- Made-up land (`tests/test_search_clusters.py`, normative): on two 120 m squares joined by a 50 m
+  neck the strictest profile, which proposed nothing, proposes layouts of two clusters joined by a
+  link; the others take both wings (540 flats where 444 were, under not_counted-allowed).
+- The service's made-up baseline: 768 configurations evaluated where 384 were, the same twelve
+  proposed and three shown; re-pinned.
+- Dhulapally, Run B prime's request (the C4 benchmark): 2,304 configurations, 112 laid out, 24
+  judged, no legal FAIL; four judged layouts stand two clusters joined where their rings meet, one
+  of them among the ten proposed; the best is unchanged (three towers of stilt + 10, 360 flats),
+  as the north arm leaves no ground a cluster with its ring fits (13 m of it, a block is 25.8 m).
+
 ## 2026-10-06: C4-01, the full search draws every road from a centre-line graph
 
 `optimizer/search/road_graph.py`: the roads are a graph of nodes (an entrance, a junction, the

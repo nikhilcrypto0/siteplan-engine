@@ -20,7 +20,7 @@ planting strip that band asks is drawn round the plot whenever such a block may 
 from __future__ import annotations
 
 from collections.abc import Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from shapely import affinity
 from shapely.geometry import Point, Polygon
@@ -37,7 +37,7 @@ from siteplan.contracts import (
 from siteplan.contracts.candidate import RoadKind
 from siteplan.contracts.design_brief import ClubSize
 from siteplan.optimizer.search import fringe, ground, network
-from siteplan.optimizer.search.build import Laid, Placement, named_placements
+from siteplan.optimizer.search.build import FIRE_ROADS, Laid, Placement, named_placements
 from siteplan.optimizer.search.columns import (
     Choice,
     Standing,
@@ -60,7 +60,7 @@ from siteplan.optimizer.search.land import (
 from siteplan.optimizer.search.parking_plan import plan_parking, ramp_length_m
 from siteplan.optimizer.search.quantities import Quantities, quantities
 from siteplan.optimizer.search.readings import FloorClass, Profile, floor_classes
-from siteplan.optimizer.search.road_graph import Road
+from siteplan.optimizer.search.road_graph import NODE_SNAP_M, Road
 from siteplan.optimizer.search.turns import Turning, loop_turns
 
 EPS_LAND_M = 0.02  # ground a block must stand this far inside, so no rounding puts it over a line
@@ -72,8 +72,7 @@ RAMP_RESERVE_SQM = 280.0
 CLUB_ASSUMED_SHARE_OF_NET = 0.0375  # built-up area over the plot, times the club's share
 CLUB_FLOORS = 2  # the club house's storeys when the brief gives none
 SIDES = ("N", "S", "E", "W")
-# The roads a vehicle uses; a rule 8(l) pathway serves only the block it reaches.
-MOTOR_ROADS = (RoadKind.LOOP, RoadKind.INTERNAL, RoadKind.APPROACH)
+MAX_CLUSTERS = 3  # the first cluster of blocks and at most two more, each round its own ring road
 
 
 @dataclass(frozen=True)
@@ -85,11 +84,13 @@ class Config:
     reserve: str | None = None  # an end of the plot kept for the open space: N, S, E or W
     reserve_scale: float = 1.0
     low_blocks: bool = False  # blocks below the high-rise height may stand (Table III)
+    more_clusters: bool = False  # further clusters stand on the land the first leaves (C4-02)
 
     @property
     def key(self) -> tuple:
         return (self.profile.key, round(self.angle_deg, 3), round(self.offset_m, 3),
-                self.max_floors, self.reserve or "", self.reserve_scale, self.low_blocks)
+                self.max_floors, self.reserve or "", self.reserve_scale, self.low_blocks,
+                self.more_clusters)
 
 
 @dataclass(frozen=True)
@@ -158,12 +159,27 @@ class Evaluation:
     frame: Frame
     land: Land
     street_m: float
-    standing: tuple[Standing, ...]  # the blocks the ground holds, with the ring road round them
+    standing: tuple[Standing, ...]  # the blocks the ground holds, with the ring roads round them
     streets: tuple[Road, ...]
-    cluster: network.Cluster
+    clusters: tuple[network.Cluster, ...]  # the first, then any the land it leaves holds
     value: float  # saleable sqft of the blocks that stand
     kept_clear: BaseGeometry | None  # the end of the plot reserved, in the survey's frame
-    fringe: tuple[fringe.Fringed, ...] = ()  # blocks below 21 m on the ground the ring leaves
+    fringe: tuple[fringe.Fringed, ...] = ()  # blocks below 21 m on the ground the rings leave
+    links: tuple[Road, ...] = ()  # the roads that join a further cluster's ring to another's
+
+    @property
+    def cluster(self) -> network.Cluster:
+        """The first cluster, laid on all the ground the blocks may stand on."""
+        return self.clusters[0]
+
+    @property
+    def rings(self) -> BaseGeometry:
+        """Every ring road's ground, and the links between them."""
+        return unary_union([*(c.ring for c in self.clusters), *(r.ground for r in self.links)])
+
+    @property
+    def hulls(self) -> BaseGeometry:
+        return unary_union([c.hull for c in self.clusters])
 
 
 def _gap(q: Quantities):
@@ -209,17 +225,66 @@ def evaluate(run: Run, config: Config) -> Evaluation | Failure:
         [s.choice.value for s in standing])
     if cluster is None:
         return Failure(why)
-    if not run.brief.height_intent.mixed_heights_allowed:  # the fringe keeps the columns' height
+    if not run.brief.height_intent.mixed_heights_allowed:  # the rest keep the columns' height
+        choices = [c for c in choices if c.cls.floors == fitted[0].choice.cls.floors]
         beyond = [c for c in beyond if c.cls.floors == fitted[0].choice.cls.floors]
-    extra = fringe.place(plot, q, frame, land, cluster, fitted, beyond, own=run.own_lands,
+    clusters: list[network.Cluster] = [cluster]
+    links: list[Road] = []
+    if config.more_clusters:
+        fitted, streets, clusters, links = _more_clusters(run, config, frame, land, choices,
+                                                          street, fitted, streets, clusters)
+        if len(clusters) == 1:
+            return Failure("no further cluster stands on the ground the first leaves")
+    rings = unary_union([*(c.ring for c in clusters), *(r.ground for r in links)])
+    hulls = unary_union([c.hull for c in clusters])
+    extra = fringe.place(plot, q, frame, land, rings, hulls, fitted, beyond, own=run.own_lands,
                          kept_clear=kept_clear,
                          roads_in_setback=config.profile.roads_may_use_setback,
                          eps_m=EPS_LAND_M, room_sqm=run.reserve_target_sqm) if beyond else []
     if config.low_blocks and not extra and all(s.choice.cls.high_rise for s in fitted):
         return Failure("no block below 21 m stands in this configuration")
-    return Evaluation(config, frame, land, street, tuple(fitted), tuple(streets), cluster,
-                      sum(s.choice.value for s in fitted)
-                      + sum(f.standing.choice.value for f in extra), kept_clear, tuple(extra))
+    return Evaluation(
+        config=config, frame=frame, land=land, street_m=street, standing=tuple(fitted),
+        streets=tuple(streets), clusters=tuple(clusters),
+        value=sum(s.choice.value for s in fitted) + sum(f.standing.choice.value for f in extra),
+        kept_clear=kept_clear, fringe=tuple(extra), links=tuple(links))
+
+
+def _more_clusters(run: Run, config: Config, frame: Frame, land: Land, choices: list[Choice],
+                   street: float, fitted: list[Standing], streets: list[Road],
+                   clusters: list[network.Cluster]
+                   ) -> tuple[list[Standing], list[Road], list[network.Cluster], list[Road]]:
+    """Further clusters on the ground the first leaves (an arm, a wing the first one's convex
+    outline cannot take in): the blocks' land less every cluster laid, grown by the street between
+    two columns (a ring road and a block gap, so a further cluster's blocks and ring keep clear of
+    those laid), its columns fitted round with a ring road of their own, which a link joins to a
+    ring already laid; until MAX_CLUSTERS stand, or the ground holds no more, or no link can be
+    laid."""
+    q = run.q
+    fitted, streets, clusters, links = list(fitted), list(streets), list(clusters), []
+    spacing = max(street, q.road_m + 2 * NODE_SNAP_M)  # the links' centre lines never touch
+    while len(clusters) < MAX_CLUSTERS:
+        taken = unary_union([grow(c.hull, spacing) for c in clusters])
+        rest = replace(land, cluster_land=land.cluster_land.difference(taken))
+        if rest.cluster_land.is_empty:
+            break
+        standing, _ = _columns(run, config, frame, rest, choices, street)
+        if not standing:
+            break
+        more, more_streets, cluster, _ = network.fit_cluster(
+            standing, frame, street, rest, q.road_m, q.legal_road_m,
+            [s.choice.value for s in standing], ring_id=f"ring-{len(clusters) + 1}",
+            first_street=len(streets) + 1)
+        if cluster is None:
+            break
+        joined = network.link(cluster, clusters, land.roadable, q.road_m, len(links) + 1)
+        if joined is None:
+            break
+        fitted += more
+        streets += more_streets
+        clusters.append(cluster)
+        links.append(joined)
+    return fitted, streets, clusters, links
 
 
 def _columns(run: Run, config: Config, frame: Frame, land: Land, choices: list[Choice],
@@ -260,24 +325,24 @@ def _columns(run: Run, config: Config, frame: Frame, land: Land, choices: list[C
 
 def lay_out(run: Run, ev: Evaluation) -> tuple[Laid | None, str]:
     q, plot, rules, brief = run.q, run.plot, run.rules, run.brief
-    frame, land, cluster = ev.frame, ev.land, ev.cluster
+    frame, land, clusters = ev.frame, ev.land, ev.clusters
     placements = named_placements(ev.standing, frame, [f.standing for f in ev.fringe])
     footprints = [p.footprint for p in placements]
     gaps = [p.standing.choice.cls.gap_m for p in placements]
     high = [p.standing.choice.cls.high_rise for p in placements]
     blocks = unary_union(footprints)
     blocked = unary_union([blocks, ev.kept_clear]) if ev.kept_clear is not None else blocks
-    entrance, why = network.find_entrance(plot, cluster, blocked, q.approach_m,
+    entrance, why = network.find_entrance(plot, clusters, blocked, q.approach_m,
                                           land_strip(land, q))
     if entrance is None:
         return None, why
     serving = _pathway_roads(ev, q)
-    graph = network.road_graph(cluster, ev.streets, entrance,
+    graph = network.road_graph(clusters, ev.streets, ev.links, entrance,
                                [p for p in serving if p is not None])
     problems = graph.problems()
     if problems:
         return None, f"the roads are not one network: {'; '.join(problems)}"
-    roads = graph.ground(MOTOR_ROADS)
+    roads = graph.ground(FIRE_ROADS)  # a rule 8(l) pathway serves only the block it reaches
     pathways = [r.ground for r in graph.of_kind(RoadKind.PATHWAY)]
     lanes = network.fire_lanes([f for f, tall in zip(footprints, high, strict=True) if tall],
                                roads, plot.net, q.lane_m, blocks)
@@ -289,14 +354,20 @@ def lay_out(run: Run, ev: Evaluation) -> tuple[Laid | None, str]:
                 if not _served(p, roads, way)]
     if unserved:
         return None, f"no road touches {', '.join(unserved)}"
-    turns = loop_turns(cluster.ring, [Turning(*t) for t in q.turnings])
+    turnings = [Turning(*t) for t in q.turnings]
+    turns_of = [(c, loop_turns(c.ring, turnings)) for c in clusters]
+    turns = unary_union([t for _, t in turns_of])
     off = turns.difference(plot.net).area + turns.intersection(
         unary_union([land.strip, plot.excluded])).area
     if off > network.RING_CLIP_SQM:
         return None, (f"a turn of the ring road lies off the plot, on the strip or in the water "
                       f"({off:,.0f} m²)")
-    on_turns = [p.name for p in placements[len(ev.standing):]
-                if p.footprint.intersection(turns).area > network.RING_CLIP_SQM]
+    # a block keeps off where the tender turns on every ring but its own cluster's (whose blocks
+    # stand within it); a block on the fringe belongs to no cluster
+    on_turns = [p.name for i, p in enumerate(placements)
+                if any(p.footprint.intersection(t).area > network.RING_CLIP_SQM
+                       for c, t in turns_of
+                       if i >= len(ev.standing) or not _within(p.footprint, c.hull))]
     if on_turns:
         return None, f"{', '.join(on_turns)} stands where the tender turns on the ring road"
     zones = ground.zones_of(footprints, gaps, roads, lanes, q.reach_m, turns, high,
@@ -349,7 +420,7 @@ def lay_out(run: Run, ev: Evaluation) -> tuple[Laid | None, str]:
         frame=frame, placements=placements, graph=graph, entrance=entrance,
         lanes=lanes, pockets=pockets, strip=strip, club=club, club_floors=club_floors,
         facilities=facilities, facilities_missed=missed, ramps=ramps,
-        ring_clipped=cluster.clipped, cellars=plan.cellars,
+        clipped_rings=frozenset(c.road.id for c in clusters if c.clipped), cellars=plan.cellars,
         cars=_cars(plan), zones=zones, land=land)
     return laid, ""
 
@@ -360,8 +431,12 @@ def _pathway_roads(ev: Evaluation, q: Quantities) -> list[Road | None]:
     out: list[Road | None] = []
     for f in ev.fringe:
         out.append(None if f.path is None else network.pathway_road(
-            sum(p is not None for p in out) + 1, f.path, fringe.pathway_width_m(q), ev.cluster))
+            sum(p is not None for p in out) + 1, f.path, fringe.pathway_width_m(q), ev.clusters))
     return out
+
+
+def _within(footprint: Polygon, hull: Polygon) -> bool:
+    return footprint.difference(hull).area <= network.RING_CLIP_SQM
 
 
 def _served(placement: Placement, roads: BaseGeometry, pathway: BaseGeometry) -> bool:

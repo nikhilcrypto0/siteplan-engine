@@ -23,6 +23,7 @@ from shapely.ops import linemerge, unary_union
 from siteplan.contracts.candidate import RoadKind
 from siteplan.optimizer.search import layout, network
 from siteplan.optimizer.search import strategy as strategy_module
+from siteplan.optimizer.search.build import FIRE_ROADS
 from siteplan.optimizer.search.land import polygons
 from siteplan.optimizer.search.layout import Config, evaluate, lay_out, make_run
 from siteplan.optimizer.search.readings import profiles
@@ -237,7 +238,7 @@ def test_the_entrance_is_a_node_of_the_ring_when_the_ring_itself_meets_the_gate(
     hull = box(0, 0, 60, 40)
     ring = Road("ring", RoadKind.LOOP, network.ring_centre(hull, 9.0), 9.0)
     entrance = network.Entrance(box(20, -11, 29, -9), None, 9.0, "S", (24.5, -9.0))
-    graph = network.road_graph(network.Cluster(hull, ring), [], entrance, [])
+    graph = network.road_graph([network.Cluster(hull, ring)], [], [], entrance, [])
     (gate,) = [n for n in graph.nodes if n.kind is NodeKind.ENTRANCE]
     assert Point(gate.at).distance(ring.line) <= ON_LINE_M
     assert graph.degree(gate.id) == 2 and graph.problems() == [] and graph.loops() == 1
@@ -272,7 +273,7 @@ def test_the_motor_roads_leave_the_pathways_out():
     for _, laid in _search("l_plot"):
         if not laid.pathways:
             continue
-        motor = laid.graph.ground(layout.MOTOR_ROADS)
+        motor = laid.graph.ground(FIRE_ROADS)
         for pathway in laid.pathways:
             assert pathway.difference(motor).area > 1.0  # its own pavement is not a motor road
         assert unary_union([motor, *laid.pathways]).area > motor.area
