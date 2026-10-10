@@ -4,6 +4,91 @@ A characterization test (tests/manifest.py) pins what the engine produces today.
 only together with a normative replacement test and an entry here: what changed, why, the
 evidence, and the test that now holds the behaviour. Newest first.
 
+## 2026-10-10: a height starts at the ground, and the storeys start above it
+
+Rule 2(e) measures a height from the abutting road, or on undulated terrain from the average of
+the corresponding ground level, and NBC 2016 Part 2 2.6 from "the average level of the ground
+around and contiguous to the building ... to the terrace of last livable floor". The engine
+measured from the stilt floor. NBC 2016 Part 3 12.1 (read on the page image of p.43), which rule
+15(a)(vi) brings to "all buildings" as a requirement of parts of a building, raises the lowest
+floor above the ground: a plinth of 450 mm (12.1.1), covered parking 150 mm (12.1.2). So storeys
+that exactly reached a limit were over it: a 3 m stilt and nine 3 m floors are 30.15 m from the
+ground, not 30 m. Found in the Dhulapally final check under the new approach (2026-10-10).
+
+- `rules.COVERED_PARKING_RAISE_M` (0.15 m) and `rules.PLINTH_MIN_M` (0.45 m), each with its
+  clause. A parking stilt is taken as covered parking: 12.1.2's heading names covered parking and
+  its sentence only courtyards. The open reading `stilt_raise` carries it, the plinth being the
+  stricter reading `resolve`'s selections may take (a project file does not carry it yet); under
+  ALL the larger raise is taken, which holds under both. A block with no stilt and the club house
+  stand on the plinth.
+- The raise is in every height with the stilt in it: the physical height (NBC's: the 30 m dead
+  end, the 15 m line, rule 8(l)'s 12 m) and the rule height under the counted reading. Where the
+  stilt is left out (rule 5(c) for Table III; the not_counted reading of Table IV) the whole stilt
+  floor is, its raise with it (our reading), so Table III's rows and the not_counted reading are
+  as they were.
+- `HeightRules.lowest_floor_raise_m` is the one lookup: the optimizer (`floors.assess_floor_count`,
+  the open-space pockets' setbacks in `search.build`, the club house's band in `search.layout`)
+  and the validator (`measure.TowerGeometry`, `clubhouse._club_height_m`). The floors calculator
+  (`max_floors`: `siteplan floors`, the `max_floors` tool, intake's "max", the acceptance report's
+  limit line) and the legacy request (`LayoutRequest.height_m`, so the legacy search's legality and
+  its setback rows) read rules.py. The legacy checker's own buildings (a sanctioned plan's) are
+  measured as drawn.
+- Contracts extended, not bumped: `HeightRules` gains `stilt_raise_m`, `plinth_m` and
+  `raise_interpretation`, optional and left out of the dump when absent, and `stilt_raise` is not a
+  reading the contract requires. Every stored 1.3 contract reads, keeps its digest, and is judged
+  as it was proposed: no raise. The hand-built contract fixtures are such contracts, so the
+  validator's and optimizer's tests written on them keep their heights; `with_raise` gives them
+  the raise where a test is about it.
+- With the engine's default 3 m storeys, with the stilt counted, every count is 0.15 m over a
+  Table IV edge: one floor fewer at each road limit (a 60 ft road: stilt + 8, was 9; a 40 ft road:
+  6, was 7; a dead end: 8, was 9) and the next row's setback for each count (stilt + 7 is 24.15 m:
+  9 m, was 8). Without the stilt counted only NBC's physical height moves (stilt + 10 is 33.15 m).
+  Storeys a little under 3 m keep the old figures: 2.9 m storeys and a 2.9 m stilt give stilt + 9
+  or 10 at 30 m. Rule 8(l)'s pathway now reaches a stilt + 3 of 3 m storeys only if it stays 12 m
+  or under (12.15 m does not).
+- Levels are not modelled: on a slope or over a raised cellar deck the stilt floor can stand
+  higher above the average ground than the minimum.
+
+Tests (normative): `tests/test_heights_from_the_ground.py` (new: what the raise changes in the
+optimizer, the validator, a block with no stilt, the exact edges on a 2.85 m stilt, the legacy
+request; rules stored without it unchanged), `tests/test_rules.py` (the values, their clauses,
+rule 15(a)(vi) quoted from p.20 of the order), `tests/test_resolve.py` (the reading, a stricter
+selection, a stored contract that reads with no raise and dumps as stored), and re-pinned:
+`tests/test_max_floors.py`, `tests/test_heights.py`, `tests/test_mcp_server.py`,
+`tests/test_client_fixtures.py` (the floor counts), `tests/test_optimizer_legacy.py` (the
+generator's legal findings agree with floors.py on rules with the raise),
+`tests/test_review_fixes.py` (a height's label reads 27.15 m). The made-up firms of
+`tests/search_support.py`, `tests/test_layout.py` and the jagged access side in
+`tests/test_access.py` take a 2.85 m stilt, so their stilt floor tops out 3 m up and their
+heights are as before.
+
+Characterization re-pinned:
+- `tests/test_intake.py`: "max" on a 60 ft road at 3 m storeys is stilt + 8.
+- `tests/test_acceptance.py`: the calculator's limit is stilt + 8, the first height tried 9 (30.15 m,
+  past the road's 30 m), and with the stilt left out the physical height is the rule height and
+  3.15 m.
+- `tests/test_service_proposals_baseline.py`: the same maximum-yield, balanced and open-space
+  layouts (the not_counted profiles); the robust one, holding under every reading, is S+7, S+7,
+  S+3 (204 flats, 276,760 sft) where it was 3 x S+7; 119 laid out where 116 were.
+- `tests/test_optimizer_characterization.py`: the generator's own three massings are compared at
+  stilt + 8, its tallest now (stilt + 9 is 30.15 m); the points land on the same three.
+- `tests/test_validator_client_run.py`, `tests/test_validator_client_suchitra.py`,
+  `tests/test_optimizer_client_baseline.py` (client data): the validator judges the real options
+  on rules with the raise. The generator plans for one reading of the stilt and the validator
+  weighs both, and with 3 m storeys the two readings now land in different Table IV rows, so the
+  validator is held to today's checker under the reading the generator planned for (its verdict
+  by reading). On the runs planned with the stilt left out, the S+8 options claim open space that
+  lies in the 10 m setback the counted reading asks (27.15 m): the validator blocks that
+  cross-check, and those options' verdict is FAIL (`STRICTER_CROSS_CHECKS`, which each test holds
+  to what really blocks). Suchitra's seam test puts its tower back on 7 floors, exactly 21 m
+  without the stilt, since its options are now S+6. The LEGACY run starts at stilt + 8 (stilt
+  counted) or 10.
+- The Dhulapally debug baseline (`tests/client_baseline.py`, client data, gitignored): with the
+  stilt counted the heights tried run 9 (30.15 m, FAIL on the road) down to 6 and the best layouts
+  are 3 x S+6 (288, 276 and 252 flats; 344,100 sft saleable at best) where they were S+7 (336,
+  308, 280 flats; 401,450 sft), every count taking the next Table IV row's setback; with the stilt
+  left out nothing moves. Rebuild it where it is kept: `uv run python tests/client_baseline.py`.
+
 ## 2026-10-07: C4-16, the architect's soft preferences scored
 
 The brief has carried soft preferences all along (`Objectives.soft_preferences`: a kind, its

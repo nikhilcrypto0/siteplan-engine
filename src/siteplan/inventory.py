@@ -112,6 +112,27 @@ INVENTORY: tuple[Entry, ...] = (
                 "sanctioned) keeps the setbacks of its blocks without their stilt.",
     ),
     Entry(
+        "Height", "The storeys start above the ground the height is measured from: a parking "
+                  "stilt's floor is raised, and a building without one stands on its plinth.",
+        f"{rules.COVERED_PARKING_RAISE_M:g} m under a stilt; {rules.PLINTH_MIN_M:g} m otherwise",
+        f"{rules.COVERED_PARKING_RAISE_CLAUSE}; {rules.PLINTH_CLAUSE}", Reading.INTERPRETED,
+        (Where.FLOORS, Where.RESOLVER, Where.LAYOUT),
+        ("COVERED_PARKING_RAISE_M", "COVERED_PARKING_RAISE_CLAUSE", "PLINTH_MIN_M",
+         "PLINTH_CLAUSE"),
+        choice="Rule 2(e) and NBC Part 2 2.6 measure a height from the ground; NBC Part 3 12.1, "
+               "brought to all buildings by rule 15(a)(vi), raises the lowest floor above it, so "
+               "a stack of storeys that exactly reaches a limit with the stilt in it is over it; "
+               "where the stilt is left out (rule 5(c), the not_counted reading) its raise goes "
+               "with it, and a block with no stilt stands on its plinth. 12.1.2's heading names "
+               "covered parking and its sentence only interior courtyards: a parking stilt is "
+               "taken as covered parking, the stricter reading being 12.1.1's plinth. The floors "
+               "calculator, the optimizer, the validator and the legacy layout's request "
+               "(LayoutRequest.height_m) add the raise to every height worked out from floors; "
+               "the legacy checker's own buildings (a sanctioned plan's) do not.",
+        settles="A sanctioned stilt + N plan's section showing the stilt floor's level against "
+                "the ground the authority measured from.",
+    ),
+    Entry(
         "Height", "Parking floors above the ground floor are left out of the height that picks "
                   "the Table IV row.",
         "left out of the height", rules.PARKING_FLOOR_HEIGHT_CLAUSE, Reading.NOT_MODELLED,

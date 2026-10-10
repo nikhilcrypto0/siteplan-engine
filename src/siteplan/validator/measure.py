@@ -2,9 +2,10 @@
 
 A tower's footprint is its prototype's, placed as `PlacedTower.world` says; the footprint the
 generator states is only compared with it. Heights come from the floors, the stilt and the floor
-heights (the prototype's, else the brief's firm standards). Whether the stilt counts toward the
-height that picks the Table IV row is an open reading, so a tower has one rule height per
-reading and one physical height, the one NBC measures.
+heights (the prototype's, else the brief's firm standards), standing on the lowest floor's raise
+above the ground every height is measured from (`HeightRules.lowest_floor_raise_m`, NBC Part 3
+12.1). Whether the stilt counts toward the height that picks the Table IV row is an open reading,
+so a tower has one rule height per reading and one physical height, the one NBC measures.
 """
 
 from __future__ import annotations
@@ -54,19 +55,22 @@ class TowerGeometry:
     has_stilt: bool
     stilt_height_m: float
     floor_height_m: float
+    raise_m: float  # the lowest floor above the ground the height is measured from
     prototype: TowerPrototype
     placed: PlacedTower
     flaws: tuple[str, ...] = ()  # shapes that crossed themselves and were mended to be measured
 
     @property
     def above_stilt_m(self) -> float:
-        """Every floor above the stilt: the height Table III is read on (rule 5(c))."""
-        return self.floors * self.floor_height_m
+        """The height with the stilt floor left out, the height Table III is read on (rule
+        5(c)): every floor above the stilt; a block with no stilt stands on its plinth."""
+        return self.floors * self.floor_height_m + (0.0 if self.has_stilt else self.raise_m)
 
     @property
     def stilt_built_m(self) -> float:
-        """The stilt this block stands on; nothing when it has none."""
-        return self.stilt_height_m if self.has_stilt else 0.0
+        """The stilt floor this block stands on, from the ground: its raise and its storey;
+        nothing when it has none."""
+        return self.raise_m + self.stilt_height_m if self.has_stilt else 0.0
 
     @property
     def physical_height_m(self) -> float:
@@ -96,7 +100,8 @@ class TowerGeometry:
         return out
 
 
-def tower_geometries(candidate: CandidateLayout, brief: DesignBrief) -> tuple[TowerGeometry, ...]:
+def tower_geometries(candidate: CandidateLayout, brief: DesignBrief, rules: ResolvedRules
+                     ) -> tuple[TowerGeometry, ...]:
     standards = brief.firm_standards
     towers = []
     for placed in candidate.towers:
@@ -128,6 +133,7 @@ def tower_geometries(candidate: CandidateLayout, brief: DesignBrief) -> tuple[To
             floors=placed.floors_above_stilt, has_stilt=placed.has_stilt,
             stilt_height_m=prototype.heights.stilt_height_m or standards.stilt_height_m.value,
             floor_height_m=prototype.heights.floor_to_floor_m or standards.floor_to_floor_m.value,
+            raise_m=rules.height.lowest_floor_raise_m(placed.has_stilt),
             prototype=prototype, placed=placed, flaws=tuple(flaws)))
     return tuple(towers)
 

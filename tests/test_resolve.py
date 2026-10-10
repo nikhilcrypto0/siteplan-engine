@@ -25,8 +25,11 @@ from siteplan.contracts.resolved_rules import (
     OPEN_SPACE_BASIS,
     OPEN_SPACE_OTHER_USES,
     OPENS_ONTO_ROAD,
+    PLINTH,
+    RAISE_FIELDS,
     REQUIRED_INTERPRETATIONS,
     STILT_IN_RULE_HEIGHT,
+    STILT_RAISE,
     TOT_LOT_SURFACE,
     Applicability,
     BandKind,
@@ -138,6 +141,7 @@ AUDITED_READINGS = {
     "The extra cellar setback is applied to every level": CELLAR_EXTRA_SETBACK,
     "NBC's own high-rise line, the stilt included": NBC_FIRE_HEIGHT,
     "How much of a block must face a road for it to open onto one": OPENS_ONTO_ROAD,
+    "A parking stilt's floor stands this far above the ground": STILT_RAISE,
 }
 
 
@@ -156,10 +160,12 @@ def test_a_rule_value_resting_on_an_open_reading_points_at_one():
     rules = resolve(load("rectangle", "CanonicalSiteModel"))
     resting = {path for path, value in _values(rules)
                if value.basis is Basis.UNRESOLVED_INTERPRETATION}
-    explained_by = {"amenities.share_of_built_up": AMENITY_SHARE}
+    explained_by = {"amenities.share_of_built_up": AMENITY_SHARE,
+                    "height.stilt_raise_m": STILT_RAISE}
     assert resting == set(explained_by)
     assert set(explained_by.values()) <= {i.id for i in rules.interpretations}
     assert rules.amenities.share_interpretation == AMENITY_SHARE
+    assert rules.height.raise_interpretation == STILT_RAISE
 
 
 # --- Criterion 4, as unit tests: the road sets the height by Table IV -------------------------
@@ -418,6 +424,34 @@ def test_a_selection_must_name_a_reading_the_site_carries():
         resolve(site, selections={TABLE_IV_ROAD_WIDTH: "existing"})
     again = resolve(site, selections={STILT_IN_RULE_HEIGHT: ALL})
     assert again.interpretation(STILT_IN_RULE_HEIGHT).status is Provenance.UNVERIFIED
+
+
+def test_the_storeys_start_above_the_ground_and_a_profile_may_take_the_stricter_raise():
+    """NBC Part 3 12.1 (rule 15(a)(vi)): a parking stilt's floor 0.15 m up as covered parking,
+    0.45 m on the plinth reading or under every reading (the larger holds under both); a block
+    with no stilt stands on the 0.45 m plinth."""
+    site = make_site(PLOT)
+    taken = resolve(site).height
+    assert (taken.lowest_floor_raise_m(True), taken.lowest_floor_raise_m(False)) == (0.15, 0.45)
+    assert taken.stilt_raise_m.basis is Basis.UNRESOLVED_INTERPRETATION
+    assert taken.plinth_m.basis is Basis.LEGAL_RULE and "12.1.1" in taken.plinth_m.clause
+    for reading in (PLINTH, ALL):
+        stricter = resolve(site, selections={STILT_RAISE: reading})
+        assert stricter.height.lowest_floor_raise_m(True) == 0.45
+        assert reading in stricter.height.stilt_raise_m.note
+
+
+def test_a_contract_stored_before_the_raise_reads_with_no_raise_and_keeps_its_digest():
+    """A ResolvedRules stored before 2026-10-10 carries no raise: it still reads, its heights
+    start at the lowest floor as the run it belongs to was proposed, and it dumps as it was
+    stored, so its digest is still the one every stored candidate, envelope and report names."""
+    stored = json.loads(resolve(make_site(PLOT)).model_dump_json())
+    for key in RAISE_FIELDS:
+        del stored["height"][key]
+    stored["interpretations"] = [i for i in stored["interpretations"] if i["id"] != STILT_RAISE]
+    old = ResolvedRules.model_validate(stored)
+    assert (old.height.lowest_floor_raise_m(True), old.height.lowest_floor_raise_m(False)) == (0, 0)
+    assert old.model_dump(mode="json") == stored  # so digest(old) is the digest it was stored with
 
 
 # --- The rest of what the contract asks -------------------------------------------------------

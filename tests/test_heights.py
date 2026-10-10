@@ -26,15 +26,17 @@ def test_heights_run_from_one_above_the_legal_limit_down_to_the_lowest_high_rise
 
 
 def test_a_height_the_road_cannot_serve_fails_on_the_law_and_is_not_drawn():
-    found = search_heights(PLOT, LIBRARY, LayoutRequest(floors=9, unit_mix=MIX, maximise=True),
+    """Measured from the ground, the stilt floor 0.15 m up (NBC Part 3 12.1.2): stilt + 9 on
+    3 m storeys is 30.15 m, past the 60 ft road's 30 m."""
+    found = search_heights(PLOT, LIBRARY, LayoutRequest(floors=8, unit_mix=MIX, maximise=True),
                            FACTS)
     top = found.results[0]
-    assert (top.floors, top.verdict, top.search) == (10, "FAIL (law)", None)
+    assert (top.floors, top.verdict, top.search) == (9, "FAIL (law)", None)
     assert top.reasons()[0].startswith("Abutting road width: 18.29 m; needs >= 24 m")
-    assert found.max_legal_floors == 9
-    assert found.max_feasible_floors == 9
+    assert found.max_legal_floors == 8
+    assert found.max_feasible_floors == 8
     assert found.options and all(not option.fails for option in found.options)
-    assert [r.floors for r in found.results] == [10, 9, 8, 7, 6]
+    assert [r.floors for r in found.results] == [9, 8, 7, 6]
 
 
 def test_above_30_m_an_unknown_dead_end_is_unverified_and_a_known_one_fails():
@@ -47,9 +49,12 @@ def test_above_30_m_an_unknown_dead_end_is_unverified_and_a_known_one_fails():
     assert dead_end() is Status.UNVERIFIED
     assert dead_end(road_dead_end=True) is Status.FAIL
     assert dead_end(road_dead_end=False) is Status.PASS
-    at_30 = legal_findings(9, LayoutRequest(floors=9, unit_mix=MIX),
-                           SiteFacts(abutting_road_m=18.3, road_dead_end=True), PLOT)
-    assert not any(f.rule == "Dead-end road" for f in at_30)  # up to 30 m a dead end is allowed
+    ends = SiteFacts(abutting_road_m=18.3, road_dead_end=True)
+    eight = legal_findings(8, LayoutRequest(floors=8, unit_mix=MIX), ends, PLOT)
+    assert not any(f.rule == "Dead-end road" for f in eight)  # 27.15 m: a dead end is allowed
+    nine = legal_findings(9, LayoutRequest(floors=9, unit_mix=MIX), ends, PLOT)
+    # 30.15 m from the ground, the stilt floor's raise in it: over 30 m on a dead end
+    assert next(f for f in nine if f.rule == "Dead-end road").status is Status.FAIL
 
 
 def test_without_coordinates_the_airport_height_stays_unverified_and_blocks_nothing():

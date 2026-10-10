@@ -603,10 +603,44 @@
           "title": "Measures",
           "type": "object"
         },
+        "plinth_m": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RuleValue_float_"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "raise_interpretation": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Raise Interpretation"
+        },
         "rule_height_interpretation": {
           "default": "stilt_in_rule_height",
           "title": "Rule Height Interpretation",
           "type": "string"
+        },
+        "stilt_raise_m": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RuleValue_float_"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "tdr_band_m": {
           "$ref": "#/$defs/RuleValue_tuple_float__float__"

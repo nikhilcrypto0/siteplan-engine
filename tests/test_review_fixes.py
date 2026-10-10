@@ -103,7 +103,7 @@ def test_when_nothing_passes_every_heights_real_reason_reaches_the_caller(tmp_pa
     with pytest.raises(NoLayout) as caught:
         run_layout(project, LIBRARY, box(0, 0, 70, 60), REQUEST, tmp_path)
     text = str(caught.value)
-    assert "stilt + 8 (27 m): FAIL (site)" in text and "open ground" in text
+    assert "stilt + 8 (27.15 m): FAIL (site)" in text and "open ground" in text
     assert "No tower fits" not in text
 
 

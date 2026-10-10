@@ -94,7 +94,8 @@ class HeightSearch:
 
 
 def lowest_high_rise_floors(request: LayoutRequest) -> int:
-    stilt = request.stilt_height_m if request.stilt_in_rule_height else 0.0
+    below = request.height_m - request.floors * request.floor_height_m  # the stilt floor
+    stilt = below if request.stilt_in_rule_height else 0.0
     return math.ceil((rules.HIGH_RISE_THRESHOLD_M - stilt) / request.floor_height_m - 1e-9)
 
 

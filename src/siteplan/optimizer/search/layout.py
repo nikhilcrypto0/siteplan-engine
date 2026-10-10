@@ -715,7 +715,7 @@ def _club(run: Run, land: Land, buildable: BaseGeometry, zones: ground.Zones,
     size = _club_size(run, tower_sqm, units)
     if size <= 0:
         return None, floors, ""
-    own = _club_gap_m(run.rules, floors * run.q.floor_m)
+    own = _club_gap_m(run.rules, _club_height_m(run.rules, floors, run.q.floor_m))
     keep = unary_union([grow(p.footprint, max(
         p.standing.choice.cls.gap_m, own,
         run.q.reach_m if p.standing.choice.cls.high_rise else 0.0)) for p in placements])
@@ -739,7 +739,8 @@ def _club_ground(run: Run, land: Land, zones: ground.Zones, floors: int,
     beyond the setback of the tallest tower, a wider band than its own, which kept it off an arm
     or a strip of the plot it may use. Where the rules model no band for its height, as before."""
     q = run.q
-    band = run.rules.height.band_for_block(floors * q.floor_m, 0.0, stilt_counted=False)
+    band = run.rules.height.band_for_block(_club_height_m(run.rules, floors, q.floor_m), 0.0,
+                                           stilt_counted=False)
     if band is None or not band.modelled or band.setback_m is None:
         return buildable
     front = band.front_m if band.front_setback_m is not None else band.setback_m
@@ -748,6 +749,11 @@ def _club_ground(run: Run, land: Land, zones: ground.Zones, floors: int,
                          zones.blocks, zones.turns, zones.pathways, run.plot.excluded)
              if not g.is_empty]
     return own.difference(unary_union(taken)) if taken else own
+
+
+def _club_height_m(rules: ResolvedRules, floors: int, floor_m: float) -> float:
+    """The club house's height: it has no stilt, so its storeys stand on the plinth."""
+    return rules.height.lowest_floor_raise_m(False) + floors * floor_m
 
 
 def _club_gap_m(rules: ResolvedRules, height_m: float) -> float:

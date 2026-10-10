@@ -127,7 +127,7 @@ def build(site: CanonicalSiteModel, rules: ResolvedRules, brief: DesignBrief,
     land = site_geometry.build(site, rules)
     if land is None:
         return None
-    towers = tower_geometries(candidate, brief)
+    towers = tower_geometries(candidate, brief, rules)
     classes: dict[str, dict[str, HeightClass]] = {}
     for reading in rules.readings(STILT_IN_RULE_HEIGHT):
         made = {t.name: classify_block(rules, t, reading) for t in towers}

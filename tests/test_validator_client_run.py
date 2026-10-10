@@ -10,10 +10,12 @@ from pathlib import Path
 
 import pytest
 from client_baseline import ANSWERS, SURVEY, profile_path
+from contract_fixtures import with_raise
 from contract_fixtures.rules_and_envelope import resolved_rules
 
 from siteplan.contracts import digest
 from siteplan.contracts.common import Status
+from siteplan.contracts.resolved_rules import STILT_IN_RULE_HEIGHT
 
 TEST_CLASS = "characterization"
 FIXTURES = Path(__file__).parent.parent / "fixtures"
@@ -30,6 +32,21 @@ STRICTER = {
         "setback reaches 9 m and a strip is asked for, so the validator says UNVERIFIED naming "
         "the reading where the checker, which knows only the one it planned for, says INFO",
 }
+
+
+# Cross-checks the validator blocks on a run planned for one reading of the stilt, and why.
+STRICTER_CROSS_CHECKS = {
+    ("not_counted", "open space"):
+        "planned with the stilt left out of the height; if it counts, stilt + 8 is 27.15 m from "
+        "the ground (the stilt floor 0.15 m up, NBC Part 3 12.1.2) and asks Table IV's 10 m, so "
+        "part of the open space the generator counted lies in that setback; the validator counts "
+        "what holds under every reading",
+}
+
+
+def _planned(check, reading) -> bool:
+    """Whether the validator's verdict under the reading the generator planned for is its own."""
+    return check is not None and check.by_reading.get(STILT_IN_RULE_HEIGHT, {}).get(reading)
 
 
 @pytest.fixture(scope="module", params=["counted", "not_counted"])
@@ -53,7 +70,7 @@ def real_run(request, tmp_path_factory):
     stated = AmenityLibrary.model_validate_json(
         (Path(__file__).parent.parent / "examples" / "amenities.hyderabad.json").read_text())
     design = brief(project, defaults, amenities=stated)
-    rules = resolved_rules(site)
+    rules = with_raise(resolved_rules(site))  # today's rules: heights from the ground
     readings = Readings.of(project.layout)
     refs = {"site_ref": digest(site), "rules_ref": digest(rules), "brief_ref": digest(design)}
     candidates = [candidate_from_option(
@@ -66,14 +83,19 @@ def real_run(request, tmp_path_factory):
 def test_the_real_options_have_nothing_the_validator_fails(real_run):
     from siteplan.validator import validate
 
-    _, site, rules, design, candidates = real_run
+    reading, site, rules, design, candidates = real_run
     assert len(candidates) >= 3
+    allowed = {item for r, item in STRICTER_CROSS_CHECKS if r == reading}
+    blocked = set()
     for candidate in candidates:
         report = validate(site, rules, design, candidate)
         failed = [c.finding.rule for c in report.legal if c.finding.status is Status.FAIL]
         assert failed == [], (candidate.candidate_id, failed)
-        assert [d.item for d in report.cross_checks if d.blocks_pass] == []
-        assert report.verdict.legal.value == "UNVERIFIED"  # the 45 t loading alone sees to that
+        blocks = {d.item for d in report.cross_checks if d.blocks_pass}
+        blocked |= blocks
+        # a blocking cross-check fails the verdict; else the 45 t loading alone sees to that
+        assert report.verdict.legal.value == ("FAIL" if blocks else "UNVERIFIED")
+    assert blocked == allowed  # each listed one is real, and nothing else blocks
 
 
 def test_the_validator_agrees_with_todays_checker_on_the_real_options(real_run):
@@ -81,12 +103,15 @@ def test_the_validator_agrees_with_todays_checker_on_the_real_options(real_run):
 
     reading, site, rules, design, candidates = real_run
     for candidate in candidates:
-        ours = {c.finding.rule: c.finding.status for c in validate(
-            site, rules, design, candidate).legal}
+        ours = {c.finding.rule: c for c in validate(site, rules, design, candidate).legal}
         for claim in candidate.generator_claims:
             if (reading, claim.rule) in STRICTER or claim.status is Status.INFO:
                 continue
-            assert ours.get(claim.rule) is claim.status, (reading, claim.rule)
+            check = ours.get(claim.rule)
+            if check is not None and check.finding.status is claim.status:
+                continue
+            # the checker knows only the reading it planned for; the validator weighs both
+            assert _planned(check, reading) is claim.status, (reading, claim.rule)
 
 
 def test_each_listed_stricter_verdict_is_real(real_run):

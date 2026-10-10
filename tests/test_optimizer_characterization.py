@@ -26,10 +26,10 @@ def test_on_the_generators_own_three_massings_the_points_land_on_the_same_three(
     """The generator's A (maximum yield), B (balanced) and C (conventional smaller towers) at
     one height: the optimizer's three points choose the same three layouts."""
     _, candidates = generators_layouts()
-    nine = [c for c in candidates if c.towers[0].floors_above_stilt == 9]
-    assert len(nine) == 3
+    eight = [c for c in candidates if c.towers[0].floors_above_stilt == 8]  # stilt + 9: 30.15 m
+    assert len(eight) == 3
     by_point = {p.point: p.scored.candidate.pareto_tag
-                for p in select(_scored(nine, BRIEF), BRIEF).picks}
+                for p in select(_scored(eight, BRIEF), BRIEF).picks}
     assert by_point == {ParetoPoint.MAX_YIELD: "Option A: Maximum yield",
                         ParetoPoint.BALANCED: "Option B: Balanced development",
                         ParetoPoint.CONVENTIONAL_OPEN_SPACE:

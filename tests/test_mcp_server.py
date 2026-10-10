@@ -195,7 +195,7 @@ def test_a_height_question_is_answered_from_the_table_with_its_clause(ws):
 def test_max_floors_gives_both_stilt_answers_and_the_rule_that_stops_it(ws):
     answer = ok(call(ws, "max_floors", {"plot_area_sqm": 18969, "road_width_m": 18.28}))
     assert answer["max_height_m"] == 30.0 and answer["extra_floors_through_tdr"] == 4
-    assert sorted(answer["floors_above_stilt"].values()) == [9, 10]
+    assert sorted(answer["floors_above_stilt"].values()) == [8, 10]  # stilt + 9 is 30.15 m
     assert "Table IV" in answer["limited_by"]
     bad = call(ws, "max_floors", {"plot_area_sqm": 18969, "road_width_m": 0})
     assert bad.isError
@@ -208,7 +208,7 @@ def test_max_floors_caps_at_30_m_only_when_told_the_road_ends_at_the_plot(ws):
     dead_end = ok(call(ws, "max_floors", {"plot_area_sqm": 18969, "road_width_m": 18.28,
                                           "road_is_dead_end": True}))
     assert dead_end["road_ends_at_plot"] == "yes" and dead_end["extra_floors_through_tdr"] == 0
-    assert sorted(dead_end["floors_above_stilt"].values()) == [9, 9]
+    assert sorted(dead_end["floors_above_stilt"].values()) == [8, 8]
 
 
 def test_rule_search_refuses_rather_than_improvising_when_no_document_is_loaded(ws):
@@ -342,13 +342,13 @@ def test_a_project_from_answers_is_drawn_from_its_own_floors_and_the_firms_libra
     assert made["project_file"] in found["projects"]
     assert found["project_names"][made["project_file"]] == "Chat site"
     assert (made["project"]["layout"]["floors"], made["project"]["layout"]["maximise"]) == (
-        9, True)
+        8, True)  # 60 ft road, 3 m storeys on a stilt floor 0.15 m up: stilt + 8
     architect = Architect("decline")
     reply = ok(call(ws, "propose_layouts", {"project_file": made["project_file"],
                                             "brief": "Get the most out of the site.",
                                             "survey_file": survey}, architect))
     assert reply["solved"] is False and "missing" not in reply  # the answers set floors, mix
-    assert "the most the rules allow, 9" in architect.asked[0]
+    assert "the most the rules allow, 8" in architect.asked[0]
     assert nothing_drawn(ws)
 
 

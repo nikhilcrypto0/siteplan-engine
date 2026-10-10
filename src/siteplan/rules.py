@@ -66,6 +66,33 @@ TABLE_IV_CLAUSE = "G.O.168 rule 7(a)(x), Table IV as substituted by G.O.Ms.No.50
 HIGH_RISE_THRESHOLD_M = 21.0
 HIGH_RISE_CLAUSE = "G.O.168 rule 2(f) as substituted by G.O.Ms.No.95 of 2026 (21 m)"
 
+# A height starts at the ground: rule 2(e), "height measured from the abutting road and in case of
+# undulated terrain height can be considered as average of the corresponding ground level"; NBC
+# 2016 Part 2 2.6, "from the average level of the ground around and contiguous to the building ...
+# to the terrace of last livable floor". The lowest floor does not stand on that ground but above
+# it. NBC 2016 Part 3 12.1, read on the page image of p.43 on 2026-10-10: 12.1.1 Main Buildings,
+# "The height of the plinth shall be not less than 450 mm from the surrounding ground level";
+# 12.1.2 Interior Courtyards and Covered Parking, "Every interior courtyard shall be raised at
+# least 150 mm above the determining ground level". Section 12 is NBC's requirements of parts of
+# buildings, which rule 15(a)(vi) holds "all buildings" to. So a height with the stilt in it is
+# this raise plus the storeys, and storeys that exactly reach a limit are over it. Where the stilt
+# is left out of a height (rule 5(c) for Table III; the not_counted reading of Table IV) the whole
+# stilt floor is, its raise with it (our reading); a block with no stilt stands on its plinth.
+# UNRESOLVED_INTERPRETATION (constraints.py) for a stilt: 12.1.2's heading names covered parking,
+# its sentence only courtyards. A parking stilt is taken as covered parking (150 mm); the stricter
+# reading is 12.1.1's plinth for "any part of a building" (450 mm).
+PLINTH_MIN_M = 0.45
+PLINTH_CLAUSE = (
+    "NBC 2016 Part 3 12.1.1 (the plinth at least 450 mm above the surrounding ground level), "
+    "through G.O.168 rule 15(a)(vi) (in all buildings, the requirements of parts of the building "
+    "conform to the NBC)"
+)
+COVERED_PARKING_RAISE_M = 0.15
+COVERED_PARKING_RAISE_CLAUSE = (
+    "NBC 2016 Part 3 12.1.2 (interior courtyards and covered parking at least 150 mm above the "
+    "determining ground level), through G.O.168 rule 15(a)(vi)"
+)
+
 # Same order, 5(ii), inserting rule 17(d)(viii): on plots of 750 to 2000 sq.m a building of
 # 18 to 21 m is permitted only through TDR, so that band is a question, not a pass.
 TDR_BAND_M = (18.0, 21.0)

@@ -26,18 +26,34 @@ def test_tdr_buys_extra_floors_on_plots_above_2000_m2_by_road(plot_sqm, road_m, 
     assert tdr_extra_floors(plot_sqm, road_m) == extra
 
 
-def test_dhulapally_on_its_60_ft_road_takes_stilt_plus_9_or_10():
+def test_dhulapally_on_its_60_ft_road_takes_stilt_plus_8_or_10_at_3_m_storeys():
+    """The stilt floor stands 0.15 m above the ground (NBC Part 3 12.1.2): with the stilt
+    counted, 3 m storeys that sum to 30 m are 30.15 m, so stilt + 9 is over the road's 30 m.
+    Left out, the stilt floor goes with its raise: ten 3 m floors are 30 m."""
     limit = max_floors(plot_sqm=18969, road_m=18.28)
     assert limit.high_rise and limit.max_height_m == 30.0
-    assert (limit.floors_stilt_counted, limit.floors_stilt_not_counted) == (9, 10)
+    assert (limit.floors_stilt_counted, limit.floors_stilt_not_counted) == (8, 10)
     assert limit.setback_m == 10.0 and limit.tdr_extra_floors == 4
     assert "road" in limit.limited_by
+    assert any(note.startswith("Ground:") and "12.1.2" in note for note in limit.notes)
+
+
+def test_storeys_a_little_under_3_m_keep_the_floor_the_raise_takes():
+    limit = max_floors(plot_sqm=18969, road_m=18.28, floor_height_m=2.9, stilt_height_m=2.9)
+    assert (limit.floors_stilt_counted, limit.floors_stilt_not_counted) == (9, 10)
+
+
+def test_a_building_with_no_stilt_stands_on_the_plinth():
+    """NBC Part 3 12.1.1: 450 mm. 0.45 + 9 x 3 m = 27.45 m; a tenth floor is 30.45 m."""
+    limit = max_floors(plot_sqm=18969, road_m=18.28, stilt_height_m=0.0)
+    assert (limit.floors_stilt_counted, limit.floors_stilt_not_counted) == (9, 9)
+    assert any("12.1.1" in note for note in limit.notes)
 
 
 def test_a_40_ft_road_stops_at_24_m():
     limit = max_floors(plot_sqm=8064, road_m=12.19)
     assert limit.max_height_m == 24.0
-    assert (limit.floors_stilt_counted, limit.floors_stilt_not_counted) == (7, 8)
+    assert (limit.floors_stilt_counted, limit.floors_stilt_not_counted) == (6, 8)
     assert limit.setback_m == 8.0 and limit.tdr_extra_floors == 3
 
 
@@ -75,13 +91,13 @@ def test_every_answer_says_what_it_does_not_check():
 def test_the_command_prints_both_stilt_readings(capsys):
     assert main(["floors", "--plot-sqyd", "22686", "--road-ft", "60"]) == 0
     out = capsys.readouterr().out
-    assert "stilt + 9" in out and "stilt + 10" in out and "30 m" in out
+    assert "stilt + 8" in out and "stilt + 10" in out and "30 m" in out
 
 
-def test_on_a_dead_end_road_dhulapally_stops_at_stilt_plus_9_either_way_with_no_tdr():
+def test_on_a_dead_end_road_dhulapally_stops_at_stilt_plus_8_either_way_with_no_tdr():
     limit = max_floors(plot_sqm=18969, road_m=18.28, dead_end=True)
     assert limit.max_height_m == 30.0 and limit.dead_end is True
-    assert (limit.floors_stilt_counted, limit.floors_stilt_not_counted) == (9, 9)
+    assert (limit.floors_stilt_counted, limit.floors_stilt_not_counted) == (8, 8)
     assert limit.tdr_extra_floors == 0
     assert any("stilt in it" in note for note in limit.notes)  # NBC counts the stilt
 
@@ -89,23 +105,23 @@ def test_on_a_dead_end_road_dhulapally_stops_at_stilt_plus_9_either_way_with_no_
 def test_a_dead_end_caps_even_a_wide_road_at_30_m():
     limit = max_floors(plot_sqm=18969, road_m=24.4, dead_end=True)  # Table IV alone: 45 m
     assert limit.max_height_m == 30.0 and "dead-end" in limit.limited_by
-    assert (limit.floors_stilt_counted, limit.floors_stilt_not_counted) == (9, 9)
+    assert (limit.floors_stilt_counted, limit.floors_stilt_not_counted) == (8, 8)
     assert limit.setback_m == 10.0 and limit.tdr_extra_floors == 0
     unlimited = max_floors(plot_sqm=18969, road_m=30.0, dead_end=True)
-    assert unlimited.max_height_m == 30.0 and unlimited.floors_stilt_counted == 9
+    assert unlimited.max_height_m == 30.0 and unlimited.floors_stilt_counted == 8
 
 
 def test_a_dead_end_keeps_the_tdr_floors_that_stay_within_30_m():
     limit = max_floors(plot_sqm=8064, road_m=12.19, dead_end=True)  # 24 m, TDR 3
-    assert (limit.floors_stilt_counted, limit.floors_stilt_not_counted) == (7, 8)
-    assert limit.tdr_extra_floors == 2  # stilt + 9 is 30 m
+    assert (limit.floors_stilt_counted, limit.floors_stilt_not_counted) == (6, 8)
+    assert limit.tdr_extra_floors == 2  # stilt + 8 is 27.15 m; stilt + 9 would be 30.15 m
 
 
 def test_an_unknown_road_warns_only_when_an_answer_passes_30_m():
     def warned(limit):
         return any(note.startswith("Dead end:") for note in limit.notes)
 
-    assert warned(max_floors(plot_sqm=18969, road_m=18.28))  # stilt + 10 is 33 m
+    assert warned(max_floors(plot_sqm=18969, road_m=18.28))  # stilt + 10 is 33.15 m
     assert not warned(max_floors(plot_sqm=18969, road_m=18.28, dead_end=False))
     assert not warned(max_floors(plot_sqm=2000, road_m=12.19))  # 27 m at most, no TDR
     assert warned(max_floors(plot_sqm=18969, road_m=30.0))  # no road limit at all
@@ -114,7 +130,7 @@ def test_an_unknown_road_warns_only_when_an_answer_passes_30_m():
 def test_the_command_takes_the_architects_word_on_a_dead_end(capsys):
     assert main(["floors", "--plot-sqyd", "22686", "--road-ft", "60", "--dead-end", "yes"]) == 0
     out = capsys.readouterr().out
-    assert "road ends at the plot" in out and "stilt + 9" in out and "stilt + 10" not in out
+    assert "road ends at the plot" in out and "stilt + 8" in out and "stilt + 9" not in out
 
 
 def test_a_project_file_says_what_is_declared_measured_and_unknown(tmp_path, capsys):

@@ -13,6 +13,7 @@ from types import SimpleNamespace
 
 import pytest
 from client_baseline import BASELINE, PINNED, READINGS, WORKSPACE, summarise
+from contract_fixtures import with_raise
 from contract_fixtures.rules_and_envelope import resolved_rules
 
 from siteplan.adapters import option_keys, split_project
@@ -40,7 +41,7 @@ def wrapped(request):
         pytest.skip(f"{saved.name} of the {reading} baseline is not present")
     project = Project.model_validate_json(saved.read_text())
     site, brief, readings = split_project(project)
-    rules = resolved_rules(site)
+    rules = with_raise(resolved_rules(site))  # today's rules: heights from the ground
     # The baseline plans in the conservative test mode: whose rules apply is not established.
     rules = rules.model_copy(update={"jurisdiction": rules.jurisdiction.model_copy(
         update={"when_open": WhenOpen.CONSERVATIVE if readings.when_open is WhenOpen.CONSERVATIVE
@@ -63,10 +64,11 @@ def test_the_wrapped_run_is_the_pinned_baseline(wrapped):
 
 
 def test_the_starting_floors_come_from_the_law_and_agree_with_the_baselines_project(wrapped):
-    """The baseline's project says 9 floors (the stilt counted) or 10 (not counted); the run
-    here was given no number and worked out the same from 30 m of rule height."""
+    """The baseline's project says 8 floors (the stilt counted: stilt + 9 is 30.15 m from the
+    ground) or 10 (not counted); the run here was given no number and worked out the same from
+    30 m of rule height."""
     reading, project, _, run = wrapped
-    assert run.request.floors == project.layout.floors == (9 if reading == "counted" else 10)
+    assert run.request.floors == project.layout.floors == (8 if reading == "counted" else 10)
     assert run.request.stilt_in_rule_height is (reading == "counted")
     assert run.found.max_legal_floors == run.request.floors
 

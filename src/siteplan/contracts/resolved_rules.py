@@ -23,7 +23,7 @@ import math
 from enum import StrEnum
 from typing import Generic, Literal, TypeVar
 
-from pydantic import Field, model_validator
+from pydantic import Field, model_serializer, model_validator
 
 from siteplan.contracts.common import (
     Basis,
@@ -79,6 +79,11 @@ READINGS: dict[str, tuple[str, ...]] = {
     OPENS_ONTO_ROAD: (TOUCH, FRONTAGE),
 }
 REQUIRED_INTERPRETATIONS = tuple(READINGS)
+# Carried since 2026-10-10 and not required, so a contract stored before it still reads: whether a
+# parking stilt's floor is raised as NBC Part 3 12.1.2's covered parking or as 12.1.1's plinth.
+STILT_RAISE = "stilt_raise"
+COVERED_PARKING, PLINTH = "covered_parking", "plinth"
+RAISE_FIELDS = ("stilt_raise_m", "plinth_m", "raise_interpretation")  # absent from stored 1.3
 
 
 class RuleValue(Part, Generic[T]):
@@ -369,6 +374,30 @@ class HeightRules(Part):
     tdr_plot_sqm: RuleValue[tuple[float, float]]
     bands: list[Band] = Field(min_length=1)
     limits: list[HeightLimit]
+    # How far the lowest floor stands above the ground a height is measured from (NBC 2016 Part 3
+    # 12.1, through rule 15(a)(vi)): under a parking stilt (the stilt_raise reading), and under a
+    # lowest floor of any other use. Absent from contracts stored before 2026-10-10, whose heights
+    # started at the lowest floor: read as no raise there, and left out of the dump when absent,
+    # so a stored contract keeps its digest and a stored run is judged as it was proposed.
+    stilt_raise_m: RuleValue[float] | None = None
+    plinth_m: RuleValue[float] | None = None
+    raise_interpretation: str | None = None  # the reading stilt_raise_m rests on
+
+    @model_serializer(mode="wrap")
+    def _as_stored_when_absent(self, handler):
+        dumped = handler(self)
+        for key in RAISE_FIELDS:
+            if dumped.get(key) is None:
+                dumped.pop(key, None)
+        return dumped
+
+    def lowest_floor_raise_m(self, has_stilt: bool) -> float:
+        """Where a building's storeys start, above the ground its height is measured from: a
+        parking stilt's raise, else the plinth. Nothing where the rules carry none (a stored
+        contract). Where the stilt is left out of a height (the not_counted reading, Table III's
+        rule 5(c)) its raise goes with it: the whole stilt floor, from the ground, is left out."""
+        raise_m = self.stilt_raise_m if has_stilt else self.plinth_m
+        return raise_m.value if raise_m is not None else 0.0
 
     @model_validator(mode="after")
     def _bands_cover_every_height_once(self) -> HeightRules:
