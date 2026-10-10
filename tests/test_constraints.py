@@ -92,6 +92,7 @@ NOT_DOMAIN = {
     "prototypes.compose.COORD_DIGITS": "the decimals a composed prototype is saved to",
     "optimizer.search.network.STREET_REACH_M": "a stand-in for infinity, far beyond any plot",
     "steps.run.LATER": "the numbers and names of the architect's steps not built yet",
+    "steps.carried.CONTEXT_LAYERS": "rendering: how carried roads and water are drawn",
     "steps.survey_copy_report.DRAWN_AROUND_M": "how far round the plot step 1's picture shows",
     "steps.survey_copy_report.LABEL_OFFSET_M": "where a side's label sits in step 1's picture",
     "steps.road_widening_report.DRAWN_AROUND_M": "how far round the plot step 3's picture shows",

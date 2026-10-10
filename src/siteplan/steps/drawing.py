@@ -67,7 +67,8 @@ class Picture:
         x0, y0, x1, y1 = self.bounds()
         scale = DRAWING_PX / max(x1 - x0, y1 - y0, 1.0)
         width = (x1 - x0) * scale + 2 * MARGIN_PX
-        legend = [layer for layer in self.layers if layer.legend]
+        used = {name for name, _ in self.shapes}  # a legend names only what is drawn
+        legend = [layer for layer in self.layers if layer.legend and layer.name in used]
         top = TITLE_PX
         height = top + (y1 - y0) * scale + 2 * MARGIN_PX + LEGEND_ROW_PX * (len(legend) + 1)
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from siteplan import rules
+from siteplan.steps import carried
 from siteplan.steps.drawing import Layer, Picture, frame
 from siteplan.steps.report import Choice, RuleUsed, StepReport, Table
 from siteplan.steps.road_widening import (
@@ -61,7 +62,7 @@ def report(w: Widening) -> StepReport:
                             "Placing it from the area alone has been wrong before: an even "
                             "strip along a whole side can take twice the land given up.")]
         r.output = ["Nothing yet: the step needs the answer below."]
-        r.tables = [_declared_table(w)]
+        r.tables = [_declared_table(w), _carried_table(w)]
         r.questions = [w.ask] if w.ask else []
         return r
     r.rules = _rules(w)
@@ -255,7 +256,41 @@ def _output(w: Widening) -> tuple[list[str], list[Table]]:
                                    f"land given up ({p.why})" if p.counted else
                                    "a drawing difference (nothing says it is land given up)")
                                   for i, p in enumerate(w.pieces, 1))))
-    return lines, tables
+    return lines, [*tables, _carried_table(w)]
+
+
+def _used_here(w: Widening) -> dict[str, str]:
+    """How this step used each item step 1 found: every one gets an answer, none is dropped."""
+    reaching = {road.name for road in w.copy.roads if road.reaches}
+    splayed = {name for s in w.splays for name in s.roads}
+    water = {x.kind: x for x in w.water}
+    used = {}
+    for item in carried.found_in(w.copy):
+        if w.stopped:
+            used[item.key] = "carried unchanged (this step stopped)"
+        elif item.kind == carried.ROAD and item.key in splayed:
+            used[item.key] = "meets another road at a corner: the corner cut is shown"
+        elif item.kind == carried.ROAD and item.key in reaching:
+            used[item.key] = "looked at for corner cuts: none at its corners"
+        elif item.kind == carried.WATER and item.key in water:
+            x = water[item.key]
+            used[item.key] = (f"its {x.buffer_m:g} m buffer is shown: "
+                              f"{x.kept_free.area:,.1f} m² kept free from the line drawn, "
+                              f"{x.edge_kept_free.area:,.1f} m² from the plot's edge; "
+                              "not taken off")
+        elif item.kind == carried.MARK and "road widening" in item.later:
+            used[item.key] = "read with the land given up (above)"
+        else:
+            used[item.key] = "carried unchanged"
+    return used
+
+
+def _carried_table(w: Widening) -> Table:
+    used = _used_here(w)
+    return Table("Carried on from step 1 (everything a later rule may need)",
+                 ("What", "In this step", "Needed later for"),
+                 tuple((item.what, used[item.key], item.later)
+                       for item in carried.found_in(w.copy)))
 
 
 def _declared_table(w: Widening) -> Table:
@@ -307,7 +342,6 @@ def _questions(w: Widening) -> list[str]:
 
 def picture(w: Widening) -> Picture:
     p = Picture(f"Step 3: {TITLE}", w.inputs.site, layers=[
-        Layer("ROADS", "#d62828", 1, "Roads as drawn", fill=0.10, width=1.0),
         Layer("NET-PLOT", "#2e8b3d", 3, "The net plot: every later step measures from it",
               fill=0.12, width=3.0),
         Layer("GIVEN-UP", "#f08c00", 30, "Land given up for road widening", fill=0.45,
@@ -317,19 +351,13 @@ def picture(w: Widening) -> Picture:
               "plot's edge (not taken off)", fill=0.35, width=0.8, dash="4 3"),
         Layer("WATER-BUFFER", "#5cc4dd", 4, "Water's buffer from the line drawn (not taken "
               "off)", fill=0.45, width=0.5),
-        Layer("WATER", "#00a6c8", 4, "Water the project names", width=2.5),
         Layer("SURVEYED", "#b0177e", 6, "The surveyed plot (step 1)", width=1.5, dash="6 4"),
         Layer("SPLAYS", "#111111", 7, "Corner cut where two roads meet (shown, not taken)",
               fill=0.8),
         Layer("NOTES", "#222222", 7, ""),
     ])
     view = frame(w.copy.plot, DRAWN_AROUND_M)
-    for road in w.copy.roads:
-        shown = road.area.intersection(view) if road.area else None
-        p.add("ROADS", shown)
-        if shown is not None and not shown.is_empty:
-            spot = shown.representative_point()
-            p.label("ROADS", (spot.x, spot.y), road.name)
+    carried.draw(p, carried.found_in(w.copy), view)
     p.add("NET-PLOT", w.net)
     p.add("SLIVERS", w.slivers)
     for i, piece in enumerate(w.pieces, 1):
@@ -339,7 +367,6 @@ def picture(w: Widening) -> Picture:
     for water in w.water:
         p.add("WATER-BUFFER-EDGE", water.edge_kept_free)
         p.add("WATER-BUFFER", water.kept_free)
-        p.add("WATER", water.lines.intersection(view))
         shown = water.edge_kept_free if not water.edge_kept_free.is_empty else water.kept_free
         if not shown.is_empty:
             spot = shown.representative_point()
@@ -359,7 +386,8 @@ def picture(w: Widening) -> Picture:
 def facts(w: Widening) -> dict:
     out = {"step": 3, "title": TITLE, "site": w.inputs.site, "stopped": w.stopped,
            "question": w.ask, "known_from": w.route,
-           "declared": [{"what": a, "value": b, "from": c} for a, b, c in w.declared]}
+           "declared": [{"what": a, "value": b, "from": c} for a, b, c in w.declared],
+           "carried": carried.facts(carried.found_in(w.copy), _used_here(w))}
     if w.stopped:
         return out
     return {**out,

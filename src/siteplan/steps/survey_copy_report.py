@@ -5,6 +5,7 @@ from __future__ import annotations
 from shapely.geometry import Point
 
 from siteplan import rules
+from siteplan.steps import carried
 from siteplan.steps.drawing import Layer, Picture, colour_name, frame
 from siteplan.steps.inputs import compass_word
 from siteplan.steps.report import Choice, RuleUsed, StepReport, Table
@@ -196,7 +197,10 @@ def _output(copy: SurveyCopy) -> tuple[list[str], list[Table]]:
                     tuple((colour_name(g.key), f"{g.length_m:,.1f} m",
                            "yes" if g.crosses_plot else "no")
                           for g in (*copy.inside_lines, *copy.near_lines)))
-    tables = [sides, roads] + ([unnamed] if unnamed.rows else [])
+    later = Table("What the later steps must respect (carried on to every step)",
+                  ("What", "Needed later for"),
+                  tuple((item.what, item.later) for item in carried.found_in(copy)))
+    tables = [sides, roads] + ([unnamed] if unnamed.rows else []) + [later]
     return lines + [f"Warning from the survey reader: {w}" for w in copy.warnings], tables
 
 
@@ -309,6 +313,8 @@ def facts(copy: SurveyCopy) -> dict:
         "lines_not_named": [{"key": g.key, "length_m": g.length_m, "crosses_plot": g.crosses_plot}
                             for g in (*copy.inside_lines, *copy.near_lines)],
         "warnings": copy.warnings,
+        "carried": carried.facts(items := carried.found_in(copy),
+                                 {item.key: "found here" for item in items}),
     }
 
 

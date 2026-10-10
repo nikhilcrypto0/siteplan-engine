@@ -11,7 +11,8 @@ from shapely.geometry import Polygon
 from siteplan import rules
 from siteplan.blind import BlindLeak
 from siteplan.cli import main
-from siteplan.steps import road_widening_report, survey_copy_report
+from siteplan.steps import carried, road_widening_report, survey_copy_report
+from siteplan.steps.drawing import frame
 from siteplan.steps.inputs import from_answers, from_project
 from siteplan.steps.road_widening import take_off
 from siteplan.steps.run import run_steps
@@ -24,7 +25,7 @@ PLOT = [(0, 0), (120, 0), (120, 90), (0, 90)]
 
 
 def _survey(path, *, south=True, east=True, far=True, short_road=False, west_road=False,
-            south_along=False, sump=False, detour=False, nala_x=-12.0):
+            south_along=False, sump=False, detour=False, nala_x=-12.0, extras=False):
     doc = ezdxf.new("R2018")
     doc.header["$INSUNITS"] = 6
     msp = doc.modelspace()
@@ -60,6 +61,11 @@ def _survey(path, *, south=True, east=True, far=True, short_road=False, west_roa
     for x, y, z in ((20, 20, 500.4), (100, 20, 500.0), (60, 70, 501.0), (20, 80, 501.2),
                     (54.5, -3, 499.8), (54.5, -8, 499.6)):
         msp.add_point((x, y, z))
+    if extras:  # notes near the plot, and lines the engine cannot name
+        msp.add_text("ROAD WIDENING", height=1.5).set_placement((70, -5))
+        msp.add_text("HT LINE", height=1.5).set_placement((125, 45))
+        msp.add_lwpolyline([(10, -10), (10, 100)], dxfattribs={"layer": "POWER"})
+        msp.add_lwpolyline([(-20, 0), (-20, 90)], dxfattribs={"layer": "DRAIN"})
     msp.add_text("BORE", height=1.5).set_placement((30, 30))
     msp.add_text("BORE", height=1.5).set_placement((90, 30))
     msp.add_text("SHED", height=1.5).set_placement((60, -6))
@@ -389,4 +395,40 @@ def test_water_drawn_off_the_plot_is_measured_both_ways_and_asked(tmp_path):
     questions = road_widening_report.report(widening).questions
     assert any("boundary: at the line the survey draws, or at the plot's own edge" in q
                for q in questions)
+
+
+def test_everything_step_1_finds_is_carried_by_step_3_in_its_report_facts_and_picture(tmp_path):
+    """The guard added after step 3 first left a nala out: every road, water body, note near
+    the plot and unnamed line step 1 finds has a row in step 3's report, an entry in its facts
+    and, when it has a shape, a place in its picture."""
+    survey = _survey(tmp_path / "survey.dxf", nala_x=0.0, extras=True)
+    inputs = _inputs(tmp_path, survey, water=[{"kind": "nala_over_10m", "survey_layer": "NALA"}])
+    copy = copy_survey(inputs)
+    items = carried.found_in(copy)
+    assert {i.kind for i in items} == {carried.ROAD, carried.WATER, carried.MARK,
+                                       carried.UNNAMED}
+    assert [c["key"] for c in survey_copy_report.facts(copy)["carried"]] == [i.key for i in items]
+    widening = take_off(inputs, copy)
+    text = road_widening_report.report(widening).markdown()
+    assert all(i.what in text for i in items)
+    assert [c["key"] for c in road_widening_report.facts(widening)["carried"]] == [
+        i.key for i in items]
+    picture = road_widening_report.picture(widening)
+    drawn = [g for layer, g in picture.shapes if layer in ("ROADS", "WATER")]
+    view = frame(copy.plot, road_widening_report.DRAWN_AROUND_M)
+    for i in items:
+        if i.shape is not None and not i.shape.intersection(view).is_empty:
+            assert any(g.intersects(i.shape) for g in drawn), i.key
+
+
+def test_a_step_that_stops_still_carries_everything_step_1_found(tmp_path):
+    survey = _survey(tmp_path / "survey.dxf", extras=True)
+    inputs = _inputs(tmp_path, survey, gross_area_sqm=10_800, net_area_sqm=10_200,
+                     road_strip_side="S")
+    copy = copy_survey(inputs)
+    report = road_widening_report.report(take_off(inputs, copy))
+    assert report.stopped
+    text = report.markdown()
+    assert all(i.what in text for i in carried.found_in(copy))
+    assert "carried unchanged (this step stopped)" in text
 
