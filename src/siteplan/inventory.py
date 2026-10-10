@@ -389,7 +389,7 @@ INVENTORY: tuple[Entry, ...] = (
         "Plot", "No building within a water body's buffer, which may be open space but never "
                 "the setback.",
         ", ".join(f"{kind.replace('_', ' ')} {m:g} m" for kind, m in rules.WATER_BUFFER_M.items()),
-        rules.WATER_BUFFER_CLAUSE, Reading.INTERPRETED, _BOTH,
+        rules.WATER_BUFFER_CLAUSE, Reading.INTERPRETED, (*_BOTH, Where.STEPS),
         ("WATER_BUFFER_M", "WATER_BUFFER_CLAUSE"),
         choice="The architect names the water body's class and the colour or layer the survey "
                "draws it in. The buffer is measured from the lines drawn, kept free of towers, "

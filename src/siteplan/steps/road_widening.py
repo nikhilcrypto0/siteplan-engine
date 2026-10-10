@@ -13,13 +13,19 @@ from shapely.errors import GEOSException
 from shapely.geometry import LineString, Point, Polygon
 from shapely.geometry.base import BaseGeometry
 from shapely.geometry.polygon import orient
-from shapely.ops import polylabel, split
+from shapely.ops import polylabel, split, unary_union
 
 from siteplan import rules
-from siteplan.geometry import COMPASS_DEG, facing_deg, straight_runs
+from siteplan.geometry import COMPASS_DEG, angle_gap, facing_deg, straight_runs
 from siteplan.runner import NET_AREA_TOLERANCE_SQM, STRIP_AREA_TOLERANCE, load_plot
 from siteplan.steps.inputs import Inputs, bearing, compass, compass_word
-from siteplan.steps.survey_copy import ALONG, ROAD_TOUCH_M, SurveyCopy
+from siteplan.steps.survey_copy import (
+    ALONG,
+    ENDS_AT_DEG,
+    ROAD_TOUCH_M,
+    SurveyCopy,
+    outside_water,
+)
 
 MIN_PIECE_SQM = 0.5  # a sliver smaller than this between two outlines is rounding, not land
 THIN_M = 0.5  # land between two outlines narrower than this is a drawing difference
@@ -28,6 +34,7 @@ CORNER_TURN_DEG = 20.0  # a turn of the boundary smaller than this is a bend, no
 LABEL_TOLERANCE_M = 0.05  # how finely a piece's widest point is searched for
 ON_LINE_M = 0.05  # a piece's edge this close to a side of the plot lies along it
 SIDE_DEG = 45.0  # a side facing within this of the side the answers name is that side
+WATER_ALONGSIDE_M = 15.0  # the plot's edge within this of a water body's lines faces it
 PLACED, OUTLINE, NONE = "placed", "outline", "none"  # how the land given up is known
 
 
@@ -57,6 +64,22 @@ class Ground:
 
 
 @dataclass(frozen=True)
+class WaterNear:
+    """A water body the project names, carried on with the net plot: rule 3(a)(ii) keeps its
+    buffer free of building, and later steps keep to it. Never taken off the plot: the buffer may
+    count as open space, never as a setback (rule 3(a)(iii)(3))."""
+
+    kind: str  # 'nala_over_10m'
+    buffer_m: float
+    distance_m: float  # from the net plot
+    lines: BaseGeometry  # as the survey draws it, outside the plot
+    kept_free: BaseGeometry  # the net plot's land within the buffer of the lines drawn
+    edge: BaseGeometry  # the net plot's edge the water runs alongside
+    edge_kept_free: BaseGeometry  # within the buffer of that edge: if the land between the
+    # line drawn and the plot is the water itself, its boundary is the plot's edge
+
+
+@dataclass(frozen=True)
 class Splay:
     corner: tuple[float, float]
     lies: str
@@ -82,6 +105,7 @@ class Widening:
     slivers: BaseGeometry | None = None  # the parts thinner than THIN_M: drawing differences
     beyond_sqm: float = 0.0  # the net outline's area outside the surveyed boundary
     splays: tuple[Splay, ...] = ()
+    water: tuple[WaterNear, ...] = ()
     high_rise_plot: bool | None = None  # rule 7(a)(ii) on the net plot; None within shortfall
     group_scheme: bool = False
 
@@ -151,7 +175,51 @@ def take_off(inputs: Inputs, copy: SurveyCopy) -> Widening:
     given = sum(p.area_sqm for p in pieces if p.counted)
     return Widening(inputs, copy, None, None, basis, route, declared, net, tuple(pieces),
                     slivers, beyond, tuple(_splays(net, inputs, copy, pieces)),
+                    tuple(_water(inputs, net)),
                     rules.high_rise_plot_met(net.area, surrendered=given > 0), group)
+
+
+def _water(inputs: Inputs, net: Polygon) -> list[WaterNear]:
+    """Each water body the project names, as drawn outside the plot, with its buffer by class
+    (rule 3(a)(ii)), measured from the lines drawn."""
+    lines: dict[str, list] = {}
+    for kind, line in outside_water(inputs):
+        lines.setdefault(kind, []).append(line)
+    out = []
+    for kind, drawn in lines.items():
+        water = unary_union(drawn)
+        buffer = rules.WATER_BUFFER_M[kind]
+        edge = _alongside(net, water)
+        out.append(WaterNear(kind, buffer, water.distance(net), water,
+                             net.intersection(water.buffer(buffer)), edge,
+                             net.intersection(edge.buffer(buffer)) if not edge.is_empty
+                             else Polygon()))
+    return out
+
+
+def _alongside(net: Polygon, water: BaseGeometry) -> BaseGeometry:
+    """The net plot's edge that runs alongside the water: within WATER_ALONGSIDE_M of its lines
+    and within ENDS_AT_DEG of the direction of the nearest of them."""
+    near = net.exterior.intersection(water.buffer(WATER_ALONGSIDE_M))
+    banks = [LineString([a, b]) for line in getattr(water, "geoms", [water])
+             if line.geom_type == "LineString"
+             for a, b in zip(line.coords, line.coords[1:], strict=False) if a != b]
+    keep = []
+    for part in getattr(near, "geoms", [near]):
+        coords = list(getattr(part, "coords", []))
+        for a, b in zip(coords, coords[1:], strict=False):
+            if a == b:
+                continue
+            piece = LineString([a, b])
+            bank = min(banks, key=lambda k: k.distance(piece.centroid))
+            if angle_gap(_angle(piece), _angle(bank)) <= ENDS_AT_DEG:
+                keep.append(piece)
+    return unary_union(keep) if keep else LineString()
+
+
+def _angle(line: LineString) -> float:
+    (x0, y0), (x1, y1) = line.coords[0], line.coords[-1]
+    return math.degrees(math.atan2(y1 - y0, x1 - x0)) % 180
 
 
 def _declared(inputs: Inputs) -> list[tuple[str, str, str]]:

@@ -24,7 +24,7 @@ PLOT = [(0, 0), (120, 0), (120, 90), (0, 90)]
 
 
 def _survey(path, *, south=True, east=True, far=True, short_road=False, west_road=False,
-            south_along=False, sump=False, detour=False):
+            south_along=False, sump=False, detour=False, nala_x=-12.0):
     doc = ezdxf.new("R2018")
     doc.header["$INSUNITS"] = 6
     msp = doc.modelspace()
@@ -53,7 +53,7 @@ def _survey(path, *, south=True, east=True, far=True, short_road=False, west_roa
     if south_along:  # 12 m wide, along the south side, half a metre off it
         msp.add_lwpolyline([(-40, -0.5), (150, -0.5)], dxfattribs=road)
         msp.add_lwpolyline([(-40, -12.5), (150, -12.5)], dxfattribs=road)
-    msp.add_lwpolyline([(-12, -20), (-12, 110)], dxfattribs={"layer": "NALA"})
+    msp.add_lwpolyline([(nala_x, -20), (nala_x, 110)], dxfattribs={"layer": "NALA"})
     if sump:
         msp.add_lwpolyline([(80, 60), (84, 60), (84, 64), (80, 64)], close=True,
                            dxfattribs={"layer": "NALA"})
@@ -356,4 +356,37 @@ def test_a_profile_goes_with_answers_only(tmp_path, capsys):
     profile.write_text(json.dumps({"name": "made-up"}))
     assert main(["steps", str(survey), "--project", str(_project(tmp_path / "p.json")),
                  "--profile", str(profile), "--out", str(tmp_path / "o")]) == 2
+
+
+def test_step_three_carries_the_water_and_its_buffer_on_with_the_net_plot(tmp_path):
+    """A nala wider than 10 m along the west side: its 9 m buffer keeps 9 x 90 m of the net plot
+    free of building from step 4 on; nothing is taken off, and the later steps get its lines."""
+    survey = _survey(tmp_path / "survey.dxf", nala_x=0.0)
+    inputs = _inputs(tmp_path, survey, water=[{"kind": "nala_over_10m", "survey_layer": "NALA"}])
+    widening = take_off(inputs, copy_survey(inputs))
+    water, = widening.water
+    assert water.buffer_m == rules.WATER_BUFFER_M["nala_over_10m"]
+    assert water.kept_free.area == pytest.approx(9 * 90, rel=0.01)
+    assert widening.net.area == pytest.approx(10_800)  # never taken off
+    facts = road_widening_report.facts(widening)
+    assert facts["water"][0]["lines_m"] and facts["water"][0]["buffer_m"] == 9.0
+    report = road_widening_report.report(widening)
+    assert rules.WATER_BUFFER_CLAUSE in report.markdown()
+    assert any("Is the water really a nala over 10m?" in q for q in report.questions)
+    assert any(layer.name == "WATER" for layer in road_widening_report.picture(widening).layers)
+
+
+def test_water_drawn_off_the_plot_is_measured_both_ways_and_asked(tmp_path):
+    """The nala's line is drawn 8 m off the west side. Measured from that line its 9 m buffer
+    reaches 1 m into the plot; if the 8 m between is the nala itself, it starts at the plot's
+    edge and reaches 9 m in. Both are shown and the architect is asked."""
+    survey = _survey(tmp_path / "survey.dxf", nala_x=-8.0)
+    inputs = _inputs(tmp_path, survey, water=[{"kind": "nala_over_10m", "survey_layer": "NALA"}])
+    widening = take_off(inputs, copy_survey(inputs))
+    water, = widening.water
+    assert water.kept_free.area == pytest.approx(1 * 90, rel=0.02)
+    assert water.edge_kept_free.area == pytest.approx(9 * 90, rel=0.02)
+    questions = road_widening_report.report(widening).questions
+    assert any("boundary: at the line the survey draws, or at the plot's own edge" in q
+               for q in questions)
 

@@ -1564,6 +1564,17 @@ REGISTRY: tuple[Constraint, ...] = (
         settles="The architect's outline of the land given up, or the net plot's.",
     ),
     Constraint(
+        "Steps", "Road widening (step 3): the plot's edge within this of a water body's lines "
+                 "runs alongside it; the water's buffer is shown from that edge as well as from "
+                 "the lines drawn.",
+        _m(step_widening.WATER_ALONGSIDE_M), Basis.ENGINE_DESIGN_ASSUMPTION,
+        "none (the engine's own)", ("steps.road_widening.WATER_ALONGSIDE_M",),
+        note="Rule 3(a)(ii) measures from the water's defined boundary, which a drawing may not "
+             "show: the land between a line drawn and the plot may be the water itself. Both "
+             "readings are shown and the architect is asked; neither is taken off.",
+        settles="The architect's word on where the water's defined boundary lies.",
+    ),
+    Constraint(
         "Steps", "Road widening (step 3): two roads meet at a corner of the net plot when each "
                  "comes within a metre of one of its sides this near the corner; a turn of the "
                  "boundary smaller than this is a bend, not a corner.",

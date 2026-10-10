@@ -13,6 +13,7 @@ from siteplan.steps.road_widening import (
     OUTLINE,
     SIDE_DEG,
     THIN_M,
+    WATER_ALONGSIDE_M,
     Widening,
 )
 from siteplan.steps.survey_copy import ROAD_TOUCH_M
@@ -45,6 +46,7 @@ def report(w: Widening) -> StepReport:
         f"From {w.inputs.given_as}: the net area, and the side, width or outline of the land "
         "given up.",
         "The roads that meet the plot (step 1), to find corners where two roads meet.",
+        "The water the project names (step 1), carried on with the net plot.",
     ]
     if w.stopped:
         r.did = ["Read what the project says about land given up for a road: how much, and "
@@ -97,6 +99,13 @@ def _rules(w: Widening) -> list[RuleUsed]:
                  "below high-rise; for a high-rise the authority decides.",
                  f"{rules.JUNCTION_SPLAY_CLAUSE}; {rules.JUNCTION_SPLAY_HIGH_RISE_CLAUSE}"),
     ]
+    if w.water:
+        out.append(RuleUsed(
+            "Keep clear of water", "No building within a water body's buffer: "
+            + ", ".join(f"{m:g} m from a {kind.replace('_', ' ')}"
+                        for kind, m in rules.WATER_BUFFER_M.items())
+            + ". The buffer may count as open space, never as a setback.",
+            rules.WATER_BUFFER_CLAUSE))
     if w.given_sqm:
         out += [
             RuleUsed("What the land given up earns", "One of three, not all: a TDR "
@@ -163,6 +172,13 @@ def _choices(w: Widening) -> list[Choice]:
                       "show a corner cut against itself."))
     out.append(Choice("The TDR is read as built-up area equal to twice the land given up.",
                       "The rule's words: '200% of built up area of such area surrendered'."))
+    if w.water:
+        out.append(Choice("A water body's buffer is measured two ways: from its lines as the "
+                          "survey draws them, and from the plot's own edge where the water runs "
+                          f"alongside (within {WATER_ALONGSIDE_M:g} m of its lines). Both are "
+                          "shown; neither is chosen.", "The rule measures from the water's "
+                          "defined boundary, which the drawing may not show: the land between "
+                          "a line drawn and the plot may be the water itself."))
     out.append(Choice("The group-scheme size is checked on the plot's written area (the area "
                       "as per documents), or the drawn area when none is written.", "Rule 2(c) "
                       "speaks of the site; the engine takes the documents' figure."))
@@ -214,6 +230,16 @@ def _output(w: Widening) -> tuple[list[str], list[Table]]:
     else:
         lines.append("Corner cuts (splays): no corner of the net plot is where two roads "
                      "meet.")
+    for water in w.water:
+        lines.append(f"Water carried on to the next steps: the {water.kind.replace('_', ' ')}, "
+                     f"{water.distance_m:.1f} m from the net plot at its nearest, along "
+                     f"{water.edge.length:,.1f} m of the plot's edge. Its buffer is "
+                     f"{water.buffer_m:g} m. Measured from the line drawn, it keeps "
+                     f"{water.kept_free.area:,.1f} m² of the net plot free of building; if the "
+                     "land between that line and the plot is the water itself, it starts at the "
+                     f"plot's edge and keeps {water.edge_kept_free.area:,.1f} m² free. Either "
+                     "way it is NOT taken off: it stays part of the plot and may count as open "
+                     "space, never as a setback. Step 4 keeps it free.")
     if w.given_sqm:
         lines.append("What the land given up could earn (ONE of these; none is taken): a TDR "
                      f"of {rules.TDR_ROAD_SURRENDER_SHARE * w.given_sqm:,.1f} m² of built-up "
@@ -265,6 +291,17 @@ def _questions(w: Widening) -> list[str]:
     if w.difference_sqm >= MIN_PIECE_SQM or w.beyond_sqm >= MIN_PIECE_SQM:
         out.append("Are the drawing differences really just that? They are left out of the "
                    "net plot but not counted as land given up.")
+    status = w.inputs.status.get("water", "")
+    for water in w.water:
+        if abs(water.edge_kept_free.area - water.kept_free.area) >= MIN_PIECE_SQM:
+            out.append(f"Where is the {water.kind.replace('_', ' ')}'s boundary: at the line the "
+                       "survey draws, or at the plot's own edge (is the land between them the "
+                       f"water)? Its buffer keeps {water.kept_free.area:,.1f} m² of the plot free "
+                       f"the first way and {water.edge_kept_free.area:,.1f} m² the second.")
+        if status not in ("USER_CONFIRMED", "VERIFIED"):
+            out.append(f"Is the water really a {water.kind.replace('_', ' ')}? Its class sets the "
+                       f"buffer ({water.buffer_m:g} m here). The class comes from "
+                       f"{w.inputs.given_as}, with no confirmation recorded.")
     return out
 
 
@@ -276,6 +313,11 @@ def picture(w: Widening) -> Picture:
         Layer("GIVEN-UP", "#f08c00", 30, "Land given up for road widening", fill=0.45,
               width=1.0),
         Layer("SLIVERS", "#7a7a7a", 8, "Drawing differences (not counted)", fill=0.6),
+        Layer("WATER-BUFFER-EDGE", "#b9e6f2", 4, "Water's buffer if the water reaches the "
+              "plot's edge (not taken off)", fill=0.35, width=0.8, dash="4 3"),
+        Layer("WATER-BUFFER", "#5cc4dd", 4, "Water's buffer from the line drawn (not taken "
+              "off)", fill=0.45, width=0.5),
+        Layer("WATER", "#00a6c8", 4, "Water the project names", width=2.5),
         Layer("SURVEYED", "#b0177e", 6, "The surveyed plot (step 1)", width=1.5, dash="6 4"),
         Layer("SPLAYS", "#111111", 7, "Corner cut where two roads meet (shown, not taken)",
               fill=0.8),
@@ -294,6 +336,15 @@ def picture(w: Widening) -> Picture:
         p.add("GIVEN-UP" if piece.counted else "SLIVERS", piece.polygon)
         spot = piece.polygon.representative_point()
         p.label("NOTES", (spot.x, spot.y), f"piece {i}: {piece.area_sqm:,.1f} m²")
+    for water in w.water:
+        p.add("WATER-BUFFER-EDGE", water.edge_kept_free)
+        p.add("WATER-BUFFER", water.kept_free)
+        p.add("WATER", water.lines.intersection(view))
+        shown = water.edge_kept_free if not water.edge_kept_free.is_empty else water.kept_free
+        if not shown.is_empty:
+            spot = shown.representative_point()
+            p.label("WATER", (spot.x, spot.y), f"{water.kind.replace('_', ' ')}: "
+                    f"{water.buffer_m:g} m buffer")
     p.add("SURVEYED", w.copy.plot)
     for s in w.splays:
         p.add("SPLAYS", s.triangle)
@@ -327,6 +378,15 @@ def facts(w: Widening) -> dict:
                          "outline_m": [[round(x, 3), round(y, 3)]
                                        for x, y in list(w.net.exterior.coords)[:-1]]},
             "high_rise_plot": w.high_rise_plot, "group_scheme": w.group_scheme,
+            "water": [{"class": water.kind, "buffer_m": water.buffer_m,
+                       "distance_to_net_plot_m": round(water.distance_m, 2),
+                       "buffer_inside_net_plot_sqm": round(water.kept_free.area, 2),
+                       "buffer_from_plot_edge_sqm": round(water.edge_kept_free.area, 2),
+                       "plot_edge_alongside_m": round(water.edge.length, 2),
+                       "lines_m": [[[round(x, 3), round(y, 3)] for x, y in part.coords]
+                                   for part in getattr(water.lines, "geoms", [water.lines])
+                                   if part.geom_type == "LineString"]}
+                      for water in w.water],
             "splays": [{"corner": [round(c, 2) for c in s.corner], "lies": s.lies,
                         "roads": list(s.roads), "sized_by": s.width_from,
                         "width_m": None if s.width_m is None else round(s.width_m, 2),
