@@ -252,12 +252,12 @@ def assess_floor_count(rules: ResolvedRules, brief: DesignBrief, prototype: Towe
     if floors < 1:
         raise ValueError("a tower has at least one floor above the stilt")
     stilt, floor = standard_heights(brief, prototype, has_stilt)
-    on_stilt = brief.height_intent.has_stilt if has_stilt is None else has_stilt
-    raise_m = rules.height.lowest_floor_raise_m(on_stilt)
+    stilted = brief.height_intent.has_stilt if has_stilt is None else has_stilt
+    raise_m = rules.height.lowest_floor_raise_m(stilted)
     # The stilt floor from the ground (its raise and its storey), and the rest: left out with the
     # stilt where it is not counted; a block with no stilt stands on its plinth in every measure.
-    stilt_floor = raise_m + stilt if on_stilt else 0.0
-    above_stilt = floors * floor + (0.0 if on_stilt else raise_m)
+    stilt_floor = raise_m + stilt if stilted else 0.0
+    above_stilt = floors * floor + (0.0 if stilted else raise_m)
     physical = stilt_floor + above_stilt
     rule_height = physical if reading == STILT_COUNTED else above_stilt
     checks = tuple(_check(limit, rule_height, physical) for limit in rules.height.limits)

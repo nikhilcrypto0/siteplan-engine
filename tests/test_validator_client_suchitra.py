@@ -6,6 +6,7 @@ validator rebuilds that buffer from the site model, and must find nothing to fai
 generator makes round it, and fail a tower that stands in it. Characterization: it pins today's
 agreement on a real site, and a defect found on it (a tower off the plot at the Table IV seam)."""
 
+import re
 from pathlib import Path
 
 import pytest
@@ -54,9 +55,35 @@ STRICTER_CROSS_CHECKS = {
 }
 
 
-def _planned(check, reading) -> bool:
-    """Whether the validator's verdict under the reading the generator planned for is its own."""
-    return check is not None and check.by_reading.get(STILT_IN_RULE_HEIGHT, {}).get(reading)
+OTHER = {"counted": "not_counted", "not_counted": "counted"}
+
+
+def _planned(check, reading) -> Status | None:
+    """The validator's verdict under the reading the generator planned for."""
+    return check.by_reading.get(STILT_IN_RULE_HEIGHT, {}).get(reading) if check else None
+
+
+def _parting(reading, rule, check) -> tuple:
+    """(reading, the rule without its tower, the validator's verdict, its verdict under the reading
+    the generator did not plan for)."""
+    other = check.by_reading.get(STILT_IN_RULE_HEIGHT, {}).get(OTHER[reading])
+    return (reading, re.sub(r":.*$", "", rule).strip(), check.finding.status.value,
+            other.value if other else None)
+
+
+# Where the validator parts from today's checker only under the reading the generator did not
+# plan for (it agrees under the one planned for), and what it says there: the stilt + 6 options
+# planned with the stilt counted are 18 m without it (no setback is given 18-21 m: NOT_CHECKED);
+# the stilt + 8 ones planned without it are 27.15 m with it and ask 10 m (FAIL).
+ON_THE_OTHER_READING = {
+    ("counted", "All-round setback", "UNVERIFIED", "NOT_CHECKED"),
+    ("counted", "Cellar ramp", "UNVERIFIED", "UNVERIFIED"),
+    ("counted", "Organized open space (tot-lot)", "UNVERIFIED", "UNVERIFIED"),
+    ("counted", "Plot size for high-rise", "UNVERIFIED", "NOT_CHECKED"),
+    ("not_counted", "All-round setback", "UNVERIFIED", "FAIL"),
+    ("not_counted", "Cellar ramp", "UNVERIFIED", "FAIL"),
+    ("not_counted", "Organized open space (tot-lot)", "UNVERIFIED", "UNVERIFIED"),
+}
 
 
 @pytest.fixture(scope="module", params=sorted(LAYOUTS))
@@ -130,6 +157,7 @@ def test_the_validator_agrees_with_todays_checker_on_the_real_options(suchitra):
     from siteplan.validator import validate
 
     planned, _, _, site, rules, design, candidates = suchitra
+    parted = set()
     for candidate in candidates:
         ours = {c.finding.rule: c for c in validate(site, rules, design, candidate).legal}
         for claim in candidate.generator_claims:
@@ -142,6 +170,8 @@ def test_the_validator_agrees_with_todays_checker_on_the_real_options(suchitra):
             elif c is None or c.finding.status is not claim.status:
                 # the checker knows only the reading it planned for; the validator weighs both
                 assert _planned(c, planned) is claim.status, claim.rule
+                parted.add(_parting(planned, claim.rule, c))
+    assert parted == {p for p in ON_THE_OTHER_READING if p[0] == planned}
 
 
 def test_without_the_surfaces_of_its_facilities_the_open_space_is_unverified_not_passed(suchitra):

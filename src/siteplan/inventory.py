@@ -128,7 +128,8 @@ INVENTORY: tuple[Entry, ...] = (
                "taken as covered parking, the stricter reading being 12.1.1's plinth. The floors "
                "calculator, the optimizer, the validator and the legacy layout's request "
                "(LayoutRequest.height_m) add the raise to every height worked out from floors; "
-               "the legacy checker's own buildings (a sanctioned plan's) do not.",
+               "the legacy checker (siteplan check, the cases) does not yet: it measures a "
+               "building as its file gives it.",
         settles="A sanctioned stilt + N plan's section showing the stilt floor's level against "
                 "the ground the authority measured from.",
     ),

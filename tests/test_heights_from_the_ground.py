@@ -9,6 +9,8 @@ raise, as a contract stored before it does; `with_raise` gives them the one the 
 carries. Made-up land only.
 """
 
+from types import SimpleNamespace
+
 import pytest
 from contract_fixtures import HERE, with_raise
 from optimizer_support import fixture, intent, max_legal, module_prototype, rules_with_dead_end
@@ -26,6 +28,11 @@ from siteplan.optimizer.floors import (
     assess_floors,
     feasible_floors,
 )
+from siteplan.optimizer.search import layout as search_layout
+from siteplan.optimizer.search.fringe import pathway_serves
+from siteplan.optimizer.search.quantities import quantities
+from siteplan.optimizer.search.readings import ALL, Profile, floor_classes
+from siteplan.validator import clubhouse, validate
 from siteplan.validator.measure import tower_geometries
 
 TEST_CLASS = "normative"
@@ -128,3 +135,49 @@ def test_the_legacy_request_measures_from_the_ground_too():
     left_out = LayoutRequest(floors=10, unit_mix=MIX, stilt_in_rule_height=False)
     assert left_out.rule_height_m == pytest.approx(30.0)
     assert left_out.height_m == pytest.approx(33.15)
+
+
+def test_the_validator_holds_a_dead_end_to_30_m_from_the_ground():
+    """NBC 4.6(b): no dead-end road above 30 m. Stilt + 9 on 3 m storeys is 30 m from the stilt
+    floor, which passed, and 30.15 m from the ground, which does not."""
+    site, stored = rules_with_dead_end(True)
+    brief = fixture()[2]
+    candidate = CandidateLayout.model_validate_json(
+        (HERE / "rectangle" / "CandidateLayout.json").read_text())
+    for tower in candidate.towers:
+        tower.floors_above_stilt = 9
+
+    def dead_end(rules):
+        report = validate(site, rules, brief, candidate)
+        return next(c.finding.status for c in report.legal
+                    if c.finding.rule == "Fire access: dead-end road")
+
+    assert dead_end(stored) is Status.PASS
+    assert dead_end(with_raise(stored)) is Status.FAIL
+
+
+def test_rule_8l_lets_a_pathway_reach_a_block_up_to_12_m_from_the_ground_only():
+    """Stilt + 3 on 3 m storeys is 12 m from the stilt floor and 12.15 m from the ground: then it
+    opens onto a road, not a pathway (the optimizer's side; the validator measures the same
+    physical height, test_the_validator_measures_the_same_heights_from_the_ground)."""
+    site, stored = rules_with_dead_end(None)
+    brief = max_legal(fixture()[2])
+
+    def three_floors_on_a_pathway(rules):
+        classes = floor_classes(rules, brief, module_prototype(1), Profile("counted", ALL))
+        cls = next(c for c in classes if c.floors == 3)
+        return pathway_serves(quantities(site, rules, brief), cls)
+
+    assert three_floors_on_a_pathway(stored)
+    assert not three_floors_on_a_pathway(with_raise(stored))
+
+
+def test_the_club_house_stands_on_its_plinth_in_the_optimizer_and_the_validator_alike():
+    """The club house has no stilt: four 3 m floors on the 0.45 m plinth are 12.45 m in both."""
+    _, stored = rules_with_dead_end(None)
+    brief = fixture()[2]
+    floor = brief.firm_standards.floor_to_floor_m.value
+    for rules, expected in ((stored, 4 * floor), (with_raise(stored), 0.45 + 4 * floor)):
+        ctx = SimpleNamespace(rules=rules, brief=brief, drawn=SimpleNamespace(club_floors=4))
+        assert search_layout._club_height_m(rules, 4, floor) == pytest.approx(expected)
+        assert clubhouse._club_height_m(ctx) == pytest.approx(expected)

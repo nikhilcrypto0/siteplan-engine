@@ -18,9 +18,11 @@ ground, not 30 m. Found in the Dhulapally final check under the new approach (20
 - `rules.COVERED_PARKING_RAISE_M` (0.15 m) and `rules.PLINTH_MIN_M` (0.45 m), each with its
   clause. A parking stilt is taken as covered parking: 12.1.2's heading names covered parking and
   its sentence only courtyards. The open reading `stilt_raise` carries it, the plinth being the
-  stricter reading `resolve`'s selections may take (a project file does not carry it yet); under
-  ALL the larger raise is taken, which holds under both. A block with no stilt and the club house
-  stand on the plinth.
+  stricter reading `resolve`'s selections may take; it reaches the optimizer and the validator
+  only, the floors calculator and the legacy request reading the default from rules.py, and a
+  project file does not carry it yet. Under ALL the larger raise is taken, which holds under both:
+  a count that holds only at 0.15 m is held back, not UNVERIFIED. A block with no stilt and the
+  club house stand on the plinth.
 - The raise is in every height with the stilt in it: the physical height (NBC's: the 30 m dead
   end, the 15 m line, rule 8(l)'s 12 m) and the rule height under the counted reading. Where the
   stilt is left out (rule 5(c) for Table III; the not_counted reading of Table IV) the whole stilt
@@ -31,8 +33,10 @@ ground, not 30 m. Found in the Dhulapally final check under the new approach (20
   and the validator (`measure.TowerGeometry`, `clubhouse._club_height_m`). The floors calculator
   (`max_floors`: `siteplan floors`, the `max_floors` tool, intake's "max", the acceptance report's
   limit line) and the legacy request (`LayoutRequest.height_m`, so the legacy search's legality and
-  its setback rows) read rules.py. The legacy checker's own buildings (a sanctioned plan's) are
-  measured as drawn.
+  its setback rows) and the acceptance report's heights read rules.py. Not yet the legacy checker
+  (`siteplan check`, the cases): it measures a building as its file gives it, a sanctioned plan's
+  or a project's stilt + floors, without the raise (a project's stilt + 8 of 3 m storeys checks
+  at 27 m and 9 m where the rest of the engine asks 27.15 m and 10 m).
 - Contracts extended, not bumped: `HeightRules` gains `stilt_raise_m`, `plinth_m` and
   `raise_interpretation`, optional and left out of the dump when absent, and `stilt_raise` is not a
   reading the contract requires. Every stored 1.3 contract reads, keeps its digest, and is judged
@@ -51,7 +55,9 @@ ground, not 30 m. Found in the Dhulapally final check under the new approach (20
 
 Tests (normative): `tests/test_heights_from_the_ground.py` (new: what the raise changes in the
 optimizer, the validator, a block with no stilt, the exact edges on a 2.85 m stilt, the legacy
-request; rules stored without it unchanged), `tests/test_rules.py` (the values, their clauses,
+request, the validator's dead end at 30 m, rule 8(l)'s pathway up to 12 m, the club house's
+height in the optimizer and the validator alike; rules stored without it unchanged),
+`tests/test_acceptance.py` (the report's legal height reads 27.15 m), `tests/test_rules.py` (the values, their clauses,
 rule 15(a)(vi) quoted from p.20 of the order), `tests/test_resolve.py` (the reading, a stricter
 selection, a stored contract that reads with no raise and dumps as stored), and re-pinned:
 `tests/test_max_floors.py`, `tests/test_heights.py`, `tests/test_mcp_server.py`,
@@ -77,7 +83,8 @@ Characterization re-pinned:
   on rules with the raise. The generator plans for one reading of the stilt and the validator
   weighs both, and with 3 m storeys the two readings now land in different Table IV rows, so the
   validator is held to today's checker under the reading the generator planned for (its verdict
-  by reading). On the runs planned with the stilt left out, the S+8 options claim open space that
+  by reading), and which checks part from it only under the other reading, and how, is pinned
+  (`ON_THE_OTHER_READING`). On the runs planned with the stilt left out, the S+8 options claim open space that
   lies in the 10 m setback the counted reading asks (27.15 m): the validator blocks that
   cross-check, and those options' verdict is FAIL (`STRICTER_CROSS_CHECKS`, which each test holds
   to what really blocks). Suchitra's seam test puts its tower back on 7 floors, exactly 21 m

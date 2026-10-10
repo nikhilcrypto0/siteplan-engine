@@ -76,6 +76,8 @@ def test_the_report_carries_every_section_the_acceptance_asks_for(generated):
                     "5. LAYOUTS THAT PASS", "6. REJECTED CANDIDATES",
                     "7. COMPARED WITH THE FIRM'S PLAN"):
         assert heading in text, heading
+    # heights from the ground, the stilt floor 0.15 m up: stilt + 8 of 3 m storeys is 27.15 m
+    assert "Maximum legally allowed: stilt + 8 (27.15 m)" in text
     for line in ("Towers:", "flats per core per floor", "Flats:", "Areas: built-up",
                  "Internal roads (rule 8(m)):", "Fire lanes:",
                  "Fire access:", "Parking: required", "Tot-lot:", "Club house:", "Amenities:",
