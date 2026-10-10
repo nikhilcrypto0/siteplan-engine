@@ -34,6 +34,7 @@ WHERE = {  # the modules each place in the inventory is
     Where.LAYOUT: ("layout", "towers", "grounds", "access", "parking", "heights", "runner"),
     Where.FLOORS: ("max_floors",),
     Where.RESOLVER: tuple(m for m in MODULES if m.startswith("legal/")),
+    Where.STEPS: tuple(m for m in MODULES if m.startswith("steps/")),
 }
 SOURCES = {where: "".join(TEXT[m] for m in modules) for where, modules in WHERE.items()}
 SOURCES[Where.LOOKUP] = inspect.getsource(rules.height_rules)
