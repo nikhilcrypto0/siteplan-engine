@@ -70,6 +70,11 @@ height is 0.15 m over a Table IV edge and takes the next row's setback. The maxi
 balanced and open-space options, built on the reading that leaves the stilt floor out, are the
 same layouts; the robust one, which holds under every reading, is S+7, S+7, S+3 (204 flats,
 276,760 sft) where it was 3 x S+7, whose 24.15 m now asks 9 m. 119 laid out where 116 were.
+Re-pinned on 2026-10-10 again, where rules.py gains the values `siteplan steps` shows (the 12 m
+site-plan band, the splay table, rule 16's 2012 wording and the 200% TDR): no rule the search or
+the validator reads changes, but the rules' fingerprint (rules_digest) covers every value in
+rules.py, so the same proposals and the same four shown carry new digests; the model's answer
+is unchanged.
 
 The values pin exact output on the locked dependencies (uv.lock). They move only with a normative
 replacement and an entry in docs/behaviour-changes.md.
@@ -115,15 +120,15 @@ PINNED = {
         "full-ALL-ALL-114",
         "full-ALL-ALL-5",
     ],
-    "proposed_sha256": "e595f6628ea16061d9ca74fa12b044f70108fe197097d8167b79165d16f60a82",
+    "proposed_sha256": "f34818c6e2fee044bb2e5f223c927926a5914850b29613b3c9ed8014fcb99e75",
     "shown": [
         ["full-not_counted-allowed-90", "BALANCED"],
         ["full-not_counted-allowed-86", "MAX_YIELD"],
         ["full-not_counted-ALL-65", "CONVENTIONAL_OPEN_SPACE"],
         ["full-ALL-ALL-113", "ROBUST"],
     ],
-    "shown_digests": ["3d283e81de8300d7", "9cb4a9ff4274b2a6",
-                      "35aba5eb39ee1768", "710ea9bdc9af3e58"],
+    "shown_digests": ["1166b77f62375804", "ac979956680232bc",
+                      "c936ea2b99ab170c", "d4b7ee68cd157bb7"],
     "answer_sha256": "230e37bca31cae9f8b09abccaf6f3ff50fbc9bf084a5e694b9331ff9afe4348c",
     "approval_page_sha256": "cd3ebee2af46849756df643999df9b16d2cbc91d92c45101983782cff1eb0181",
 }

@@ -4,6 +4,27 @@ A characterization test (tests/manifest.py) pins what the engine produces today.
 only together with a normative replacement test and an entry here: what changed, why, the
 evidence, and the test that now holds the behaviour. Newest first.
 
+## 2026-10-10: `siteplan steps`, the architect's steps 1 and 3 for any project
+
+Stage 1 of the stage-wise build: step 1 (copy the survey) and step 3 (road widening) move out of
+one site's scripts into the engine (`steps/`), each with a report that answers five questions and
+lists everything the engine decided by itself. No layout, check or verdict changes: the search,
+the validator and the legacy path read none of it. rules.py gains the values the steps show (the
+12 m site-plan band, NBC 2016 Part 2 12.2.3(e); the splay table, G.O.168 5(f)(xiv); rule 16(a)-(f)
+and 17(b)(i) as the 2012 order words them), and `roads.Road` keeps the edge lines a road was
+measured on and the ground between them (new fields with defaults; nothing read before changes).
+
+The rules' fingerprint (`legal.resolve.rules_digest`, every value in rules.py) moves with the new
+values, so every ResolvedRules carries a new `rules_digest` and every candidate a new `rules_ref`
+and `envelope_ref`. Characterization re-pinned: the service's made-up baseline
+(`tests/test_service_proposals_baseline.py`): the same notes, the same 15 proposals, the same four
+shown and the same approval page; the proposals' digest and the four shown digests move, and the
+model's answer is unchanged.
+
+Tests (normative): `tests/test_steps.py` (25 tests on made-up land: the survey copy, where each
+road meets the plot, the access road, water named and not drawn, the strip placed or judged by its
+side, splays, the stopped reports, broken outlines, the blind guard, the command).
+
 ## 2026-10-10: a height starts at the ground, and the storeys start above it
 
 Rule 2(e) measures a height from the abutting road, or on undulated terrain from the average of
