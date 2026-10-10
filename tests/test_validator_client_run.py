@@ -6,14 +6,17 @@ which recomputes everything from the site model, must find no FAIL in them and m
 today's checker rule by rule, except where it sees an open reading the generator did not.
 Characterization: it pins today's agreement on a real site."""
 
+import re
 from pathlib import Path
 
 import pytest
 from client_baseline import ANSWERS, SURVEY, profile_path
+from contract_fixtures import with_raise
 from contract_fixtures.rules_and_envelope import resolved_rules
 
 from siteplan.contracts import digest
 from siteplan.contracts.common import Status
+from siteplan.contracts.resolved_rules import STILT_IN_RULE_HEIGHT
 
 TEST_CLASS = "characterization"
 FIXTURES = Path(__file__).parent.parent / "fixtures"
@@ -29,6 +32,50 @@ STRICTER = {
         "planned as if the stilt is not counted, the options draw no strip; if it counts the "
         "setback reaches 9 m and a strip is asked for, so the validator says UNVERIFIED naming "
         "the reading where the checker, which knows only the one it planned for, says INFO",
+}
+
+
+# Cross-checks the validator blocks on a run planned for one reading of the stilt, and why.
+STRICTER_CROSS_CHECKS = {
+    ("not_counted", "open space"):
+        "planned with the stilt left out of the height; if it counts, stilt + 8 is 27.15 m from "
+        "the ground (the stilt floor 0.15 m up, NBC Part 3 12.1.2) and asks Table IV's 10 m, so "
+        "part of the open space the generator counted lies in that setback; the validator counts "
+        "what holds under every reading",
+}
+
+
+OTHER = {"counted": "not_counted", "not_counted": "counted"}
+
+
+def _planned(check, reading) -> Status | None:
+    """The validator's verdict under the reading the generator planned for."""
+    return check.by_reading.get(STILT_IN_RULE_HEIGHT, {}).get(reading) if check else None
+
+
+def _parting(reading, rule, check) -> tuple:
+    """(reading, the rule without its tower, the validator's verdict, its verdict under the reading
+    the generator did not plan for)."""
+    other = check.by_reading.get(STILT_IN_RULE_HEIGHT, {}).get(OTHER[reading])
+    return (reading, re.sub(r":.*$", "", rule).strip(), check.finding.status.value,
+            other.value if other else None)
+
+
+# Where the validator parts from today's checker only under the reading the generator did not
+# plan for (it agrees under the one planned for), and what it says there. With 3 m storeys and
+# the stilt floor 0.15 m up the two readings land in different rows: the stilt + 6 options planned
+# with the stilt counted are 21.15 m, and 18 m without it, a stretch no order gives a setback for
+# (NOT_CHECKED); the stilt + 8 options planned without it are 27.15 m with it and ask 10 m (FAIL).
+ON_THE_OTHER_READING = {
+    ("counted", "Abutting road width (for T1)", "UNVERIFIED", "NOT_CHECKED"),
+    ("counted", "All-round setback", "UNVERIFIED", "NOT_CHECKED"),
+    ("counted", "Cellar ramp", "UNVERIFIED", "UNVERIFIED"),
+    ("counted", "Gap between blocks", "UNVERIFIED", "NOT_CHECKED"),
+    ("counted", "Organized open space (tot-lot)", "UNVERIFIED", "UNVERIFIED"),
+    ("counted", "Plot size for high-rise", "UNVERIFIED", "NOT_CHECKED"),
+    ("not_counted", "All-round setback", "UNVERIFIED", "FAIL"),
+    ("not_counted", "Gap between blocks", "UNVERIFIED", "FAIL"),
+    ("not_counted", "Organized open space (tot-lot)", "UNVERIFIED", "FAIL"),
 }
 
 
@@ -53,7 +100,7 @@ def real_run(request, tmp_path_factory):
     stated = AmenityLibrary.model_validate_json(
         (Path(__file__).parent.parent / "examples" / "amenities.hyderabad.json").read_text())
     design = brief(project, defaults, amenities=stated)
-    rules = resolved_rules(site)
+    rules = with_raise(resolved_rules(site))  # today's rules: heights from the ground
     readings = Readings.of(project.layout)
     refs = {"site_ref": digest(site), "rules_ref": digest(rules), "brief_ref": digest(design)}
     candidates = [candidate_from_option(
@@ -66,27 +113,38 @@ def real_run(request, tmp_path_factory):
 def test_the_real_options_have_nothing_the_validator_fails(real_run):
     from siteplan.validator import validate
 
-    _, site, rules, design, candidates = real_run
+    reading, site, rules, design, candidates = real_run
     assert len(candidates) >= 3
+    allowed = {item for r, item in STRICTER_CROSS_CHECKS if r == reading}
+    blocked = set()
     for candidate in candidates:
         report = validate(site, rules, design, candidate)
         failed = [c.finding.rule for c in report.legal if c.finding.status is Status.FAIL]
         assert failed == [], (candidate.candidate_id, failed)
-        assert [d.item for d in report.cross_checks if d.blocks_pass] == []
-        assert report.verdict.legal.value == "UNVERIFIED"  # the 45 t loading alone sees to that
+        blocks = {d.item for d in report.cross_checks if d.blocks_pass}
+        blocked |= blocks
+        # a blocking cross-check fails the verdict; else the 45 t loading alone sees to that
+        assert report.verdict.legal.value == ("FAIL" if blocks else "UNVERIFIED")
+    assert blocked == allowed  # each listed one is real, and nothing else blocks
 
 
 def test_the_validator_agrees_with_todays_checker_on_the_real_options(real_run):
     from siteplan.validator import validate
 
     reading, site, rules, design, candidates = real_run
+    parted = set()
     for candidate in candidates:
-        ours = {c.finding.rule: c.finding.status for c in validate(
-            site, rules, design, candidate).legal}
+        ours = {c.finding.rule: c for c in validate(site, rules, design, candidate).legal}
         for claim in candidate.generator_claims:
             if (reading, claim.rule) in STRICTER or claim.status is Status.INFO:
                 continue
-            assert ours.get(claim.rule) is claim.status, (reading, claim.rule)
+            check = ours.get(claim.rule)
+            if check is not None and check.finding.status is claim.status:
+                continue
+            # the checker knows only the reading it planned for; the validator weighs both
+            assert _planned(check, reading) is claim.status, (reading, claim.rule)
+            parted.add(_parting(reading, claim.rule, check))
+    assert parted == {p for p in ON_THE_OTHER_READING if p[0] == reading}
 
 
 def test_each_listed_stricter_verdict_is_real(real_run):

@@ -35,6 +35,9 @@ from siteplan.optimizer import SearchContext
 from siteplan.optimizer.interfaces import Budget
 from siteplan.optimizer.search import FullSearchStrategy, Limits
 from siteplan.prototypes import compose_library
+from siteplan.rules import COVERED_PARKING_RAISE_M as RAISE_M
+
+STILT_TOPS_OUT_M = 3.0  # the made-up firm's stilt floor, from the ground (see made_up)
 
 # Quick enough for a test: three columns' starts, two heights, a few layouts laid out and judged.
 FAST = Limits(offsets=3, heights=2, laid_per_profile=3, attempts_per_profile=14,
@@ -77,6 +80,13 @@ def made_up(net: Polygon, *, side: str | None = "S", road_ft: float = 60, nala: 
                                                       "status": Provenance.UNVERIFIED})
         site = site.model_copy(update={"access": site.access.model_copy(update={"side": unknown})})
     design = make_brief(made)
+    # A made-up firm whose stilt floor tops out 3 m up: the 0.15 m raise the rules give a stilt
+    # floor (NBC Part 3 12.1.2) and a 2.85 m stilt, so every height lands where these tests
+    # reckon it; test_heights_from_the_ground holds what the raise changes.
+    standards = design.firm_standards
+    stilt = standards.stilt_height_m.model_copy(update={"value": STILT_TOPS_OUT_M - RAISE_M})
+    design = design.model_copy(update={"firm_standards": standards.model_copy(
+        update={"stilt_height_m": stilt})})
     intent = floors or HeightIntent(notation=design.height_intent.notation,
                                     mode=HeightMode.MAX_LEGAL,
                                     mixed_heights_allowed=mixed_heights)

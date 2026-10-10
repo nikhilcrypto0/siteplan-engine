@@ -53,6 +53,16 @@ def test_the_fire_tender_loading_is_pinned():
     assert rules.FIRE_TENDER_LOAD_T == 45.0
 
 
+def test_the_lowest_floor_stands_above_the_ground_as_nbc_part_3_12_1_gives_it():
+    """NBC 2016 Part 3 12.1, read on the page image of p.43 on 2026-10-10: a plinth of 450 mm,
+    covered parking raised 150 mm, brought to all buildings by G.O.168 rule 15(a)(vi) (quoted
+    from p.20 below)."""
+    assert rules.PLINTH_MIN_M == 0.45 and rules.COVERED_PARKING_RAISE_M == 0.15
+    assert "12.1.1" in rules.PLINTH_CLAUSE and "12.1.2" in rules.COVERED_PARKING_RAISE_CLAUSE
+    assert all("15(a)(vi)" in clause
+               for clause in (rules.PLINTH_CLAUSE, rules.COVERED_PARKING_RAISE_CLAUSE))
+
+
 def test_the_distance_from_an_electricity_line_is_as_rule_3c_gives_it():
     """Rule 3(c)(i), pp.4-5 of the 2012 order: 3 m from a high-tension line, 1.5 m from a
     low-tension line, 'both vertical and horizontal'."""
@@ -298,6 +308,7 @@ QUOTED = [
     (14, "The minimum abutting existing road width shall be 12m and black topped"),
     (15, "access through pathways of 6m width"),
     (15, "Column -10 of Table-"),
+    (20, "In all Buildings, the requirements of parts of the building"),
     (7, "The setbacks shall be followed as per Table-III of rule-5"),
     (8, "Group Housing with more than 100 units"),
     (8, "a means of independent access of minimum 3.6m pathway"),

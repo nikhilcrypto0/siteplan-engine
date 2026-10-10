@@ -3,6 +3,7 @@ the starting floors worked out from the law's metres, a time budget, and a plain
 try" where the generator cannot be asked. Made-up land only."""
 
 import pytest
+from contract_fixtures import with_raise
 from optimizer_support import (
     LIBRARY,
     Clock,
@@ -163,8 +164,10 @@ def test_a_road_that_ends_at_the_plot_lowers_the_start_under_the_reading_that_dr
 def test_floors_from_metres_and_the_generators_legal_findings_agree_on_every_height(
         reading, dead_end):
     """The law side of the generator (heights.legal_findings) and floors.py are two routes to
-    the same answer for each count: it fails the law in one exactly when it does in the other."""
-    site, rules = rules_with_dead_end(dead_end)
+    the same answer for each count: it fails the law in one exactly when it does in the other.
+    Both measure from the ground, the stilt floor's raise in it (NBC Part 3 12.1)."""
+    site, stored = rules_with_dead_end(dead_end)
+    rules = with_raise(stored)
     brief = max_legal(BRIEF)
     big = Polygon([(0, 0), (150, 0), (150, 100), (0, 100)])
     for floors in range(1, 14):

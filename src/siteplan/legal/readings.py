@@ -23,13 +23,16 @@ from siteplan.contracts.resolved_rules import (
     AMENITY_SHARE,
     APPROACH_WIDTH,
     CIRCULATION_IN_SETBACK,
+    COVERED_PARKING,
     FIRE_TURNING_RADIUS,
     MIXED_HEIGHT_SPACING,
     NBC_FIRE_HEIGHT,
     OPEN_SPACE_BASIS,
     OPEN_SPACE_OTHER_USES,
     OPENS_ONTO_ROAD,
+    PLINTH,
     STILT_IN_RULE_HEIGHT,
+    STILT_RAISE,
     TOT_LOT_SURFACE,
     VISITOR_PARKING,
 )
@@ -112,6 +115,18 @@ def _defaults(master_plan_road: bool) -> list[dict]:
                      "centreline reading needs more"],
             settles="the fire NOC of a sanctioned high-rise, or the layout agreed with the "
                     "Chief Fire Officer"),
+        _reading(
+            STILT_RAISE,
+            "How far above the ground a height is measured from does a parking stilt's floor "
+            "stand?",
+            {COVERED_PARKING: f"{rules.COVERED_PARKING_RAISE_M:g} m: a parking stilt is the "
+                              "covered parking of NBC Part 3 12.1.2",
+             PLINTH: f"{rules.PLINTH_MIN_M:g} m: it is part of the building, on 12.1.1's plinth"},
+            COVERED_PARKING,
+            sources=[rules.COVERED_PARKING_RAISE_CLAUSE + ": its heading names covered parking, "
+                     "its sentence only interior courtyards", rules.PLINTH_CLAUSE],
+            settles="a sanctioned stilt + N plan's section showing the stilt floor's level against "
+                    "the ground the authority measured from"),
         _reading(
             APPROACH_WIDTH,
             "How wide is the main approach road within the range rule 8(m) gives?",

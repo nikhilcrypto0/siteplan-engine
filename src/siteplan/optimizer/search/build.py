@@ -327,11 +327,12 @@ def counted_open_space(laid: Laid, rules: ResolvedRules, q: Quantities, plot: Pl
     built = unary_union([*footprints, *([laid.club] if laid.club is not None else []),
                          laid.zones.roads, laid.zones.lanes, *laid.ramps, *laid.pathways])
     least = pockets.area
-    stilt = q.stilt_m if q.has_stilt else 0.0
+    raise_m = rules.height.lowest_floor_raise_m(q.has_stilt)  # the storeys start above the ground
+    stilt = raise_m + q.stilt_m if q.has_stilt else 0.0  # the stilt floor, from the ground
     for reading in rules.readings(STILT_IN_RULE_HEIGHT):
         setbacks, gaps, high = [], [], []
         for p in laid.placements:
-            above = p.standing.choice.cls.floors * q.floor_m
+            above = p.standing.choice.cls.floors * q.floor_m + (0.0 if q.has_stilt else raise_m)
             height = above + (stilt if reading == "counted" else 0.0)
             band = rules.height.band_for_block(above, stilt, stilt_counted=reading == "counted")
             usable = band is not None and band.modelled and band.setback_m is not None

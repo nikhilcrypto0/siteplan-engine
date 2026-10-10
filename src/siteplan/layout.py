@@ -139,12 +139,15 @@ class LayoutRequest(BaseModel):
 
     @property
     def height_m(self) -> float:
-        """The physical height, stilt included: what NBC's fire rules measure."""
-        return self.stilt_height_m + self.floors * self.floor_height_m
+        """The physical height, from the ground: the stilt floor's raise (NBC Part 3 12.1.2),
+        the stilt and every floor. What NBC's fire rules measure."""
+        return (rules.COVERED_PARKING_RAISE_M + self.stilt_height_m
+                + self.floors * self.floor_height_m)
 
     @property
     def rule_height_m(self) -> float:
-        """The height that picks the Table IV row and the high-rise class."""
+        """The height that picks the Table IV row and the high-rise class. Where the stilt is
+        left out of it, the whole stilt floor is, its raise with it."""
         return self.height_m if self.stilt_in_rule_height else self.floors * self.floor_height_m
 
 

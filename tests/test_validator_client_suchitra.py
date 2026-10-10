@@ -6,15 +6,17 @@ validator rebuilds that buffer from the site model, and must find nothing to fai
 generator makes round it, and fail a tower that stands in it. Characterization: it pins today's
 agreement on a real site, and a defect found on it (a tower off the plot at the Table IV seam)."""
 
+import re
 from pathlib import Path
 
 import pytest
+from contract_fixtures import with_raise
 from contract_fixtures.rules_and_envelope import resolved_rules
 from validator_helpers import move_tower
 
 from siteplan.contracts import digest
 from siteplan.contracts.common import Line, Status
-from siteplan.contracts.resolved_rules import OPENS_ONTO_ROAD
+from siteplan.contracts.resolved_rules import OPENS_ONTO_ROAD, STILT_IN_RULE_HEIGHT
 
 TEST_CLASS = "characterization"
 WORKSPACE = Path(__file__).parent.parent / "fixtures" / "workspace"
@@ -40,6 +42,47 @@ STRICTER = {
     "Abutting road width (for T1)":
         "the 12.4 m is a value read off the drawing and never confirmed; the checker takes it as "
         "given, the validator will not settle a width nobody confirmed",
+}
+
+
+# Cross-checks the validator blocks on a run planned for one reading of the stilt, and why.
+STRICTER_CROSS_CHECKS = {
+    ("not_counted", "open space"):
+        "planned with the stilt left out of the height; if it counts, stilt + 8 is 27.15 m from "
+        "the ground (the stilt floor 0.15 m up, NBC Part 3 12.1.2) and asks Table IV's 10 m, so "
+        "part of the open space the generator counted lies in that setback; the validator counts "
+        "what holds under every reading",
+}
+
+
+OTHER = {"counted": "not_counted", "not_counted": "counted"}
+
+
+def _planned(check, reading) -> Status | None:
+    """The validator's verdict under the reading the generator planned for."""
+    return check.by_reading.get(STILT_IN_RULE_HEIGHT, {}).get(reading) if check else None
+
+
+def _parting(reading, rule, check) -> tuple:
+    """(reading, the rule without its tower, the validator's verdict, its verdict under the reading
+    the generator did not plan for)."""
+    other = check.by_reading.get(STILT_IN_RULE_HEIGHT, {}).get(OTHER[reading])
+    return (reading, re.sub(r":.*$", "", rule).strip(), check.finding.status.value,
+            other.value if other else None)
+
+
+# Where the validator parts from today's checker only under the reading the generator did not
+# plan for (it agrees under the one planned for), and what it says there: the stilt + 6 options
+# planned with the stilt counted are 18 m without it (no setback is given 18-21 m: NOT_CHECKED);
+# the stilt + 8 ones planned without it are 27.15 m with it and ask 10 m (FAIL).
+ON_THE_OTHER_READING = {
+    ("counted", "All-round setback", "UNVERIFIED", "NOT_CHECKED"),
+    ("counted", "Cellar ramp", "UNVERIFIED", "UNVERIFIED"),
+    ("counted", "Organized open space (tot-lot)", "UNVERIFIED", "UNVERIFIED"),
+    ("counted", "Plot size for high-rise", "UNVERIFIED", "NOT_CHECKED"),
+    ("not_counted", "All-round setback", "UNVERIFIED", "FAIL"),
+    ("not_counted", "Cellar ramp", "UNVERIFIED", "FAIL"),
+    ("not_counted", "Organized open space (tot-lot)", "UNVERIFIED", "UNVERIFIED"),
 }
 
 
@@ -73,7 +116,7 @@ def suchitra(request):
     # statements, assumed for the test, never read off a name).
     stated = AmenityLibrary.model_validate_json(STATED.read_text())
     design = brief(project, defaults, amenities=stated)
-    rules = resolved_rules(site)
+    rules = with_raise(resolved_rules(site))  # today's rules: heights from the ground
     readings = Readings.of(project.layout)
     refs = {"site_ref": digest(site), "rules_ref": digest(rules), "brief_ref": digest(design)}
     candidates = [candidate_from_option(
@@ -95,20 +138,26 @@ def test_the_validators_water_buffer_is_the_one_the_generator_keeps_clear(suchit
 def test_the_real_options_have_nothing_the_validator_fails(suchitra):
     from siteplan.validator import validate
 
-    _, _, _, site, rules, design, candidates = suchitra
+    reading, _, _, site, rules, design, candidates = suchitra
     assert candidates
+    allowed = {item for r, item in STRICTER_CROSS_CHECKS if r == reading}
+    blocked = set()
     for candidate in candidates:
         report = validate(site, rules, design, candidate)
         failed = [c.finding.rule for c in report.legal if c.finding.status is Status.FAIL]
         assert failed == [], (candidate.candidate_id, failed)
-        assert [d.item for d in report.cross_checks if d.blocks_pass] == []
-        assert report.verdict.legal.value == "UNVERIFIED"  # the unconfirmed road, the 45 t loading
+        blocks = {d.item for d in report.cross_checks if d.blocks_pass}
+        blocked |= blocks
+        # a blocking cross-check fails the verdict; else the unconfirmed road, the 45 t loading
+        assert report.verdict.legal.value == ("FAIL" if blocks else "UNVERIFIED")
+    assert blocked == allowed  # each listed one is real, and nothing else blocks
 
 
 def test_the_validator_agrees_with_todays_checker_on_the_real_options(suchitra):
     from siteplan.validator import validate
 
-    _, _, _, site, rules, design, candidates = suchitra
+    planned, _, _, site, rules, design, candidates = suchitra
+    parted = set()
     for candidate in candidates:
         ours = {c.finding.rule: c for c in validate(site, rules, design, candidate).legal}
         for claim in candidate.generator_claims:
@@ -118,8 +167,11 @@ def test_the_validator_agrees_with_todays_checker_on_the_real_options(suchitra):
             if claim.rule in AS_THE_CHECKER_READS and c is not None:
                 interpretation, reading = AS_THE_CHECKER_READS[claim.rule]
                 assert c.by_reading[interpretation][reading] is claim.status, claim.rule
-            else:
-                assert (c.finding.status if c else None) is claim.status, claim.rule
+            elif c is None or c.finding.status is not claim.status:
+                # the checker knows only the reading it planned for; the validator weighs both
+                assert _planned(c, planned) is claim.status, claim.rule
+                parted.add(_parting(planned, claim.rule, c))
+    assert parted == {p for p in ON_THE_OTHER_READING if p[0] == planned}
 
 
 def test_without_the_surfaces_of_its_facilities_the_open_space_is_unverified_not_passed(suchitra):
@@ -165,6 +217,7 @@ def test_a_tower_off_the_plot_fails_its_setback_even_at_the_table_seam(suchitra)
     _, plot, _, site, rules, design, candidates = suchitra
     candidate = candidates[0].model_copy(deep=True)
     tower = candidate.towers[0]
+    tower.floors_above_stilt = 7  # 24.15 m with the stilt, so exactly 21 m without: the seam
     centre = candidate.placed_footprint(tower).centroid
     move_tower(candidate, tower.name, plot.bounds[2] + 80.0 - centre.x, 0.0)
     report = validate(site, rules, design, candidate)

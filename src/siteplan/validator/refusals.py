@@ -141,7 +141,7 @@ def no_net_plot(site: CanonicalSiteModel, rules: ResolvedRules, brief: DesignBri
                 ) -> ValidationReport:
     """No usable net plot, so nothing can be measured on the land: the report is one UNVERIFIED
     check, which can never be a pass, with the references and footprints that need no plot."""
-    towers = tower_geometries(candidate, brief)
+    towers = tower_geometries(candidate, brief, rules)
     return report.assemble(
         site, rules, brief, candidate, envelope,
         recomputed=Recomputed(units_by_type=program.units_by_type(towers)),

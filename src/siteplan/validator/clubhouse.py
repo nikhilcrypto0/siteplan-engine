@@ -106,7 +106,9 @@ def club_house_check(ctx: Context) -> Check:
 
 
 def _club_height_m(ctx: Context) -> float:
-    return ctx.drawn.club_floors * ctx.brief.firm_standards.floor_to_floor_m.value
+    """It has no stilt, so its storeys stand on the plinth (NBC Part 3 12.1.1)."""
+    return (ctx.rules.height.lowest_floor_raise_m(False)
+            + ctx.drawn.club_floors * ctx.brief.firm_standards.floor_to_floor_m.value)
 
 
 def _club_class(ctx: Context) -> HeightClass | None:

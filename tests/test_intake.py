@@ -104,7 +104,7 @@ def test_the_project_keeps_declared_and_measured_apart_and_says_where_each_came_
 
 def test_max_floors_are_worked_out_by_the_engine_not_typed():
     layout = build_project(_draft(), ANSWERS)["layout"]
-    assert (layout["floors"], layout["maximise"]) == (9, True)  # a 60 ft road: 30 m
+    assert (layout["floors"], layout["maximise"]) == (8, True)  # 60 ft road: 30 m, from 0.15 m up
     fixed = build_project(_draft(), ANSWERS | {"floors": "8"})["layout"]
     assert fixed["floors"] == 8 and "maximise" not in fixed
 

@@ -130,13 +130,14 @@ def compare(generated: Generated, case: Case,
     firm_floors = ", ".join(f"{b.name} stilt + {b.floors}" for b in case.buildings)
     stilt, floor_h = (generated.project["layout"][k] for k in ("stilt_height_m",
                                                                 "floor_height_m"))
+    base = rules.COVERED_PARKING_RAISE_M + stilt  # the stilt floor, from the ground (NBC 12.1.2)
     rows = [
         ("Net plot", f"{generated.plot.area:,.0f} m²", f"{firm_plot.area:,.0f} m²"),
         ("Towers", str(best["towers"]), str(len(case.buildings))),
         ("Floors above the stilt", f"stilt + {best['floors_above_stilt']} (every tower)",
          firm_floors),
-        ("Height, stilt counted", f"{stilt + best['floors_above_stilt'] * floor_h:g} m",
-         ", ".join(sorted({f"{stilt + b.floors * floor_h:g} m" for b in case.buildings}))),
+        ("Height, stilt counted", f"{base + best['floors_above_stilt'] * floor_h:g} m",
+         ", ".join(sorted({f"{base + b.floors * floor_h:g} m" for b in case.buildings}))),
         ("Least setback from the plot line", f"{setback:.2f} m", f"{firm_setback:.2f} m"),
         ("Least gap between towers", f"{gap:.2f} m" if gap else "one tower",
          f"{firm_gap:.2f} m" if firm_gap else "one tower"),
@@ -263,7 +264,8 @@ def _heights(generated: Generated) -> list[str]:
     def height(floors: int | None) -> str:
         if floors is None:
             return "none"
-        physical = stilt + floors * floor_h
+        # from the ground, the stilt floor 0.15 m up (NBC 12.1.2); left out, it goes with the stilt
+        physical = rules.COVERED_PARKING_RAISE_M + stilt + floors * floor_h
         if counted:
             return f"stilt + {floors} ({physical:g} m)"
         return f"stilt + {floors} ({floors * floor_h:g} m for the rules, {physical:g} m physical)"

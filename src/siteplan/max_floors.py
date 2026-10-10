@@ -2,7 +2,10 @@
 
 The road the plot takes its access from caps the height (Table IV column 3), and a plot under
 2,000 m² cannot take a high-rise at all (rule 7(a)(ii)). Floors follow from that height, the
-stilt and the floor-to-floor height. Whether the stilt counts in the height is still open (see
+stilt and the floor-to-floor height, standing on the lowest floor's raise above the ground the
+height is measured from (NBC Part 3 12.1): with the stilt in the height, storeys that exactly
+reach a limit are over it; left out, the stilt floor goes with its raise. Whether
+the stilt counts in the height is still open (see
 the inventory): the text reads as counting it, while the firm's own Dhulapally drawing behaves
 as if it does not, so both answers are given until a sanctioned plan settles it. Heights leave
 out the parapet, staircase head room, lift room and water tank (rule 2(e)).
@@ -82,16 +85,45 @@ class FloorLimit:
         }
 
 
+def _raise_m(stilt_m: float) -> float:
+    """How far the lowest floor stands above the ground the height starts from: a parking
+    stilt's raise (our reading of NBC Part 3 12.1.2), else the plinth (12.1.1)."""
+    return rules.COVERED_PARKING_RAISE_M if stilt_m > 0 else rules.PLINTH_MIN_M
+
+
+def _raise_note(stilt_m: float) -> str:
+    if stilt_m > 0:
+        return (f"Ground: heights start at the ground, and the stilt floor stands at least "
+                f"{rules.COVERED_PARKING_RAISE_M:g} m above it "
+                f"({rules.COVERED_PARKING_RAISE_CLAUSE}; our reading for a parking stilt, "
+                f"{rules.PLINTH_MIN_M:g} m on the stricter one): with the stilt counted, storeys "
+                "that exactly reach a limit are over it. Left out, the stilt floor goes with its "
+                "raise.")
+    return (f"Ground: heights start at the ground, and the lowest floor stands at least "
+            f"{rules.PLINTH_MIN_M:g} m above it ({rules.PLINTH_CLAUSE}), so storeys that exactly "
+            "reach a limit are over it.")
+
+
+def _bases(stilt_m: float) -> tuple[float, float]:
+    """Where the storeys above the stilt start, with the stilt counted (its floor from the
+    ground: raise and storey) and not (the stilt floor left out, its raise with it). A building
+    with no stilt stands on its plinth either way."""
+    counted = _raise_m(stilt_m) + stilt_m
+    return counted, (0.0 if stilt_m > 0 else counted)
+
+
 def _floors_up_to(height_m: float, floor_m: float, stilt_m: float) -> tuple[int, int]:
     """Floors above the stilt whose top stays at or under height_m: stilt counted, then not."""
-    return (math.floor((height_m - stilt_m) / floor_m + _EPS),
-            math.floor(height_m / floor_m + _EPS))
+    counted, not_counted = _bases(stilt_m)
+    return (math.floor((height_m - counted) / floor_m + _EPS),
+            math.floor((height_m - not_counted) / floor_m + _EPS))
 
 
 def _floors_under(height_m: float, floor_m: float, stilt_m: float) -> tuple[int, int]:
     """The same, strictly under height_m: a building of exactly 21 m is already high-rise."""
-    return (math.floor((height_m - stilt_m - _EPS) / floor_m),
-            math.floor((height_m - _EPS) / floor_m))
+    counted, not_counted = _bases(stilt_m)
+    return (math.floor((height_m - counted - _EPS) / floor_m),
+            math.floor((height_m - not_counted - _EPS) / floor_m))
 
 
 def _not_high_rise(plot_sqm, road_m, floor_m, stilt_m, why: str, dead_end) -> FloorLimit:
@@ -109,7 +141,8 @@ def _not_high_rise(plot_sqm, road_m, floor_m, stilt_m, why: str, dead_end) -> Fl
     return FloorLimit(plot_sqm, road_m, floor_m, stilt_m, high_rise=False,
                       max_height_m=None, limited_by=why, floors_stilt_counted=counted,
                       floors_stilt_not_counted=not_counted, setback_m=None, tdr_extra_floors=0,
-                      notes=(*notes, _ROAD_NOTE, _STILT_NOTE, _UNCHECKED_NOTE),
+                      notes=(*notes, _ROAD_NOTE, _STILT_NOTE, _raise_note(stilt_m),
+                             _UNCHECKED_NOTE),
                       dead_end=dead_end)
 
 
@@ -139,7 +172,7 @@ def max_floors(plot_sqm: float, road_m: float, floor_height_m: float = 3.0,
     if dead_end:  # NBC counts the stilt, so the cap binds both readings and the TDR floors
         top = _floors_up_to(rules.DEAD_END_MAX_HEIGHT_M, floor_height_m, stilt_height_m)[0]
         not_counted, extra = min(not_counted, top), max(0, min(extra, top - counted))
-    notes = [_ROAD_NOTE, _STILT_NOTE]
+    notes = [_ROAD_NOTE, _STILT_NOTE, _raise_note(stilt_height_m)]
     if extra:
         notes.append(f"With TDR: up to {extra} more floors ({rules.TDR_EXTRA_FLOORS_CLAUSE}), "
                      "subject to fire, airport and other norms. It modifies earlier provisions "
@@ -182,7 +215,7 @@ def _dead_end_notes(dead_end, counted, not_counted, extra, floor_m, stilt_m) -> 
         return [f"The access road ends at the plot: NBC measures height from the ground with the "
                 f"stilt in it (Part 3 2.10), so neither stilt answer, nor any TDR floor, may pass "
                 f"{cap:g} m ({rules.DEAD_END_CLAUSE})."]
-    tallest = stilt_m + max(not_counted, counted + extra) * floor_m
+    tallest = _raise_m(stilt_m) + stilt_m + max(not_counted, counted + extra) * floor_m
     if dead_end is None and tallest > cap + _EPS:
         return [_DEAD_END_WARNING]
     return []

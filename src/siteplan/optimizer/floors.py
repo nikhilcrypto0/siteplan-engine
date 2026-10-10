@@ -2,7 +2,10 @@
 
 ResolvedRules speaks in metres on named measures and holds no floor count. A tower's floors come
 from the stilt and floor-to-floor heights (the prototype's when it sets them, else the firm's
-standards in the DesignBrief). Whether the stilt counts toward the height that picks the Table IV
+standards in the DesignBrief), standing on the lowest floor's raise above the ground every height
+is measured from (`HeightRules.lowest_floor_raise_m`, NBC Part 3 12.1): storeys that exactly
+reach a limit with the stilt in it are over it. Where the stilt is left out, its raise goes with
+it. Whether the stilt counts toward the height that picks the Table IV
 row is an open reading (`stilt_in_rule_height`, selected ALL), so every function here takes one
 reading and `floors_by_reading` runs them all. NBC's physical height always includes the stilt.
 
@@ -249,11 +252,16 @@ def assess_floor_count(rules: ResolvedRules, brief: DesignBrief, prototype: Towe
     if floors < 1:
         raise ValueError("a tower has at least one floor above the stilt")
     stilt, floor = standard_heights(brief, prototype, has_stilt)
-    physical = stilt + floors * floor
-    rule_height = physical if reading == STILT_COUNTED else floors * floor
+    stilted = brief.height_intent.has_stilt if has_stilt is None else has_stilt
+    raise_m = rules.height.lowest_floor_raise_m(stilted)
+    # The stilt floor from the ground (its raise and its storey), and the rest: left out with the
+    # stilt where it is not counted; a block with no stilt stands on its plinth in every measure.
+    stilt_floor = raise_m + stilt if stilted else 0.0
+    above_stilt = floors * floor + (0.0 if stilted else raise_m)
+    physical = stilt_floor + above_stilt
+    rule_height = physical if reading == STILT_COUNTED else above_stilt
     checks = tuple(_check(limit, rule_height, physical) for limit in rules.height.limits)
-    above_stilt = floors * floor
-    band = rules.height.band_for_block(above_stilt, stilt,
+    band = rules.height.band_for_block(above_stilt, stilt_floor,
                                        stilt_counted=reading == STILT_COUNTED)
     high_rise = _high_rise(rules, rule_height)
     permission = None

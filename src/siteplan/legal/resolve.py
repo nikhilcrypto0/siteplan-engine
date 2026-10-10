@@ -19,6 +19,9 @@ from siteplan import parking, rules
 from siteplan.contracts.accounting import DeductionKind
 from siteplan.contracts.common import Basis, FacilityUse, Provenance, digest
 from siteplan.contracts.resolved_rules import (
+    ALL,
+    COVERED_PARKING,
+    STILT_RAISE,
     Applicability,
     BandKind,
     Eligibility,
@@ -74,10 +77,12 @@ ORDERS = (
 MEASURES = {
     HeightMeasure.RULE_HEIGHT: "the height Table IV and the high-rise class are read on; whether "
                                "it includes the stilt is the stilt_in_rule_height reading",
-    HeightMeasure.PHYSICAL_HEIGHT: "ground to the top, stilt included (NBC Part 3 2.10)",
+    HeightMeasure.PHYSICAL_HEIGHT: "ground to the top, stilt included (NBC Part 3 2.10), the "
+                                   "lowest floor's raise above the ground too (NBC Part 3 12.1)",
     HeightMeasure.AMSL: "height above mean sea level (airport and Air Force limits)",
-    HeightMeasure.HEIGHT_ABOVE_STILT: "ground to the top with the parking stilt left out: the "
-                                      "height Table III is read on (rule 5(c))",
+    HeightMeasure.HEIGHT_ABOVE_STILT: "ground to the top with the parking stilt floor left out, "
+                                      "its raise with it (a block with no stilt keeps its "
+                                      "plinth): the height Table III is read on (rule 5(c))",
 }
 
 
@@ -104,7 +109,7 @@ def resolve(site: CanonicalSiteModel, *, selections: dict[str, str] | None = Non
         category=_category(site, group),
         jurisdiction={"table_v_column": column, "when_open": when_open,
                       "note": jurisdiction_note},
-        height=_height(site, road),
+        height=_height(site, road, (selections or {}).get(STILT_RAISE, COVERED_PARKING)),
         setbacks=_setbacks(),
         spacing={"clause": rules.BLOCK_SPACING_CLAUSE},
         open_space=_open_space(site),
@@ -153,7 +158,7 @@ def _category(site: CanonicalSiteModel, group: bool) -> dict:
 # --- Height ----------------------------------------------------------------------------------
 
 
-def _height(site: CanonicalSiteModel, road: Road | None) -> dict:
+def _height(site: CanonicalSiteModel, road: Road | None, raise_reading: str) -> dict:
     return {
         "measures": MEASURES,
         "high_rise_from_m": _rv(rules.HIGH_RISE_THRESHOLD_M, rules.HIGH_RISE_CLAUSE, unit="m"),
@@ -161,7 +166,22 @@ def _height(site: CanonicalSiteModel, road: Road | None) -> dict:
         "tdr_band_m": _rv(rules.TDR_BAND_M, rules.TDR_BAND_CLAUSE, unit="m"),
         "tdr_plot_sqm": _rv(rules.TDR_PLOT_RANGE_SQM, rules.TDR_BAND_CLAUSE, unit="m²"),
         "bands": _bands(site, _widths(road)),
-        "limits": [*_road_limits(road), _dead_end_limit(site), _airport_limit(site)]}
+        "limits": [*_road_limits(road), _dead_end_limit(site), _airport_limit(site)],
+        "stilt_raise_m": _stilt_raise(raise_reading),
+        "plinth_m": _rv(rules.PLINTH_MIN_M, rules.PLINTH_CLAUSE, unit="m"),
+        "raise_interpretation": STILT_RAISE}
+
+
+def _stilt_raise(reading: str) -> dict:
+    """A parking stilt's floor above the ground, on the stilt_raise reading the rules take:
+    under every reading (ALL) the larger, which holds under both."""
+    covered = reading == COVERED_PARKING
+    return _rv(rules.COVERED_PARKING_RAISE_M if covered else rules.PLINTH_MIN_M,
+               rules.COVERED_PARKING_RAISE_CLAUSE if covered else rules.PLINTH_CLAUSE, unit="m",
+               basis=Basis.UNRESOLVED_INTERPRETATION,
+               note=f"the {reading} reading of {STILT_RAISE}" + (
+                   ": held to the larger raise, which holds under every reading"
+                   if reading == ALL else ""))
 
 
 def _widths(road: Road | None) -> tuple[non_high_rise.Width, ...]:

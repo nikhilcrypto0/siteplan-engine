@@ -22,7 +22,8 @@ LIBRARY = FlatLibrary(
     core_width_m=7.5,
 )
 # No jurisdiction is given, so these made-up sites run in the conservative test mode.
-REQUEST = LayoutRequest(floors=8, unit_mix={"2BHK": 0.7, "3BHK": 0.3},  # 27 m: 9 m setbacks
+# 0.15 m raise (NBC Part 3 12.1.2) + a 2.85 m stilt + 8 x 3 m = 27 m: 9 m setbacks
+REQUEST = LayoutRequest(floors=8, unit_mix={"2BHK": 0.7, "3BHK": 0.3}, stilt_height_m=2.85,
                         conservative_parking=True)
 LAYOUT_RULES = ("All-round setback", "Gap between blocks", "Organized open space", "Open-space")
 L_PLOT = Polygon([(0, 0), (180, 0), (180, 90), (90, 90), (90, 170), (0, 170)])

@@ -186,6 +186,33 @@ REGISTRY: tuple[Constraint, ...] = (
         settles="A sanctioned stilt + N high-rise whose approved setback fits one reading only.",
     ),
     Constraint(
+        "Height", "A building with no parking stilt starts its storeys this far above the ground "
+                  "its height is measured from.",
+        _m(rules.PLINTH_MIN_M), Basis.LEGAL_RULE, rules.PLINTH_CLAUSE, ("rules.PLINTH_MIN_M",),
+        note="NBC 2016 Part 3 12.1.1, read on the page image of p.43. The club house stands on "
+             "it; the floors calculator, the optimizer and the validator add it to every height "
+             "worked out from floors (HeightRules.lowest_floor_raise_m).",
+    ),
+    Constraint(
+        "Height", "A parking stilt's floor stands this far above the ground the height is "
+                  "measured from, so a block's height is this raise plus its storeys.",
+        _m(rules.COVERED_PARKING_RAISE_M), Basis.UNRESOLVED_INTERPRETATION,
+        rules.COVERED_PARKING_RAISE_CLAUSE, ("rules.COVERED_PARKING_RAISE_M",),
+        note="NBC 2016 Part 3 12.1.2's heading names covered parking and its sentence only "
+             "interior courtyards: a parking stilt is taken as covered parking. The stricter "
+             f"reading is 12.1.1's {rules.PLINTH_MIN_M:g} m plinth for any part of a building "
+             "(the stilt_raise reading; resolve's selections may take it). The raise is in "
+             "every height with the stilt in it (physical; the counted reading); where the "
+             "stilt is left out (rule 5(c), the not_counted reading) its raise goes with it. "
+             "Until 2026-10-10 the engine started heights at the stilt floor, so storeys that "
+             "exactly reached a limit passed: 3 m storeys gave stilt + 9 at 30 m, which is "
+             "30.15 m from the ground. On sloping ground or over a raised cellar deck the stilt "
+             "floor can stand higher than this above the average ground: levels are not "
+             "modelled.",
+        settles="A sanctioned stilt + N plan's section showing the stilt floor's level against "
+                "the ground the authority measured from, or the authority's written reading.",
+    ),
+    Constraint(
         "Height", "Where no limit stops the floor count (a road of 30 m or more), how high the "
                   "optimizer assesses counts.",
         f"up to {optimizer_floors.CEILING_M:g} m, the top of Table IV's last bounded row",

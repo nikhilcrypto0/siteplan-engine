@@ -97,7 +97,7 @@ def test_dhulapally_is_run_both_ways_on_the_dead_end_nobody_knows(dead_end):
                        dead_end=dead_end)
     nbc_note = any("4.6(b)" in note for note in limit.notes)
     assert nbc_note is dead_end  # the residential 30 m rule speaks only on a dead end
-    assert limit.floors_stilt_not_counted == (9 if dead_end else 10)
+    assert limit.floors_stilt_not_counted == (8 if dead_end else 10)  # 30.15 m on a dead end
 
 
 def test_suchitra_road_is_a_drawing_value_and_its_floors_only_proposed():
@@ -157,7 +157,7 @@ def test_dhulapally_60_ft_road_allows_30_m_of_rule_height_under_either_reading()
     assert answers["_source_kind"]["road_row"] == "ARCHITECT"
     limit = max_floors(sqyd_to_sqm(22686), ft_to_m(60), floor_height_m=3.0, stilt_height_m=3.0)
     assert limit.max_height_m == 30
-    assert (limit.floors_stilt_counted, limit.floors_stilt_not_counted) == (9, 10)
+    assert (limit.floors_stilt_counted, limit.floors_stilt_not_counted) == (8, 10)  # 0.15 m raise
 
 
 def test_the_fitted_net_outline_matches_the_stated_net_and_strip():

@@ -50,11 +50,11 @@ def generated(tmp_path_factory):
 
 
 def test_generation_needs_only_the_survey_the_answers_and_the_firms_libraries(generated):
-    assert generated.options and generated.limit.floors_stilt_counted == 9  # a 60 ft road
+    assert generated.options and generated.limit.floors_stilt_counted == 8  # 60 ft, 0.15 m raise
     tried = generated.options[0]["heights_tried"]
-    assert (tried[0]["floors_above_stilt"], tried[0]["verdict"]) == (10, "FAIL (law)")
+    assert (tried[0]["floors_above_stilt"], tried[0]["verdict"]) == (9, "FAIL (law)")
     assert "Abutting road width" in tried[0]["reasons"][0]
-    assert tried[1]["floors_above_stilt"] == 9
+    assert tried[1]["floors_above_stilt"] == 8
     assert (generated.out / "project.json").exists()
 
 
@@ -76,6 +76,8 @@ def test_the_report_carries_every_section_the_acceptance_asks_for(generated):
                     "5. LAYOUTS THAT PASS", "6. REJECTED CANDIDATES",
                     "7. COMPARED WITH THE FIRM'S PLAN"):
         assert heading in text, heading
+    # heights from the ground, the stilt floor 0.15 m up: stilt + 8 of 3 m storeys is 27.15 m
+    assert "Maximum legally allowed: stilt + 8 (27.15 m)" in text
     for line in ("Towers:", "flats per core per floor", "Flats:", "Areas: built-up",
                  "Internal roads (rule 8(m)):", "Fire lanes:",
                  "Fire access:", "Parking: required", "Tot-lot:", "Club house:", "Amenities:",
@@ -121,7 +123,7 @@ def test_a_test_profile_sets_its_values_labels_them_and_leaves_the_rules_alone(t
     assert made.found.max_feasible_floors == 8
     for option in made.found.options:  # the stilt is left out of the rule height, not NBC's
         assert option.height_m <= 24.0
-        assert option.physical_height_m == option.height_m + 3.0
+        assert option.physical_height_m == pytest.approx(option.height_m + 3.15)  # raise + stilt
     best = made.found.options[0]
     assert any(r.kind == "perimeter" for r in best.roads)
     setback, _ = spacing(made.plot, [t.footprint for t in best.towers])

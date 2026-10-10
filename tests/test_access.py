@@ -127,7 +127,9 @@ def test_a_jagged_access_side_still_gets_a_full_width_approach_road(side):
     plot = Polygon([(0, 0), (100, 0), *side, (0, 85)])
     facts = SiteFacts(abutting_road_m=12.38, authority="HMDA", inside_cure=False,
                       access_side="NE")
-    result = search(plot, library, LayoutRequest(floors=7, unit_mix={"2BHK": 1.0}), facts)
+    # 0.15 m raise + 2.85 m stilt + 7 x 3 m = 24 m: the most the 40 ft road serves
+    request = LayoutRequest(floors=7, unit_mix={"2BHK": 1.0}, stilt_height_m=2.85)
+    result = search(plot, library, request, facts)
     assert result.options, [r.reasons for r in result.rejected]
     approach = next(r for r in result.options[0].roads if r.kind == "main approach")
     assert not narrower_than(approach.shape, 8.98)
