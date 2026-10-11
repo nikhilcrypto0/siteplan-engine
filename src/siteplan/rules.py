@@ -328,6 +328,20 @@ WATER_BUFFER_CLAUSE = (
     "G.O.168 rule 3(a)(ii), the river clause as substituted by G.O.Ms.No.7 of 2016; rule "
     "3(a)(iii)(3)"
 )
+# The same rule as G.O.168 of 2012 words it, p.4 (read 2026-10-10; one of the architect's seven
+# files, the only rule source `siteplan steps` uses): no building within 100 m of a river's
+# boundary outside a Municipal Corporation, Municipality or Nagara Panchayat and 50 m within it;
+# 30 m of the FTL of a lake, tank or kunta of 10 ha and above, 9 m below 10 ha; 9 m of a canal,
+# vagu, nala or storm water drain wider than 10 m, 2 m up to 10 m; the buffer may count as tot-lot
+# or organised open space, never for setbacks. The lake and nala figures are WATER_BUFFER_M's; a
+# river's are here, because WATER_BUFFER_M's 50 m everywhere follows G.O.Ms.No.7 of 2016.
+RIVER_BUFFER_2012_M = (100.0, 50.0)  # outside, within municipal limits
+WATER_BUFFER_2012_CLAUSE = (
+    "G.O.168 rule 3(a)(ii)(1)-(5) and (iii)(3), p.4 (no building within 100 m of a river outside "
+    "municipal limits or 50 m within; 30 m of a lake of 10 ha and above, 9 m below; 9 m of a "
+    "nala, canal, vagu or storm water drain wider than 10 m, 2 m up to 10 m; the buffer may "
+    "count as open space, never as a setback)"
+)
 
 # Rule 3(c)(i), read from the 2012 text (pp.4-5) on 2026-10-03: "In case of sites in the vicinity
 # of High Tension Electricity Transmission Lines besides taking other safety precautions, a

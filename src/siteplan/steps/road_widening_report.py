@@ -101,12 +101,14 @@ def _rules(w: Widening) -> list[RuleUsed]:
                  f"{rules.JUNCTION_SPLAY_CLAUSE}; {rules.JUNCTION_SPLAY_HIGH_RISE_CLAUSE}"),
     ]
     if w.water:
+        outside, within = rules.RIVER_BUFFER_2012_M
         out.append(RuleUsed(
             "Keep clear of water", "No building within a water body's buffer: "
             + ", ".join(f"{m:g} m from a {kind.replace('_', ' ')}"
-                        for kind, m in rules.WATER_BUFFER_M.items())
-            + ". The buffer may count as open space, never as a setback.",
-            rules.WATER_BUFFER_CLAUSE))
+                        for kind, m in rules.WATER_BUFFER_M.items() if kind != "river")
+            + f"; a river {outside:g} m outside municipal limits, {within:g} m within. The "
+            "buffer may count as open space, never as a setback.",
+            rules.WATER_BUFFER_2012_CLAUSE))
     if w.given_sqm:
         out += [
             RuleUsed("What the land given up earns", "One of three, not all: a TDR "
@@ -127,10 +129,6 @@ def _rules(w: Widening) -> list[RuleUsed]:
                      rules.ROAD_SURRENDER_CAP_CLAUSE),
             RuleUsed("Who decides", "The sanctioning authority.",
                      rules.ROAD_SURRENDER_AUTHORITY_CLAUSE),
-            RuleUsed("A later order, NOT one of your 7 files", "G.O.Ms.No.7 of 2016 rewrote "
-                     "rule 16 (a high-rise down to 7 m on all sides). The engine's other steps "
-                     "still follow it; your decision on which order wins is pending.",
-                     rules.ROAD_WIDENING_CLAUSE),
         ]
     return out
 
@@ -231,7 +229,12 @@ def _output(w: Widening) -> tuple[list[str], list[Table]]:
     else:
         lines.append("Corner cuts (splays): no corner of the net plot is where two roads "
                      "meet.")
-    for water in w.water:
+    for water in (x for x in w.water if x.buffer_m is None):
+        outside, within = rules.RIVER_BUFFER_2012_M
+        lines.append(f"Water carried on to the next steps: the river, {water.distance_m:.1f} m "
+                     f"from the net plot. Its buffer is {outside:g} m outside municipal limits "
+                     f"or {within:g} m within; which applies is asked, so none is drawn yet.")
+    for water in (x for x in w.water if x.buffer_m is not None):
         lines.append(f"Water carried on to the next steps: the {water.kind.replace('_', ' ')}, "
                      f"{water.distance_m:.1f} m from the net plot at its nearest, along "
                      f"{water.edge.length:,.1f} m of the plot's edge. Its buffer is "
@@ -272,6 +275,8 @@ def _used_here(w: Widening) -> dict[str, str]:
             used[item.key] = "meets another road at a corner: the corner cut is shown"
         elif item.kind == carried.ROAD and item.key in reaching:
             used[item.key] = "looked at for corner cuts: none at its corners"
+        elif item.kind == carried.WATER and item.key in water and water[item.key].buffer_m is None:
+            used[item.key] = "its buffer waits on one answer (100 or 50 m: asked)"
         elif item.kind == carried.WATER and item.key in water:
             x = water[item.key]
             used[item.key] = (f"its {x.buffer_m:g} m buffer is shown: "
@@ -327,7 +332,11 @@ def _questions(w: Widening) -> list[str]:
         out.append("Are the drawing differences really just that? They are left out of the "
                    "net plot but not counted as land given up.")
     status = w.inputs.status.get("water", "")
-    for water in w.water:
+    if any(x.buffer_m is None for x in w.water):
+        outside, within = rules.RIVER_BUFFER_2012_M
+        out.append(f"Is the site within municipal limits? A river's buffer is {outside:g} m "
+                   f"outside them and {within:g} m within (G.O.168 rule 3(a)(ii)(1)).")
+    for water in (x for x in w.water if x.buffer_m is not None):
         if abs(water.edge_kept_free.area - water.kept_free.area) >= MIN_PIECE_SQM:
             out.append(f"Where is the {water.kind.replace('_', ' ')}'s boundary: at the line the "
                        "survey draws, or at the plot's own edge (is the land between them the "
@@ -368,7 +377,7 @@ def picture(w: Widening) -> Picture:
         p.add("WATER-BUFFER-EDGE", water.edge_kept_free)
         p.add("WATER-BUFFER", water.kept_free)
         shown = water.edge_kept_free if not water.edge_kept_free.is_empty else water.kept_free
-        if not shown.is_empty:
+        if not shown.is_empty and water.buffer_m is not None:
             spot = shown.representative_point()
             p.label("WATER", (spot.x, spot.y), f"{water.kind.replace('_', ' ')}: "
                     f"{water.buffer_m:g} m buffer")

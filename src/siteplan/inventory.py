@@ -613,6 +613,20 @@ INVENTORY: tuple[Entry, ...] = (
                 "high-rise.",
     ),
     Entry(
+        "Plot", "No building within a water body's buffer, in G.O.168's 2012 words (what "
+                "`siteplan steps` cites).",
+        f"river {rules.RIVER_BUFFER_2012_M[0]:g} m outside municipal limits, "
+        f"{rules.RIVER_BUFFER_2012_M[1]:g} m within; lakes and nalas as above",
+        rules.WATER_BUFFER_2012_CLAUSE, Reading.INTERPRETED, (Where.STEPS,),
+        ("RIVER_BUFFER_2012_M", "WATER_BUFFER_2012_CLAUSE"),
+        choice="The steps use the architect's seven files only. Their lake and nala figures are "
+               "the ones above; a river's depends on whether the site is within municipal "
+               "limits, which the engine is not told, so step 3 shows both figures, draws no "
+               "buffer for it and asks. The engine's other parts use 50 m for a river within "
+               "HMDA and UDA limits too (G.O.Ms.No.7 of 2016, not one of the seven files).",
+        settles="The architect's word on whether the site lies within municipal limits.",
+    ),
+    Entry(
         "Survey", "A site plan shows the streets, buildings and premises within 12 m of the "
                   "site, and the nearest street when none is that close.",
         f"{rules.SITE_PLAN_NEIGHBOUR_BAND_M:g} m", rules.SITE_PLAN_NEIGHBOUR_BAND_CLAUSE,

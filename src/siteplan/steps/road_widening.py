@@ -70,7 +70,7 @@ class WaterNear:
     count as open space, never as a setback (rule 3(a)(iii)(3))."""
 
     kind: str  # 'nala_over_10m'
-    buffer_m: float
+    buffer_m: float | None  # None for a river: 100 or 50 m, by municipal limits (asked)
     distance_m: float  # from the net plot
     lines: BaseGeometry  # as the survey draws it, outside the plot
     kept_free: BaseGeometry  # the net plot's land within the buffer of the lines drawn
@@ -188,8 +188,12 @@ def _water(inputs: Inputs, net: Polygon) -> list[WaterNear]:
     out = []
     for kind, drawn in lines.items():
         water = unary_union(drawn)
-        buffer = rules.WATER_BUFFER_M[kind]
         edge = _alongside(net, water)
+        if kind == "river":  # the 2012 figure depends on municipal limits: asked, not drawn
+            out.append(WaterNear(kind, None, water.distance(net), water, Polygon(), edge,
+                                 Polygon()))
+            continue
+        buffer = rules.WATER_BUFFER_M[kind]  # the lake and nala figures are the 2012 text's
         out.append(WaterNear(kind, buffer, water.distance(net), water,
                              net.intersection(water.buffer(buffer)), edge,
                              net.intersection(edge.buffer(buffer)) if not edge.is_empty

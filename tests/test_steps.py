@@ -377,7 +377,7 @@ def test_step_three_carries_the_water_and_its_buffer_on_with_the_net_plot(tmp_pa
     facts = road_widening_report.facts(widening)
     assert facts["water"][0]["lines_m"] and facts["water"][0]["buffer_m"] == 9.0
     report = road_widening_report.report(widening)
-    assert rules.WATER_BUFFER_CLAUSE in report.markdown()
+    assert rules.WATER_BUFFER_2012_CLAUSE in report.markdown()
     assert any("Is the water really a nala over 10m?" in q for q in report.questions)
     assert any(layer.name == "WATER" for layer in road_widening_report.picture(widening).layers)
 
@@ -431,4 +431,36 @@ def test_a_step_that_stops_still_carries_everything_step_1_found(tmp_path):
     text = report.markdown()
     assert all(i.what in text for i in carried.found_in(copy))
     assert "carried unchanged (this step stopped)" in text
+
+
+def test_a_river_shows_both_of_its_2012_figures_and_asks_which(tmp_path):
+    """G.O.168 (2012) gives a river 100 m outside municipal limits and 50 m within; the engine is
+    not told which, so step 3 draws no buffer for it and asks."""
+    survey = _survey(tmp_path / "survey.dxf", nala_x=-5.0)
+    inputs = _inputs(tmp_path, survey, water=[{"kind": "river", "survey_layer": "NALA"}])
+    widening = take_off(inputs, copy_survey(inputs))
+    river, = widening.water
+    assert river.buffer_m is None and river.kept_free.is_empty
+    report = road_widening_report.report(widening)
+    assert any("within municipal limits?" in q for q in report.questions)
+    assert "100 m outside municipal limits or 50 m within" in report.markdown()
+
+
+SEVEN_FILES = {"168", "50", "95", "119"}  # G.O.168/2012, G.O.50/2019, G.O.95/2026, AP G.O.119
+
+
+def test_every_steps_report_cites_only_the_architects_seven_files(tmp_path):
+    """The architect's rule (2026-10-10): rules come from his seven files only; anything else is
+    put to him first. NBC 2016 is among them; a government order outside them fails this."""
+    import re
+
+    survey = _survey(tmp_path / "survey.dxf", nala_x=0.0, extras=True)
+    inputs = _inputs(tmp_path, survey, gross_area_sqm=10_800, net_area_sqm=10_350,
+                     road_strip_side="E", road_strip_width_m=5.0,
+                     water=[{"kind": "nala_over_10m", "survey_layer": "NALA"}])
+    run_steps(inputs, tmp_path / "out")
+    for n in (1, 3):
+        text = (tmp_path / "out" / f"step{n}" / "REPORT.md").read_text()
+        cited = set(re.findall(r"G\.O\.(?:M\.?S\.? ?)?(?:No\.)? ?(\d+)", text, re.I))
+        assert cited <= SEVEN_FILES, (n, cited - SEVEN_FILES)
 

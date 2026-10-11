@@ -1512,6 +1512,14 @@ REGISTRY: tuple[Constraint, ...] = (
              "exactly 12 m is in neither row, so both legs are shown.",
     ),
     Constraint(
+        "Not used by generation", "A river's buffer in G.O.168's 2012 words: outside municipal "
+                                  "limits, and within them.",
+        f"{_m(rules.RIVER_BUFFER_2012_M[0])}; {_m(rules.RIVER_BUFFER_2012_M[1])}",
+        Basis.LEGAL_RULE, rules.WATER_BUFFER_2012_CLAUSE, ("rules.RIVER_BUFFER_2012_M",),
+        note="`siteplan steps` (step 3) shows both and asks which applies; it draws no buffer "
+             "for a river until it knows.",
+    ),
+    Constraint(
         "Not used by generation", "How far round the site the survey copy reports streets, "
                                   "buildings and premises.",
         _m(rules.SITE_PLAN_NEIGHBOUR_BAND_M), Basis.LEGAL_RULE,
