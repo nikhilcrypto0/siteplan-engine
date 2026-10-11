@@ -75,7 +75,7 @@ def report(h: Height) -> StepReport:
     r.files = [("step2.svg", "the picture: the plot and the main road"),
                ("step2.dxf", "the plan, to open in CAD (metres)"),
                ("step2.json", "every number in this report")]
-    if h.floors is not None:
+    if h.allowed_floors is not None:
         r.files[1:1] = [("step2-section.svg", "the side view: the stilt and the floors, with "
                          "the limits"),
                         ("step2-section.dxf", "the side view, to open in CAD (metres)")]
@@ -83,6 +83,10 @@ def report(h: Height) -> StepReport:
 
 
 def _width_words(h: Height) -> str:
+    if h.width_from == DRAWN and h.unpinned_m:
+        return (f"{h.width_m:.2f} m as drawn; {h.inputs.given_as} give a legal width of "
+                f"{h.unpinned_m:g} m without naming the road, so the drawn one stands in until "
+                "you say it is this road's")
     if h.width_from == DRAWN:
         return (f"{h.width_m:.2f} m as drawn; no legal width is given, so the drawn one stands "
                 "in until you give it")
@@ -167,9 +171,12 @@ def _choices(h: Height) -> list[Choice]:
                           "meets the plot.", "Your rule: when the main road is not named, the "
                           "biggest road is the main road."))
     if h.width_from == DRAWN:
-        out.append(Choice(f"The height is read from {h.road.name}'s drawn width.", "No legal "
-                          "width is given. A drawing often shows only the carriageway, which is "
-                          "narrower than the legal road: give the legal width (asked)."))
+        why = (f"{h.inputs.given_as.capitalize()} give a legal width without naming the road, "
+               "and step 1 does not pin it on the biggest road (asked)." if h.unpinned_m else
+               "No legal width is given (asked).")
+        out.append(Choice(f"The height is read from {h.road.name}'s drawn width.", why + " A "
+                          "drawing often shows only the carriageway, narrower than the legal "
+                          "road."))
     if h.way == TABLE_III_WAY:
         out.append(Choice("Below high-rise the height comes from Table III, the stilt left out.",
                           "The road is narrower than Table IV's 12 m, or the plot is under "
@@ -181,7 +188,9 @@ def _choices(h: Height) -> list[Choice]:
 def _output(h: Height) -> list[str]:
     s, road = h.storeys, h.road
     if h.width_from == DRAWN:
-        width = f"{h.width_m:.2f} m as drawn (no legal width given)"
+        width = f"{h.width_m:.2f} m as drawn" + (
+            f" (a legal width of {h.unpinned_m:g} m is given without naming the road)"
+            if h.unpinned_m else " (no legal width given)")
     elif h.reckoned_m != h.width_m:
         width = f"{h.width_m:.3f} m ({_feet(h.width_m)} ft), counted as {h.reckoned_m:g} m"
     else:
@@ -196,14 +205,19 @@ def _output(h: Height) -> list[str]:
         lines.append(f"{h.way}: on a road {h.reckoned_m:g} m wide, a building may go {word} "
                      f"{h.limit_m:g} m (counted from the first floor; the stilt is not "
                      "counted).")
-        lines.append(f"THE MOST: Stilt + {h.floors} floors. Counted height "
-                     f"{s.counted_m(h.floors):.1f} m; real height from the ground to the terrace "
-                     f"{s.physical_m(h.floors):.2f} m ({s.raise_m:g} raise + {s.stilt_m:g} "
-                     f"stilt + {h.floors} x {s.floor_m:g}).")
+        if h.allowed_floors != h.floors:
+            lines.append(f"The road alone would allow Stilt + {h.floors}.")
         nxt = next((b for b in h.bands if not b.served), None)
         if nxt is not None and nxt.road_m:
             lines.append(f"One floor more would need a wider road: {nxt.heights} needs "
                          f"{nxt.road_m:g} m.")
+    allowed = h.allowed_floors
+    if allowed is not None:
+        why = (f", because {road.name} is a dead end" if allowed != h.floors else "")
+        lines.append(f"THE MOST: Stilt + {allowed} floors{why}. Counted height "
+                     f"{s.counted_m(allowed):.1f} m; real height from the ground to the terrace "
+                     f"{s.physical_m(allowed):.2f} m ({s.raise_m:g} raise + {s.stilt_m:g} "
+                     f"stilt + {allowed} x {s.floor_m:g}).")
     floors = h.floors
     over = floors is None or s.physical_m(floors) > rules.DEAD_END_MAX_HEIGHT_M
     if over:
@@ -219,18 +233,24 @@ def _output(h: Height) -> list[str]:
     else:
         lines.append(f"The real height stays within {rules.DEAD_END_MAX_HEIGHT_M:g} m, so it "
                      "does not matter whether the road ends at the plot.")
-    allowed = h.allowed_floors
     if allowed is not None:
         kind = "a HIGH-RISE" if h.high_rise else "not a high-rise"
         lines.append(f"Stilt + {allowed} is {kind} (high-rise is "
                      f"{rules.HIGH_RISE_THRESHOLD_M:g} m and more, counted).")
-    if h.tdr_floors and allowed is not None:
-        most = allowed + h.tdr_floors
-        lines.append(f"With TDR (shown, NOT taken): up to {h.tdr_floors} more floors, so "
+    if h.tdr_shown and allowed is not None:
+        most = allowed + h.tdr_shown
+        lines.append(f"With TDR (shown, NOT taken): up to {h.tdr_shown} more floors, so "
                      f"Stilt + {most} ({s.physical_m(most):.2f} m real height), only by buying "
                      "TDR and subject to fire, airport and other norms"
                      + (", and never on a dead-end road." if s.physical_m(most)
                         > rules.DEAD_END_MAX_HEIGHT_M else "."))
+    elif h.tdr_floors:
+        lines.append(f"TDR: no extra floor here: the {h.tdr_floors} it may buy on this road would "
+                     f"go above {rules.DEAD_END_MAX_HEIGHT_M:g} m on a dead-end road.")
+    if h.unpinned_m:
+        other = ("no height limit" if h.unpinned_floors is None
+                 else f"Stilt + {h.unpinned_floors}")
+        lines.append(f"If {h.unpinned_m:g} m is {road.name}'s legal width: {other} (asked).")
     return lines
 
 
@@ -266,9 +286,10 @@ def _used_here(h: Height) -> dict[str, str]:
         if h.stopped:
             used[item.key] = "carried unchanged (this step stopped)"
         elif item.kind == carried.ROAD and h.road is not None and item.key == h.road.name:
-            used[item.key] = (f"the main road: its width sets the height (Stilt + {h.floors})"
-                              if h.floors is not None else
-                              "the main road: its width sets the height (no limit)")
+            used[item.key] = (
+                f"the main road: its width sets the height (Stilt + {h.allowed_floors})"
+                if h.allowed_floors is not None else
+                "the main road: its width sets the height (no limit)")
         elif item.kind == carried.ROAD:
             used[item.key] = "not used for the height: only the main road's width counts"
         else:
@@ -287,13 +308,17 @@ def _carried_table(h: Height) -> Table:
 def _questions(h: Height) -> list[str]:
     out = []
     road = h.road
-    if h.width_from == DRAWN:
+    allowed = ("no limit" if h.allowed_floors is None else f"Stilt + {h.allowed_floors}")
+    if h.width_from == DRAWN and h.unpinned_m:
+        out.append(f"Is {h.unpinned_m:g} m {road.name}'s legal width ({h.inputs.given_as} give it "
+                   "without naming the road; step 1 asks too)? Until you say, the height is read "
+                   f"from its drawn width, {h.width_m:.2f} m ({allowed}).")
+    elif h.width_from == DRAWN:
         out.append(f"What is {road.name}'s legal width? The height here is read from its drawn "
                    f"width, {h.width_m:.2f} m, which may be only the carriageway.")
     elif not _width_checked(h):
         out.append(f"Is {h.width_m:g} m really {road.name}'s legal width? It sets the height "
-                   f"(Stilt + {h.floors}), and nothing records it as checked: "
-                   f"{road.legal_source}.")
+                   f"({allowed}), and nothing records it as checked: {road.legal_source}.")
     return out
 
 
@@ -326,16 +351,19 @@ def _headline(h: Height) -> str:
         width = f"{_feet(h.width_m)} ft = {h.reckoned_m:g} m"
     else:
         width = f"{h.width_m:g} m"
-    if h.floors is None:
-        return f"MAIN ROAD {road.name}: {width}\nno height limit from the road"
-    return (f"MAIN ROAD {road.name}: {width}\nup to {h.limit_m:g} m counted\n"
-            f"STILT + {h.floors} FLOORS")
+    limit = ("no height limit from the road" if math.isinf(h.limit_m)
+             else f"up to {h.limit_m:g} m counted")
+    if h.allowed_floors is None:
+        return f"MAIN ROAD {road.name}: {width}\n{limit}"
+    dead = " (dead end)" if h.allowed_floors != h.floors else ""
+    return f"MAIN ROAD {road.name}: {width}\n{limit}\nSTILT + {h.allowed_floors} FLOORS{dead}"
 
 
 def section(h: Height) -> Picture | None:
     """The side view: the stilt and the floors standing on the ground, with each limit as a
     line at its height."""
-    if h.floors is None:
+    floors = h.allowed_floors
+    if floors is None:
         return None
     s = h.storeys
     p = Picture("Step 2: the side view", h.inputs.site, plan=False, layers=[
@@ -357,17 +385,18 @@ def section(h: Height) -> Picture | None:
     p.add("GROUND", LineString([(-4.0, 0.0), (right + 8.0, 0.0)]))
     p.add("STILT", box(0.0, s.raise_m, w, first))
     p.label("NOTES", (w / 2, s.raise_m + s.stilt_m / 2 - 0.4), f"STILT {s.stilt_m:g} m")
-    for n in range(h.floors):
+    for n in range(floors):
         p.add("FLOORS", box(0.0, first + n * s.floor_m, w, first + (n + 1) * s.floor_m))
-    for n in range(h.floors, h.floors + h.tdr_floors):
+    for n in range(floors, floors + h.tdr_shown):
         p.add("TDR", box(0.0, first + n * s.floor_m, w, first + (n + 1) * s.floor_m))
-    p.label("NOTES", (w / 2, first + h.floors * s.floor_m / 2),
-            f"{h.floors} FLOORS x {s.floor_m:g} m\n= {s.counted_m(h.floors):.1f} m counted")
-    top = first + s.counted_m(h.floors)
-    p.label("NOTES", (right, top - 0.5), f"terrace {s.physical_m(h.floors):.2f} m\nfrom the ground")
-    limit = first + h.limit_m
-    p.add("LIMIT", LineString([(-2.0, limit), (right + 6.0, limit)]))
-    p.label("LIMIT", (right, limit + 0.6), f"road allows {h.limit_m:g} m counted")
+    p.label("NOTES", (w / 2, first + floors * s.floor_m / 2),
+            f"{floors} FLOORS x {s.floor_m:g} m\n= {s.counted_m(floors):.1f} m counted")
+    top = first + s.counted_m(floors)
+    p.label("NOTES", (right, top - 0.5), f"terrace {s.physical_m(floors):.2f} m\nfrom the ground")
+    if not math.isinf(h.limit_m):
+        limit = first + h.limit_m
+        p.add("LIMIT", LineString([(-2.0, limit), (right + 6.0, limit)]))
+        p.label("LIMIT", (right, limit + 0.6), f"road allows {h.limit_m:g} m counted")
     if h.dead_end:
         p.add("DEAD-END", LineString([(-2.0, rules.DEAD_END_MAX_HEIGHT_M),
                                       (right + 6.0, rules.DEAD_END_MAX_HEIGHT_M)]))
@@ -404,6 +433,8 @@ def facts(h: Height) -> dict:
             "most_floors_on_a_dead_end": h.dead_end_floors,
             "allowed_floors": allowed,
             "high_rise": h.high_rise,
-            "tdr_extra_floors_shown_not_taken": h.tdr_floors,
+            "tdr_extra_floors_shown_not_taken": h.tdr_shown,
+            "legal_width_given_unnamed_m": h.unpinned_m,
+            "floors_with_that_width": h.unpinned_floors,
             "rows": [{"heights": b.heights, "road_m": b.road_m, "open_space_m": b.open_space_m,
                       "floors": list(b.floors), "allowed": b.served} for b in h.bands]}

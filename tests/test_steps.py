@@ -586,8 +586,13 @@ def test_the_side_view_shows_the_stilt_the_floors_and_the_limits(tmp_path):
     h = height_for(inputs, copy_survey(inputs))
     side = main_road_height_report.section(h)
     layers = [layer for layer, _ in side.shapes]
-    assert layers.count("FLOORS") == 10 and layers.count("STILT") == 1
-    assert layers.count("TDR") == 4 and "LIMIT" in layers and "DEAD-END" in layers
+    assert layers.count("FLOORS") == 9 and layers.count("STILT") == 1  # the dead end's cap
+    assert layers.count("TDR") == 0 and "LIMIT" in layers and "DEAD-END" in layers
+    through = _inputs(tmp_path, access_side="E", measured_carriageway_m=12.0,
+                      abutting_road_m=18.288)
+    layers = [layer for layer, _ in main_road_height_report.section(
+        height_for(through, copy_survey(through))).shapes]
+    assert layers.count("FLOORS") == 10 and layers.count("TDR") == 4
     assert not side.plan and "<polygon" not in side.svg()  # a side view has no north arrow
 
 # --- Step 4: setbacks from every side ----------------------------------------------------------
@@ -609,7 +614,7 @@ def test_a_high_rise_keeps_table_iv_on_every_side_with_the_green_strip_inside(tm
     s = _setbacks(_inputs(tmp_path, **HIGH_RISE))
     assert s.high_rise and s.floors == 10 and s.open_space_m == 10
     assert {side.metres for side in s.sides} == {10}
-    assert any(side.roads and "Building Line is 4 m" in side.why for side in s.sides)
+    assert any(side.roads and "legal width is 4 m" in side.why for side in s.sides)
     assert s.left.area == pytest.approx(100 * 70)
     assert s.green.area == pytest.approx(120 * 90 - 116 * 86)
     assert s.fire_room_m == pytest.approx(8.0)
@@ -621,16 +626,19 @@ def test_a_high_rise_keeps_table_iv_on_every_side_with_the_green_strip_inside(tm
     assert "LAND LEFT FOR BUILDINGS: 7,000.0 m²" in text and "it fits" in text
 
 
-def test_below_high_rise_table_iii_gives_the_front_to_the_main_road_and_column_10_elsewhere(
+def test_below_high_rise_table_iii_gives_the_front_to_the_bigger_road_and_column_10_elsewhere(
         tmp_path):
-    """A 9 m road allows 15 m (step 2): Table III row 11's 15 m line keeps 6 m on the sides
-    (column 10) and its Building Line for a road up to 12 m, 3 m, towards the main road."""
+    """The 9 m main road allows 15 m (step 2): Table III row 11's 15 m line keeps 6 m (column
+    10) on every side but the one towards the bigger road, the 12 m road along the east, which
+    keeps the Building Line for a road up to 12 m, 3 m (rule 5(f)(iii))."""
     s = _setbacks(_inputs(tmp_path))
     assert not s.high_rise and s.green is None and not s.options
-    south = next(side for side in s.sides if side.faces == "south")
-    assert south.metres == 3 and "main road" in south.why
-    assert {side.metres for side in s.sides if side is not south} == {6}
-    assert s.left.area == pytest.approx((120 - 12) * (90 - 3 - 6))
+    east = next(side for side in s.sides if side.faces == "east")
+    assert s.front_road == east.roads[0] and east.metres == 3 and "bigger road" in east.why
+    assert {side.metres for side in s.sides if side is not east} == {6}
+    assert s.left.area == pytest.approx((120 - 6 - 3) * (90 - 12))
+    text = setbacks_report.report(s).markdown()
+    assert "The sides keep 6 m; the front" in text
 
 
 def test_a_water_buffer_is_laid_over_the_setbacks_never_added(tmp_path):
@@ -652,7 +660,8 @@ def test_the_road_widening_concession_is_shown_never_taken(tmp_path):
     assert s.left.area == pytest.approx(95 * 70)
     c = s.concession
     assert c is not None and c.open_space_m == 7 and c.front_m == 10
-    assert c.left_sqm == pytest.approx((115 - 7 - 10) * (90 - 14))
+    # the east (main road) and the south (a road meets it) keep 10 m; west and north come to 7
+    assert c.left_sqm == pytest.approx((115 - 7 - 10) * (90 - 10 - 7))
     text = setbacks_report.report(s).markdown()
     assert "shown, NOT taken" in text
 
@@ -672,3 +681,72 @@ def test_a_power_line_written_near_the_plot_is_asked_in_step_four(tmp_path):
     survey = _survey(tmp_path / "survey.dxf", extras=True)
     s = _setbacks(_inputs(tmp_path, survey, **HIGH_RISE))
     assert any("power line" in q for q in setbacks_report.report(s).questions)
+
+
+# --- What the review of steps 2 and 4 found ---------------------------------------------------
+
+
+def test_a_named_dead_end_caps_a_road_that_sets_no_limit(tmp_path):
+    """A 30 m road sets no Table IV limit; named a dead end, NBC's 30 m from the ground still
+    holds, so step 2 allows stilt + 9 and step 4 draws for it instead of asking."""
+    site = {"access_side": "E", "measured_carriageway_m": 12.0, "abutting_road_m": 30.0}
+    inputs = _inputs(tmp_path, road_dead_end=True, **site)
+    h = height_for(inputs, copy_survey(inputs))
+    assert h.floors is None and h.allowed_floors == 9 and h.tdr_shown == 0
+    s = _setbacks(inputs)
+    assert not s.stopped and s.floors == 9
+    report = main_road_height_report.report(h)
+    assert any("THE MOST: Stilt + 9" in line for line in report.output)
+    assert not any("None" in q for q in report.questions)
+
+
+def test_a_named_dead_end_is_the_headline_and_takes_no_tdr_floor_above_its_cap(tmp_path):
+    inputs = _inputs(tmp_path, access_side="E", measured_carriageway_m=12.0,
+                     abutting_road_m=18.288, road_dead_end=True)
+    h = height_for(inputs, copy_survey(inputs))
+    report = main_road_height_report.report(h)
+    text = report.markdown()
+    assert "THE MOST: Stilt + 9 floors, because" in text and "THE MOST: Stilt + 10" not in text
+    assert "The road alone would allow Stilt + 10" in text
+    assert h.tdr_floors == 4 and h.tdr_shown == 0 and "TDR: no extra floor" in text
+    assert "STILT + 9 FLOORS" in main_road_height_report._headline(h)
+    assert main_road_height_report.facts(h)["tdr_extra_floors_shown_not_taken"] == 0
+
+
+def test_a_width_given_without_naming_the_road_is_said_and_what_it_would_allow_shown(tmp_path):
+    """No road named: the biggest is the main road and the answers' 60 ft is not pinned on it
+    (step 1 asks). Step 2 reads the drawn 12 m but never says no legal width was given."""
+    inputs = _inputs(tmp_path, access_side=None, measured_carriageway_m=None,
+                     abutting_road_m=None, abutting_road_ft=60)
+    h = height_for(inputs, copy_survey(inputs))
+    assert h.width_from == DRAWN and h.floors == 8
+    assert h.unpinned_m == pytest.approx(18.288) and h.unpinned_floors == 10
+    report = main_road_height_report.report(h)
+    text = report.markdown()
+    assert "no legal width is given" not in text and "no legal width given" not in text
+    assert any("without naming the road" in q for q in report.questions)
+    assert any("Stilt + 10 (asked)" in line for line in report.output)
+
+
+def test_a_net_plot_whose_table_iii_row_does_not_allow_the_floors_stops_and_asks(tmp_path):
+    """Step 2 reads Table III from the written area; when the net plot's row stops lower, step
+    4 asks instead of failing."""
+    from dataclasses import replace
+
+    inputs = _inputs(tmp_path)
+    copy = copy_survey(inputs)
+    h = replace(height_for(inputs, copy), floors=7)  # 20.3 m: above row 11's last line
+    s = set_back(inputs, copy, h, take_off(inputs, copy))
+    assert s.stopped and "Table III row" in s.stopped and "How many floors" in s.ask
+    assert setbacks_report.report(s).stopped
+
+
+def test_a_river_whose_buffer_waits_on_an_answer_is_never_said_to_be_laid_over(tmp_path):
+    survey = _survey(tmp_path / "survey.dxf", nala_x=0.0)
+    s = _setbacks(_inputs(tmp_path, survey, water=[{"kind": "river", "survey_layer": "NALA"}],
+                          **HIGH_RISE))
+    report = setbacks_report.report(s)
+    assert not s.left_by_water
+    assert not any("buffer over the setbacks" in line for line in report.did)
+    assert not any("laid over the setbacks: land in both" in c.what for c in report.choices)
+    assert any("waits on one answer" in line for line in report.output)

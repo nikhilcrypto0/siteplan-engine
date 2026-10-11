@@ -12,7 +12,7 @@ from dataclasses import dataclass
 
 from siteplan import rules
 from siteplan.steps.inputs import Inputs
-from siteplan.steps.survey_copy import RoadSeen, SurveyCopy
+from siteplan.steps.survey_copy import BIGGEST, RoadSeen, SurveyCopy
 
 SLAB_M = 0.15  # a floor slab: no rule gives it; with NBC's 2.75 m room it makes a 2.9 m storey
 FIT_M = 1e-6  # a height this close to a limit is at it
@@ -79,16 +79,30 @@ class Height:
     floors: int | None = None  # the most floors the road allows; None when it sets no limit
     dead_end: bool = False  # only when the project says so: a road not said to be one is not
     dead_end_floors: int = 0  # the most floors on a road that ends at the plot
-    tdr_floors: int = 0  # the most floors TDR may add (shown, none taken)
+    tdr_floors: int = 0  # the most floors TDR may add on this road (shown, none taken)
     bands: tuple[Band, ...] = ()
     storeys: Storeys = STOREYS
+    unpinned_m: float | None = None  # a legal width the answers give without naming the road
+    unpinned_floors: int | None = None  # the most floors that width would allow
 
     @property
     def allowed_floors(self) -> int | None:
-        """The most floors, with what the project says of a dead end applied."""
-        if self.dead_end and self.floors is not None:
-            return min(self.floors, self.dead_end_floors)
-        return self.floors
+        """The most floors, with what the project says of a dead end applied: on a named dead
+        end never more than NBC's 30 m allows, even where the road sets no limit."""
+        if not self.dead_end:
+            return self.floors
+        if self.floors is None:
+            return self.dead_end_floors
+        return min(self.floors, self.dead_end_floors)
+
+    @property
+    def tdr_shown(self) -> int:
+        """The floors TDR may add on top of the most allowed; on a named dead end only as many
+        as stay within its 30 m."""
+        allowed = self.allowed_floors
+        if not self.dead_end or allowed is None:
+            return self.tdr_floors
+        return max(0, min(self.tdr_floors, self.dead_end_floors - allowed))
 
     @property
     def high_rise(self) -> bool:
@@ -107,15 +121,16 @@ def height_for(inputs: Inputs, copy: SurveyCopy) -> Height:
                      else (road.drawn_width_m, DRAWN))
     reckoned = rules.reckoned_road_width_m(width)
     plot = copy.written_sqm or copy.drawn_sqm
-    top = rules.max_height_for_road(reckoned)
-    if top is not None and plot >= rules.MIN_HIGH_RISE_PLOT_SQM:
-        way, limit, below = TABLE_IV_WAY, top, False
-        bands = _table_iv_bands(reckoned)
-    else:
-        line = _table_iii_top(plot, reckoned)
-        way, limit, below = TABLE_III_WAY, line.up_to_m, line.below
-        bands = _table_iii_bands(plot, reckoned)
+    way, limit, below, bands = _reading(reckoned, plot)
     storeys = STOREYS
+    # Step 1 does not pin a width the answers give without naming the road on the biggest road
+    # (it asks); the height is read from the drawn width, and what that width would allow shown.
+    given = inputs.project.to_site().abutting_road_m
+    unpinned = given if source == DRAWN and copy.access_how == BIGGEST and given else None
+    unpinned_floors = None
+    if unpinned:
+        _, other, other_below, _ = _reading(rules.reckoned_road_width_m(unpinned), plot)
+        unpinned_floors = None if math.isinf(other) else storeys.most_floors(other, other_below)
     return Height(
         inputs, copy, road=road, width_m=width, width_from=source, reckoned_m=reckoned,
         plot_sqm=plot, way=way, limit_m=limit, below=below,
@@ -124,7 +139,17 @@ def height_for(inputs: Inputs, copy: SurveyCopy) -> Height:
         dead_end_floors=math.floor((rules.DEAD_END_MAX_HEIGHT_M - storeys.raise_m
                                     - storeys.stilt_m) / storeys.floor_m + FIT_M),
         tdr_floors=rules.tdr_extra_floors(plot, reckoned) if way == TABLE_IV_WAY else 0,
-        bands=bands, storeys=storeys)
+        bands=bands, storeys=storeys, unpinned_m=unpinned, unpinned_floors=unpinned_floors)
+
+
+def _reading(road_m: float, plot_sqm: float) -> tuple[str, float, bool, tuple[Band, ...]]:
+    """Which table the height comes from, its limit, whether the limit itself is not reached,
+    and the table's rows, for a road of that width (as reckoned) and a plot of that size."""
+    top = rules.max_height_for_road(road_m)
+    if top is not None and plot_sqm >= rules.MIN_HIGH_RISE_PLOT_SQM:
+        return TABLE_IV_WAY, top, False, _table_iv_bands(road_m)
+    line = _table_iii_top(plot_sqm, road_m)
+    return TABLE_III_WAY, line.up_to_m, line.below, _table_iii_bands(plot_sqm, road_m)
 
 
 def _floors_in(above_m: float, up_to_m: float, below: bool = False) -> tuple[int, ...]:

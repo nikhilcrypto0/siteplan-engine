@@ -44,7 +44,7 @@ def report(s: Setbacks) -> StepReport:
         r.did += [f"Marked the {rules.PERIPHERAL_GREEN_STRIP_M:g} m green strip inside the "
                   f"setback, and checked a {rules.FIRE_TENDER_MIN_WIDTH_M:g} m fire lane still "
                   "fits beside it."]
-    if s.widening.water:
+    if s.left_by_water:
         r.did.append("Laid the water's buffer over the setbacks.")
     r.did.append("Measured the land left for buildings, and showed what lower heights, longer "
                  "blocks and other choices would change (none taken).")
@@ -132,10 +132,23 @@ def _choices(s: Setbacks) -> list[Choice]:
         Choice("Every point of the land left is at least its side's setback from that side; at a "
                "corner the two setbacks meet in a curve.", "The rules give a distance from each "
                "side; the engine keeps each one exactly."),
+        Choice("A side that meets a road keeps its front setback along its whole length, even "
+               "where the road meets only part of it.", "The rules speak of the side abutting "
+               "the road and do not cut a side where the road stops."),
         Choice("The stilt is not counted in the height that picks the row.", "Your rule "
                "(2026-10-11), carried from step 2."),
     ]
-    if s.widening.water:
+    if not s.high_rise:
+        out.append(Choice(f"The front is towards {s.front_road}, the widest road that meets the "
+                          "net plot (its legal width where one is given, else as drawn).",
+                          "Rule 5(f)(iii): the front setback towards the bigger road; the main "
+                          "road wins a tie."))
+    if s.concession is not None:
+        out.append(Choice("Under the concession every side that meets a road keeps its front "
+                          "setback; only the others come down to 7 m.", "Rule 16(e) keeps 'the "
+                          "front' as it is and does not say which side that is on a plot with "
+                          "more than one road: the stricter reading."))
+    if s.left_by_water:
         out.append(Choice("The water's buffer is laid over the setbacks: land in both is kept "
                           "free once, and the setback is still measured from the plot's edge.",
                           "The engine's reading: the buffer is kept free of building and the "
@@ -154,12 +167,12 @@ def _choices(s: Setbacks) -> list[Choice]:
 
 def _output(s: Setbacks) -> tuple[list[str], list[Table]]:
     net = s.widening.net
-    lines = [f"Every side keeps {s.open_space_m:g} m"
-             + (f"; towards {s.height.road.name} (the main road) {_front(s):g} m"
-                if _front(s) != s.open_space_m else "") + "."]
+    lines = [_keeps(s) + "."]
     lines.append(f"Setback land: {s.band.area:,.1f} m². LAND LEFT FOR BUILDINGS: "
                  f"{s.left.area:,.1f} m² of the net plot's {net.area:,.1f} m² "
                  f"({s.left.area / net.area:.0%}).")
+    if s.left.is_empty:
+        lines.append("NO LAND IS LEFT for buildings at this height: no building fits.")
     if s.green is not None:
         lines.append(f"Green strip ({rules.PERIPHERAL_GREEN_STRIP_M:g} m, inside the setback): "
                      f"{s.green.area:,.1f} m².")
@@ -178,20 +191,23 @@ def _output(s: Setbacks) -> tuple[list[str], list[Table]]:
     if s.concession is not None:
         c = s.concession
         lines.append(f"With the road-widening concession (shown, NOT taken): sides and rear "
-                     f"{c.open_space_m:g} m, the front {c.front_m:g} m, land left "
+                     f"{c.open_space_m:g} m, every side on a road {c.front_m:g} m, land left "
                      f"{c.left_sqm:,.1f} m² ({c.left_sqm - s.left.area:+,.1f} m²). It is one of "
                      "three rewards (step 3) and only for a Master Plan or Road Development Plan "
                      "road.")
     if s.high_rise:
         less = s.open_space_m - rules.NO_OPENING_REDUCTION_M
+        low, high = rules.NO_OPENING_LIMITS_M
+        figure = (f"{less:g} m" if low <= less <= high
+                  else f"{less:g} m, or {high:g} m by the note's maximum: asked")
         lines.append(f"A side whose rooms take no light or air from it may keep "
-                     f"{rules.NO_OPENING_REDUCTION_M:g} m less ({less:g} m). Not drawn: it "
+                     f"{rules.NO_OPENING_REDUCTION_M:g} m less ({figure}). Not drawn: it "
                      "depends on the building's design (step 6).")
     tables = [_sides_table(s)]
     if s.options:
         tables.append(Table("Lower buildings stand closer (shown, not taken)",
                             ("Height (counted)", "Floors", "Open space all round",
-                             "Towards the main road", "Land left for buildings"),
+                             f"Towards {s.front_road}", "Land left for buildings"),
                             tuple((o.heights, _floors(o.floors), f"{o.open_space_m:g} m",
                                    f"{o.front_m:g} m", f"{o.left_sqm:,.1f} m²")
                                   for o in s.options)))
@@ -203,9 +219,12 @@ def _output(s: Setbacks) -> tuple[list[str], list[Table]]:
     return lines, [*tables, _carried_table(s)]
 
 
-def _front(s: Setbacks) -> float:
-    main = s.height.road.name
-    return max((side.metres for side in s.sides if main in side.roads), default=s.open_space_m)
+def _keeps(s: Setbacks) -> str:
+    """'Every side keeps 10 m', or the sides and the front apart when they differ."""
+    if s.front_m == s.open_space_m:
+        return f"Every side keeps {s.open_space_m:g} m"
+    return (f"The sides keep {s.open_space_m:g} m; the front, towards {s.front_road}, keeps "
+            f"{s.front_m:g} m")
 
 
 def _floors(floors: tuple[int, ...]) -> str:
@@ -305,8 +324,10 @@ def picture(s: Setbacks) -> Picture:
         if side.length_m >= SHORT_RUN_M:
             p.label("NOTES", side_label_at(side, net, -side.metres / 2), f"{side.metres:g} m")
     spot = s.left.representative_point() if not s.left.is_empty else net.representative_point()
+    keeps = (f"{s.open_space_m:g} m all round" if s.front_m == s.open_space_m
+             else f"sides {s.open_space_m:g} m, front {s.front_m:g} m")
     p.label("NOTES", (spot.x, spot.y), f"LAND LEFT {s.left.area:,.1f} m²\nStilt + {s.floors}: "
-            f"{s.open_space_m:g} m all round")
+            f"{keeps}")
     return p
 
 
@@ -317,7 +338,8 @@ def facts(s: Setbacks) -> dict:
         return out
     return {**out,
             "floors": s.floors, "counted_height_m": round(s.counted_m, 2),
-            "high_rise": s.high_rise, "open_space_m": s.open_space_m, "front_m": _front(s),
+            "high_rise": s.high_rise, "open_space_m": s.open_space_m, "front_m": s.front_m,
+            "front_road": s.front_road,
             "sides": [{"side": x.number, "faces": x.faces, "length_m": round(x.length_m, 2),
                        "meets_roads": list(x.roads), "setback_m": x.metres, "why": x.why}
                       for x in s.sides],

@@ -11,7 +11,7 @@ road allows from Table IV (Table III below it) and counts the floors in the shor
 architect's seven files allow (NBC's 2.75 m room and a 0.15 m slab, 2.9 m), the stilt separate and
 not counted (the architect's rule of 2026-10-11); a road is a dead end only when the answers name
 it one (his rule, same day). Step 4 (`steps/setbacks.py`) keeps Table IV's column 4 round the net
-plot (Table III's front and column 10 below high-rise), the front towards a road the higher of
+plot (below high-rise Table III's front towards the bigger road and column 10 elsewhere), the front towards a road the higher of
 that and the Building Line, the 2012 green strip inside, the water's buffer laid over, and shows
 the lower heights, G.O.50's long-block note and rule 16(e)'s concession, none taken. No layout,
 check or verdict changes: the search, the validator and the legacy path read none of it.

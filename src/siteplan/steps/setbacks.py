@@ -1,14 +1,14 @@
 """Step 4: setbacks from every side. The net plot (step 3) keeps open space round its edge for
 the height step 2 allows: a high-rise keeps Table IV's column 4 on every side and, towards a road,
 the higher of that and Table III's Building Line (rule 7(a)(xi)); a building below high-rise
-keeps Table III's front towards the main road and its column 10 elsewhere (rule 5(f)(iii)).
+keeps Table III's front towards the bigger road and its column 10 elsewhere (rule 5(f)(iii)).
 Inside it a high-rise keeps a 2 m green strip; a water body's buffer is laid over the setbacks,
 never added to them. What is left is the land buildings may stand on. The step never draws a
 building: what changes with one (its length, a side without windows) is shown, not taken."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from shapely.geometry import LineString, Polygon
 from shapely.geometry.base import BaseGeometry
@@ -59,6 +59,7 @@ class Setbacks:
     counted_m: float = 0.0
     high_rise: bool = True
     open_space_m: float = 0.0  # Table IV column 4, or Table III column 10
+    front_road: str | None = None  # the front: the main road (high-rise), the bigger (Table III)
     sides: tuple[SideSetback, ...] = ()
     band: BaseGeometry | None = None  # the setback land
     green: BaseGeometry | None = None  # the 2 m green strip, inside the setbacks
@@ -68,13 +69,18 @@ class Setbacks:
     options: tuple[Option, ...] = ()
     long_blocks: tuple[tuple[float, float], ...] = ()  # (length, open space)
     concession: Option | None = None  # rule 16(e), when land was given up: shown, not taken
-    notes: list[str] = field(default_factory=list)
 
     @property
     def fire_room_m(self) -> float:
         """The least open space beside the green strip, where a fire lane must run."""
         return min(s.metres for s in self.sides) - (
             rules.PERIPHERAL_GREEN_STRIP_M if self.green is not None else 0.0)
+
+    @property
+    def front_m(self) -> float:
+        """The setback towards the front road; the open space when no road meets the plot."""
+        return max((side.metres for side in self.sides if self.front_road in side.roads),
+                   default=self.open_space_m)
 
 
 def set_back(inputs: Inputs, copy: SurveyCopy, height: Height, widening: Widening) -> Setbacks:
@@ -93,15 +99,24 @@ def set_back(inputs: Inputs, copy: SurveyCopy, height: Height, widening: Widenin
         return _stop(s, "the net plot is too small for a high-rise", "The net plot is under "
                      f"{rules.MIN_HIGH_RISE_PLOT_SQM:,.0f} m², so no high-rise is allowed "
                      "(rule 7(a)(ii)). How tall should the buildings be, below 21 m?")
+    net = widening.net
     s.floors, s.counted_m = floors, height.storeys.counted_m(floors)
     s.high_rise = height.way == TABLE_IV_WAY
+    if not s.high_rise and rules.table_iii_line(net.area, s.counted_m) is None:
+        top = rules.table_iii_lines(net.area)[-1]
+        return _stop(s, f"the net plot's Table III row does not allow Stilt + {floors}",
+                     f"Step 2 read Table III from the plot's written area "
+                     f"({height.plot_sqm:,.1f} m²): Stilt + {floors}. After road widening the "
+                     f"net plot ({net.area:,.1f} m²) is in a row that stops "
+                     f"{'below' if top.below else 'at'} {top.up_to_m:g} m. How many floors "
+                     "should the setbacks be drawn for?")
     reach = _road_reach(copy, widening)
-    s.sides = _sides(s, widening.net, reach, floors)
+    s.front_road = _front_road(s, reach)
+    s.sides = _sides(s, net, reach, floors)
     s.open_space_m = _open_space(s, floors)
-    s.band, s.left = _band_and_left(widening.net, s.sides)
+    s.band, s.left = _band_and_left(net, s.sides)
     if s.high_rise:
-        s.green = widening.net.boundary.buffer(rules.PERIPHERAL_GREEN_STRIP_M).intersection(
-            widening.net)
+        s.green = net.boundary.buffer(rules.PERIPHERAL_GREEN_STRIP_M).intersection(net)
         s.long_blocks = tuple((length, rules.long_block_open_space_m(s.open_space_m, length))
                               for length in LONG_BLOCKS_M)
         s.options = _options(s, reach)
@@ -130,10 +145,22 @@ def _road_reach(copy: SurveyCopy, widening: Widening) -> dict[str, BaseGeometry]
     return out
 
 
-def _width_m(road: RoadSeen, height: Height) -> float:
+def _width(road: RoadSeen, height: Height) -> tuple[float, str]:
+    """A road's width as the rules reckon it, and whether it is the legal or the drawn one."""
     if road is height.road:
-        return height.reckoned_m
-    return rules.reckoned_road_width_m(road.legal_width_m or road.drawn_width_m)
+        return height.reckoned_m, height.width_from
+    if road.legal_width_m:
+        return rules.reckoned_road_width_m(road.legal_width_m), "legal"
+    return rules.reckoned_road_width_m(road.drawn_width_m), "drawn"
+
+
+def _front_road(s: Setbacks, reach: dict[str, BaseGeometry]) -> str | None:
+    """A high-rise's front is towards the main road; below high-rise, towards the bigger road
+    that meets the net plot (rule 5(f)(iii)), the main road between equals."""
+    roads = [road for road in s.copy.roads if road.name in reach]
+    if s.high_rise or not roads:
+        return s.height.road.name
+    return max(roads, key=lambda road: (_width(road, s.height)[0], road is s.height.road)).name
 
 
 def _sides(s: Setbacks, net: Polygon, reach: dict[str, BaseGeometry],
@@ -159,16 +186,20 @@ def _side_rule(s: Setbacks, floors: int, meets: list[RoadSeen]) -> tuple[float, 
         if not meets:
             return col4, "Table IV column 4"
         line = rules.table_iii_lines(plot)[-1]
-        front = max(rules.building_line_m(line, _width_m(road, h)) for road in meets)
+        lines = [(rules.building_line_m(line, _width(road, h)[0]), road) for road in meets]
+        front, road = max(lines, key=lambda pair: pair[0])
+        said = f"the Building Line for {road.name}'s {_width(road, h)[1]} width is {front:g} m"
         names = ", ".join(road.name for road in meets)
         if front > col4:
-            return front, f"towards {names}: Table III's Building Line, higher than Table IV"
-        return col4, f"towards {names}: Table IV column 4 (the Building Line is {front:g} m)"
+            return front, f"towards {names}: {said}, higher than Table IV"
+        return col4, f"towards {names}: Table IV column 4 ({said})"
     line = rules.table_iii_line(plot, counted)
-    side = line.side_m or 0.0
-    if h.road is not None and any(road.name == h.road.name for road in meets):
-        return rules.building_line_m(line, h.reckoned_m), "the front, towards the main road"
-    return side, "Table III column 10"
+    front = next((road for road in meets if road.name == s.front_road), None)
+    if front is not None:
+        width, how = _width(front, h)
+        return (rules.building_line_m(line, width),
+                f"the front, towards {front.name}, the bigger road ({how} width)")
+    return line.side_m or 0.0, "Table III column 10"
 
 
 def _open_space(s: Setbacks, floors: int) -> float:
@@ -195,19 +226,21 @@ def _options(s: Setbacks, reach: dict[str, BaseGeometry]) -> tuple[Option, ...]:
             continue
         sides = _sides(s, s.widening.net, reach, floors[-1])
         _, left = _band_and_left(s.widening.net, sides)
-        front = max((side.metres for side in sides if side.roads), default=band.open_space_m)
+        front = max((side.metres for side in sides if s.front_road in side.roads),
+                    default=band.open_space_m)
         out.append(Option(band.heights, floors, band.open_space_m, front, left.area))
     return tuple(out)
 
 
 def _concession(s: Setbacks) -> Option:
     """Rule 16(e): for land given up, a high-rise may keep its sides and rear down to 7 m clear,
-    the front as it is. Shown, not taken: it is one of three rewards, and only for a Master Plan
-    or Road Development Plan road."""
-    clear, main = rules.ROAD_SURRENDER_HIGH_RISE_CLEAR_M, s.height.road.name
-    sides = tuple(side if main in side.roads else SideSetback(
+    the front as it is. Every side that meets a road is kept as a front (the stricter reading).
+    Shown, not taken: it is one of three rewards, and only for a Master Plan or Road Development
+    Plan road."""
+    clear = rules.ROAD_SURRENDER_HIGH_RISE_CLEAR_M
+    sides = tuple(side if side.roads else SideSetback(
         side.number, side.faces, side.length_m, side.roads, min(side.metres, clear),
         "rule 16(e) concession", side.line) for side in s.sides)
     _, left = _band_and_left(s.widening.net, sides)
-    front = max((side.metres for side in sides if main in side.roads), default=clear)
+    front = max((side.metres for side in sides if side.roads), default=clear)
     return Option("the same height, with the concession", (s.floors,), clear, front, left.area)
