@@ -99,6 +99,7 @@ NOT_DOMAIN = {
     "steps.main_road_height_report.DRAWN_AROUND_M": "how far round the plot step 2's picture "
                                                     "shows",
     "steps.setbacks_report.DRAWN_AROUND_M": "how far round the plot step 4's picture shows",
+    "steps.tot_lot_report.DRAWN_AROUND_M": "how far round the plot step 5's picture shows",
     "steps.setbacks.LONG_BLOCKS_M": "the block lengths step 4's table shows the long-block note "
                                     "for: a table, no setback is drawn from it",
     "steps.main_road_height_report.SECTION_WIDTH_M": "rendering: the building's width in step 2's "

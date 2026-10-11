@@ -168,6 +168,34 @@ OPEN_SPACE_MIN_FRACTION = 0.10
 OPEN_SPACE_MIN_WIDTH_M = 3.0
 OPEN_SPACE_MIN_POCKET_SQM = 50.0
 OPEN_SPACE_CLAUSE = "G.O.168 rule 7(a)(vii)"
+# The 2012 wording, p.13 (one of the architect's seven files, what `siteplan steps` cites): "In
+# every high rise building site, an organized open space shall be utilized as greenery, tot lot or
+# soft landscaping, etc. shall be provided over and above the mandatory setbacks to be left in and
+# around the building. This space shall be at least 10% of total site area at ground level open to
+# sky and shall be a minimum width of 3m. This may be in one or more pockets with minimum area of
+# 50sq.m at each location."
+OPEN_SPACE_2012_CLAUSE = (
+    "G.O.168 rule 7(a)(vii), p.13 (a high-rise site keeps organised open space of at least 10% of "
+    "the total site area over and above the setbacks, at ground level open to sky, at least 3 m "
+    "wide, in pockets of at least 50 m²)"
+)
+# Rule 8(g), p.15, for a Group Development Scheme: "Minimum of 10% of site area shall be earmarked
+# for organised open space and be utilised as greenery, tot lot or soft landscaping, etc. and shall
+# be provided over and above the mandatory setbacks. Such open space shall be open to sky with a
+# minimum width of 3m. This may be in one or more pockets with minimum area of 50sq.m at each
+# location." The same 10% as rule 7(a)(vii): a high-rise group scheme meets both at once.
+GROUP_SCHEME_OPEN_SPACE_CLAUSE = (
+    "G.O.168 rule 8(g), p.15 (a Group Development Scheme earmarks at least 10% of the site area "
+    "as organised open space over and above the setbacks, open to sky, at least 3 m wide, in "
+    "pockets of at least 50 m²)"
+)
+# Rule 7(a)(xii), p.14: "The open space to be left between two blocks shall be equivalent to the
+# open space mentioned in Col. 4 of above Table - IV and this shall not be considered for organized
+# open space (Tot lot)."
+BLOCK_GAP_NOT_OPEN_SPACE_CLAUSE = (
+    "G.O.168 rule 7(a)(xii), p.14 (the open space between two blocks equals Table IV column 4 and "
+    "is not counted as organised open space)"
+)
 
 # Rule 7(viii) as substituted by G.O.Ms.No.7 of 05-01-2016, Amendment-8: the strip is required
 # "where the setback is 9m and above", which the 2012 text did not qualify.

@@ -12,6 +12,7 @@ from siteplan.steps import (
     road_widening_report,
     setbacks_report,
     survey_copy_report,
+    tot_lot_report,
 )
 from siteplan.steps.drawing import Picture
 from siteplan.steps.inputs import Inputs
@@ -20,9 +21,9 @@ from siteplan.steps.report import StepReport
 from siteplan.steps.road_widening import take_off
 from siteplan.steps.setbacks import set_back
 from siteplan.steps.survey_copy import copy_survey
+from siteplan.steps.tot_lot import lay_out
 
 LATER = {  # the architect's steps not built yet, each in a later stage
-    5: "The open space (tot-lot)",
     6: "Buildings, roads, parking and site works",
     7: "The final check of the whole plan",
 }
@@ -51,8 +52,13 @@ def run_steps(inputs: Inputs, out: Path) -> list[StepReport]:
     _write(out / "step4", "step4", fourth,
            None if setbacks.stopped else setbacks_report.picture(setbacks),
            setbacks_report.facts(setbacks))
-    _index(out, inputs, [first, second, third, fourth])
-    return [first, second, third, fourth]
+    tot_lot = lay_out(inputs, copy, setbacks)
+    fifth = tot_lot_report.report(tot_lot)
+    _write(out / "step5", "step5", fifth,
+           None if fifth.picture is None else tot_lot_report.picture(tot_lot),
+           tot_lot_report.facts(tot_lot))
+    _index(out, inputs, [first, second, third, fourth, fifth])
+    return [first, second, third, fourth, fifth]
 
 
 def _write(folder: Path, stem: str, report: StepReport, picture: Picture | None,

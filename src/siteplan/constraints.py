@@ -74,6 +74,7 @@ from siteplan.steps import main_road_height as step_height
 from siteplan.steps import road_widening as step_widening
 from siteplan.steps import setbacks as step_setbacks
 from siteplan.steps import survey_copy as step_copy
+from siteplan.steps import tot_lot as step_tot_lot
 from siteplan.validator import (
     accounting,
     clubhouse,
@@ -1620,6 +1621,15 @@ REGISTRY: tuple[Constraint, ...] = (
         note="The rules speak of the side abutting the road and do not say how much of it. "
              "Named in the step's report as the engine's own choice.",
         settles="The architect's word on which sides are fronts.",
+    ),
+    Constraint(
+        "Steps", "The tot-lot (step 5): how finely the cut across the land, or a pocket's growth "
+                 "into the building land beside it, is placed; pieces this close are one pocket.",
+        _m(step_tot_lot.CUT_TOLERANCE_M), Basis.ENGINE_DESIGN_ASSUMPTION,
+        "none (the engine's own)", ("steps.tot_lot.CUT_TOLERANCE_M",),
+        note="A search tolerance: the tot-lot comes out at least the need, to within a pocket "
+             "the cut cannot leave narrower than the rule's width.",
+        settles="Nothing: a drawing tolerance.",
     ),
     Constraint(
         "Steps", "Setbacks (step 4): less of the fire lane than this in a water body's buffer, "

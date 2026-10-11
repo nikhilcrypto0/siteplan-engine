@@ -36,6 +36,7 @@ class Inputs:
     source_kinds: dict[str, str]
     mode: str  # 'blind' or 'debug'
     given_as: str  # 'your answers' or 'the project file'
+    workspace: Path | None = None  # the firm's standards (its flat library), when given
 
     @property
     def site(self) -> str:
@@ -74,18 +75,20 @@ def from_answers(survey: Path, answers: dict, workspace: Path | None = None,
     project = build_project(draft, answers, defaults)
     if profile is not None:
         project = apply_profile(project, profile)
-    return _inputs(survey, draft, project, mode, "your answers")
+    return _inputs(survey, draft, project, mode, "your answers", workspace)
 
 
 def from_project(survey: Path, project_file: Path, workspace: Path | None = None,
                  mode: str = BLIND) -> Inputs:
-    defaults = load_defaults(workspace or survey.parent)
+    workspace = workspace or survey.parent
+    defaults = load_defaults(workspace)
     check(mode, survey, {}, None, defaults.finished_plans)
     project = json.loads(project_file.read_text())
-    return _inputs(survey, extract(survey), project, mode, "the project file")
+    return _inputs(survey, extract(survey), project, mode, "the project file", workspace)
 
 
-def _inputs(survey: Path, draft: Draft, project: dict, mode: str, given_as: str) -> Inputs:
+def _inputs(survey: Path, draft: Draft, project: dict, mode: str, given_as: str,
+            workspace: Path | None) -> Inputs:
     leaked = finished_values(project)
     if mode == BLIND and leaked:
         raise BlindLeak("A blind run may not use the firm's finished plan: "
@@ -102,7 +105,7 @@ def _inputs(survey: Path, draft: Draft, project: dict, mode: str, given_as: str)
                   {k: str(v) for k, v in (project.get("sources") or {}).items()},
                   {k: str(v) for k, v in (project.get("status") or {}).items()},
                   {k: str(v) for k, v in (project.get("source_kinds") or {}).items()},
-                  mode, given_as)
+                  mode, given_as, workspace)
 
 
 def compass(bearing_deg: float) -> str:

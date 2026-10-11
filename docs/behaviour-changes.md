@@ -4,6 +4,32 @@ A characterization test (tests/manifest.py) pins what the engine produces today.
 only together with a normative replacement test and an entry here: what changed, why, the
 evidence, and the test that now holds the behaviour. Newest first.
 
+## 2026-10-11: `siteplan steps` step 5 (the tot-lot)
+
+Stage 3 of the stage-wise build: step 5 (`steps/tot_lot.py`) keeps the organised open space, 10%
+of the whole plot for a high-rise site or a Group Development Scheme (rules 7(a)(vii) and 8(g),
+one 10%, not added; the whole plot is the architect's rule of 2026-10-11) and 5% for any other
+plot above 750 m² (rule 5(f)(vi)), in pockets at least 3 m wide and 50 m² (15 m² for the 5%),
+over and above the setbacks. It goes first where no block of the firm's flat library fits (his
+rule the same day) and on a water body's buffer outside the setbacks (rule 3(a)(iii)(3)); what
+that land cannot hold comes from the building land on the side of the largest pocket, or, with
+none, from the end of the land furthest from the main road, each cut off by one straight line
+(the engine's choice, named in the report).
+`Inputs` carries the workspace, so a step can read the firm's flat library; with none named,
+step 5 says the size and asks for it. No layout, check or verdict changes: the search, the
+validator and the legacy path read none of it.
+
+rules.py gains `OPEN_SPACE_2012_CLAUSE`, `GROUP_SCHEME_OPEN_SPACE_CLAUSE` and
+`BLOCK_GAP_NOT_OPEN_SPACE_CLAUSE` (the 2012 wording, pp.13-15). The rules' fingerprint moves with
+them, so the service's made-up baseline is re-pinned: the same notes, proposals, shown four,
+approval page and answer; only the digests move. Rule 5(f)(vi) (5% below high-rise) is now
+applied by the steps (inventory).
+
+Tests (normative): `tests/test_steps.py` (the 10%, 5% or none; a strip at the far end when blocks
+fit everywhere; a lake's buffer outside the setbacks holding the tot-lot; land no block fits on
+taken first and the rest grown beside it; the stops; the picture; step 5 in the five-questions,
+carried and seven-files guards).
+
 ## 2026-10-11: `siteplan steps` steps 2 and 4 (the height the main road allows; setbacks)
 
 Stage 2 of the stage-wise build: step 2 (`steps/main_road_height.py`) reads the height the main

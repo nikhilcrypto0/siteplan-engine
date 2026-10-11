@@ -729,13 +729,34 @@ INVENTORY: tuple[Entry, ...] = (
                       "sky at ground level.",
         f"{rules.OPEN_SPACE_MIN_FRACTION:.0%} of the site area; pockets at least "
         f"{rules.OPEN_SPACE_MIN_WIDTH_M:g} m wide and {rules.OPEN_SPACE_MIN_POCKET_SQM:g} m²",
-        rules.OPEN_SPACE_CLAUSE, Reading.INTERPRETED, _BOTH,
+        rules.OPEN_SPACE_CLAUSE, Reading.INTERPRETED, (*_BOTH, Where.STEPS),
         ("OPEN_SPACE_MIN_FRACTION", "OPEN_SPACE_MIN_WIDTH_M", "OPEN_SPACE_MIN_POCKET_SQM",
          "OPEN_SPACE_CLAUSE"),
         choice="The text says 'total site area' without saying gross or net. The layout meets "
                "10% of the larger of the two, so it passes on either reading; the checker tests "
                "both. The tot-lot keeps off the roads, the fire lanes and the block gaps.",
         settles="A sanctioned plan's tot-lot share and the site area it was taken of.",
+    ),
+    Entry(
+        "Open space", "The tot-lot as the 2012 text words it, for a high-rise site (rule "
+                      "7(a)(vii)) and a Group Development Scheme (rule 8(g)): one 10%, not added.",
+        f"{rules.OPEN_SPACE_MIN_FRACTION:.0%} of the whole plot; pockets at least "
+        f"{rules.OPEN_SPACE_MIN_WIDTH_M:g} m wide and {rules.OPEN_SPACE_MIN_POCKET_SQM:g} m²",
+        f"{rules.OPEN_SPACE_2012_CLAUSE}; {rules.GROUP_SCHEME_OPEN_SPACE_CLAUSE}",
+        Reading.INTERPRETED, (Where.STEPS,),
+        ("OPEN_SPACE_2012_CLAUSE", "GROUP_SCHEME_OPEN_SPACE_CLAUSE"),
+        choice="`siteplan steps` (step 5) takes the share of the whole plot (the architect's rule "
+               "of 2026-10-11: 'total site area' does not say whole or net, and the whole is the "
+               "larger) and places it first where no block of the firm's fits (his rule the same "
+               "day). A water body's buffer outside the setbacks counts (rule 3(a)(iii)(3)).",
+        settles="A sanctioned plan's tot-lot and the area it was taken of.",
+    ),
+    Entry(
+        "Open space", "The gap between two blocks is never counted as tot-lot (the 2012 "
+                      "wording).",
+        "never counted", rules.BLOCK_GAP_NOT_OPEN_SPACE_CLAUSE, Reading.AS_WRITTEN,
+        (Where.STEPS,), ("BLOCK_GAP_NOT_OPEN_SPACE_CLAUSE",),
+        choice="Said by step 5; the gaps come with the blocks (step 6).",
     ),
     Entry(
         "Open space", "Part of the open space as permeable softscape, and a cap on paved area.",
@@ -779,14 +800,14 @@ INVENTORY: tuple[Entry, ...] = (
         f"{rules.NON_HIGH_RISE_OPEN_SPACE_MIN_WIDTH_M:g} m wide and "
         f"{rules.NON_HIGH_RISE_OPEN_SPACE_MIN_POCKET_SQM:g} m², plots above "
         f"{rules.NON_HIGH_RISE_OPEN_SPACE_ABOVE_SQM:g} m²",
-        rules.NON_HIGH_RISE_OPEN_SPACE_CLAUSE, Reading.NOT_MODELLED,
-        uses=("NON_HIGH_RISE_OPEN_SPACE_FRACTION", "NON_HIGH_RISE_OPEN_SPACE_ABOVE_SQM",
-              "NON_HIGH_RISE_OPEN_SPACE_MIN_WIDTH_M", "NON_HIGH_RISE_OPEN_SPACE_MIN_POCKET_SQM",
-              "NON_HIGH_RISE_OPEN_SPACE_CLAUSE"),
-        choice="Rule 5(f)(vi), p.10, for the plots Table III governs. A group development scheme "
-               "(rule 8(g)) and a high-rise site (rule 7(a)(vii)) keep 10%, the same 'over and "
-               "above the setbacks', so the engine's schemes never meet the 5%. Which applies to "
-               "a site that could take either depends on the design.",
+        rules.NON_HIGH_RISE_OPEN_SPACE_CLAUSE, Reading.AS_WRITTEN, (Where.STEPS,),
+        ("NON_HIGH_RISE_OPEN_SPACE_FRACTION", "NON_HIGH_RISE_OPEN_SPACE_ABOVE_SQM",
+         "NON_HIGH_RISE_OPEN_SPACE_MIN_WIDTH_M", "NON_HIGH_RISE_OPEN_SPACE_MIN_POCKET_SQM",
+         "NON_HIGH_RISE_OPEN_SPACE_CLAUSE"),
+        choice="Rule 5(f)(vi), p.10, for the plots Table III governs: `siteplan steps` (step 5) "
+               "keeps it on a plot above 750 m² that is neither a high-rise site nor a Group "
+               "Development Scheme. Those keep 10% (rules 7(a)(vii) and 8(g)), so the engine's "
+               "other parts, which plan group schemes, never meet the 5%."
     ),
     # Access and fire
     Entry(
