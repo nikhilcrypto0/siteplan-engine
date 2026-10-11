@@ -71,7 +71,8 @@ balanced and open-space options, built on the reading that leaves the stilt floo
 same layouts; the robust one, which holds under every reading, is S+7, S+7, S+3 (204 flats,
 276,760 sft) where it was 3 x S+7, whose 24.15 m now asks 9 m. 119 laid out where 116 were.
 Re-pinned on 2026-10-10 again, where rules.py gains the values `siteplan steps` shows (the 12 m
-site-plan band, the splay table, rule 16's 2012 wording and the 200% TDR): no rule the search or
+site-plan band, the splay table, rule 16's and the water buffer's 2012 wording and the 200%
+TDR): no rule the search or
 the validator reads changes, but the rules' fingerprint (rules_digest) covers every value in
 rules.py, so the same proposals and the same four shown carry new digests; the model's answer
 is unchanged.
@@ -120,15 +121,15 @@ PINNED = {
         "full-ALL-ALL-114",
         "full-ALL-ALL-5",
     ],
-    "proposed_sha256": "f34818c6e2fee044bb2e5f223c927926a5914850b29613b3c9ed8014fcb99e75",
+    "proposed_sha256": "f9d1dd19f9d607ec04f56c7fdf2eab025a67b5ef9d3938f43352f87aa830067b",
     "shown": [
         ["full-not_counted-allowed-90", "BALANCED"],
         ["full-not_counted-allowed-86", "MAX_YIELD"],
         ["full-not_counted-ALL-65", "CONVENTIONAL_OPEN_SPACE"],
         ["full-ALL-ALL-113", "ROBUST"],
     ],
-    "shown_digests": ["1166b77f62375804", "ac979956680232bc",
-                      "c936ea2b99ab170c", "d4b7ee68cd157bb7"],
+    "shown_digests": ["2f53317272cc98cf", "97b59ad10724d2e9",
+                      "332dd73051fb7e77", "a1b459b429e29fcf"],
     "answer_sha256": "230e37bca31cae9f8b09abccaf6f3ff50fbc9bf084a5e694b9331ff9afe4348c",
     "approval_page_sha256": "cd3ebee2af46849756df643999df9b16d2cbc91d92c45101983782cff1eb0181",
 }

@@ -11,7 +11,7 @@ one site's scripts into the engine (`steps/`), each with a report that answers f
 lists everything the engine decided by itself. No layout, check or verdict changes: the search,
 the validator and the legacy path read none of it. rules.py gains the values the steps show (the
 12 m site-plan band, NBC 2016 Part 2 12.2.3(e); the splay table, G.O.168 5(f)(xiv); rule 16(a)-(f)
-and 17(b)(i) as the 2012 order words them), and `roads.Road` keeps the edge lines a road was
+and 17(b)(i) and the water buffer, rule 3(a)(ii), as the 2012 order words them), and `roads.Road` keeps the edge lines a road was
 measured on and the ground between them (new fields with defaults; nothing read before changes).
 
 The rules' fingerprint (`legal.resolve.rules_digest`, every value in rules.py) moves with the new
