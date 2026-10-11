@@ -12,8 +12,10 @@ from siteplan.steps.report import Choice, RuleUsed, StepReport, Table
 from siteplan.steps.survey_copy import (
     AGREES_PCT,
     APART,
+    BIGGEST,
     CARRIED,
     ENDS_AT_DEG,
+    NAMED,
     ROAD_LEVEL_REACH_M,
     ROAD_TOUCH_M,
     SHORT_RUN_M,
@@ -103,7 +105,12 @@ def _choices(copy: SurveyCopy) -> list[Choice]:
                 "of its own drawn lines reaches the plot there, so the road was taken on in its "
                 "own direction to the plot.",
                 "Otherwise the road would look as if it does not reach the plot."))
-    if copy.access is not None:
+    if copy.access is not None and copy.access_how == BIGGEST:
+        out.append(Choice(f"{copy.access.name} is taken as the main road: of the roads that meet "
+                          f"the plot it is the biggest, drawn {copy.access.drawn_width_m:.2f} m "
+                          "wide.", "Your rule: when the architect does not name the main road, "
+                          "the biggest road is the main road."))
+    elif copy.access is not None:
         site = copy.inputs.project.site
         matched = [f"lies on the {compass_word(site.access_side)}"] if site.access_side else []
         if site.measured_carriageway_m:
@@ -148,11 +155,14 @@ def _output(copy: SurveyCopy) -> tuple[list[str], list[Table]]:
                  + ", ".join(r.name for r in meeting) + ").")
     if copy.access is not None:
         a = copy.access
-        lines.append(f"Access road: {a.name} on the {a.lies}, drawn {a.drawn_width_m:.2f} m "
-                     f"wide; legal width {a.legal_width_m:.2f} m ({a.legal_source}).")
+        how = ("named in " + copy.inputs.given_as if copy.access_how == NAMED else
+               "the biggest road that meets the plot, by your rule")
+        legal = (f"legal width {a.legal_width_m:.2f} m ({a.legal_source})" if a.legal_width_m
+                 else "legal width not given")
+        lines.append(f"Main road: {a.name} on the {a.lies} ({how}), drawn "
+                     f"{a.drawn_width_m:.2f} m wide; {legal}.")
     else:
-        lines.append("Access road: not told apart from the others yet (step 2 picks the main "
-                     "road).")
+        lines.append("Main road: not found (see the questions).")
     t = copy.terrain
     if t:
         lines.append(f"Ground: {t.lowest:.2f} to {t.highest:.2f} m, falling to the "
@@ -209,12 +219,18 @@ def _questions(copy: SurveyCopy) -> list[str]:
            f"{r.lies})? It meets the plot." for r in copy.roads
            if r.meets != APART and r.legal_width_m is None]
     site = copy.inputs.project.site
+    given = copy.inputs.project.to_site().abutting_road_m
+    if copy.access_how == BIGGEST and given:
+        out.append(f"According to {copy.inputs.given_as}, the main road's legal width is "
+                   f"{given:.2f} m, without saying which road. Is it the width of "
+                   f"{copy.access.name}, the biggest road?")
     if copy.access is None and (site.abutting_road_m or site.abutting_road_ft):
         out.append(f"According to {copy.inputs.given_as} there is an access road, but no road "
                    "that meets the plot matches it (by its side and drawn width). Which road is "
                    "it?")
     elif copy.access is None:
-        out.append("Which road is the main (access) road? Step 2 starts from it.")
+        out.append("No drawn road meets the plot. Which road does the site take its access "
+                   "from? Step 2 starts from it.")
     for missing in copy.inputs.water_missing:
         out.append(f"The {missing} is named but the survey does not draw it in that colour or "
                    "layer. Where is it drawn?")
@@ -302,7 +318,8 @@ def facts(copy: SurveyCopy) -> dict:
                        "count": r.level[3]},
                    "legal_width_m": r.legal_width_m, "legal_width_from": r.legal_source or None}
                   for r in copy.roads],
-        "access_road": copy.access.name if copy.access else None,
+        "main_road": copy.access.name if copy.access else None,
+        "main_road_how": copy.access_how or None,
         "ground": None if t is None else {"lowest_m": t.lowest, "highest_m": t.highest,
                                           "falls_towards": compass_word(t.falls_towards),
                                           "slope_pct": round(t.slope_pct, 2)},

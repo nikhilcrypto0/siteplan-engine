@@ -464,3 +464,18 @@ def test_every_steps_report_cites_only_the_architects_seven_files(tmp_path):
         cited = set(re.findall(r"G\.O\.(?:M\.?S\.? ?)?(?:No\.)? ?(\d+)", text, re.I))
         assert cited <= SEVEN_FILES, (n, cited - SEVEN_FILES)
 
+
+def test_the_biggest_road_is_the_main_road_when_the_answers_name_none(tmp_path):
+    """The architect's rule (2026-10-11): when the main road is not named, the biggest road that
+    meets the plot is the main road. A legal width given without a road is asked, not pinned on
+    it."""
+    survey = _survey(tmp_path / "survey.dxf")
+    inputs = _inputs(tmp_path, survey, access_side=None, measured_carriageway_m=None)
+    copy = copy_survey(inputs)
+    east = next(r for r in copy.roads if r.lies == "east")  # 12 m, the biggest that meets it
+    assert copy.access is not None and copy.access.name == east.name
+    assert copy.access.legal_width_m is None  # the 9 m given is not pinned on it
+    report = survey_copy_report.report(copy)
+    assert any("Your rule" in c.why for c in report.choices)
+    assert any("without saying which road" in q for q in report.questions)
+

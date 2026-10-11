@@ -31,6 +31,7 @@ SIDE_MATCH_M = 0.05  # a written length's edge and a stretch this close in lengt
 AGREES_PCT = 1.0  # a drawn and a written figure this close agree
 WIDTH_MATCH_M = 0.05  # a road drawn this close to the carriageway the project records is it
 CARRIED = "ends at the plot (its straight edges stop short; taken on to the plot)"
+NAMED, BIGGEST = "named", "biggest"  # how the main road was found
 ENDS, ALONG, APART = "ends at the plot", "runs along the plot", "does not reach the plot"
 _LETTER = re.compile(r"[A-Za-z]{2,}")
 
@@ -86,7 +87,8 @@ class SurveyCopy:
     sides: list[Side]
     jogs: tuple[int, float]  # stretches shorter than SHORT_RUN_M: how many, how long in all
     roads: list[RoadSeen]
-    access: RoadSeen | None
+    access: RoadSeen | None  # the main road
+    access_how: str  # NAMED (in the answers) or BIGGEST (the architect's rule); '' when none
     terrain: Terrain | None
     levels: tuple[int, int]  # on the plot, off it
     inside: list[tuple[str, int]]  # text drawn inside the plot, and how many times
@@ -110,8 +112,8 @@ def copy_survey(inputs: Inputs) -> SurveyCopy:
     named = inputs.water_keys
     unnamed = [g for g in inputs.draft.line_work if g.key.upper() not in named]
     roads = [_seen(i, road, inputs) for i, road in enumerate(roads_near(survey), 1)]
-    access = _access(roads, inputs)
-    if access is not None:
+    access, access_how = _access(roads, inputs)
+    if access is not None and access_how == NAMED:
         roads = [_with_legal(r, inputs) if r is access else r for r in roads]
         access = next(r for r in roads if r.name == access.name)
     band = plot.buffer(rules.SITE_PLAN_NEIGHBOUR_BAND_M)
@@ -126,7 +128,7 @@ def copy_survey(inputs: Inputs) -> SurveyCopy:
         scale=scale, scale_is_a_check=checks,
         sides_read=cal is not None and bool(cal.agreeing or cal.rejected),
         boundary_how=_boundary_how(inputs), sides=sides, jogs=jogs, roads=roads,
-        access=access, terrain=survey.terrain(),
+        access=access, access_how=access_how, terrain=survey.terrain(),
         levels=(sum(lv.on_site for lv in survey.levels),
                 sum(not lv.on_site for lv in survey.levels)),
         inside=inside, inside_lines=[g for g in unnamed if g.crosses_plot],
@@ -262,23 +264,29 @@ def _seen(number: int, road: Road, inputs: Inputs) -> RoadSeen:
                     area=road.area, frontage=front, ground=ground)
 
 
-def _access(roads: list[RoadSeen], inputs: Inputs) -> RoadSeen | None:
-    """The road the project names as its access: on its side, as wide as its measured
-    carriageway, among the roads that meet the plot. None when it cannot be told apart."""
+def _access(roads: list[RoadSeen], inputs: Inputs) -> tuple[RoadSeen | None, str]:
+    """The main road. The one the project names (by its side and the carriageway it records),
+    among the roads that meet the plot; when it names none, the biggest road that meets the plot
+    (the architect's rule, 2026-10-11). None when a named road matches none of them, or no road
+    meets the plot: then it is asked."""
     site = inputs.project.site
-    if site.abutting_road_m is None and site.abutting_road_ft is None:
-        return None
     found = [r for r in roads if r.reaches]
-    if site.access_side:
-        found = [r for r in found if r.side_code == site.access_side]
-    if site.measured_carriageway_m:
-        found = [r for r in found
-                 if abs(r.drawn_width_m - site.measured_carriageway_m) <= WIDTH_MATCH_M]
-    return found[0] if len(found) == 1 else None
+    if site.access_side or site.measured_carriageway_m:
+        if site.access_side:
+            found = [r for r in found if r.side_code == site.access_side]
+        if site.measured_carriageway_m:
+            found = [r for r in found
+                     if abs(r.drawn_width_m - site.measured_carriageway_m) <= WIDTH_MATCH_M]
+        return (found[0], NAMED) if len(found) == 1 else (None, "")
+    if not found:
+        return None, ""
+    return max(found, key=lambda r: (r.drawn_width_m, r.frontage_m)), BIGGEST
 
 
 def _with_legal(road: RoadSeen, inputs: Inputs) -> RoadSeen:
     site = inputs.project.site
+    if site.abutting_road_m is None and site.abutting_road_ft is None:
+        return road
     told = inputs.told("abutting_road")
     if site.abutting_road_status:
         told += f"; {site.abutting_road_status}"
