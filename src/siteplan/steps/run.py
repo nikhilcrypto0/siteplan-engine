@@ -7,16 +7,21 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from siteplan.steps import road_widening_report, survey_copy_report
+from siteplan.steps import (
+    main_road_height_report,
+    road_widening_report,
+    setbacks_report,
+    survey_copy_report,
+)
 from siteplan.steps.drawing import Picture
 from siteplan.steps.inputs import Inputs
+from siteplan.steps.main_road_height import height_for
 from siteplan.steps.report import StepReport
 from siteplan.steps.road_widening import take_off
+from siteplan.steps.setbacks import set_back
 from siteplan.steps.survey_copy import copy_survey
 
 LATER = {  # the architect's steps not built yet, each in a later stage
-    2: "The main road and the height it allows",
-    4: "Setbacks from every side",
     5: "The open space (tot-lot)",
     6: "Buildings, roads, parking and site works",
     7: "The final check of the whole plan",
@@ -28,13 +33,26 @@ def run_steps(inputs: Inputs, out: Path) -> list[StepReport]:
     first = survey_copy_report.report(copy)
     _write(out / "step1", "step1", first, survey_copy_report.picture(copy),
            survey_copy_report.facts(copy))
+    height = height_for(inputs, copy)
+    second = main_road_height_report.report(height)
+    _write(out / "step2", "step2", second,
+           None if height.stopped else main_road_height_report.picture(height),
+           main_road_height_report.facts(height))
+    side = None if height.stopped else main_road_height_report.section(height)
+    if side is not None:
+        side.write(out / "step2", "step2-section")
     widening = take_off(inputs, copy)
     third = road_widening_report.report(widening)
     _write(out / "step3", "step3", third,
            None if widening.stopped else road_widening_report.picture(widening),
            road_widening_report.facts(widening))
-    _index(out, inputs, [first, third])
-    return [first, third]
+    setbacks = set_back(inputs, copy, height, widening)
+    fourth = setbacks_report.report(setbacks)
+    _write(out / "step4", "step4", fourth,
+           None if setbacks.stopped else setbacks_report.picture(setbacks),
+           setbacks_report.facts(setbacks))
+    _index(out, inputs, [first, second, third, fourth])
+    return [first, second, third, fourth]
 
 
 def _write(folder: Path, stem: str, report: StepReport, picture: Picture | None,

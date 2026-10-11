@@ -70,7 +70,9 @@ from siteplan.optimizer.search import land as search_land
 from siteplan.optimizer.search import layout as search_layout
 from siteplan.prototypes import compose
 from siteplan.prototypes import library as prototype_library
+from siteplan.steps import main_road_height as step_height
 from siteplan.steps import road_widening as step_widening
+from siteplan.steps import setbacks as step_setbacks
 from siteplan.steps import survey_copy as step_copy
 from siteplan.validator import (
     accounting,
@@ -1520,6 +1522,28 @@ REGISTRY: tuple[Constraint, ...] = (
              "for a river until it knows.",
     ),
     Constraint(
+        "Not used by generation", "G.O.50's notes under Table IV: 1 m less where rooms take no "
+                                  "light or air from a side (between the two limits); a block "
+                                  "longer than the first figure adds a share of its length less "
+                                  "the third, up to the fourth.",
+        f"{_m(rules.NO_OPENING_REDUCTION_M)} ({rules.NO_OPENING_LIMITS_M[0]:g}-"
+        f"{rules.NO_OPENING_LIMITS_M[1]:g} m); {_m(rules.LONG_BLOCK_FROM_M)}, "
+        f"{_pct(rules.LONG_BLOCK_SHARE)}, {_m(rules.LONG_BLOCK_LESS_M)}, "
+        f"{_m(rules.LONG_BLOCK_MAX_M)}", Basis.LEGAL_RULE,
+        f"{rules.NO_OPENING_CLAUSE}; {rules.LONG_BLOCK_CLAUSE}",
+        ("rules.NO_OPENING_REDUCTION_M", "rules.NO_OPENING_LIMITS_M", "rules.LONG_BLOCK_FROM_M",
+         "rules.LONG_BLOCK_SHARE", "rules.LONG_BLOCK_LESS_M", "rules.LONG_BLOCK_MAX_M"),
+        note="Used by `siteplan steps` (step 4) only, the architect's seven files being its rule "
+             "source; G.O.Ms.No.65 of 2019 (not one of them) deleted the long-block note.",
+    ),
+    Constraint(
+        "Not used by generation", "The least height of a room for human habitation, floor to "
+                                  "the bottom of the slab.",
+        _m(rules.ROOM_HEIGHT_MIN_M), Basis.LEGAL_RULE, rules.ROOM_HEIGHT_CLAUSE,
+        ("rules.ROOM_HEIGHT_MIN_M",),
+        note="`siteplan steps` (step 2) counts floors with it and a slab.",
+    ),
+    Constraint(
         "Not used by generation", "How far round the site the survey copy reports streets, "
                                   "buildings and premises.",
         _m(rules.SITE_PLAN_NEIGHBOUR_BAND_M), Basis.LEGAL_RULE,
@@ -1570,6 +1594,41 @@ REGISTRY: tuple[Constraint, ...] = (
         note="Each piece is listed with its side, width and why it counts; the step asks the "
              "architect to confirm every piece beyond the largest.",
         settles="The architect's outline of the land given up, or the net plot's.",
+    ),
+    Constraint(
+        "Steps", "The main road and the height (step 2): a storey is the shortest room the "
+                 "files allow and a slab this thick; the stilt is the shortest stilt and the "
+                 "same slab, standing the covered-parking raise above the ground; a height this "
+                 "close to a limit is at it.",
+        f"{_m(step_height.SLAB_M)} slab; storeys {_m(step_height.STOREYS.floor_m)}, stilt "
+        f"{_m(step_height.STOREYS.stilt_m)}; {step_height.FIT_M:g} m",
+        Basis.ENGINE_DESIGN_ASSUMPTION,
+        "none (the engine's own; the room, the stilt and the raise are rules.py's)",
+        ("steps.main_road_height.SLAB_M", "steps.main_road_height.STOREYS",
+         "steps.main_road_height.FIT_M"),
+        note="The architect's rule of 2026-10-11: floors are counted in the shortest storey the "
+             "files allow (the middle of a range, where a file gives one; none does), the stilt "
+             "separate and left out of the Table IV height. Named in the step's report.",
+        settles="The firm's own storey heights.",
+    ),
+    Constraint(
+        "Steps", "Setbacks (step 4): a side of the net plot meets a road when this much of it "
+                 "lies along the road's frontage, or along land given up to widen that road; "
+                 "such a side keeps the front setback.",
+        _m(step_setbacks.FACES_ALONG_M), Basis.ENGINE_DESIGN_ASSUMPTION,
+        "none (the engine's own)", ("steps.setbacks.FACES_ALONG_M",),
+        note="The rules speak of the side abutting the road and do not say how much of it. "
+             "Named in the step's report as the engine's own choice.",
+        settles="The architect's word on which sides are fronts.",
+    ),
+    Constraint(
+        "Steps", "Setbacks (step 4): less of the fire lane than this in a water body's buffer, "
+                 "or in the land left for buildings, is drawing noise and is not reported.",
+        f"{step_setbacks.LANE_CROSSES_SQM:g} m²", Basis.ENGINE_DESIGN_ASSUMPTION,
+        "none (the engine's own)", ("steps.setbacks.LANE_CROSSES_SQM",),
+        note="A tolerance on two outlines meeting, not a rule: more than this is reported and "
+             "asked.",
+        settles="Nothing: a drawing tolerance.",
     ),
     Constraint(
         "Steps", "Road widening (step 3): the plot's edge within this of a water body's lines "

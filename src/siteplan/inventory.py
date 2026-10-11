@@ -184,9 +184,10 @@ INVENTORY: tuple[Entry, ...] = (
                   "system and lift more.",
         f"{rules.STILT_MIN_HEIGHT_M:g} m; {rules.MECHANICAL_PARKING_FLOOR_MIN_HEIGHT_M:g} m",
         rules.TABLE_III_STILT_CLAUSE, Reading.NOT_MODELLED,
-        uses=("STILT_MIN_HEIGHT_M", "MECHANICAL_PARKING_FLOOR_MIN_HEIGHT_M"),
-        choice="The stilt's height is the firm's standard (the brief); nothing holds it to 2.5 m "
-               "yet. The 4.5 m is rule 5(c)'s, written for non-high-rise buildings.",
+        uses=("MECHANICAL_PARKING_FLOOR_MIN_HEIGHT_M",),
+        choice="The stilt's height is the firm's standard (the brief); outside `siteplan steps` "
+               "nothing holds it to 2.5 m yet (step 2 counts it, the entry below). The 4.5 m is "
+               "rule 5(c)'s, written for non-high-rise buildings.",
     ),
     Entry(
         "Height", "On a mid-sized plot, a building just below high-rise is allowed only through "
@@ -340,11 +341,15 @@ INVENTORY: tuple[Entry, ...] = (
     Entry(
         "Road", "A site on more than one road keeps the front setback towards the bigger road.",
         "front on the bigger road, column 10 on the other sides",
-        rules.TABLE_III_BIGGER_ROAD_CLAUSE, Reading.NOT_MODELLED,
-        uses=("TABLE_III_BIGGER_ROAD_CLAUSE",),
-        choice="The site model knows the access road, not which of the roads drawn beside the "
-               "plot abut it. An individual residential building may choose its front; a "
+        rules.TABLE_III_BIGGER_ROAD_CLAUSE, Reading.INTERPRETED, (Where.STEPS,),
+        ("TABLE_III_BIGGER_ROAD_CLAUSE",),
+        choice="Applied by `siteplan steps` (step 4) only: the front goes towards the main road "
+               "(the one the answers name, else the biggest that meets the plot, the "
+               "architect's rule of 2026-10-11), column 10 on every other side, a road or not. "
+               "The engine's other parts know the access road, not which roads drawn beside "
+               "the plot abut it. An individual residential building may choose its front; a "
                "group scheme does not.",
+        settles="A sanctioned plan of a building below high-rise on a corner plot.",
     ),
     # Plot
     Entry(
@@ -625,6 +630,49 @@ INVENTORY: tuple[Entry, ...] = (
                "buffer for it and asks. The engine's other parts use 50 m for a river within "
                "HMDA and UDA limits too (G.O.Ms.No.7 of 2016, not one of the seven files).",
         settles="The architect's word on whether the site lies within municipal limits.",
+    ),
+    Entry(
+        "Setbacks", "The two notes G.O.50 prints under Table IV: a side whose rooms take no light "
+                    "or air from it may keep 1 m less; a building longer than 40 m keeps more.",
+        f"{rules.NO_OPENING_REDUCTION_M:g} m less (between {rules.NO_OPENING_LIMITS_M[0]:g} and "
+        f"{rules.NO_OPENING_LIMITS_M[1]:g} m); above {rules.LONG_BLOCK_FROM_M:g} m long, "
+        f"{rules.LONG_BLOCK_SHARE:.0%} of the length less {rules.LONG_BLOCK_LESS_M:g} m more, up "
+        f"to {rules.LONG_BLOCK_MAX_M:g} m",
+        f"{rules.NO_OPENING_CLAUSE}; {rules.LONG_BLOCK_CLAUSE}", Reading.INTERPRETED,
+        (Where.STEPS,),
+        ("NO_OPENING_REDUCTION_M", "NO_OPENING_LIMITS_M", "NO_OPENING_CLAUSE",
+         "LONG_BLOCK_FROM_M", "LONG_BLOCK_SHARE", "LONG_BLOCK_LESS_M", "LONG_BLOCK_MAX_M",
+         "LONG_BLOCK_CLAUSE"),
+        choice="`siteplan steps` (step 4) applies the notes as G.O.50 prints them, the architect's "
+               "seven files being its only rule source: the long-block note sets the open space "
+               "for each length of block; the 1 m less is shown as an option of the building's "
+               "own design. G.O.Ms.No.65 of 2019, not one of the seven files, deleted the "
+               "long-block note, and the engine's other parts follow it.",
+        settles="A sanctioned plan of a block longer than 40 m, or the architect's word.",
+    ),
+    Entry(
+        "Height", "Below high-rise, Table III gives the permissible height by plot size and the "
+                  "front by the road, the stilt left out (the 2012 wording).",
+        _table_iii_heights(), rules.TABLE_III_2012_CLAUSE, Reading.AS_WRITTEN, (Where.STEPS,),
+        ("TABLE_III_2012_CLAUSE",),
+    ),
+    Entry(
+        "Setbacks", "A high-rise keeps a 2 m green planting strip all round, within the "
+                    "setbacks (the 2012 wording).",
+        f"{rules.PERIPHERAL_GREEN_STRIP_M:g} m on every side", rules.GREEN_STRIP_2012_CLAUSE,
+        Reading.AS_WRITTEN, (Where.STEPS,), ("GREEN_STRIP_2012_CLAUSE",),
+    ),
+    Entry(
+        "Height", "A room is at least 2.75 m high and a stilt floor at least 2.5 m: the shortest "
+                  "storeys the files allow.",
+        f"rooms {rules.ROOM_HEIGHT_MIN_M:g} m clear; stilt {rules.STILT_MIN_HEIGHT_M:g} m",
+        f"{rules.ROOM_HEIGHT_CLAUSE}; {rules.STILT_MIN_HEIGHT_2012_CLAUSE}", Reading.INTERPRETED,
+        (Where.STEPS,), ("ROOM_HEIGHT_MIN_M", "ROOM_HEIGHT_CLAUSE", "STILT_MIN_HEIGHT_M",
+                         "STILT_MIN_HEIGHT_2012_CLAUSE"),
+        choice="`siteplan steps` (step 2) counts floors with the shortest storey the files allow "
+               "(the room's 2.75 m and a slab), the architect's choice of 2026-10-11; no file "
+               "gives a greatest height, and with a range he takes the middle.",
+        settles="The firm's own storey heights.",
     ),
     Entry(
         "Survey", "A site plan shows the streets, buildings and premises within 12 m of the "
