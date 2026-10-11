@@ -667,11 +667,17 @@ def test_a_water_buffer_is_laid_over_the_setbacks_never_added(tmp_path):
     assert kind == "nala_over_10m"
     assert from_line.area == pytest.approx(s.left.area) == pytest.approx(from_edge.area)
     # the fire lane, 2 m to 8 m in, lies in the 9 m buffer along the west: 6 x 86 and the two
-    # 1 x 6 ends of the north and south lanes; whether a lane may run there is asked
+    # 1 x 6 ends of the north and south lanes; the architect's rule (2026-10-11) allows it, so it
+    # is said, never asked
     (kind, on_line, on_edge), = s.lane_in_water
     assert on_line == pytest.approx(6 * 86 + 2 * 6) == pytest.approx(on_edge)
     report = setbacks_report.report(s)
-    assert any("May a fire lane run in a water body's buffer?" in q for q in report.questions)
+    assert not any("fire lane" in q for q in report.questions)
+    assert any(c.what == "The fire lane may run in a water body's buffer." and "Your rule" in c.why
+               for c in report.choices)
+    assert any("Your rule (2026-10-11): the buffer and the setbacks overlap" in c.why
+               for c in report.choices)
+    assert any("allowed (your rule, 2026-10-11)" in line for line in report.output)
     assert setbacks_report.facts(s)["fire_lane_in_water_buffer_sqm"][0]["from_line_drawn"] == (
         pytest.approx(528))
 

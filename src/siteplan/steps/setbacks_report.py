@@ -151,8 +151,10 @@ def _choices(s: Setbacks) -> list[Choice]:
     if s.left_by_water:
         out.append(Choice("The water's buffer is laid over the setbacks: land in both is kept "
                           "free once, and the setback is still measured from the plot's edge.",
-                          "The engine's reading: the buffer is kept free of building and the "
-                          "setback is kept from the plot line; neither is added to the other."))
+                          "Your rule (2026-10-11): the buffer and the setbacks overlap; neither is "
+                          "added to the other. Rule 3(a)(iii)(3) reckons the buffer as tot-lot or "
+                          "open space 'and not for setback requirements'; you read the two as "
+                          "overlapping."))
     if s.options:
         out.append(Choice("The table of lower heights reads Table IV's first row as G.O.50 "
                           "prints it (up to 21 m: 7 m).", "Below "
@@ -166,6 +168,9 @@ def _choices(s: Setbacks) -> list[Choice]:
                           f"{lane:g} m lane on all sides and does not say where in the setback. "
                           "Where the buildings and roads finally put it, and its turns at the "
                           "corners, are step 6's."))
+    if s.lane_in_water:
+        out.append(Choice("The fire lane may run in a water body's buffer.", "Your rule "
+                          "(2026-10-11), with the buffer overlapping the setbacks."))
     return out
 
 
@@ -192,7 +197,8 @@ def _output(s: Setbacks) -> tuple[list[str], list[Table]]:
         for kind, on_line, on_edge in s.lane_in_water:
             lines.append(f"{on_line:,.1f} m² of the fire lane lies in the "
                          f"{kind.replace('_', ' ')}'s buffer from the line drawn "
-                         f"({on_edge:,.1f} m² from the plot's edge): asked.")
+                         f"({on_edge:,.1f} m² from the plot's edge): allowed (your rule, "
+                         "2026-10-11).")
     for kind, from_line, from_edge in s.left_by_water:
         lines.append(f"With the {kind.replace('_', ' ')}'s buffer laid over the setbacks: "
                      f"{from_line.area:,.1f} m² left if the buffer starts at the line drawn, "
@@ -302,13 +308,6 @@ def _questions(s: Setbacks) -> list[str]:
                    f"{low:g} m and a maximum of {high:g} m'. "
                    f"For a {s.open_space_m:g} m open space, is that {less:g} m, or at most "
                    f"{high:g} m?")
-    for kind, on_line, on_edge in s.lane_in_water:
-        out.append(f"The fire lane crosses the {kind.replace('_', ' ')}'s buffer "
-                   f"({on_line:,.1f} m² from the line drawn, {on_edge:,.1f} m² from the plot's "
-                   "edge). May a fire lane run in a water body's buffer? Rule 3(a)(ii) keeps it "
-                   "a green buffer with no building, and 3(a)(iii)(3) counts it as open space "
-                   "'and not for setback requirements'. If not, the lane moves in and the land "
-                   "left shrinks.")
     for item in carried.found_in(s.copy):
         if item.kind == carried.MARK and "power line" in item.later:
             out.append(f"{item.what}: where does the power line run, and what is its voltage? "
