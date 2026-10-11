@@ -23,6 +23,7 @@ from siteplan.steps.survey_copy import ROAD_TOUCH_M, RoadSeen, SurveyCopy
 
 FACES_ALONG_M = 2.0  # a side meets a road when this much of it lies along the road's frontage
 LONG_BLOCKS_M = (40.0, 50.0, 60.0, 80.0, 100.0, 120.0)  # block lengths the note is shown for
+LANE_CROSSES_SQM = 0.5  # less of the fire lane than this in a water's buffer is drawing noise
 
 
 @dataclass(frozen=True)
@@ -63,6 +64,7 @@ class Setbacks:
     sides: tuple[SideSetback, ...] = ()
     band: BaseGeometry | None = None  # the setback land
     green: BaseGeometry | None = None  # the 2 m green strip, inside the setbacks
+    fire_lane: BaseGeometry | None = None  # where a 6 m fire lane can run, inside the green strip
     left: BaseGeometry | None = None  # the land left for buildings, before any water buffer
     left_by_water: tuple[tuple[str, BaseGeometry, BaseGeometry], ...] = ()  # (water, from the
     # line drawn, from the plot's edge): the land left with its buffer laid over the setbacks
@@ -75,6 +77,22 @@ class Setbacks:
         """The least open space beside the green strip, where a fire lane must run."""
         return min(s.metres for s in self.sides) - (
             rules.PERIPHERAL_GREEN_STRIP_M if self.green is not None else 0.0)
+
+    @property
+    def lane_in_water(self) -> tuple[tuple[str, float, float], ...]:
+        """(water, m² of the fire lane in its buffer from the line drawn, from the plot's edge),
+        for each water body whose buffer the lane crosses."""
+        if self.fire_lane is None:
+            return ()
+        out = []
+        for water in self.widening.water:
+            if water.buffer_m is None:
+                continue
+            on_line = self.fire_lane.intersection(water.kept_free).area
+            on_edge = self.fire_lane.intersection(water.edge_kept_free).area
+            if max(on_line, on_edge) >= LANE_CROSSES_SQM:
+                out.append((water.kind, on_line, on_edge))
+        return tuple(out)
 
     @property
     def front_m(self) -> float:
@@ -117,6 +135,7 @@ def set_back(inputs: Inputs, copy: SurveyCopy, height: Height, widening: Widenin
     s.band, s.left = _band_and_left(net, s.sides)
     if s.high_rise:
         s.green = net.boundary.buffer(rules.PERIPHERAL_GREEN_STRIP_M).intersection(net)
+        s.fire_lane = _fire_lane(net, s.green)
         s.long_blocks = tuple((length, rules.long_block_open_space_m(s.open_space_m, length))
                               for length in LONG_BLOCKS_M)
         s.options = _options(s, reach)
@@ -215,6 +234,14 @@ def _band_and_left(net: Polygon, sides) -> tuple[BaseGeometry, BaseGeometry]:
     band = unary_union([side.line.buffer(side.metres) for side in sides if side.metres > 0])
     band = band.intersection(net)
     return band, net.difference(band)
+
+
+def _fire_lane(net: Polygon, green: BaseGeometry) -> BaseGeometry:
+    """Where a fire lane can run all round a high-rise (NBC Part 3 4.6(c)): the band the lane's
+    width wide just inside the green strip. Where the buildings and roads put it, and its turns,
+    are step 6's; where a setback is too narrow for it the band reaches into the land left."""
+    reach = rules.PERIPHERAL_GREEN_STRIP_M + rules.FIRE_TENDER_MIN_WIDTH_M
+    return net.boundary.buffer(reach).intersection(net).difference(green)
 
 
 def _options(s: Setbacks, reach: dict[str, BaseGeometry]) -> tuple[Option, ...]:

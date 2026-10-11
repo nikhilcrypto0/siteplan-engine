@@ -8,7 +8,7 @@ from siteplan import rules
 from siteplan.steps import carried
 from siteplan.steps.drawing import Layer, Picture, frame
 from siteplan.steps.report import Choice, RuleUsed, StepReport, Table
-from siteplan.steps.setbacks import FACES_ALONG_M, LONG_BLOCKS_M, Setbacks
+from siteplan.steps.setbacks import FACES_ALONG_M, LANE_CROSSES_SQM, LONG_BLOCKS_M, Setbacks
 from siteplan.steps.survey_copy import SHORT_RUN_M, side_label_at
 
 TITLE = "Setbacks from every side"
@@ -42,8 +42,8 @@ def report(s: Setbacks) -> StepReport:
     ]
     if s.high_rise:
         r.did += [f"Marked the {rules.PERIPHERAL_GREEN_STRIP_M:g} m green strip inside the "
-                  f"setback, and checked a {rules.FIRE_TENDER_MIN_WIDTH_M:g} m fire lane still "
-                  "fits beside it."]
+                  f"setback, drew where a {rules.FIRE_TENDER_MIN_WIDTH_M:g} m fire lane can run "
+                  "just inside it (dark red), and checked it fits."]
     if s.left_by_water:
         r.did.append("Laid the water's buffer over the setbacks.")
     r.did.append("Measured the land left for buildings, and showed what lower heights, longer "
@@ -160,8 +160,12 @@ def _choices(s: Setbacks) -> list[Choice]:
                           "and Table III may ask less of it; that is for the buildings "
                           "(step 6)."))
     if s.high_rise:
-        out.append(Choice("The fire lane is checked to fit, not drawn.", "Where it runs depends "
-                          "on the buildings (step 6)."))
+        green, lane = rules.PERIPHERAL_GREEN_STRIP_M, rules.FIRE_TENDER_MIN_WIDTH_M
+        out.append(Choice(f"The fire lane is drawn just inside the green strip, {green:g} m to "
+                          f"{green + lane:g} m in from the edge, all round.", "NBC asks a "
+                          f"{lane:g} m lane on all sides and does not say where in the setback. "
+                          "Where the buildings and roads finally put it, and its turns at the "
+                          "corners, are step 6's."))
     return out
 
 
@@ -179,7 +183,16 @@ def _output(s: Setbacks) -> tuple[list[str], list[Table]]:
         room = s.fire_room_m
         fits = "it fits" if room >= rules.FIRE_TENDER_MIN_WIDTH_M - 1e-6 else "IT DOES NOT FIT"
         lines.append(f"Fire lane: beside the green strip the narrowest setback leaves {room:g} m "
-                     f"for a {rules.FIRE_TENDER_MIN_WIDTH_M:g} m lane: {fits}.")
+                     f"for a {rules.FIRE_TENDER_MIN_WIDTH_M:g} m lane: {fits}. Drawn in dark "
+                     f"red: {s.fire_lane.area:,.1f} m².")
+        into = s.fire_lane.intersection(s.left).area
+        if into >= LANE_CROSSES_SQM:
+            lines.append(f"The lane reaches {into:,.1f} m² into the land left for buildings, "
+                         "where the setback is too narrow for it.")
+        for kind, on_line, on_edge in s.lane_in_water:
+            lines.append(f"{on_line:,.1f} m² of the fire lane lies in the "
+                         f"{kind.replace('_', ' ')}'s buffer from the line drawn "
+                         f"({on_edge:,.1f} m² from the plot's edge): asked.")
     for kind, from_line, from_edge in s.left_by_water:
         lines.append(f"With the {kind.replace('_', ' ')}'s buffer laid over the setbacks: "
                      f"{from_line.area:,.1f} m² left if the buffer starts at the line drawn, "
@@ -289,6 +302,13 @@ def _questions(s: Setbacks) -> list[str]:
                    f"{low:g} m and a maximum of {high:g} m'. "
                    f"For a {s.open_space_m:g} m open space, is that {less:g} m, or at most "
                    f"{high:g} m?")
+    for kind, on_line, on_edge in s.lane_in_water:
+        out.append(f"The fire lane crosses the {kind.replace('_', ' ')}'s buffer "
+                   f"({on_line:,.1f} m² from the line drawn, {on_edge:,.1f} m² from the plot's "
+                   "edge). May a fire lane run in a water body's buffer? Rule 3(a)(ii) keeps it "
+                   "a green buffer with no building, and 3(a)(iii)(3) counts it as open space "
+                   "'and not for setback requirements'. If not, the lane moves in and the land "
+                   "left shrinks.")
     for item in carried.found_in(s.copy):
         if item.kind == carried.MARK and "power line" in item.later:
             out.append(f"{item.what}: where does the power line run, and what is its voltage? "
@@ -302,6 +322,8 @@ def picture(s: Setbacks) -> Picture:
         Layer("SETBACK", "#f08c00", 30, "Setback: no building here", fill=0.30, width=0.5),
         Layer("GREEN-STRIP", "#2e8b3d", 3, f"{rules.PERIPHERAL_GREEN_STRIP_M:g} m green strip "
               "(inside the setback)", fill=0.55, width=0.5),
+        Layer("FIRE-LANE", "#8b0000", 14, f"Where the {rules.FIRE_TENDER_MIN_WIDTH_M:g} m fire "
+              "lane can run (inside the setback)", fill=0.85, width=0.5),
         Layer("WATER-BUFFER-EDGE", "#b9e6f2", 4, "Water's buffer if the water reaches the "
               "plot's edge", fill=0.35, width=0.8, dash="4 3"),
         Layer("WATER-BUFFER", "#5cc4dd", 4, "Water's buffer from the line drawn", fill=0.45,
@@ -318,6 +340,7 @@ def picture(s: Setbacks) -> Picture:
     for water in s.widening.water:
         p.add("WATER-BUFFER-EDGE", water.edge_kept_free)
         p.add("WATER-BUFFER", water.kept_free)
+    p.add("FIRE-LANE", s.fire_lane)
     p.add("LEFT", s.left)
     p.add("NET-PLOT", net)
     for side in s.sides:
@@ -346,6 +369,10 @@ def facts(s: Setbacks) -> dict:
             "setback_sqm": round(s.band.area, 2),
             "green_strip_sqm": None if s.green is None else round(s.green.area, 2),
             "fire_lane_room_m": round(s.fire_room_m, 2) if s.high_rise else None,
+            "fire_lane_sqm": None if s.fire_lane is None else round(s.fire_lane.area, 2),
+            "fire_lane_in_water_buffer_sqm": [{"water": kind, "from_line_drawn": round(a, 2),
+                                               "from_plot_edge": round(b, 2)}
+                                              for kind, a, b in s.lane_in_water],
             "left_sqm": round(s.left.area, 2),
             "left_with_water_sqm": [{"water": kind, "buffer_from_line_drawn": round(a.area, 2),
                                      "buffer_from_plot_edge": round(b.area, 2)}

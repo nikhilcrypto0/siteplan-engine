@@ -1622,6 +1622,15 @@ REGISTRY: tuple[Constraint, ...] = (
         settles="The architect's word on which sides are fronts.",
     ),
     Constraint(
+        "Steps", "Setbacks (step 4): less of the fire lane than this in a water body's buffer, "
+                 "or in the land left for buildings, is drawing noise and is not reported.",
+        f"{step_setbacks.LANE_CROSSES_SQM:g} m²", Basis.ENGINE_DESIGN_ASSUMPTION,
+        "none (the engine's own)", ("steps.setbacks.LANE_CROSSES_SQM",),
+        note="A tolerance on two outlines meeting, not a rule: more than this is reported and "
+             "asked.",
+        settles="Nothing: a drawing tolerance.",
+    ),
+    Constraint(
         "Steps", "Road widening (step 3): the plot's edge within this of a water body's lines "
                  "runs alongside it; the water's buffer is shown from that edge as well as from "
                  "the lines drawn.",

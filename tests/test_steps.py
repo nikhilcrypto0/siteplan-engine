@@ -626,13 +626,29 @@ def test_a_high_rise_keeps_table_iv_on_every_side_with_the_green_strip_inside(tm
     assert "LAND LEFT FOR BUILDINGS: 7,000.0 m²" in text and "it fits" in text
 
 
+def test_the_fire_lane_is_drawn_in_dark_red_just_inside_the_green_strip(tmp_path):
+    """The lane runs 2 m to 8 m in from the edge all round: 116 x 86 less 104 x 74. It lies
+    inside the 10 m setback, and the picture draws it on its own dark red layer."""
+    s = _setbacks(_inputs(tmp_path, **HIGH_RISE))
+    assert s.fire_lane.area == pytest.approx(116 * 86 - 104 * 74)
+    assert s.fire_lane.difference(s.band).area == pytest.approx(0, abs=1e-6)
+    assert s.fire_lane.intersection(s.green).area == pytest.approx(0, abs=1e-6)
+    assert not s.lane_in_water
+    p = setbacks_report.picture(s)
+    assert next(layer for layer in p.layers if layer.name == "FIRE-LANE").colour == "#8b0000"
+    assert any(name == "FIRE-LANE" for name, _ in p.shapes)
+    assert "Drawn in dark red: 2,280.0 m²" in setbacks_report.report(s).markdown()
+    assert setbacks_report.facts(s)["fire_lane_sqm"] == pytest.approx(2280)
+
+
 def test_below_high_rise_table_iii_gives_the_front_to_the_bigger_road_and_column_10_elsewhere(
         tmp_path):
     """The 9 m main road allows 15 m (step 2): Table III row 11's 15 m line keeps 6 m (column
     10) on every side but the one towards the bigger road, the 12 m road along the east, which
     keeps the Building Line for a road up to 12 m, 3 m (rule 5(f)(iii))."""
     s = _setbacks(_inputs(tmp_path))
-    assert not s.high_rise and s.green is None and not s.options
+    assert not s.high_rise and s.green is None and not s.options and s.fire_lane is None
+    assert not any(name == "FIRE-LANE" for name, _ in setbacks_report.picture(s).shapes)
     east = next(side for side in s.sides if side.faces == "east")
     assert s.front_road == east.roads[0] and east.metres == 3 and "bigger road" in east.why
     assert {side.metres for side in s.sides if side is not east} == {6}
@@ -650,6 +666,14 @@ def test_a_water_buffer_is_laid_over_the_setbacks_never_added(tmp_path):
     (kind, from_line, from_edge), = s.left_by_water
     assert kind == "nala_over_10m"
     assert from_line.area == pytest.approx(s.left.area) == pytest.approx(from_edge.area)
+    # the fire lane, 2 m to 8 m in, lies in the 9 m buffer along the west: 6 x 86 and the two
+    # 1 x 6 ends of the north and south lanes; whether a lane may run there is asked
+    (kind, on_line, on_edge), = s.lane_in_water
+    assert on_line == pytest.approx(6 * 86 + 2 * 6) == pytest.approx(on_edge)
+    report = setbacks_report.report(s)
+    assert any("May a fire lane run in a water body's buffer?" in q for q in report.questions)
+    assert setbacks_report.facts(s)["fire_lane_in_water_buffer_sqm"][0]["from_line_drawn"] == (
+        pytest.approx(528))
 
 
 def test_the_road_widening_concession_is_shown_never_taken(tmp_path):
