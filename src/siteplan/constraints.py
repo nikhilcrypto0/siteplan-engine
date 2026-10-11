@@ -1628,7 +1628,17 @@ REGISTRY: tuple[Constraint, ...] = (
         _m(step_tot_lot.CUT_TOLERANCE_M), Basis.ENGINE_DESIGN_ASSUMPTION,
         "none (the engine's own)", ("steps.tot_lot.CUT_TOLERANCE_M",),
         note="A search tolerance: the tot-lot comes out at least the need, to within a pocket "
-             "the cut cannot leave narrower than the rule's width.",
+             "the cut cannot leave narrower than the rule's width. A pocket this short of the "
+             "least width still counts, so a strip drawn exactly 3 m wide is 3 m wide.",
+        settles="Nothing: a drawing tolerance.",
+    ),
+    Constraint(
+        "Steps", "The tot-lot (step 5): two outlines GEOS cannot overlay ('non-noded "
+                 "intersection') are snapped to this grid and tried again.",
+        _m(step_tot_lot.GRID_M), Basis.ENGINE_DESIGN_ASSUMPTION,
+        "none (the engine's own)", ("steps.tot_lot.GRID_M",),
+        note="A geometry library's tolerance, used only when an overlay fails; a millimetre "
+             "moves no area that is reported.",
         settles="Nothing: a drawing tolerance.",
     ),
     Constraint(

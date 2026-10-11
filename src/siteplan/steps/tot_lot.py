@@ -10,9 +10,12 @@ The gaps between blocks never count (rule 7(a)(xii)): they come with the blocks 
 from __future__ import annotations
 
 import math
+import warnings
 from dataclasses import dataclass
 from pathlib import Path
 
+from shapely import set_precision
+from shapely.errors import GEOSException
 from shapely.geometry import Polygon
 from shapely.geometry.base import BaseGeometry
 from shapely.ops import unary_union
@@ -25,7 +28,9 @@ from siteplan.steps.inputs import Inputs, bearing, compass
 from siteplan.steps.setbacks import Setbacks
 from siteplan.steps.survey_copy import SurveyCopy
 
-CUT_TOLERANCE_M = 0.01  # how finely a cut across the land, or a pocket's growth, is placed
+CUT_TOLERANCE_M = 0.01  # how finely a cut is placed; pieces this close are one pocket; a
+# width this short of the least still counts (a 3.000 m strip is 3 m wide)
+GRID_M = 0.001  # two outlines GEOS cannot overlay are snapped to this grid and tried again
 WATER, THIN, BLOCK = "the water's buffer", "land no block fits on", "land a block fits on"
 FROM_LINE, FROM_EDGE = "the buffer from the line drawn", "the buffer from the plot's edge"
 
@@ -74,16 +79,25 @@ class Blocks:
     source: str  # the file and how far it is confirmed
 
 
+class NoBlocks(Exception):
+    """The workspace names a flat library that cannot be read or composed."""
+
+
 def firm_blocks(workspace: Path | None) -> Blocks | None:
-    """The blocks the firm's flat library composes (the prototype kit), or None when the
-    workspace names no library."""
+    """The blocks the firm's flat library composes (the prototype kit, the flats in equal
+    shares), or None when the workspace names no library."""
     if workspace is None:
         return None
     defaults = load_defaults(workspace)
     if not defaults.flat_library:
         return None
-    library = FlatLibrary.model_validate_json((workspace / defaults.flat_library).read_text())
-    kit = compose_library(library)
+    try:
+        library = FlatLibrary.model_validate_json(
+            (workspace / defaults.flat_library).read_text())
+        kit = compose_library(library)
+    except (OSError, ValueError) as problem:
+        first = str(problem).splitlines()[0]
+        raise NoBlocks(f"{defaults.flat_library} cannot be used: {first}") from problem
     smallest = min(kit, key=lambda block: block.length_m * block.depth_m)
     return Blocks(min(block.depth_m for block in kit), (smallest.length_m, smallest.depth_m),
                   len(kit), f"{defaults.flat_library}, the firm's flat library in the workspace "
@@ -115,6 +129,7 @@ class Placing:
     pockets: tuple[Pocket, ...]
     grew_from: str  # how the rest was found: 'beside', 'far end', or '' when free land held it
     need_sqm: float
+    block_land_after: BaseGeometry  # where a block fits once the tot-lot is out, measured again
 
     @property
     def short_sqm(self) -> float:
@@ -126,11 +141,7 @@ class Placing:
     @property
     def after(self) -> BaseGeometry:
         """The land left for buildings, roads and parking once the tot-lot is out."""
-        return self.land.difference(self.tot_lot)
-
-    @property
-    def block_land_after(self) -> BaseGeometry:
-        return self.block_land.difference(self.tot_lot)
+        return _overlay(self.land, self.tot_lot, DIFF)
 
 
 @dataclass
@@ -167,11 +178,15 @@ def lay_out(inputs: Inputs, copy: SurveyCopy, setbacks: Setbacks) -> TotLot:
     t.share = share_for(setbacks.high_rise, setbacks.widening.group_scheme, t.plot_sqm)
     if t.share is None:
         return t
-    t.blocks = firm_blocks(inputs.workspace)
+    ask = ("Which flat library does the firm build with? Name it as flat_library in the "
+           "workspace's siteplan.workspace.json.")
+    try:
+        t.blocks = firm_blocks(inputs.workspace)
+    except NoBlocks as problem:
+        return _stop(t, f"the firm's flat library cannot be used ({problem})", ask)
     if t.blocks is None:
         return _stop(t, "the firm's blocks are not known, and the tot-lot goes first where none "
-                        "of them fits", "Which flat library does the firm build with? Name it "
-                        "as flat_library in the workspace's siteplan.workspace.json.")
+                        "of them fits", ask)
     water = [w for w in setbacks.widening.water if w.buffer_m is not None]
     t.waiting = tuple(w.kind for w in setbacks.widening.water if w.buffer_m is None)
     readings = [("", None)] if not water else [
@@ -181,8 +196,8 @@ def lay_out(inputs: Inputs, copy: SurveyCopy, setbacks: Setbacks) -> TotLot:
     start = next((g for g in (road.frontage, road.ground, road.area)
                   if g is not None and not g.is_empty), None)
     for reading, buffer in readings:
-        land = setbacks.left if buffer is None else setbacks.left.difference(buffer)
-        wet = None if buffer is None else setbacks.left.intersection(buffer)
+        land = setbacks.left if buffer is None else _overlay(setbacks.left, buffer, DIFF)
+        wet = None if buffer is None else _overlay(setbacks.left, buffer, MEET)
         t.placings += (place(land, wet, t.need_sqm, t.share, t.blocks, start,
                              setbacks.widening.net, reading),)
     return t
@@ -205,7 +220,7 @@ def place(land: BaseGeometry, wet: BaseGeometry | None, need_sqm: float, share: 
     water = keep(wet) if wet is not None else Polygon()
     water_lost = (wet.area - water.area) if wet is not None else 0.0
     block_land = block_land_in(land, blocks)
-    thin = keep(land.difference(block_land))
+    thin = keep(_overlay(land, block_land, DIFF))
     free = sorted(_parts(unary_union([water, thin])), key=lambda p: -p.area)
     taken, held = [], 0.0
     for part in free:
@@ -226,12 +241,14 @@ def place(land: BaseGeometry, wet: BaseGeometry | None, need_sqm: float, share: 
     tot_lot = unary_union(taken) if taken else Polygon()
     pockets = tuple(Pocket(part, compass(bearing((plot.centroid.x, plot.centroid.y),
                                                  (part.centroid.x, part.centroid.y))),
-                           tuple((kind, part.intersection(ground).area) for kind, ground in
-                                 ((WATER, water), (THIN, thin), (BLOCK, block_land))
-                                 if part.intersection(ground).area > 0))
+                           tuple((kind, _overlay(part, ground, MEET).area)
+                                 for kind, ground in ((WATER, water), (THIN, thin),
+                                                      (BLOCK, block_land))
+                                 if _overlay(part, ground, MEET).area > 0))
                     for part in _touching(_parts(tot_lot)))
+    after = _overlay(land, tot_lot, DIFF)
     return Placing(reading, land, water, water_lost, block_land, thin, tot_lot, pockets,
-                   grew_from, need_sqm)
+                   grew_from, need_sqm, block_land_in(after, blocks))
 
 
 def pockets_in(geometry: BaseGeometry, share: Share) -> BaseGeometry:
@@ -240,9 +257,9 @@ def pockets_in(geometry: BaseGeometry, share: Share) -> BaseGeometry:
     least pocket."""
     if geometry is None or geometry.is_empty:
         return Polygon()
-    half = share.min_width_m / 2
+    half = share.min_width_m / 2 - CUT_TOLERANCE_M
     wide = geometry.buffer(-half, join_style="mitre").buffer(half, join_style="mitre")
-    wide = wide.intersection(geometry)
+    wide = _overlay(wide, geometry, MEET)
     return unary_union([p for p in _parts(wide) if p.area >= share.min_pocket_sqm])
 
 
@@ -251,11 +268,23 @@ def block_land_in(land: BaseGeometry, blocks: Blocks) -> BaseGeometry:
     pieces that hold the smallest."""
     if land.is_empty:
         return Polygon()
-    half = blocks.depth_m / 2
+    half = blocks.depth_m / 2 - CUT_TOLERANCE_M
     wide = land.buffer(-half, join_style="mitre").buffer(half, join_style="mitre")
-    wide = wide.intersection(land)
+    wide = _overlay(wide, land, MEET)
     length, depth = blocks.smallest
     return unary_union([p for p in _parts(wide) if p.area >= length * depth])
+
+
+MEET, DIFF = "intersection", "difference"
+
+
+def _overlay(a: BaseGeometry, b: BaseGeometry, how: str) -> BaseGeometry:
+    """a's intersection with b, or a less b. GEOS refuses some outlines that meet at a hair's
+    breadth ('non-noded intersection'); those are snapped to a millimetre grid and tried again."""
+    try:
+        return getattr(a, how)(b)
+    except GEOSException:
+        return getattr(set_precision(a, GRID_M), how)(set_precision(b, GRID_M))
 
 
 def _parts(geometry: BaseGeometry) -> list[Polygon]:
@@ -288,7 +317,12 @@ def _toward(start: BaseGeometry | None, end: BaseGeometry) -> tuple[float, float
 def _lengthwise(part: BaseGeometry, road: BaseGeometry | None) -> tuple[float, float] | None:
     """The direction along a pocket's length (its smallest enclosing rectangle's long side),
     pointing away from the main road."""
-    (ax, ay), (bx, by), (cx, cy) = list(part.minimum_rotated_rectangle.exterior.coords)[:3]
+    with warnings.catch_warnings():  # GEOS divides by zero on a rectangle square to the axes
+        warnings.simplefilter("ignore", RuntimeWarning)
+        rectangle = part.minimum_rotated_rectangle
+    if not isinstance(rectangle, Polygon):  # a line or a point: no length to cut along
+        return None
+    (ax, ay), (bx, by), (cx, cy) = list(rectangle.exterior.coords)[:3]
     dx, dy = max(((bx - ax, by - ay), (cx - bx, cy - by)), key=lambda d: math.hypot(*d))
     length = math.hypot(dx, dy)
     if length <= CUT_TOLERANCE_M:
@@ -303,6 +337,7 @@ def _straight_cut(region: BaseGeometry, toward: tuple[float, float] | None, area
     """The part of `region` furthest along `toward` that holds `area` m² of pockets that count,
     cut off by one straight line square to it. All of it when it holds no more."""
     whole = keep(region)
+    toward = toward or _lengthwise(region, None)
     if whole.area <= area or toward is None:
         return whole
     ux, uy = toward
@@ -316,7 +351,7 @@ def _straight_cut(region: BaseGeometry, toward: tuple[float, float] | None, area
                         (x - side * uy + side * ux, y + side * ux + side * uy),
                         (x + side * uy + side * ux, y - side * ux + side * uy),
                         (x + side * uy, y - side * ux)])
-        return keep(region.intersection(half))
+        return keep(_overlay(region, half, MEET))
 
     low, high = min(along), max(along)
     while high - low > CUT_TOLERANCE_M:

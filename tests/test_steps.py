@@ -8,7 +8,8 @@ from pathlib import Path
 
 import ezdxf
 import pytest
-from shapely.geometry import LineString, Polygon
+from shapely import wkt
+from shapely.geometry import LineString, Polygon, box
 
 from siteplan import rules
 from siteplan.blind import BlindLeak
@@ -28,7 +29,16 @@ from siteplan.steps.road_widening import take_off
 from siteplan.steps.run import run_steps
 from siteplan.steps.setbacks import set_back
 from siteplan.steps.survey_copy import ALONG, APART, CARRIED, ENDS, copy_survey
-from siteplan.steps.tot_lot import BLOCK, THIN, WATER, Blocks, lay_out, place, share_for
+from siteplan.steps.tot_lot import (
+    BLOCK,
+    THIN,
+    WATER,
+    Blocks,
+    lay_out,
+    place,
+    pockets_in,
+    share_for,
+)
 
 TEST_CLASS = "normative"
 
@@ -847,6 +857,11 @@ def test_a_water_buffer_outside_the_setbacks_holds_the_tot_lot_and_saves_buildin
         assert p.land.area == pytest.approx(80 * 70)
         assert p.on(WATER) == pytest.approx(1_080, abs=1.0) and p.on(BLOCK) == 0
         assert p.after.area == pytest.approx(80 * 70)
+    text = tot_lot_report.report(t).markdown()
+    assert "Took the land left for buildings from step 4 (7,000.0 m²)" in text
+    assert ("LAND LEFT FOR BUILDINGS, ROADS AND PARKING: 5,600.0 m² (5,600.0 m² left after the "
+            "setbacks and the water's buffer, less the tot-lot on it)") in text
+    assert "and on the water's buffer outside the setbacks" in text
 
 
 def test_land_no_block_fits_on_takes_the_tot_lot_first_and_the_rest_grows_beside_it():
@@ -880,6 +895,8 @@ def test_step_five_stops_when_step_four_has_no_land(tmp_path):
     t = lay_out(*_tot_lot_inputs(inputs))
     assert t.stopped and "step 4" in t.stopped
     assert "carried unchanged (this step stopped)" in tot_lot_report.report(t).markdown()
+    facts = tot_lot_report.facts(t)
+    assert facts["needed"] is None and facts["need_sqm"] is None  # not known, never "no"
 
 
 def test_step_five_draws_the_tot_lot_and_the_land_no_block_fits_on(tmp_path):
@@ -895,4 +912,84 @@ def test_step_five_draws_the_tot_lot_and_the_land_no_block_fits_on(tmp_path):
 def _tot_lot_inputs(inputs):
     copy = copy_survey(inputs)
     return inputs, copy, set_back(inputs, copy, height_for(inputs, copy), take_off(inputs, copy))
+
+
+# --- What the review of step 5 found ----------------------------------------------------------
+
+TEN = share_for(True, False, 10_000)
+CASES = Path(__file__).resolve().parent / "steps_data"
+
+
+def test_a_pocket_exactly_the_least_width_counts():
+    """An 88 x 3.0 m strip (a 9 m buffer outside a 6 m setback leaves one) is 3 m wide: it
+    counts, where the rounding of the width test once threw it out."""
+    assert pockets_in(box(6, 6, 94, 9), TEN).area == pytest.approx(88 * 3, abs=0.5)
+    assert pockets_in(box(6, 6, 94, 8.9), TEN).is_empty
+
+
+def test_outlines_geos_cannot_overlay_are_snapped_and_tried_again():
+    """A made-up plot (from the review's random probes) on which GEOS raised 'non-noded
+    intersection' and stopped the whole run: now it places, inside its land and buffer."""
+    case = json.loads((CASES / "geos_non_noded_case.json").read_text())
+    land, net, road = (wkt.loads(case[k]) for k in ("land", "net", "road"))
+    wet = wkt.loads(case["wet"]) if case["wet"] else None
+    share = share_for(False, False, 3_000) if case["five"] else TEN
+    p = place(land, wet, case["need"], share, Blocks(25.79, (19.58, 25.79), 4, "made up"),
+              road, net)
+    room = land if wet is None else land.union(wet)
+    assert p.tot_lot.difference(room.buffer(0.01)).area == pytest.approx(0, abs=0.01)
+
+
+def test_the_land_a_block_fits_on_is_measured_again_after_the_tot_lot():
+    """40 x 30 m all fits a 24.13 m block; a 600 m² cut at the far end leaves 20 x 30 m, too
+    narrow for one: none is left, not the 600 m² a plain subtraction would say."""
+    land = box(0, 0, 40, 30)
+    p = place(land, None, 600, TEN, EXAMPLE_BLOCKS, LineString([(0, 0), (0, 30)]), land)
+    assert p.block_land.area == pytest.approx(1_200)
+    assert p.after.area == pytest.approx(600, abs=1.0) and p.block_land_after.is_empty
+
+
+def test_land_that_cannot_hold_the_tot_lot_is_said_and_asked(tmp_path):
+    from dataclasses import replace
+
+    t = lay_out(*_tot_lot_inputs(_inputs(tmp_path, **HIGH_RISE)))
+    land = box(0, 0, 20, 20)
+    short = place(land, None, 1_080, TEN, EXAMPLE_BLOCKS, LineString([(0, 0), (0, 20)]), land)
+    assert short.short_sqm == pytest.approx(1_080 - 400, abs=1.0)
+    report = tot_lot_report.report(replace(t, placings=(short,)))
+    assert any("THE LAND LEFT CANNOT HOLD THE TOT-LOT" in line for line in report.output)
+    assert any("cannot hold the tot-lot" in q and "lower" in q for q in report.questions)
+
+
+def test_a_plot_the_rules_ask_no_tot_lot_of_says_so(tmp_path):
+    from dataclasses import replace
+
+    t = lay_out(*_tot_lot_inputs(_inputs(tmp_path, **HIGH_RISE)))
+    none = replace(t, share=None, placings=())
+    report = tot_lot_report.report(none)
+    assert report.output == ["No tot-lot is needed on this plot."] and report.picture is None
+    assert "cut short" not in report.markdown()
+    assert tot_lot_report.facts(none)["needed"] is False
+
+
+def test_five_percent_takes_pockets_of_fifteen_square_metres():
+    """A plot below high-rise and below a group scheme: 5%, in pockets of 15 m² (rule
+    5(f)(vi)). An 8 x 3 m nib on the corner is too thin for a block but is a pocket."""
+    five = share_for(False, False, 3_000)
+    land = Polygon([(0, 0), (40, 0), (40, 30), (8, 30), (8, 33), (0, 33)])
+    p = place(land, None, five.fraction * 3_000, five, EXAMPLE_BLOCKS,
+              LineString([(40, 0), (40, 30)]), land)
+    assert five.min_pocket_sqm == pytest.approx(15)
+    assert p.tot_lot.area == pytest.approx(150, abs=1.0)
+    assert all(pocket.area_sqm >= 15 for pocket in p.pockets)
+
+
+def test_a_flat_library_that_cannot_be_read_stops_and_asks(tmp_path):
+    survey = _survey(tmp_path / "survey.dxf")
+    folder = tmp_path / "broken"
+    folder.mkdir()
+    (folder / "siteplan.workspace.json").write_text(json.dumps({"flat_library": "gone.json"}))
+    inputs = from_project(survey, _project(tmp_path / "p.json", **HIGH_RISE), folder)
+    t = lay_out(*_tot_lot_inputs(inputs))
+    assert t.stopped and "gone.json cannot be used" in t.stopped and "flat_library" in t.ask
 

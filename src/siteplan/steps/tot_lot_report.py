@@ -8,7 +8,7 @@ from siteplan import rules
 from siteplan.steps import carried
 from siteplan.steps.drawing import Layer, Picture, frame
 from siteplan.steps.report import Choice, RuleUsed, StepReport, Table
-from siteplan.steps.tot_lot import BLOCK, THIN, WATER, Placing, TotLot
+from siteplan.steps.tot_lot import BLOCK, CUT_TOLERANCE_M, THIN, WATER, Placing, TotLot
 
 TITLE = "The open space (tot-lot)"
 DRAWN_AROUND_M = 30.0
@@ -43,7 +43,7 @@ def report(t: TotLot) -> StepReport:
         f"({t.blocks.depth_m:.2f} m deep), or a piece too small for its smallest "
         f"({t.blocks.smallest[0]:.2f} x {t.blocks.smallest[1]:.2f} m).",
         "Put the tot-lot there first" + (", and on the water's buffer outside the setbacks"
-                                          if t.placings[0].reading else "") + _then(p) + ".",
+                                          if p.on(WATER) > 0 else "") + _then(p) + ".",
         f"Kept every pocket at least {t.share.min_width_m:g} m wide and "
         f"{t.share.min_pocket_sqm:g} m², and measured the land left after it.",
     ]
@@ -67,10 +67,20 @@ def report(t: TotLot) -> StepReport:
     r.rules = _rules(t)
     r.choices = _choices(t)
     r.output, r.tables = _output(t)
-    r.questions = []
+    r.questions = _questions(t)
     r.files = [("step5.svg", "the picture"), ("step5.dxf", "the same, to open in CAD (metres)"),
                ("step5.json", "every number in this report, with the tot-lot's outline")]
     return r
+
+
+def _questions(t: TotLot) -> list[str]:
+    short = [p for p in t.placings if p.short_sqm > 0]
+    if not short:
+        return []
+    worst = max(short, key=lambda p: p.short_sqm)
+    return [f"The land left after the setbacks cannot hold the tot-lot: it is short by "
+            f"{worst.short_sqm:,.1f} m² (Stilt + {t.setbacks.floors}). Should the buildings be "
+            "lower (smaller setbacks, step 4's table), or is the tot-lot to be found elsewhere?"]
 
 
 def _none_needed(r: StepReport, t: TotLot) -> StepReport:
@@ -117,12 +127,16 @@ def _choices(t: TotLot) -> list[Choice]:
     b = t.blocks
     out = [
         Choice(f"The {t.share.fraction:.0%} is of the whole plot, {t.plot_sqm:,.1f} m² "
-               f"({t.plot_from}).", "Your rule (2026-10-11). The rule says 'total site area'; "
-               "the whole plot is the larger, so the plan holds on either reading."),
+               f"({t.plot_from}).", "Your rule (2026-10-11): the rule says 'total site area' "
+               "and does not say whole or net." + (
+                   " The whole plot is the larger, so the plan holds on either reading."
+                   if t.need_sqm >= t.net_need_sqm else
+                   f" Here the net plot is the larger: {t.net_need_sqm:,.1f} m² of it.")),
         Choice(f"Land no block fits on: narrower than the firm's shallowest block "
-               f"({b.depth_m:.2f} m), or a piece smaller than its smallest "
+               f"({b.depth_m:.2f} m), or a piece with less area than its smallest "
                f"({b.smallest[0]:.2f} x {b.smallest[1]:.2f} m).", "Your rule (2026-10-11): the "
-               "tot-lot goes where blocks cannot fit. The blocks come from " + b.source + "."),
+               "tot-lot goes where blocks cannot fit. The blocks are the kit composed from "
+               + b.source + ", the flats in equal shares (no mix is given at this step)."),
         Choice("Free land is taken largest pocket first; the last one is cut square to its "
                "length, at its end away from the main road.", "Fewest and biggest pockets; free "
                "land costs no building land wherever it is taken."),
@@ -131,9 +145,14 @@ def _choices(t: TotLot) -> list[Choice]:
                "the main road, cut off by one straight line.", "Keeps the tot-lot in few pieces, "
                "with straight edges the blocks can line up on, and away from the entrance's "
                "traffic. The engine's choice: say if the architects do it otherwise."),
+        Choice("'Away from the main road' runs from the middle of its frontage through the "
+               "middle of the land, so a road at a corner gives a cut on the diagonal.",
+               "The rule names no direction; this one keeps the tot-lot off the entrance side."),
         Choice(f"A pocket's {t.share.min_width_m:g} m is checked by rolling a circle that wide "
-               "through it; square corners keep their shape.", "The rule gives the width, not "
-               "how to measure it on a bent piece."),
+               f"(less {CUT_TOLERANCE_M * 100:g} cm) through it; square corners keep their shape; "
+               f"pieces within {CUT_TOLERANCE_M * 100:g} cm of each other are one pocket.",
+               "The rule gives the width, not how to measure it on a bent piece; the "
+               "centimetre is the drawing's tolerance."),
     ]
     if t.placings[0].reading:
         out.append(Choice("Only the water's buffer outside the setbacks counts as tot-lot.",
@@ -160,7 +179,8 @@ def _output(t: TotLot) -> tuple[list[str], list[Table]]:
             continue
         lines.append(f"With {other.reading} (asked in step 3): tot-lot {other.tot_lot.area:,.1f}"
                      f" m², {other.on(WATER):,.1f} m² of it on the buffer, {other.on(BLOCK):,.1f}"
-                     f" m² of building land; land left after it {other.after.area:,.1f} m².")
+                     f" m² of building land; land left after it {other.after.area:,.1f} m²."
+                     + (f" SHORT BY {other.short_sqm:,.1f} m²." if other.short_sqm > 0 else ""))
     for placing in t.placings:
         if f"{placing.water_lost_sqm:,.1f}" != "0.0":
             lines.append(f"With {placing.reading}, {placing.water_lost_sqm:,.1f} m² of the "
@@ -186,10 +206,12 @@ def _placing_lines(p: Placing) -> list[str]:
     return [
         f"It stands on: {water}{p.on(THIN):,.1f} m² of land no block fits on, and "
         f"{p.on(BLOCK):,.1f} m² of land a block fits on (the building land it costs).",
-        f"LAND LEFT FOR BUILDINGS, ROADS AND PARKING: {after:,.1f} m² (step 4's "
-        f"{p.land.area:,.1f} m² less the tot-lot on it).",
+        f"LAND LEFT FOR BUILDINGS, ROADS AND PARKING: {after:,.1f} m² ({p.land.area:,.1f} m² "
+        f"left after the setbacks{' and the water' + chr(39) + 's buffer' if p.reading else ''}, "
+        "less the tot-lot on it).",
         f"Land a block fits on: {p.block_land.area:,.1f} m² before, "
-        f"{p.block_land_after.area:,.1f} m² after.",
+        f"{p.block_land_after.area:,.1f} m² after (measured again: a strip the tot-lot leaves "
+        "too thin for a block no longer counts).",
     ]
 
 
@@ -199,7 +221,7 @@ def _used_here(t: TotLot) -> dict[str, str]:
     for item in carried.found_in(t.copy):
         if t.stopped:
             used[item.key] = "carried unchanged (this step stopped)"
-        elif item.kind == carried.ROAD and item.key == main:
+        elif item.kind == carried.ROAD and item.key == main and t.placings:
             used[item.key] = ("the main road: where a pocket is cut short, the tot-lot keeps the "
                               "end away from it")
         elif item.kind == carried.WATER and t.placings and t.placings[0].reading:
@@ -258,8 +280,10 @@ def facts(t: TotLot) -> dict:
     out = {"step": 5, "title": TITLE, "site": t.inputs.site, "stopped": t.stopped,
            "question": t.ask, "carried": carried.facts(carried.found_in(t.copy), _used_here(t))}
     if t.stopped or t.share is None:
-        return {**out, "needed": t.share is not None,
-                "need_sqm": round(t.need_sqm, 2) if t.share else 0.0}
+        if t.share is None:  # stopped before the share was known, or none is needed
+            return {**out, "needed": None if t.stopped else False, "need_sqm": None if t.stopped
+                    else 0.0}
+        return {**out, "needed": True, "need_sqm": round(t.need_sqm, 2)}
     return {**out,
             "needed": True, "share": t.share.fraction, "because": t.share.why,
             "plot_sqm": round(t.plot_sqm, 2), "plot_from": t.plot_from,
