@@ -328,6 +328,20 @@ WATER_BUFFER_CLAUSE = (
     "G.O.168 rule 3(a)(ii), the river clause as substituted by G.O.Ms.No.7 of 2016; rule "
     "3(a)(iii)(3)"
 )
+# The same rule as G.O.168 of 2012 words it, p.4 (read 2026-10-10; one of the architect's seven
+# files, the only rule source `siteplan steps` uses): no building within 100 m of a river's
+# boundary outside a Municipal Corporation, Municipality or Nagara Panchayat and 50 m within it;
+# 30 m of the FTL of a lake, tank or kunta of 10 ha and above, 9 m below 10 ha; 9 m of a canal,
+# vagu, nala or storm water drain wider than 10 m, 2 m up to 10 m; the buffer may count as tot-lot
+# or organised open space, never for setbacks. The lake and nala figures are WATER_BUFFER_M's; a
+# river's are here, because WATER_BUFFER_M's 50 m everywhere follows G.O.Ms.No.7 of 2016.
+RIVER_BUFFER_2012_M = (100.0, 50.0)  # outside, within municipal limits
+WATER_BUFFER_2012_CLAUSE = (
+    "G.O.168 rule 3(a)(ii)(1)-(5) and (iii)(3), p.4 (no building within 100 m of a river outside "
+    "municipal limits or 50 m within; 30 m of a lake of 10 ha and above, 9 m below; 9 m of a "
+    "nala, canal, vagu or storm water drain wider than 10 m, 2 m up to 10 m; the buffer may "
+    "count as open space, never as a setback)"
+)
 
 # Rule 3(c)(i), read from the 2012 text (pp.4-5) on 2026-10-03: "In case of sites in the vicinity
 # of High Tension Electricity Transmission Lines besides taking other safety precautions, a
@@ -740,6 +754,89 @@ ROAD_WIDENING_NON_HIGH_RISE_CLAUSE = (
 TDR_NON_HIGH_RISE_SETBACK_CLAUSE = (
     "G.O.Ms.No.95 of 2026, rule 17(d)(ix), p.2 (a non-high-rise building may relax its setbacks "
     "through TDR, keeping the minimums of road widening)"
+)
+
+# Rule 16 as G.O.168 of 2012 words it, p.22 (read 2026-10-10 in the order's text, one of the
+# architect's seven files): (a) land in a Master Plan road, or in a road to be widened under a
+# Road Development Plan, is surrendered free of cost; (b) the owner then takes a TDR under rule
+# 17, OR an extra floor with built-up area equal to the area surrendered, OR setback concessions
+# (the building lines and the side and rear setbacks of ROAD_WIDENING_NON_HIGH_RISE_*, the same
+# figures in both orders); (c) the built-up area after a concession is at most what the whole
+# site allowed without the widening plus built-up area equal to the land surrendered; (e) a
+# high-rise leaves its front as it is and keeps at least 7 m clear on the sides and the rear for
+# fire vehicles; (f) the sanctioning authority decides. G.O.Ms.No.7 of 2016, not among the seven
+# files, rewrote the rule (ROAD_WIDENING_CLAUSE: down to 7 m on all sides), and the engine's other
+# readings follow it. `siteplan steps` shows the options beside the land given up; none is taken.
+ROAD_SURRENDER_CLAUSE = (
+    "G.O.168 rule 16(a), p.22 (land in a Master Plan road, or in a road to be widened under a "
+    "Road Development Plan, is surrendered free of cost)"
+)
+ROAD_SURRENDER_REWARDS_CLAUSE = (
+    "G.O.168 rule 16(b), p.22 (on surrender, a TDR under rule 17, OR an extra floor with built-up "
+    "area equal to the area surrendered, OR setback concessions)"
+)
+ROAD_SURRENDER_CAP_CLAUSE = (
+    "G.O.168 rule 16(c), p.22 (the built-up area after a concession is at most what the whole "
+    "site allowed without the widening plus built-up area equal to the land surrendered)"
+)
+ROAD_SURRENDER_HIGH_RISE_CLEAR_M = 7.0
+ROAD_SURRENDER_HIGH_RISE_CLAUSE = (
+    "G.O.168 rule 16(e), p.22 (a high-rise's concessions leave the front setback as it is and "
+    "keep at least 7 m clear on the sides and the rear, for fire vehicles)"
+)
+ROAD_SURRENDER_AUTHORITY_CLAUSE = (
+    "G.O.168 rule 16(f), p.22 (the sanctioning or competent authority decides the concessions)"
+)
+# Rule 17(b)(i), p.22: for a Master Plan road or a Road Development Plan road, a TDR "equivalent
+# to 200% of built up area of such area surrendered".
+TDR_ROAD_SURRENDER_SHARE = 2.0
+TDR_ROAD_SURRENDER_CLAUSE = (
+    "G.O.168 rule 17(b)(i), p.22 (a TDR of built-up area equal to 200% of the area surrendered "
+    "for a Master Plan or Road Development Plan road)"
+)
+
+# Rule 5(f)(xiv), p.11 (read 2026-10-10): "Splay at road junctions, including 'Y' junctions shall
+# be provided as follows. The area of such splay would be deemed to form part of the road
+# junction": roads less than 12 m, 3 x 3 m; above 12 up to 24 m, 4.5 x 4.5 m; above 24 m, 6 x 6 m.
+# It sits in rule 5, the rules for buildings below high-rise. For a high-rise, NBC 2016 Part 3 4.8
+# leaves the corner to the authority, by the roads' widths, the traffic and the sight lines, and
+# gives no size. A road of exactly 12 m (what rule 5(f)(xvii) makes of a 40 ft road) is in neither
+# row, so both legs are given for it.
+JUNCTION_SPLAY_ROAD_M = (12.0, 24.0)  # where the rows part
+JUNCTION_SPLAY_LEGS_M = (3.0, 4.5, 6.0)  # under 12 m; above 12 up to 24 m; above 24 m
+JUNCTION_SPLAY_CLAUSE = (
+    "G.O.168 rule 5(f)(xiv), p.11 (a splay at road junctions, 'Y' junctions included: 3 x 3 m "
+    "on roads under 12 m, 4.5 x 4.5 m above 12 up to 24 m, 6 x 6 m above 24 m; it is part of the "
+    "road junction)"
+)
+JUNCTION_SPLAY_HIGH_RISE_CLAUSE = (
+    "NBC 2016 Part 3 4.8 (where roads meet, the corner is rounded off, cut off or splayed to the "
+    "approval of the Authority, by the roads' widths, the traffic and the sight lines)"
+)
+
+
+def junction_splay_legs_m(road_m: float) -> tuple[float, ...]:
+    """The legs of the splay rule 5(f)(xiv) asks where a road of that width meets another: one
+    figure, or the two a road of exactly 12 m falls between. A width given in feet is reckoned
+    as rule 5(f)(xvii) reckons it."""
+    low, high = JUNCTION_SPLAY_ROAD_M
+    small, middle, large = JUNCTION_SPLAY_LEGS_M
+    width = reckoned_road_width_m(road_m)
+    if math.isclose(width, low):
+        return (small, middle)
+    if width < low:
+        return (small,)
+    return (middle,) if width <= high or math.isclose(width, high) else (large,)
+
+
+# NBC 2016 Part 2 12.2.3(e)(2)-(3), p.12 (read on the page's OCR, 2026-10-10): the site plan shows
+# "all adjacent street, buildings (with number of storeys and height) and premises within a
+# distance of 12 m of the site", and "if there is no street within a distance of 12 m of the site,
+# the nearest existing street".
+SITE_PLAN_NEIGHBOUR_BAND_M = 12.0
+SITE_PLAN_NEIGHBOUR_BAND_CLAUSE = (
+    "NBC 2016 Part 2 12.2.3(e)(2)-(3), p.12 (a site plan shows the streets, buildings and premises "
+    "within 12 m of the site, and the nearest street when none is that close)"
 )
 
 

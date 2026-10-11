@@ -30,7 +30,7 @@ SRC = Path(siteplan.__file__).parent
 # Packages every module of which is audited, modules added later included. `service` is named
 # before it exists, so its first module is held to the audit like the rest.
 AUDITED_PACKAGES = ("adapters", "contracts", "legal", "optimizer", "prototypes", "service",
-                    "validator")
+                    "steps", "validator")
 # Top-level modules whose numbers shape a generated layout, size it, or accept or reject one.
 AUDITED_MODULES = (
     "access", "access_checks", "acceptance", "area_statement", "assistant", "basis", "blind",
@@ -63,6 +63,7 @@ EXEMPT = {
     "units": "unit conversions, fixed by definition",
     "wizard": "command-line questions for `siteplan new`",
     "legal/debug_drawing": "rendering only: the envelope's debug drawing",
+    "steps/drawing": "rendering only: a step's picture as SVG and DXF",
     "prototypes/__main__": "command-line plumbing for the prototype kit",
     "prototypes/draw": "rendering only: prototypes as DXF blocks",
     "service/render": "rendering only: a candidate as DXF, sheet notes and SVG",
@@ -90,6 +91,11 @@ NOT_DOMAIN = {
     "flat_import.SQM_SQFT": "a unit: square feet in a square metre",
     "prototypes.compose.COORD_DIGITS": "the decimals a composed prototype is saved to",
     "optimizer.search.network.STREET_REACH_M": "a stand-in for infinity, far beyond any plot",
+    "steps.run.LATER": "the numbers and names of the architect's steps not built yet",
+    "steps.carried.CONTEXT_LAYERS": "rendering: how carried roads and water are drawn",
+    "steps.survey_copy_report.DRAWN_AROUND_M": "how far round the plot step 1's picture shows",
+    "steps.survey_copy_report.LABEL_OFFSET_M": "where a side's label sits in step 1's picture",
+    "steps.road_widening_report.DRAWN_AROUND_M": "how far round the plot step 3's picture shows",
     "validator.refusals.SHOWN": "how many offending numbers a refusal names",
     "validator.refusals.LIBRARY_MESSAGE_CHARS": "how much of a library's error a report keeps",
     "assistant.MAX_UNCLEAR": "how many unclear points of a brief the reply lists",

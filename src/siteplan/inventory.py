@@ -34,6 +34,7 @@ class Where(StrEnum):
     FLOORS = "floors calculator"  # `siteplan floors` and the max_floors tool
     RESOLVER = "resolved rules"  # legal/: the bands, limits and values the validator, the
     # optimizer and `siteplan envelope` read (the legacy layout and checker do not)
+    STEPS = "steps"  # steps/: `siteplan steps`, the architect's steps one report at a time
 
 
 @dataclass(frozen=True)
@@ -388,7 +389,7 @@ INVENTORY: tuple[Entry, ...] = (
         "Plot", "No building within a water body's buffer, which may be open space but never "
                 "the setback.",
         ", ".join(f"{kind.replace('_', ' ')} {m:g} m" for kind, m in rules.WATER_BUFFER_M.items()),
-        rules.WATER_BUFFER_CLAUSE, Reading.INTERPRETED, _BOTH,
+        rules.WATER_BUFFER_CLAUSE, Reading.INTERPRETED, (*_BOTH, Where.STEPS),
         ("WATER_BUFFER_M", "WATER_BUFFER_CLAUSE"),
         choice="The architect names the water body's class and the colour or layer the survey "
                "draws it in. The buffer is measured from the lines drawn, kept free of towers, "
@@ -545,7 +546,7 @@ INVENTORY: tuple[Entry, ...] = (
         uses=("ROAD_WIDENING_NON_HIGH_RISE_BUILDING_LINE_M",
               "ROAD_WIDENING_NON_HIGH_RISE_SIDE_REAR_M", "ROAD_WIDENING_NON_HIGH_RISE_CLAUSE",
               "TDR_NON_HIGH_RISE_SETBACK_CLAUSE"),
-        carried_in=(Where.RESOLVER,),
+        carried_in=(Where.RESOLVER, Where.STEPS),
         choice="G.O.Ms.No.7 of 2016, Amendment 16 (p.5), is the owner's choice of one reward "
                "among TDR, extra floors and these concessions; G.O.Ms.No.95 of 2026, rule "
                "17(d)(ix), lets a non-high-rise building relax its setbacks through TDR down to "
@@ -565,6 +566,72 @@ INVENTORY: tuple[Entry, ...] = (
                "after a concession may not exceed what the whole site allowed plus the "
                "equivalent of the land given up. The likeliest reason a surrendering scheme's "
                "towers stand 7 m from the boundary.",
+    ),
+    Entry(
+        "Road widening", "Land in a Master Plan road, or in a road widened under a Road "
+                         "Development Plan, is surrendered free of cost; the owner then takes a "
+                         "TDR, an extra floor or setback concessions, within a cap, as the "
+                         "authority decides (the 2012 wording).",
+        f"TDR of {rules.TDR_ROAD_SURRENDER_SHARE:.0%} of the land; an extra floor equal to the "
+        f"land; a high-rise keeps {rules.ROAD_SURRENDER_HIGH_RISE_CLEAR_M:g} m clear on its "
+        "sides and rear, the front as it is",
+        "; ".join((rules.ROAD_SURRENDER_CLAUSE, rules.ROAD_SURRENDER_REWARDS_CLAUSE,
+                   rules.ROAD_SURRENDER_CAP_CLAUSE, rules.ROAD_SURRENDER_HIGH_RISE_CLAUSE,
+                   rules.ROAD_SURRENDER_AUTHORITY_CLAUSE, rules.TDR_ROAD_SURRENDER_CLAUSE)),
+        Reading.NOT_MODELLED,
+        uses=("ROAD_SURRENDER_CLAUSE", "ROAD_SURRENDER_REWARDS_CLAUSE",
+              "ROAD_SURRENDER_CAP_CLAUSE", "ROAD_SURRENDER_HIGH_RISE_CLEAR_M",
+              "ROAD_SURRENDER_HIGH_RISE_CLAUSE", "ROAD_SURRENDER_AUTHORITY_CLAUSE",
+              "TDR_ROAD_SURRENDER_SHARE", "TDR_ROAD_SURRENDER_CLAUSE"),
+        carried_in=(Where.STEPS,),
+        choice="G.O.168 of 2012's own words, one of the architect's seven files. `siteplan "
+               "steps` (step 3) shows each option beside the land given up, with what it comes "
+               "to, and takes none: rule 16(b) offers them as alternatives and 16(f) leaves "
+               "them to the authority. Rule 16(a) is for a Master Plan or Road Development Plan "
+               "road; the engine is not told which, so the step says so. G.O.Ms.No.7 of 2016 "
+               "rewrote the rule (the entries above), and the engine's other readings follow it.",
+        settles="The authority's sanction of a surrendering site, naming the reward taken.",
+    ),
+    Entry(
+        "Road widening", "Where two roads meet at a corner of the site, the corner is cut off "
+                         "(splayed) and becomes part of the road junction.",
+        f"{rules.JUNCTION_SPLAY_LEGS_M[0]:g} m legs on roads under "
+        f"{rules.JUNCTION_SPLAY_ROAD_M[0]:g} m, {rules.JUNCTION_SPLAY_LEGS_M[1]:g} m above "
+        f"{rules.JUNCTION_SPLAY_ROAD_M[0]:g} up to {rules.JUNCTION_SPLAY_ROAD_M[1]:g} m, "
+        f"{rules.JUNCTION_SPLAY_LEGS_M[2]:g} m above {rules.JUNCTION_SPLAY_ROAD_M[1]:g} m",
+        f"{rules.JUNCTION_SPLAY_CLAUSE}; {rules.JUNCTION_SPLAY_HIGH_RISE_CLAUSE}",
+        Reading.INTERPRETED, (Where.STEPS,),
+        ("JUNCTION_SPLAY_ROAD_M", "JUNCTION_SPLAY_LEGS_M", "JUNCTION_SPLAY_CLAUSE",
+         "JUNCTION_SPLAY_HIGH_RISE_CLAUSE"),
+        choice="Shown, never deducted: a corner of the net plot where two different roads (or "
+               "land given up for one) come within a metre of the two sides that meet there. "
+               "The wider road sizes the splay (rule 5(f)(xiv) names one road width); a road of "
+               "exactly 12 m is in neither row, so both legs are shown. Rule 5 is for buildings "
+               "below high-rise; for a high-rise NBC Part 3 4.8 leaves the cut to the authority "
+               "and gives no size, so the table is shown as a guide.",
+        settles="A sanctioned plan's splay at a junction, or the authority's word for a "
+                "high-rise.",
+    ),
+    Entry(
+        "Plot", "No building within a water body's buffer, in G.O.168's 2012 words (what "
+                "`siteplan steps` cites).",
+        f"river {rules.RIVER_BUFFER_2012_M[0]:g} m outside municipal limits, "
+        f"{rules.RIVER_BUFFER_2012_M[1]:g} m within; lakes and nalas as above",
+        rules.WATER_BUFFER_2012_CLAUSE, Reading.INTERPRETED, (Where.STEPS,),
+        ("RIVER_BUFFER_2012_M", "WATER_BUFFER_2012_CLAUSE"),
+        choice="The steps use the architect's seven files only. Their lake and nala figures are "
+               "the ones above; a river's depends on whether the site is within municipal "
+               "limits, which the engine is not told, so step 3 shows both figures, draws no "
+               "buffer for it and asks. The engine's other parts use 50 m for a river within "
+               "HMDA and UDA limits too (G.O.Ms.No.7 of 2016, not one of the seven files).",
+        settles="The architect's word on whether the site lies within municipal limits.",
+    ),
+    Entry(
+        "Survey", "A site plan shows the streets, buildings and premises within 12 m of the "
+                  "site, and the nearest street when none is that close.",
+        f"{rules.SITE_PLAN_NEIGHBOUR_BAND_M:g} m", rules.SITE_PLAN_NEIGHBOUR_BAND_CLAUSE,
+        Reading.AS_WRITTEN, (Where.STEPS,),
+        ("SITE_PLAN_NEIGHBOUR_BAND_M", "SITE_PLAN_NEIGHBOUR_BAND_CLAUSE"),
     ),
     Entry(
         "Setbacks", "Through TDR, a high-rise's setbacks may be relaxed by up to 10%.",
