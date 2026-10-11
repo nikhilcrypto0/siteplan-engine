@@ -96,6 +96,15 @@ NOT_DOMAIN = {
     "steps.survey_copy_report.DRAWN_AROUND_M": "how far round the plot step 1's picture shows",
     "steps.survey_copy_report.LABEL_OFFSET_M": "where a side's label sits in step 1's picture",
     "steps.road_widening_report.DRAWN_AROUND_M": "how far round the plot step 3's picture shows",
+    "steps.main_road_height_report.DRAWN_AROUND_M": "how far round the plot step 2's picture "
+                                                    "shows",
+    "steps.setbacks_report.DRAWN_AROUND_M": "how far round the plot step 4's picture shows",
+    "steps.setbacks.LONG_BLOCKS_M": "the block lengths step 4's table shows the long-block note "
+                                    "for: a table, no setback is drawn from it",
+    "steps.main_road_height_report.SECTION_WIDTH_M": "rendering: the building's width in step 2's "
+                                                     "side view",
+    "steps.main_road_height_report.SECTION_LABEL_M": "rendering: where step 2's side-view labels "
+                                                     "sit",
     "validator.refusals.SHOWN": "how many offending numbers a refusal names",
     "validator.refusals.LIBRARY_MESSAGE_CHARS": "how much of a library's error a report keeps",
     "assistant.MAX_UNCLEAR": "how many unclear points of a brief the reply lists",

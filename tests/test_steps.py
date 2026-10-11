@@ -1,5 +1,6 @@
-"""The architect's steps for any project (`siteplan steps`): step 1 copies the survey, step 3
-takes off the land given up for road widening, and every step's report answers the same five
+"""The architect's steps for any project (`siteplan steps`): step 1 copies the survey, step 2
+reads the height the main road allows, step 3 takes off the land given up for road widening,
+step 4 keeps the setbacks from every side, and every step's report answers the same five
 questions. Made-up land only."""
 
 import json
@@ -11,11 +12,19 @@ from shapely.geometry import Polygon
 from siteplan import rules
 from siteplan.blind import BlindLeak
 from siteplan.cli import main
-from siteplan.steps import carried, road_widening_report, survey_copy_report
+from siteplan.steps import (
+    carried,
+    main_road_height_report,
+    road_widening_report,
+    setbacks_report,
+    survey_copy_report,
+)
 from siteplan.steps.drawing import frame
 from siteplan.steps.inputs import from_answers, from_project
+from siteplan.steps.main_road_height import DRAWN, TABLE_III_WAY, TABLE_IV_WAY, height_for
 from siteplan.steps.road_widening import take_off
 from siteplan.steps.run import run_steps
+from siteplan.steps.setbacks import set_back
 from siteplan.steps.survey_copy import ALONG, APART, CARRIED, ENDS, copy_survey
 
 TEST_CLASS = "normative"
@@ -224,8 +233,8 @@ FIVE = ("## 1. What I did", "## 2. What is happening", "## 3. What it looks at",
 
 def test_every_step_report_answers_the_five_questions_and_names_what_the_engine_chose(tmp_path):
     reports = run_steps(_inputs(tmp_path), tmp_path / "out")
-    assert [r.number for r in reports] == [1, 3]
-    for n in (1, 3):
+    assert [r.number for r in reports] == [1, 2, 3, 4]
+    for n in (1, 2, 3, 4):
         text = (tmp_path / "out" / f"step{n}" / "REPORT.md").read_text()
         assert all(heading in text for heading in FIVE), n
         assert "Not rules: what the engine decided by itself" in text
@@ -234,6 +243,7 @@ def test_every_step_report_answers_the_five_questions_and_names_what_the_engine_
     index = (tmp_path / "out" / "README.md").read_text()
     assert all(f"| {n} |" in index for n in range(1, 8)) and "a later stage" in index
     assert json.loads((tmp_path / "out" / "step3" / "step3.json").read_text())["net_plot"]
+    assert (tmp_path / "out" / "step2" / "step2-section.svg").exists()
 
 
 def test_a_blind_run_refuses_a_value_taken_from_the_firms_finished_plan(tmp_path):
@@ -408,17 +418,30 @@ def test_everything_step_1_finds_is_carried_by_step_3_in_its_report_facts_and_pi
     assert {i.kind for i in items} == {carried.ROAD, carried.WATER, carried.MARK,
                                        carried.UNNAMED}
     assert [c["key"] for c in survey_copy_report.facts(copy)["carried"]] == [i.key for i in items]
+    for n, text, facts, picture, around in _later_steps(inputs, copy):
+        assert all(i.what in text for i in items), n
+        assert [c["key"] for c in facts["carried"]] == [i.key for i in items], n
+        drawn = [g for layer, g in picture.shapes if layer in ("ROADS", "WATER")]
+        view = frame(copy.plot, around)
+        for i in items:
+            if i.shape is not None and not i.shape.intersection(view).is_empty:
+                assert any(g.intersects(i.shape) for g in drawn), (n, i.key)
+
+
+def _later_steps(inputs, copy):
+    """Every step after step 1: its number, report, facts, picture and how far round the plot
+    the picture reaches. A new step joins this list, so the guard holds it too."""
+    height = height_for(inputs, copy)
     widening = take_off(inputs, copy)
-    text = road_widening_report.report(widening).markdown()
-    assert all(i.what in text for i in items)
-    assert [c["key"] for c in road_widening_report.facts(widening)["carried"]] == [
-        i.key for i in items]
-    picture = road_widening_report.picture(widening)
-    drawn = [g for layer, g in picture.shapes if layer in ("ROADS", "WATER")]
-    view = frame(copy.plot, road_widening_report.DRAWN_AROUND_M)
-    for i in items:
-        if i.shape is not None and not i.shape.intersection(view).is_empty:
-            assert any(g.intersects(i.shape) for g in drawn), i.key
+    setbacks = set_back(inputs, copy, height, widening)
+    return [(2, main_road_height_report.report(height).markdown(),
+             main_road_height_report.facts(height), main_road_height_report.picture(height),
+             main_road_height_report.DRAWN_AROUND_M),
+            (3, road_widening_report.report(widening).markdown(),
+             road_widening_report.facts(widening), road_widening_report.picture(widening),
+             road_widening_report.DRAWN_AROUND_M),
+            (4, setbacks_report.report(setbacks).markdown(), setbacks_report.facts(setbacks),
+             setbacks_report.picture(setbacks), setbacks_report.DRAWN_AROUND_M)]
 
 
 def test_a_step_that_stops_still_carries_everything_step_1_found(tmp_path):
@@ -459,7 +482,7 @@ def test_every_steps_report_cites_only_the_architects_seven_files(tmp_path):
                      road_strip_side="E", road_strip_width_m=5.0,
                      water=[{"kind": "nala_over_10m", "survey_layer": "NALA"}])
     run_steps(inputs, tmp_path / "out")
-    for n in (1, 3):
+    for n in (1, 2, 3, 4):
         text = (tmp_path / "out" / f"step{n}" / "REPORT.md").read_text()
         cited = set(re.findall(r"G\.O\.(?:M\.?S\.? ?)?(?:No\.)? ?(\d+)", text, re.I))
         assert cited <= SEVEN_FILES, (n, cited - SEVEN_FILES)
@@ -479,3 +502,173 @@ def test_the_biggest_road_is_the_main_road_when_the_answers_name_none(tmp_path):
     assert any("Your rule" in c.why for c in report.choices)
     assert any("without saying which road" in q for q in report.questions)
 
+# --- Step 2: the main road and the height it allows ----------------------------------------------
+
+
+def test_step_two_reads_the_height_from_the_main_roads_legal_width(tmp_path):
+    """A 60 ft road is 18 m (rule 5(f)(xvii)); Table IV lets it serve 30 m; floors of 2.9 m (the
+    2.75 m room and a slab), the stilt separate and not counted (the architect's rule): stilt +
+    10, 29 m counted, 31.8 m from the ground. TDR's extra floors are shown, never taken."""
+    inputs = _inputs(tmp_path, access_side="E", measured_carriageway_m=12.0,
+                     abutting_road_m=None, abutting_road_ft=60)
+    h = height_for(inputs, copy_survey(inputs))
+    assert h.road.lies == "east" and h.reckoned_m == 18 and h.way == TABLE_IV_WAY
+    assert h.limit_m == 30 and h.floors == 10 and h.allowed_floors == 10 and h.high_rise
+    assert h.storeys.counted_m(10) == pytest.approx(29.0)
+    assert h.storeys.physical_m(10) == pytest.approx(0.15 + 2.65 + 29.0)
+    assert h.tdr_floors == 4
+    report = main_road_height_report.report(h)
+    assert any("Stilt + 10" in line for line in report.output)
+    assert any("NOT taken" in line for line in report.output)
+    assert [b.served for b in h.bands][-1] is False  # the next row is shown, and needs 24 m
+
+
+def test_a_road_is_a_dead_end_only_when_the_project_says_so(tmp_path):
+    """The architect's rule (2026-10-11): a road is a dead end only when he names it one; until
+    then it is a through road and nothing is asked. Named, NBC's 30 m from the ground holds."""
+    site = {"access_side": "E", "measured_carriageway_m": 12.0, "abutting_road_m": 18.288}
+    through = _inputs(tmp_path, road_dead_end=None, **site)
+    h = height_for(through, copy_survey(through))
+    report = main_road_height_report.report(h)
+    assert h.dead_end is False and h.allowed_floors == 10
+    assert not any("dead end" in q for q in report.questions)
+    assert any("through road" in c.what for c in report.choices)
+    named = _inputs(tmp_path, road_dead_end=True, **site)
+    h = height_for(named, copy_survey(named))
+    assert h.floors == 10 and h.allowed_floors == 9
+    assert h.storeys.physical_m(9) <= rules.DEAD_END_MAX_HEIGHT_M < h.storeys.physical_m(10)
+
+
+def test_below_table_iv_the_height_comes_from_table_iii_the_stilt_left_out(tmp_path):
+    """A 9 m road serves no Table IV row, so Table III gives the height for the plot's size;
+    its '18**' line needs a 12 m road (rule 5(e)), so the most is 15 m: five floors."""
+    inputs = _inputs(tmp_path)
+    h = height_for(inputs, copy_survey(inputs))
+    assert h.way == TABLE_III_WAY and h.limit_m == 15 and h.floors == 5 and not h.high_rise
+    assert h.tdr_floors == 0
+    assert any(b.served is False for b in h.bands)  # the 18** line, on a road under 12 m
+
+
+def test_a_drawn_width_stands_in_for_a_legal_one_and_is_asked(tmp_path):
+    inputs = _inputs(tmp_path, access_side="E", measured_carriageway_m=12.0,
+                     abutting_road_m=None)
+    h = height_for(inputs, copy_survey(inputs))
+    assert h.width_from == DRAWN and h.width_m == pytest.approx(12.0, abs=0.05)
+    assert h.limit_m == 24 and h.floors == 8
+    assert any("legal width" in q for q in main_road_height_report.report(h).questions)
+
+
+def test_a_legal_width_nobody_checked_is_asked(tmp_path):
+    path = _project(tmp_path / "p.json", access_side="E", measured_carriageway_m=12.0,
+                    abutting_road_m=12.4, abutting_road_status="UNVERIFIED_DRAWING_VALUE")
+    project = json.loads(path.read_text())
+    project["status"] = {}
+    path.write_text(json.dumps(project))
+    inputs = from_project(_survey(tmp_path / "survey.dxf"), path, tmp_path)
+    questions = main_road_height_report.report(height_for(inputs, copy_survey(inputs))).questions
+    assert any("really" in q and "legal width" in q for q in questions)
+
+
+def test_step_two_stops_and_asks_when_there_is_no_main_road(tmp_path):
+    inputs = _inputs(tmp_path, _survey(tmp_path / "survey.dxf", extras=True), access_side="N")
+    copy = copy_survey(inputs)
+    h = height_for(inputs, copy)
+    report = main_road_height_report.report(h)
+    assert h.stopped and report.stopped and report.questions
+    text = report.markdown()
+    assert all(i.what in text for i in carried.found_in(copy))
+    assert "carried unchanged (this step stopped)" in text
+
+
+def test_the_side_view_shows_the_stilt_the_floors_and_the_limits(tmp_path):
+    inputs = _inputs(tmp_path, access_side="E", measured_carriageway_m=12.0,
+                     abutting_road_m=18.288, road_dead_end=True)
+    h = height_for(inputs, copy_survey(inputs))
+    side = main_road_height_report.section(h)
+    layers = [layer for layer, _ in side.shapes]
+    assert layers.count("FLOORS") == 10 and layers.count("STILT") == 1
+    assert layers.count("TDR") == 4 and "LIMIT" in layers and "DEAD-END" in layers
+    assert not side.plan and "<polygon" not in side.svg()  # a side view has no north arrow
+
+# --- Step 4: setbacks from every side ----------------------------------------------------------
+
+HIGH_RISE = {"access_side": "E", "measured_carriageway_m": 12.0, "abutting_road_m": None,
+             "abutting_road_ft": 60}
+
+
+def _setbacks(inputs):
+    copy = copy_survey(inputs)
+    widening = take_off(inputs, copy)
+    return set_back(inputs, copy, height_for(inputs, copy), widening)
+
+
+def test_a_high_rise_keeps_table_iv_on_every_side_with_the_green_strip_inside(tmp_path):
+    """Stilt + 10 (29 m counted) keeps Table IV's 10 m all round; towards the 60 ft road the
+    higher of that and the Building Line (4 m); the 2 m green strip lies inside; beside it 8 m
+    is left for the 6 m fire lane. 120 x 90 m less 10 m all round leaves 100 x 70 m."""
+    s = _setbacks(_inputs(tmp_path, **HIGH_RISE))
+    assert s.high_rise and s.floors == 10 and s.open_space_m == 10
+    assert {side.metres for side in s.sides} == {10}
+    assert any(side.roads and "Building Line is 4 m" in side.why for side in s.sides)
+    assert s.left.area == pytest.approx(100 * 70)
+    assert s.green.area == pytest.approx(120 * 90 - 116 * 86)
+    assert s.fire_room_m == pytest.approx(8.0)
+    assert [o.open_space_m for o in s.options] == [7, 8, 9, 10]
+    assert s.options[0].left_sqm == pytest.approx(106 * 76)
+    assert dict(s.long_blocks)[60.0] == pytest.approx(12.0)  # 10 + 6 - 4
+    assert dict(s.long_blocks)[40.0] == 10 and max(dict(s.long_blocks).values()) <= 20
+    text = setbacks_report.report(s).markdown()
+    assert "LAND LEFT FOR BUILDINGS: 7,000.0 m²" in text and "it fits" in text
+
+
+def test_below_high_rise_table_iii_gives_the_front_to_the_main_road_and_column_10_elsewhere(
+        tmp_path):
+    """A 9 m road allows 15 m (step 2): Table III row 11's 15 m line keeps 6 m on the sides
+    (column 10) and its Building Line for a road up to 12 m, 3 m, towards the main road."""
+    s = _setbacks(_inputs(tmp_path))
+    assert not s.high_rise and s.green is None and not s.options
+    south = next(side for side in s.sides if side.faces == "south")
+    assert south.metres == 3 and "main road" in south.why
+    assert {side.metres for side in s.sides if side is not south} == {6}
+    assert s.left.area == pytest.approx((120 - 12) * (90 - 3 - 6))
+
+
+def test_a_water_buffer_is_laid_over_the_setbacks_never_added(tmp_path):
+    """A nala on the west edge keeps 9 m free; the high-rise setback there is 10 m, so the
+    land left is the same either way."""
+    survey = _survey(tmp_path / "survey.dxf", nala_x=0.0)
+    s = _setbacks(_inputs(tmp_path, survey, water=[{"kind": "nala_over_10m",
+                                                    "survey_layer": "NALA"}], **HIGH_RISE))
+    (kind, from_line, from_edge), = s.left_by_water
+    assert kind == "nala_over_10m"
+    assert from_line.area == pytest.approx(s.left.area) == pytest.approx(from_edge.area)
+
+
+def test_the_road_widening_concession_is_shown_never_taken(tmp_path):
+    """Land given up on the east (5 m): the net plot is 115 x 90. The front towards the main
+    road keeps 10 m; with rule 16(e)'s concession the other sides keep 7 m: shown, not taken."""
+    s = _setbacks(_inputs(tmp_path, gross_area_sqm=10_800, net_area_sqm=10_350,
+                          road_strip_side="E", road_strip_width_m=5.0, **HIGH_RISE))
+    assert s.left.area == pytest.approx(95 * 70)
+    c = s.concession
+    assert c is not None and c.open_space_m == 7 and c.front_m == 10
+    assert c.left_sqm == pytest.approx((115 - 7 - 10) * (90 - 14))
+    text = setbacks_report.report(s).markdown()
+    assert "shown, NOT taken" in text
+
+
+def test_step_four_stops_when_step_three_has_no_net_plot(tmp_path):
+    survey = _survey(tmp_path / "survey.dxf", extras=True)
+    inputs = _inputs(tmp_path, survey, gross_area_sqm=10_800, net_area_sqm=10_200,
+                     road_strip_side="S")
+    copy = copy_survey(inputs)
+    s = _setbacks(inputs)
+    report = setbacks_report.report(s)
+    assert s.stopped and report.stopped and report.questions
+    assert all(i.what in report.markdown() for i in carried.found_in(copy))
+
+
+def test_a_power_line_written_near_the_plot_is_asked_in_step_four(tmp_path):
+    survey = _survey(tmp_path / "survey.dxf", extras=True)
+    s = _setbacks(_inputs(tmp_path, survey, **HIGH_RISE))
+    assert any("power line" in q for q in setbacks_report.report(s).questions)

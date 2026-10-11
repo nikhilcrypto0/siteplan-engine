@@ -4,6 +4,33 @@ A characterization test (tests/manifest.py) pins what the engine produces today.
 only together with a normative replacement test and an entry here: what changed, why, the
 evidence, and the test that now holds the behaviour. Newest first.
 
+## 2026-10-11: `siteplan steps` steps 2 and 4 (the height the main road allows; setbacks)
+
+Stage 2 of the stage-wise build: step 2 (`steps/main_road_height.py`) reads the height the main
+road allows from Table IV (Table III below it) and counts the floors in the shortest storey the
+architect's seven files allow (NBC's 2.75 m room and a 0.15 m slab, 2.9 m), the stilt separate and
+not counted (the architect's rule of 2026-10-11); a road is a dead end only when the answers name
+it one (his rule, same day). Step 4 (`steps/setbacks.py`) keeps Table IV's column 4 round the net
+plot (Table III's front and column 10 below high-rise), the front towards a road the higher of
+that and the Building Line, the 2012 green strip inside, the water's buffer laid over, and shows
+the lower heights, G.O.50's long-block note and rule 16(e)'s concession, none taken. No layout,
+check or verdict changes: the search, the validator and the legacy path read none of it.
+
+rules.py gains `NO_OPENING_*`, `LONG_BLOCK_*` and `long_block_open_space_m` (G.O.50's two notes
+under Table IV, as the page of the architect's file prints them; G.O.Ms.No.65 of 2019, outside
+the seven files, deleted the second and the engine's other parts still follow it),
+`GREEN_STRIP_2012_CLAUSE`, `TABLE_III_2012_CLAUSE`, `STILT_MIN_HEIGHT_2012_CLAUSE`,
+`ROOM_HEIGHT_MIN_M` and `ROOM_HEIGHT_CLAUSE`. The rules' fingerprint moves with them, so the
+service's made-up baseline (`tests/test_service_proposals_baseline.py`) is re-pinned: the same
+notes, proposals, shown four, approval page and answer; only the digests move. Rule 5(f)(iii)
+(the front towards the bigger road) is now applied by the steps (inventory).
+
+Tests (normative): `tests/test_steps.py` (step 2: the 60 ft road's stilt + 10, Table III below
+Table IV, a drawn or unchecked width asked, a dead end only when named, the stop, the side view;
+step 4: Table IV all round with the green strip and the fire lane, Table III's front and column
+10, the water laid over and not added, the concession shown, the stop, a power line asked; the
+carried guard and the seven-files check now hold steps 2 to 4).
+
 ## 2026-10-10: `siteplan steps`, the architect's steps 1 and 3 for any project
 
 Stage 1 of the stage-wise build: step 1 (copy the survey) and step 3 (road widening) move out of

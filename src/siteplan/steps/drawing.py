@@ -38,6 +38,7 @@ class Picture:
     layers: list[Layer] = field(default_factory=list)
     shapes: list[tuple[str, BaseGeometry]] = field(default_factory=list)
     labels: list[tuple[str, tuple[float, float], str]] = field(default_factory=list)
+    plan: bool = True  # a plan has a north arrow; a section (a side view) has none
 
     def add(self, layer: str, geometry: BaseGeometry | None) -> None:
         if geometry is not None and not geometry.is_empty:
@@ -96,7 +97,8 @@ class Picture:
                              f'font-size="{LABEL_PX:g}" fill="{colour}" stroke="#ffffff" '
                              'stroke-width="3" paint-order="stroke" text-anchor="middle">'
                              f'{escape(line)}</text>')
-        parts += _north_arrow(width - MARGIN_PX - 20, top + MARGIN_PX + 30)
+        if self.plan:
+            parts += _north_arrow(width - MARGIN_PX - 20, top + MARGIN_PX + 30)
         parts += _scale_bar(scale, MARGIN_PX, top + MARGIN_PX + (y1 - y0) * scale + 18)
         base = top + (y1 - y0) * scale + 2 * MARGIN_PX + 10
         for i, layer in enumerate(legend):

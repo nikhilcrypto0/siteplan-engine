@@ -75,7 +75,9 @@ site-plan band, the splay table, rule 16's and the water buffer's 2012 wording a
 TDR): no rule the search or
 the validator reads changes, but the rules' fingerprint (rules_digest) covers every value in
 rules.py, so the same proposals and the same four shown carry new digests; the model's answer
-is unchanged.
+is unchanged. Re-pinned on 2026-10-11 for the same reason: rules.py gains what steps 2 and 4
+show (G.O.50's two notes under Table IV, the 2012 green strip and Table III wording, NBC's
+2.75 m room); only the digests move.
 
 The values pin exact output on the locked dependencies (uv.lock). They move only with a normative
 replacement and an entry in docs/behaviour-changes.md.
@@ -121,15 +123,15 @@ PINNED = {
         "full-ALL-ALL-114",
         "full-ALL-ALL-5",
     ],
-    "proposed_sha256": "f9d1dd19f9d607ec04f56c7fdf2eab025a67b5ef9d3938f43352f87aa830067b",
+    "proposed_sha256": "d022187b7321e3c8dd9ace952dca6af3a5826a303e24f1aeed392f9abd29a7ac",
     "shown": [
         ["full-not_counted-allowed-90", "BALANCED"],
         ["full-not_counted-allowed-86", "MAX_YIELD"],
         ["full-not_counted-ALL-65", "CONVENTIONAL_OPEN_SPACE"],
         ["full-ALL-ALL-113", "ROBUST"],
     ],
-    "shown_digests": ["2f53317272cc98cf", "97b59ad10724d2e9",
-                      "332dd73051fb7e77", "a1b459b429e29fcf"],
+    "shown_digests": ["b486266b65c51a1a", "b91d6b18dc2bee64",
+                      "0a0c091f1526c3a3", "b5c7e47aecda302b"],
     "answer_sha256": "230e37bca31cae9f8b09abccaf6f3ff50fbc9bf084a5e694b9331ff9afe4348c",
     "approval_page_sha256": "cd3ebee2af46849756df643999df9b16d2cbc91d92c45101983782cff1eb0181",
 }

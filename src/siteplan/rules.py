@@ -61,6 +61,39 @@ TABLE_IV_CLAUSE = "G.O.168 rule 7(a)(x), Table IV as substituted by G.O.Ms.No.50
 # asking up to 3.3 m more of every long block than the law does. A building's length no longer
 # changes its setback.
 
+# The two notes G.O.Ms.No.50 of 2019, Amendment-6, prints under Table IV, read on the page image
+# of the order the architect sent on 2026-10-11 (one of his seven files): "Where rooms do not
+# derive height and ventilation from the exterior open space, the width of such exterior open
+# space as given in Col.4 may be reduced by 1 m subject to a minimum of 3 m and a maximum of 8 m.
+# No further projections shall be permitted." and "If the length of depth of the building exceeds
+# 40 m add to Col (4) ten percent of length or depth of building minus 4.0 m subject to maximum
+# requirement of 20 m." G.O.Ms.No.65 of 2019 deleted the second (above); it is not one of the
+# seven files, so `siteplan steps` applies the note as G.O.50 prints it (the architect's rule of
+# 2026-10-10) and the engine's other parts, which follow G.O.65, do not.
+NO_OPENING_REDUCTION_M = 1.0
+NO_OPENING_LIMITS_M = (3.0, 8.0)  # 'subject to a minimum of 3 m and a maximum of 8 m'
+NO_OPENING_CLAUSE = (
+    "G.O.Ms.No.50 of 2019, Amendment-6, first note under Table IV (where rooms do not take their "
+    "height and ventilation from an exterior open space, its Col. 4 width may be 1 m less, "
+    "subject to a minimum of 3 m and a maximum of 8 m; no further projections)"
+)
+LONG_BLOCK_FROM_M = 40.0
+LONG_BLOCK_SHARE = 0.10
+LONG_BLOCK_LESS_M = 4.0
+LONG_BLOCK_MAX_M = 20.0
+LONG_BLOCK_CLAUSE = (
+    "G.O.Ms.No.50 of 2019, Amendment-6, second note under Table IV (a building longer or deeper "
+    "than 40 m adds to Col. 4 ten percent of its length or depth less 4 m, up to 20 m in all)"
+)
+
+
+def long_block_open_space_m(table_m: float, length_m: float) -> float:
+    """Table IV's column 4 for a building of that length or depth, the second note applied."""
+    if length_m <= LONG_BLOCK_FROM_M:
+        return table_m
+    return min(table_m + LONG_BLOCK_SHARE * length_m - LONG_BLOCK_LESS_M, LONG_BLOCK_MAX_M)
+
+
 # Rule 2(f) as substituted by G.O.Ms.No.95 (MA&UD, 21-03-2026), amendment 5(i): "High-Rise
 # Building means a building with 21m or more in height." Read from the order on 2026-09-20.
 HIGH_RISE_THRESHOLD_M = 21.0
@@ -142,6 +175,13 @@ PERIPHERAL_GREEN_STRIP_M = 2.0
 PERIPHERAL_GREEN_STRIP_FROM_SETBACK_M = 9.0
 PERIPHERAL_GREEN_STRIP_CLAUSE = (
     "G.O.168 rule 7(a)(viii) as substituted by G.O.Ms.No.7 of 2016 (setbacks of 9 m and above)"
+)
+# The 2012 wording, p.13 (one of the architect's seven files, what `siteplan steps` cites): "In
+# addition to the above, a minimum of 2m wide green planting strip in the periphery on all sides
+# within the setbacks are required to be developed and maintained." No 9 m condition.
+GREEN_STRIP_2012_CLAUSE = (
+    "G.O.168 rule 7(a)(viii), p.13 (a high-rise keeps a green planting strip at least 2 m wide in "
+    "the periphery on all sides, within the setbacks)"
 )
 
 # Rule 7(xvi), added by the same order: "Where parking floors are provided above ground floor,
@@ -549,6 +589,12 @@ TABLE_III_CLAUSE = (
     "G.O.168 rule 5, Table III, pp.9-10 (non-high-rise setbacks and permissible height, by plot "
     "size and abutting road); parking column as amended by G.O.Ms.No.7 of 2016, Amendment 6"
 )
+# The same table and rule 5(c) as the 2012 text gives them (one of the architect's seven files,
+# what `siteplan steps` cites): no figure the steps use differs.
+TABLE_III_2012_CLAUSE = (
+    "G.O.168 rule 5, Table III, pp.9-10, and 5(c), p.10 (non-high-rise setbacks and permissible "
+    "height by plot size and abutting road; a stilt floor for parking is left out of the height)"
+)
 
 # Rule 5(c), p.10: "Stilt Floor meant for parking is excluded from the permissible height in the
 # above Table. Height of stilt floor shall not be less than 2.5m. In case of parking floors where
@@ -558,6 +604,16 @@ TABLE_III_CLAUSE = (
 # for Table IV and the high-rise class says: rule 5's own heading calls the buildings it governs
 # "below 18m in height inclusive of Stilt / Parking Floor", which leans the other way for the class.
 STILT_MIN_HEIGHT_M = 2.5
+STILT_MIN_HEIGHT_2012_CLAUSE = "G.O.168 rule 5(c), p.10 (a stilt floor at least 2.5 m high)"
+# NBC 2016 Part 3 12.2.1, p.43 (read on the page's OCR, 2026-10-11): "The height of all rooms for
+# human habitation shall not be less than 2.75 m measured from the surface of the floor to the
+# lowest point of the ceiling (bottom of slab)." A storey is this and its slab; the slab's
+# thickness is no rule's (steps/main_road_height.SLAB_M). No file gives a greatest height.
+ROOM_HEIGHT_MIN_M = 2.75
+ROOM_HEIGHT_CLAUSE = (
+    "NBC 2016 Part 3 12.2.1, p.43 (rooms for human habitation at least 2.75 m high, floor to the "
+    "bottom of the slab)"
+)
 MECHANICAL_PARKING_FLOOR_MIN_HEIGHT_M = 4.5
 TABLE_III_STILT_CLAUSE = (
     "G.O.168 rule 5(c), p.10, with G.O.Ms.No.7 of 2016, Amendment 7 (a stilt floor meant for "
