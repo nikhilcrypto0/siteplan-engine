@@ -70,6 +70,8 @@ from siteplan.optimizer.search import land as search_land
 from siteplan.optimizer.search import layout as search_layout
 from siteplan.prototypes import compose
 from siteplan.prototypes import library as prototype_library
+from siteplan.steps import road_widening as step_widening
+from siteplan.steps import survey_copy as step_copy
 from siteplan.validator import (
     accounting,
     clubhouse,
@@ -1480,6 +1482,116 @@ REGISTRY: tuple[Constraint, ...] = (
          "rules.TDR_EXTRA_FLOORS_ABOVE_PLOT_SQM"),
         note="Shown by the floors calculator beside its answer, never in a layout: an option the "
              "owner buys. The 40, 60 and 80 ft roads are taken as Table IV's 12, 18 and 24 m.",
+    ),
+    Constraint(
+        "Not used by generation", "Land given up for a road: the TDR it earns, as a share of the "
+                                  "land, and what a high-rise keeps clear on its sides and rear "
+                                  "if the owner takes setback concessions instead.",
+        f"{_pct(rules.TDR_ROAD_SURRENDER_SHARE)}; {_m(rules.ROAD_SURRENDER_HIGH_RISE_CLEAR_M)}",
+        Basis.LEGAL_RULE,
+        f"{rules.TDR_ROAD_SURRENDER_CLAUSE}; {rules.ROAD_SURRENDER_HIGH_RISE_CLAUSE}",
+        ("rules.TDR_ROAD_SURRENDER_SHARE", "rules.ROAD_SURRENDER_HIGH_RISE_CLEAR_M"),
+        note="Shown by `siteplan steps` (step 3) beside the land given up, never taken: rule "
+             "16(b) offers the TDR, an extra floor or the concessions as alternatives and 16(f) "
+             "leaves them to the authority. G.O.168 of 2012's wording, one of the architect's "
+             "seven files; G.O.Ms.No.7 of 2016, which the engine's other readings follow, "
+             "rewrote rule 16.",
+    ),
+    Constraint(
+        "Not used by generation", "The splay at a corner where two roads meet, by road width.",
+        f"{rules.JUNCTION_SPLAY_LEGS_M[0]:g} x {rules.JUNCTION_SPLAY_LEGS_M[0]:g} m under "
+        f"{rules.JUNCTION_SPLAY_ROAD_M[0]:g} m, "
+        f"{rules.JUNCTION_SPLAY_LEGS_M[1]:g} x {rules.JUNCTION_SPLAY_LEGS_M[1]:g} m above "
+        f"{rules.JUNCTION_SPLAY_ROAD_M[0]:g} up to {rules.JUNCTION_SPLAY_ROAD_M[1]:g} m, "
+        f"{rules.JUNCTION_SPLAY_LEGS_M[2]:g} x {rules.JUNCTION_SPLAY_LEGS_M[2]:g} m above "
+        f"{rules.JUNCTION_SPLAY_ROAD_M[1]:g} m", Basis.LEGAL_RULE, rules.JUNCTION_SPLAY_CLAUSE,
+        ("rules.JUNCTION_SPLAY_ROAD_M", "rules.JUNCTION_SPLAY_LEGS_M"),
+        note="Shown by `siteplan steps` (step 3) at each corner of the net plot where two roads "
+             "meet, never deducted. Rule 5 is for buildings below high-rise; for a high-rise NBC "
+             "Part 3 4.8 leaves the cut to the authority and the table is a guide. A road of "
+             "exactly 12 m is in neither row, so both legs are shown.",
+    ),
+    Constraint(
+        "Not used by generation", "A river's buffer in G.O.168's 2012 words: outside municipal "
+                                  "limits, and within them.",
+        f"{_m(rules.RIVER_BUFFER_2012_M[0])}; {_m(rules.RIVER_BUFFER_2012_M[1])}",
+        Basis.LEGAL_RULE, rules.WATER_BUFFER_2012_CLAUSE, ("rules.RIVER_BUFFER_2012_M",),
+        note="`siteplan steps` (step 3) shows both and asks which applies; it draws no buffer "
+             "for a river until it knows.",
+    ),
+    Constraint(
+        "Not used by generation", "How far round the site the survey copy reports streets, "
+                                  "buildings and premises.",
+        _m(rules.SITE_PLAN_NEIGHBOUR_BAND_M), Basis.LEGAL_RULE,
+        rules.SITE_PLAN_NEIGHBOUR_BAND_CLAUSE, ("rules.SITE_PLAN_NEIGHBOUR_BAND_M",),
+        note="`siteplan steps` (step 1) lists what the survey draws within it, and the nearest "
+             "street when none is that close. What lies inside the plot is listed and ignored.",
+    ),
+    Constraint(
+        "Steps", "The survey copy (step 1): a road meets the plot when its drawn edge comes this "
+                 "close; a road this far off the boundary's direction runs into the plot rather "
+                 "than along it, and is taken on to the plot when one of its own lines touches "
+                 "it; its level there is the middle of the levels drawn on it this near.",
+        f"{_m(step_copy.ROAD_TOUCH_M)}; {step_copy.ENDS_AT_DEG:g} degrees; "
+        f"{_m(step_copy.ROAD_LEVEL_REACH_M)}", Basis.ENGINE_DESIGN_ASSUMPTION,
+        "none (the engine's own)",
+        ("steps.survey_copy.ROAD_TOUCH_M", "steps.survey_copy.ENDS_AT_DEG",
+         "steps.survey_copy.ROAD_LEVEL_REACH_M"),
+        note="Each is named in the step's report as the engine's own choice, never as a rule. "
+             "Reported only: no layout reads them yet.",
+        settles="The architect's word on where a road meets the plot, and its level there.",
+    ),
+    Constraint(
+        "Steps", "The survey copy (step 1): a straight stretch shorter than this is a jog; a "
+                 "written length is a side's when they are this close; a drawn and a written "
+                 "figure agree within this share; a road drawn this close to the carriageway "
+                 "the project records is the access road.",
+        f"{_m(step_copy.SHORT_RUN_M)}; {_m(step_copy.SIDE_MATCH_M)}; {step_copy.AGREES_PCT:g}%; "
+        f"{_m(step_copy.WIDTH_MATCH_M)}", Basis.ENGINE_DESIGN_ASSUMPTION,
+        "none (the engine's own)",
+        ("steps.survey_copy.SHORT_RUN_M", "steps.survey_copy.SIDE_MATCH_M",
+         "steps.survey_copy.AGREES_PCT", "steps.survey_copy.WIDTH_MATCH_M"),
+        note="Named in the step's report as the engine's own tolerances.",
+        settles="The firm's tolerance for a survey's errors.",
+    ),
+    Constraint(
+        "Steps", "Road widening (step 3): land between the surveyed plot and the net plot "
+                 "thinner than this is a drawing difference; a piece under this area is "
+                 "rounding; a piece's edge this close to a side lies along it; a side facing "
+                 "within this angle of the side the answers name is that side; a piece's "
+                 "widest point is searched for this finely.",
+        f"{_m(step_widening.THIN_M)}; {step_widening.MIN_PIECE_SQM:g} m²; "
+        f"{_m(step_widening.ON_LINE_M)}; {step_widening.SIDE_DEG:g} degrees; "
+        f"{_m(step_widening.LABEL_TOLERANCE_M)}", Basis.ENGINE_DESIGN_ASSUMPTION,
+        "none (the engine's own)",
+        ("steps.road_widening.THIN_M", "steps.road_widening.MIN_PIECE_SQM",
+         "steps.road_widening.ON_LINE_M", "steps.road_widening.SIDE_DEG",
+         "steps.road_widening.LABEL_TOLERANCE_M"),
+        note="Each piece is listed with its side, width and why it counts; the step asks the "
+             "architect to confirm every piece beyond the largest.",
+        settles="The architect's outline of the land given up, or the net plot's.",
+    ),
+    Constraint(
+        "Steps", "Road widening (step 3): the plot's edge within this of a water body's lines "
+                 "runs alongside it; the water's buffer is shown from that edge as well as from "
+                 "the lines drawn.",
+        _m(step_widening.WATER_ALONGSIDE_M), Basis.ENGINE_DESIGN_ASSUMPTION,
+        "none (the engine's own)", ("steps.road_widening.WATER_ALONGSIDE_M",),
+        note="Rule 3(a)(ii) measures from the water's defined boundary, which a drawing may not "
+             "show: the land between a line drawn and the plot may be the water itself. Both "
+             "readings are shown and the architect is asked; neither is taken off.",
+        settles="The architect's word on where the water's defined boundary lies.",
+    ),
+    Constraint(
+        "Steps", "Road widening (step 3): two roads meet at a corner of the net plot when each "
+                 "comes within a metre of one of its sides this near the corner; a turn of the "
+                 "boundary smaller than this is a bend, not a corner.",
+        f"{_m(step_widening.JUNCTION_REACH_M)}; {step_widening.CORNER_TURN_DEG:g} degrees",
+        Basis.ENGINE_DESIGN_ASSUMPTION, "none (the engine's own)",
+        ("steps.road_widening.JUNCTION_REACH_M", "steps.road_widening.CORNER_TURN_DEG"),
+        note="Rule 5(f)(xiv) asks a splay 'at road junctions' and does not say where one is. "
+             "The splay is shown, never taken off.",
+        settles="A sanctioned plan's splay, or the authority's word on a junction.",
     ),
     Constraint(
         "Not used by generation", "In a project of more than this many acres, common amenities "

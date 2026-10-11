@@ -219,6 +219,33 @@ def _cmd_acceptance(args: argparse.Namespace) -> int:
     return 0 if generated.options else 1
 
 
+def _cmd_steps(args: argparse.Namespace) -> int:
+    """Raw survey and answers (or a project file) -> the architect's steps built so far, one
+    report each; exit 1 when a step stopped to ask something."""
+    from siteplan.profiles import load_profile
+    from siteplan.steps.inputs import from_answers, from_project
+    from siteplan.steps.run import run_steps
+
+    survey, out = Path(args.survey), Path(args.out)
+    workspace = Path(args.workspace) if args.workspace else None
+    mode = "debug" if args.debug else "blind"
+    if args.project and args.profile:
+        raise ValueError("--profile goes with --answers; a project file already holds its "
+                         "values.")
+    if args.project:
+        inputs = from_project(survey, Path(args.project), workspace, mode)
+    else:
+        profile = load_profile(args.profile) if args.profile else None
+        inputs = from_answers(survey, json.loads(Path(args.answers).read_text()), workspace,
+                              profile, mode)
+    reports = run_steps(inputs, out)
+    for report in reports:
+        state = "STOPPED: it needs an answer" if report.stopped else "done"
+        print(f"Step {report.number}: {report.title}: {state}")
+    print(f"\nWrote {out}/README.md and a folder for each step.")
+    return 1 if any(r.stopped for r in reports) else 0
+
+
 def _cmd_new(args: argparse.Namespace) -> int:
     """Ask a few questions and write the project file the other commands read."""
     print("A few questions about the site. Press enter to take the value in brackets.\n")
@@ -592,6 +619,20 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--out", help="Where to write the project (default: the workspace)")
     p.add_argument("--force", action="store_true", help="Replace an existing project file")
     p.set_defaults(run=_cmd_start)
+
+    p = sub.add_parser("steps", help="The architect's steps built so far (1: copy the survey; "
+                       "3: road widening), one plain report each, for any project.")
+    p.add_argument("survey")
+    given = p.add_mutually_exclusive_group(required=True)
+    given.add_argument("--answers", help="The architect's answers, as JSON")
+    given.add_argument("--project", help="A project file instead of answers")
+    p.add_argument("--workspace", help=f"Folder with {WORKSPACE_FILE} (default: the survey's)")
+    p.add_argument("--profile", help="A site's temporary test assumptions (JSON, kept in "
+                   "fixtures/), with --answers")
+    p.add_argument("--debug", action="store_true", help="A debug run, which may use the "
+                   "firm's finished plan; a blind run, the default, refuses it")
+    p.add_argument("--out", default="out/steps")
+    p.set_defaults(run=_cmd_steps)
 
     p = sub.add_parser("acceptance", help="Raw survey + answers -> layouts, then compared with "
                        "the firm's own plan, which is read only after they are drawn.")

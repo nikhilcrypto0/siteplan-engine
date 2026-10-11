@@ -19,7 +19,7 @@ import math
 from dataclasses import dataclass
 from statistics import median
 
-from shapely.geometry import LineString, Point
+from shapely.geometry import LineString, Point, Polygon
 from shapely.ops import unary_union
 from shapely.strtree import STRtree
 
@@ -49,6 +49,8 @@ class Road:
     side: str  # which side of the plot it lies on, N to NW
     direction_deg: float  # the road's own direction, 0-180, anticlockwise from east
     sections: int  # how many cross-sections were taken
+    edges: tuple[LineString, ...] = ()  # the drawn edge lines its width was measured across
+    area: Polygon | None = None  # the ground between its outermost edges, where they are drawn
 
     @property
     def width_ft(self) -> float:
@@ -209,14 +211,27 @@ def _road(angle: float, members: list[_Section], pieces, survey: Survey) -> Road
     closest = unary_union([e for e in edges if plot.distance(e) <= distance + 1.0]).centroid
     centre = plot.centroid
     bearing = math.degrees(math.atan2(closest.x - centre.x, closest.y - centre.y)) % 360
+    drawn = tuple(pieces[j] for j in dict.fromkeys(j for line in kept for _, _, j in line))
     return Road(
         width_m=width,
         lines_m=tuple(v - across[0] for v in across),
         distance_m=distance,
+        edges=drawn,
+        area=_between(drawn, angle, across[0], across[-1]),
         side=_COMPASS[round(bearing / 45) % 8],
         direction_deg=angle,
         sections=len(members),
     )
+
+
+def _between(edges: tuple[LineString, ...], angle: float, low: float, high: float) -> Polygon:
+    """The ground between the road's outermost edge lines, as far along it as they are drawn."""
+    nx, ny = _normal(angle)
+    ux, uy = ny, -nx  # along the road
+    along = [x * ux + y * uy for edge in edges for x, y in edge.coords]
+    start, end = min(along), max(along)
+    return Polygon([(t * ux + s * nx, t * uy + s * ny)
+                    for t, s in ((start, low), (end, low), (end, high), (start, high))])
 
 
 def roads_near(survey: Survey) -> tuple[Road, ...]:
