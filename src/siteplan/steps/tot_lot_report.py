@@ -126,6 +126,11 @@ def _rules(t: TotLot) -> list[RuleUsed]:
                  rules.OPEN_SPACE_2012_CLAUSE),
         RuleUsed("Gaps between blocks", "Never counted as tot-lot.",
                  rules.BLOCK_GAP_NOT_OPEN_SPACE_CLAUSE),
+        RuleUsed("The approach road", "The main approach road is "
+                 f"{rules.MAIN_APPROACH_ROAD_M[0]:g} to {rules.MAIN_APPROACH_ROAD_M[1]:g} m wide.",
+                 rules.INTERNAL_ROAD_CLAUSE),
+        RuleUsed("A fire engine's turn", f"A turning radius of at least "
+                 f"{rules.FIRE_TURNING_RADIUS_M:g} m.", rules.FIRE_ACCESS_CLAUSE),
         RuleUsed("Amenities (the club house)", "Group housing of 100 flats or more: at least "
                  f"{rules.AMENITY_MIN_BUILT_UP_FRACTION:.0%} of the flats' total built-up area, "
                  "in a block of its own. Checked in step 6, when the flats are known.",
@@ -169,6 +174,13 @@ def _choices(t: TotLot) -> list[Choice]:
                "stands on, as near the main road as it fits.", "Your figure "
                f"({t.club_share_from}); more than one only when the brief asks. Its gap to the "
                "towers is kept when they are placed (step 6)."),
+        Choice(f"The gate is where the main road meets the plot (its middle "
+               f"{rules.MAIN_APPROACH_ROAD_M[1]:g} m when it meets more), and nothing stands "
+               f"within {t.setbacks.front_m + rules.FIRE_TURNING_RADIUS_M:g} m of it: the front "
+               "setback "
+               f"({t.setbacks.front_m:g} m) and a fire engine's {rules.FIRE_TURNING_RADIUS_M:g} m "
+               "turn.", "Common sense (your word): the approach road comes in there; no tot-lot or "
+               "club house blocks it. Step 6 places the road and may move the gate."),
         Choice(f"The plot's corners are where two sides (jogs under {SHORT_RUN_M:g} m left out) "
                "meet; a pocket spans both sides equally, and a corner sharper than "
                f"{SHARP_DEG:g} degrees is cut straight across.", "Your rule (2026-10-11): the "
@@ -201,6 +213,13 @@ def _output(t: TotLot) -> tuple[list[str], list[Table]]:
     else:
         lines.append(f"CLUB HOUSE: {p.club.area_sqm:,.1f} m² does not fit where no building "
                      "stands; step 6 finds it a place.")
+    if not p.gate.is_empty:
+        lines.append(f"GATE: kept clear for {t.setbacks.front_m + rules.FIRE_TURNING_RADIUS_M:g} m "
+                     f"in front of where {t.setbacks.height.road.name} meets the plot "
+                     f"({p.gate_zone.area:,.1f} m²): no tot-lot, no club house.")
+    else:
+        lines.append(f"GATE: not known ({t.setbacks.height.road.name} does not reach the plot); "
+                     "nothing is kept clear for it yet.")
     lines.append(f"Rule 15(a)(x) asks at least {rules.AMENITY_MIN_BUILT_UP_FRACTION:.0%} of the "
                  f"flats' built-up area for 100 flats or more; your {t.club_share:.0%} of the "
                  "land is checked against it in step 6, when the flats are known.")
@@ -305,6 +324,8 @@ def picture(t: TotLot) -> Picture:
               "lane can run (beside a high-rise)", fill=0.85, width=0.5),
         Layer("WATER-BUFFER", "#5cc4dd", 4, "Water's buffer from the line drawn", fill=0.45,
               width=0.5),
+        Layer("GATE-ZONE", "#d62828", 1, "Kept clear in front of the gate", fill=0.06,
+              width=1.0, dash="6 4"),
         Layer("FREE", "#8c8c8c", 8, "No building fits here", fill=0.30,
               width=0.8, dash="4 3"),
         Layer("CLUB-HOUSE", "#7b2cbf", 6, "The club house", fill=0.80, width=1.5),
@@ -323,6 +344,10 @@ def picture(t: TotLot) -> Picture:
     for water in s.widening.water:
         pic.add("WATER-BUFFER", water.kept_free)
     pic.add("FREE", p.free_after)
+    pic.add("GATE-ZONE", p.gate_zone)
+    if not p.gate.is_empty:
+        spot = p.gate.interpolate(0.5, normalized=True)
+        pic.label("NOTES", (spot.x, spot.y), "GATE")
     if p.club.footprint is not None:
         pic.add("CLUB-HOUSE", p.club.footprint)  # named in the legend; a label would sit on
         # the tot-lot's beside it
@@ -361,6 +386,8 @@ def _placing_facts(p: Placing) -> dict:
             "height_map": [{"floors": tier.floors, "setback_m": tier.setback_m,
                             "tallest_sqm": round(tier.tallest.area, 2)} for tier in p.tiers],
             "free_sqm": round(p.free.area, 2),
+            "gate": mapping(p.gate) if not p.gate.is_empty else None,
+            "gate_clear_sqm": round(p.gate_zone.area, 2),
             "club_house": {"area_sqm": round(p.club.area_sqm, 2),
                            "placed": p.club.footprint is not None,
                            "setback_m": p.club.setback_m,

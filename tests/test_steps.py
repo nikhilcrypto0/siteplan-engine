@@ -9,7 +9,7 @@ from pathlib import Path
 import ezdxf
 import pytest
 from shapely import wkt
-from shapely.geometry import Polygon, box
+from shapely.geometry import LineString, Polygon, box
 
 from siteplan import rules
 from siteplan.blind import BlindLeak
@@ -1019,3 +1019,17 @@ def test_step_five_draws_the_height_map_the_club_house_and_the_tot_lot(tmp_path)
     facts = tot_lot_report.facts(t)
     assert facts["readings"][0]["club_house"]["placed"] and facts["lowest_floors"] == 6
 
+
+def test_nothing_stands_in_front_of_the_gate(tmp_path):
+    """The main road runs the whole east side, so the gate is its middle 18 m (the widest main
+    approach road, rule 8(m)); nothing of the tot-lot or the club house comes within the front
+    setback (10 m) and a fire engine's 9 m turn of it."""
+    t = _step5(_inputs(tmp_path, **HIGH_RISE))
+    p = t.placings[0]
+    assert p.gate.length == pytest.approx(18, abs=0.05)
+    assert p.gate.distance(LineString([(120, 0), (120, 90)])) < 0.01
+    near = 19 - 0.1  # the zone's round edge is drawn in short chords, a few centimetres in
+    assert p.tot_lot.distance(p.gate) >= near
+    if p.club.footprint is not None:
+        assert p.club.footprint.distance(p.gate) >= near
+    assert "GATE: kept clear for 19 m" in tot_lot_report.report(t).markdown()

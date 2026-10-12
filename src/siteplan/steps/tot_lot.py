@@ -28,9 +28,9 @@ from pathlib import Path
 from shapely import set_precision
 from shapely.affinity import rotate, translate
 from shapely.errors import GEOSException
-from shapely.geometry import Point, Polygon, box
+from shapely.geometry import LineString, Point, Polygon, box
 from shapely.geometry.base import BaseGeometry
-from shapely.ops import unary_union
+from shapely.ops import linemerge, substring, unary_union
 
 from siteplan import rules
 from siteplan.intake import load_defaults
@@ -38,7 +38,7 @@ from siteplan.library import FlatLibrary
 from siteplan.prototypes.compose import compose_library
 from siteplan.steps.inputs import Inputs, bearing, compass
 from siteplan.steps.setbacks import Setbacks, land_left_at
-from siteplan.steps.survey_copy import SHORT_RUN_M, SurveyCopy
+from siteplan.steps.survey_copy import ROAD_TOUCH_M, SHORT_RUN_M, SurveyCopy
 
 CUT_TOLERANCE_M = 0.01  # how finely a cut or a pocket's size is placed; pieces this close are
 # one pocket; a width this short of the least still counts (a 3.000 m strip is 3 m wide)
@@ -184,6 +184,8 @@ class Placing:
     edge: BaseGeometry  # the setback the plot's edge always keeps (ring)
     standing: tuple[BaseGeometry, ...]  # each height's land where a block still fits once the
     # tot-lot and the club house are out, measured again
+    gate: BaseGeometry  # where the approach road comes in from the main road
+    gate_zone: BaseGeometry  # kept clear before it: no tot-lot, no club house
 
     @property
     def buildable(self) -> BaseGeometry:
@@ -284,13 +286,17 @@ def lay_out(inputs: Inputs, copy: SurveyCopy, setbacks: Setbacks) -> TotLot:
     club_setback = _club_setback(t)
     corners = plot_corners(setbacks.widening.net, setbacks.sides)
     turns = _side_turns(setbacks.sides)
+    gate = gate_of(setbacks)
+    zone = _overlay(gate.buffer(setbacks.front_m + rules.FIRE_TURNING_RADIUS_M),
+                    setbacks.widening.net, MEET) if not gate.is_empty else Polygon()
     for reading, buffer in readings:
         tiers = height_map(setbacks, t.blocks, t.lowest, buffer)
         free = _free(setbacks.widening.net, tiers)
-        club = place_club(free, setbacks.widening.net, club_area, club_setback, start, turns)
+        club = place_club(_overlay(free, zone, DIFF), setbacks.widening.net, club_area,
+                          club_setback, start, turns)
         t.placings += (place(tiers, free, club, buffer, t.need_sqm, t.share, start,
                              setbacks.widening.net, corners, reading,
-                             (club_area, club_setback, turns), t.blocks),)
+                             (club_area, club_setback, turns), t.blocks, (gate, zone)),)
     return t
 
 
@@ -323,6 +329,30 @@ def _side_turns(sides) -> tuple[float, ...]:
             (x0, y0), (x1, y1) = side.line.coords[0], side.line.coords[-1]
             out.add(round(math.degrees(math.atan2(y1 - y0, x1 - x0)) % 90, 1))
     return tuple(sorted(out))
+
+
+def gate_of(s: Setbacks) -> BaseGeometry:
+    """Where the approach road comes in: the stretch of the net plot's edge the main road meets
+    (or the land given up to widen it); when that is longer than the widest main approach road
+    rule 8(m) allows, its middle that wide (step 6 may move it). Empty when the main road does not
+    reach the plot."""
+    road = s.height.road
+    if road.frontage is None or road.frontage.is_empty:
+        return LineString()
+    given = [p.polygon for p in s.widening.pieces if p.counted and road.name in p.widens]
+    reach = unary_union([road.frontage.buffer(ROAD_TOUCH_M), *given])
+    met = s.widening.net.exterior.intersection(reach.buffer(CUT_TOLERANCE_M))
+    lines = [g for g in getattr(met, "geoms", [met])
+             if g.geom_type == "LineString" and g.length > 0]
+    if not lines:
+        return LineString()
+    merged = linemerge(lines)
+    line = max(getattr(merged, "geoms", [merged]), key=lambda g: g.length)
+    widest = rules.MAIN_APPROACH_ROAD_M[1]
+    if line.length > widest:
+        middle = line.length / 2
+        line = substring(line, middle - widest / 2, middle + widest / 2)
+    return line
 
 
 def _club_setback(t: TotLot) -> float:
@@ -415,7 +445,8 @@ def place(tiers: tuple[Tier, ...], free: BaseGeometry, club: Club, buffer: BaseG
           need_sqm: float, share: Share, road: BaseGeometry | None, plot: Polygon,
           corners: list[Corner], reading: str = "",
           club_try: tuple[float, float, tuple[float, ...]] | None = None,
-          blocks: Blocks | None = None) -> Placing:
+          blocks: Blocks | None = None,
+          gate: tuple[BaseGeometry, BaseGeometry] | None = None) -> Placing:
     """The tot-lot: the free land first (largest piece first, the last cut square to its length
     at its end away from the main road); then, when it does not hold the need, pockets in the
     plot's corners, the ones that cost the fewest floors, as many as cost the least. A pocket
@@ -424,7 +455,8 @@ def place(tiers: tuple[Tier, ...], free: BaseGeometry, club: Club, buffer: BaseG
     def keep(geometry: BaseGeometry) -> BaseGeometry:
         return pockets_in(geometry, share)
 
-    held_out = club.around
+    gate_line, zone = gate if gate is not None else (LineString(), Polygon())
+    held_out = unary_union([club.around, zone])  # never in front of the gate
     taken, held = [], 0.0
     for part in sorted(_parts(keep(_overlay(free, held_out, DIFF))), key=lambda p: -p.area):
         if held >= need_sqm:
@@ -443,7 +475,7 @@ def place(tiers: tuple[Tier, ...], free: BaseGeometry, club: Club, buffer: BaseG
             area, setback, turns = club_try
             club = place_club(pockets, plot, area, setback, road, turns)
             if club.footprint is not None:
-                out = unary_union([club.around, *taken])
+                out = unary_union([club.around, zone, *taken])
                 pockets, used = corner_pockets(corners, plot, tiers, out, need_sqm - held, keep)
         taken.append(pockets)
     tot_lot = unary_union(taken) if taken else Polygon()
@@ -456,7 +488,7 @@ def place(tiers: tuple[Tier, ...], free: BaseGeometry, club: Club, buffer: BaseG
                      else block_land_in(_overlay(tier.fits, taken, DIFF), blocks)
                      for tier in tiers)
     return Placing(reading, tiers, free, club, tot_lot, pockets, used, need_sqm,
-                   ring(plot, tiers), standing)
+                   ring(plot, tiers), standing, gate_line, zone)
 
 
 def _stands_on(part: BaseGeometry, free: BaseGeometry, buffer: BaseGeometry | None,
