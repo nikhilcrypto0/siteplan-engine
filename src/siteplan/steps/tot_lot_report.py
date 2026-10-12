@@ -164,8 +164,9 @@ def _choices(t: TotLot) -> list[Choice]:
                "Your word (2026-10-11): the outside boundary is never touched; the green strip "
                "and the fire lane run in it."),
         Choice(f"The club house: one, a square of {t.club_share:.0%} of the land left after the "
-               "setbacks, keeping the setback of the lowest building Table III lists, square to "
-               "the land it stands on, as near the main road as it fits.", "Your figure "
+               "setbacks, keeping the setback of the lowest building Table III lists from the "
+               "plot's edge and all round it (the tot-lot stays outside), square to the land it "
+               "stands on, as near the main road as it fits.", "Your figure "
                f"({t.club_share_from}); more than one only when the brief asks. Its gap to the "
                "towers is kept when they are placed (step 6)."),
         Choice(f"The plot's corners are where two sides (jogs under {SHORT_RUN_M:g} m left out) "
@@ -195,7 +196,8 @@ def _output(t: TotLot) -> tuple[list[str], list[Table]]:
     lines.append(f"Land no building fits on (inside the edge's setback): {p.free.area:,.1f} "
                  "m².")
     if p.club.footprint is not None:
-        lines.append(f"CLUB HOUSE: {p.club.area_sqm:,.1f} m² placed (one).")
+        lines.append(f"CLUB HOUSE: {p.club.area_sqm:,.1f} m² placed (one), with its own "
+                     f"{p.club.setback_m:g} m setback all round, kept free of the tot-lot.")
     else:
         lines.append(f"CLUB HOUSE: {p.club.area_sqm:,.1f} m² does not fit where no building "
                      "stands; step 6 finds it a place.")

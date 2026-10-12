@@ -885,10 +885,12 @@ def test_an_arm_no_building_fits_takes_the_club_house_first_and_keeps_off_the_ed
     assert p.club.footprint is not None and p.club.footprint.within(inner_arm.buffer(7.01))
     assert p.club.area_sqm == pytest.approx(0.01 * t.setbacks.left.area)
     assert t.need_sqm == pytest.approx(1_224)
-    assert p.tot_lot.area >= 1_224 - 1.0 and p.on(FREE) > 300
+    assert p.tot_lot.area >= 1_224 - 1.0 and p.on(FREE) > 200  # the arm less the club and its ring
     edge = Polygon(ARMED).exterior
     assert p.tot_lot.distance(edge) >= 7 - 0.01 and p.club.footprint.distance(edge) >= 5 - 0.01
     assert p.tot_lot.intersection(p.club.footprint).area == pytest.approx(0, abs=0.01)
+    # a building: its own setback all round, never tot-lot
+    assert p.tot_lot.distance(p.club.footprint) >= p.club.setback_m - 0.01
 
 
 def test_on_even_land_the_tot_lot_takes_every_corner(tmp_path):

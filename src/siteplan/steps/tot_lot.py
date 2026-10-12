@@ -146,7 +146,16 @@ class Tier:
 class Club:
     footprint: Polygon | None  # None when it does not fit on the free land
     area_sqm: float
-    setback_m: float  # what it keeps from the plot's edge
+    setback_m: float  # its own setback: from the plot's edge, and all round it
+
+    @property
+    def around(self) -> BaseGeometry:
+        """The club house with its own setback all round: a building, so the tot-lot keeps out
+        of it ('over and above the mandatory setbacks to be left in and around the
+        building')."""
+        if self.footprint is None:
+            return Polygon()
+        return self.footprint.buffer(self.setback_m, join_style="mitre")
 
 
 @dataclass(frozen=True)
@@ -196,17 +205,17 @@ class Placing:
     @property
     def free_after(self) -> BaseGeometry:
         """Free land the tot-lot and the club house leave: roads, parking, landscaping."""
-        taken = unary_union([self.tot_lot, *([self.club.footprint] if self.club.footprint
-                                             else [])])
-        return _overlay(self.free, taken, DIFF)
+        return _overlay(self.free, unary_union([self.tot_lot, self.club.around]), DIFF)
 
     @property
     def kept_setbacks(self) -> BaseGeometry:
         """The setback land kept: beside where a building can still stand, each height's own,
         and the edge's own everywhere."""
+        club = _overlay(_overlay(self.club.around, self.edge.envelope, MEET),
+                        self.club.footprint or Polygon(), DIFF)
         return unary_union([*(_overlay(tier.band, land.buffer(
             tier.setback_m + CUT_TOLERANCE_M, join_style="mitre"), MEET)
-            for tier, land in zip(self.tiers, self.standing, strict=True)), self.edge])
+            for tier, land in zip(self.tiers, self.standing, strict=True)), self.edge, club])
 
     def floors_lost_sqm(self) -> float:
         """The tot-lot's area on building land, each square metre counted by the floors that
@@ -410,11 +419,12 @@ def place(tiers: tuple[Tier, ...], free: BaseGeometry, club: Club, buffer: BaseG
     """The tot-lot: the free land first (largest piece first, the last cut square to its length
     at its end away from the main road); then, when it does not hold the need, pockets in the
     plot's corners, the ones that cost the fewest floors, as many as cost the least. A pocket
-    keeps out of every setback: the edge's own, and each building's beside it."""
+    keeps out of every setback: the edge's own, each building's beside it and the club
+    house's all round it."""
     def keep(geometry: BaseGeometry) -> BaseGeometry:
         return pockets_in(geometry, share)
 
-    held_out = club.footprint if club.footprint is not None else Polygon()
+    held_out = club.around
     taken, held = [], 0.0
     for part in sorted(_parts(keep(_overlay(free, held_out, DIFF))), key=lambda p: -p.area):
         if held >= need_sqm:
@@ -433,7 +443,7 @@ def place(tiers: tuple[Tier, ...], free: BaseGeometry, club: Club, buffer: BaseG
             area, setback, turns = club_try
             club = place_club(pockets, plot, area, setback, road, turns)
             if club.footprint is not None:
-                out = unary_union([club.footprint, *taken])
+                out = unary_union([club.around, *taken])
                 pockets, used = corner_pockets(corners, plot, tiers, out, need_sqm - held, keep)
         taken.append(pockets)
     tot_lot = unary_union(taken) if taken else Polygon()
@@ -441,7 +451,7 @@ def place(tiers: tuple[Tier, ...], free: BaseGeometry, club: Club, buffer: BaseG
                                                  (part.centroid.x, part.centroid.y))),
                            _stands_on(part, free, buffer, tiers))
                     for part in _touching(_parts(tot_lot)))
-    taken = unary_union([tot_lot, *([club.footprint] if club.footprint else [])])
+    taken = unary_union([tot_lot, club.around])
     standing = tuple(_overlay(tier.fits, taken, DIFF) if blocks is None
                      else block_land_in(_overlay(tier.fits, taken, DIFF), blocks)
                      for tier in tiers)
