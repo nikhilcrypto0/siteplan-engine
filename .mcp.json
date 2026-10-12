@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "siteplan-cad": {
+      "command": "uv",
+      "args": ["run", "siteplan-cad-mcp", "--sites", "out/cad/sites.json"]
+    }
+  }
+}

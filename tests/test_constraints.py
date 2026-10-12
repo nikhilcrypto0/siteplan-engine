@@ -29,8 +29,8 @@ from siteplan.optimizer.search import strategy
 SRC = Path(siteplan.__file__).parent
 # Packages every module of which is audited, modules added later included. `service` is named
 # before it exists, so its first module is held to the audit like the rest.
-AUDITED_PACKAGES = ("adapters", "contracts", "legal", "optimizer", "prototypes", "service",
-                    "steps", "validator")
+AUDITED_PACKAGES = ("adapters", "cad", "contracts", "legal", "optimizer", "prototypes",
+                    "service", "steps", "validator")
 # Top-level modules whose numbers shape a generated layout, size it, or accept or reject one.
 AUDITED_MODULES = (
     "access", "access_checks", "acceptance", "area_statement", "assistant", "basis", "blind",
@@ -81,6 +81,10 @@ EXEMPT = {
     "agent/model": "the model's HTTP client: a connect timeout, a read chunk",
     "agent/settings": "the agent's run limits and the hand-off of its settings",
     "agent/transcript": "the run's record and the architect's view: how much a line shows",
+    # The live CAD link's plumbing; its checks (cad/live) and its acceptance run are audited.
+    "cad/__init__": "the live CAD package's marker",
+    "cad/bridge": "transport plumbing: FreeCAD's localhost port, the token file, metres to mm",
+    "cad/server": "MCP plumbing: the live session's operations as tools",
 }
 # Named numbers in audited modules that are no domain number: an ordering, a unit, a bearing, a
 # message's length. A new number belongs in constraints.py unless it is plainly one of these.
@@ -108,6 +112,8 @@ NOT_DOMAIN = {
     "steps.main_road_height_report.SECTION_LABEL_M": "rendering: where step 2's side-view labels "
                                                      "sit",
     "validator.refusals.SHOWN": "how many offending numbers a refusal names",
+    "cad.scene.DIMENSION_SIDE_M": "rendering: sides shorter than this get no CAD dimension",
+    "cad.scene.DIMENSION_SHIFT_M": "rendering: how far along its side a dimension line sits",
     "validator.refusals.LIBRARY_MESSAGE_CHARS": "how much of a library's error a report keeps",
     "assistant.MAX_UNCLEAR": "how many unclear points of a brief the reply lists",
     "assistant.EXPLAIN_MAX_TOKENS": "the model's token allowance for an explanation",

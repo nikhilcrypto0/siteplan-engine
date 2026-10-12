@@ -1,0 +1,21 @@
+{
+  "dhulapally-blind": {
+    "survey": "fixtures/workspace/dhulapally_survey.pdf",
+    "answers": "fixtures/acceptance/dhulapally.answers.json",
+    "workspace": "fixtures/workspace",
+    "mode": "blind"
+  },
+  "dhulapally-debug": {
+    "survey": "fixtures/workspace/dhulapally_survey.pdf",
+    "answers": "fixtures/acceptance/dhulapally.answers.json",
+    "profile": "fixtures/profiles/dhulapally.debug.not-counted.profile.json",
+    "workspace": "fixtures/workspace",
+    "mode": "debug"
+  },
+  "suchitra": {
+    "survey": "fixtures/workspace/suchitra_survey.pdf",
+    "project": "fixtures/workspace/suchitra.project.json",
+    "workspace": "fixtures/workspace",
+    "mode": "blind"
+  }
+}

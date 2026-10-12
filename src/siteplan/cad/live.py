@@ -1,0 +1,353 @@
+"""A live CAD session: a site's steps run by the engine, drawn in FreeCAD, and test objects (a
+tower footprint) placed, moved, read back after an edit in FreeCAD, or removed, each change
+checked by the engine's own rules. FreeCAD shows and edits; the engine decides.
+
+A site is named in a sites file (JSON, client paths, kept in gitignored fixtures/ or out/):
+{"dhulapally": {"survey": ..., "answers": ..., "profile": ..., "mode": "debug", "workspace": ...},
+ "suchitra": {"survey": ..., "project": ..., "mode": "blind", ...}}. A blind site never reads the
+firm's finished plan (`blind.py` holds it); a debug site says DEBUG in every answer."""
+
+from __future__ import annotations
+
+import json
+import math
+from dataclasses import dataclass, field
+from pathlib import Path
+
+from shapely.geometry import Polygon
+from shapely.ops import polylabel, unary_union
+
+from siteplan.cad import scene
+from siteplan.cad.bridge import Bridge, from_cad, to_cad
+from siteplan.profiles import load_profile
+from siteplan.steps.inputs import Inputs, from_answers, from_project
+from siteplan.steps.main_road_height import height_for
+from siteplan.steps.road_widening import take_off
+from siteplan.steps.setbacks import Setbacks, land_left_at, set_back
+from siteplan.steps.survey_copy import copy_survey
+from siteplan.steps.tot_lot import firm_blocks
+
+FIT_M = 0.01  # a footprint this far past a line still keeps it (drawing noise)
+MATCH_M = 0.001  # CAD and engine agree when no vertex is further apart than this
+MATCH_SHARE = 1e-6  # ... and their areas differ by less than this share
+POLE_M = 0.1  # how finely the middle of the buildable area is looked for
+
+
+@dataclass
+class TestTower:
+    """A footprint placed to try the rules: where it stands, how tall (for its setbacks)."""
+
+    ident: str
+    polygon: Polygon
+    floors: int
+
+
+@dataclass
+class Site:
+    name: str
+    mode: str
+    inputs: Inputs
+    setbacks: Setbacks
+    towers: dict[str, TestTower] = field(default_factory=dict)
+    document: str = ""  # its FreeCAD document; a reopened file brings its own name
+
+    def __post_init__(self) -> None:
+        self.document = self.document or f"Siteplan_{self.name}"
+
+    @property
+    def debug(self) -> bool:
+        return self.mode != "blind"
+
+
+def load_sites(path: Path) -> dict[str, dict]:
+    return json.loads(path.read_text())
+
+
+def run_steps(spec: dict) -> tuple[Inputs, Setbacks]:
+    """Steps 1 to 4 for a site, the engine's own functions, nothing redone here."""
+    survey = Path(spec["survey"])
+    workspace = Path(spec["workspace"]) if spec.get("workspace") else None
+    mode = spec.get("mode", "blind")
+    if spec.get("project"):
+        inputs = from_project(survey, Path(spec["project"]), workspace, mode)
+    else:
+        profile = load_profile(spec["profile"]) if spec.get("profile") else None
+        inputs = from_answers(survey, json.loads(Path(spec["answers"]).read_text()), workspace,
+                              profile, mode)
+    copy = copy_survey(inputs)
+    return inputs, set_back(inputs, copy, height_for(inputs, copy), take_off(inputs, copy))
+
+
+def tower_polygon(x: float, y: float, length_m: float, depth_m: float,
+                  bearing_deg: float) -> Polygon:
+    """A rectangle centred on (x, y), `length_m` along the bearing (clockwise from north, so 0
+    runs north to south) and `depth_m` across it."""
+    a = math.radians(bearing_deg)
+    ux, uy = math.sin(a), math.cos(a)  # along
+    vx, vy = uy, -ux  # across
+    hl, hd = length_m / 2, depth_m / 2
+    return Polygon([(x + ux * sl * hl + vx * sd * hd, y + uy * sl * hl + vy * sd * hd)
+                    for sl, sd in ((-1, -1), (1, -1), (1, 1), (-1, 1))])
+
+
+class Session:
+    """Sites opened by name, each drawn in its own FreeCAD document."""
+
+    def __init__(self, sites: dict[str, dict], bridge: Bridge | None = None):
+        self.specs = sites
+        self.sites: dict[str, Site] = {}
+        self._bridge = bridge
+
+    @property
+    def bridge(self) -> Bridge:
+        if self._bridge is None:
+            self._bridge = Bridge()
+        return self._bridge
+
+    # --- sites and what is drawn of them ------------------------------------------------------
+
+    def site(self, name: str) -> Site:
+        if name not in self.sites:
+            if name not in self.specs:
+                raise KeyError(f"no site named {name!r}; known: {', '.join(sorted(self.specs))}")
+            spec = self.specs[name]
+            inputs, setbacks = run_steps(spec)
+            self.sites[name] = Site(name, spec.get("mode", "blind"), inputs, setbacks)
+        return self.sites[name]
+
+    def show(self, name: str, what: str) -> dict:
+        """Draw a site's step in FreeCAD, or update what is already drawn: 'survey' (step 1),
+        'net' (step 3), 'setbacks' (step 4, with the buildable area) or 'all'."""
+        if what not in ("survey", "net", "setbacks", "all"):
+            raise ValueError("show 'survey', 'net', 'setbacks' or 'all'")
+        s = self.site(name)
+        b = s.setbacks
+        items: list[dict] = []
+        items += scene.survey_items(b)
+        stopped = None
+        if what in ("net", "setbacks", "all"):
+            if b.widening.stopped:
+                stopped = f"step 3 stopped: {b.widening.stopped} ({b.widening.ask})"
+            else:
+                items += scene.net_items(b)
+        if what in ("setbacks", "all") and stopped is None:
+            if b.stopped:
+                stopped = f"step 4 stopped: {b.stopped} ({b.ask})"
+            else:
+                items += scene.setback_items(b)
+        self.bridge.document(s.document)
+        done = self.bridge.upsert(items, scene.styles())
+        self.bridge.view(True)
+        return {"site": name, "mode": s.mode, "debug": s.debug, "drawn": len(done),
+                "created": sum(1 for d in done if d["created"]),
+                "updated": sum(1 for d in done if not d["created"]),
+                "stopped": stopped, "summary": self.summary(name)}
+
+    def summary(self, name: str) -> dict:
+        s = self.site(name)
+        b = s.setbacks
+        out = {"site": name, "mode": s.mode,
+               "survey_sqm": round(b.copy.plot.area, 2),
+               "net_sqm": round(b.widening.net.area, 2) if b.widening.net is not None else None}
+        if b.stopped:
+            return {**out, "stopped": b.stopped, "question": b.ask}
+        x0, y0, x1, y1 = b.left.bounds
+        inside = polylabel(max(scene.parts(b.left), key=lambda p: p.area), tolerance=POLE_M)
+        blocks = firm_blocks(s.inputs.workspace)
+        return {**out, "floors": b.floors, "high_rise": b.high_rise,
+                "buildable_sqm": round(b.left.area, 2),
+                "buildable_bounds_m": [round(v, 3) for v in (x0, y0, x1, y1)],
+                "a_point_well_inside_m": [round(inside.x, 3), round(inside.y, 3)],
+                "setbacks_m": sorted({side.metres for side in b.sides}),
+                "firm_blocks_m": [{"what": what, "length_m": round(length, 2),
+                                   "depth_m": round(depth, 2)}
+                                  for what, length, depth in blocks.footprints] if blocks else [],
+                "towers": sorted(s.towers)}
+
+    # --- test towers ---------------------------------------------------------------------------
+
+    def place_tower(self, name: str, ident: str, length_m: float, depth_m: float,
+                    x: float | None = None, y: float | None = None, bearing_deg: float = 0.0,
+                    floors: int | None = None) -> dict:
+        s = self.site(name)
+        if s.setbacks.stopped:
+            raise ValueError(f"no setbacks yet: {s.setbacks.stopped}")
+        if x is None or y is None:
+            middle = polylabel(max(scene.parts(s.setbacks.left), key=lambda p: p.area),
+                               tolerance=POLE_M)
+            x, y = middle.x, middle.y
+        s.towers[ident] = TestTower(ident, tower_polygon(x, y, length_m, depth_m, bearing_deg),
+                                    floors or s.setbacks.floors)
+        return self._redraw(s, [ident])
+
+    def move_tower(self, name: str, ident: str, east_m: float = 0.0,
+                   north_m: float = 0.0) -> dict:
+        s = self.site(name)
+        tower = self._tower(s, ident)
+        moved = Polygon([(px + east_m, py + north_m) for px, py in tower.polygon.exterior.coords])
+        s.towers[ident] = TestTower(ident, moved, tower.floors)
+        return self._redraw(s, [ident])
+
+    def delete_tower(self, name: str, ident: str) -> dict:
+        s = self.site(name)
+        self._tower(s, ident)
+        del s.towers[ident]
+        self.bridge.document(s.document)
+        gone = self.bridge.remove([f"tower-{ident}", f"tower-{ident}-label"])
+        return {**self._redraw(s, []), "removed_objects": gone}
+
+    def read_back(self, name: str, ident: str) -> dict:
+        """Take a tower as it now stands in FreeCAD (dragged or edited there) into the engine,
+        and check it."""
+        s = self.site(name)
+        tower = self._tower(s, ident)
+        self.bridge.document(s.document)
+        got = self.bridge.read(f"tower-{ident}")
+        if not got or not got.get("rings"):
+            raise ValueError(f"tower {ident} is not in FreeCAD")
+        s.towers[ident] = TestTower(ident, Polygon([from_cad(p) for p in got["rings"][0]]),
+                                    tower.floors)
+        return self._redraw(s, [ident])
+
+    def _tower(self, s: Site, ident: str) -> TestTower:
+        if ident not in s.towers:
+            raise KeyError(f"no tower {ident!r} on {s.name}; placed: {sorted(s.towers)}")
+        return s.towers[ident]
+
+    def _redraw(self, s: Site, idents: list[str]) -> dict:
+        items = []
+        for ident in idents:
+            t = s.towers[ident]
+            items += scene.polygon_items(f"tower-{ident}", f"Tower {ident} (Stilt + {t.floors})",
+                                         scene.TOWERS, t.polygon, "outline")
+            c = t.polygon.centroid
+            items.append({"id": f"tower-{ident}-label", "label": f"Tower {ident} label",
+                          "layer": scene.NOTES, "kind": "text", "at": to_cad((c.x, c.y)),
+                          "text": f"{ident}\nS+{t.floors}"})
+        remaining = self.remaining(s)
+        items += scene.polygon_items("remaining", "Buildable area left after the towers",
+                                     scene.FOOTPRINTS, remaining, "area")
+        self.bridge.document(s.document)
+        if remaining.is_empty:
+            self.bridge.remove(["remaining"])
+        self.bridge.upsert(items, scene.styles())
+        return {"site": s.name, "mode": s.mode, "checks": self.validate(s.name),
+                "remaining_sqm": round(remaining.area, 2),
+                "towers": {k: [[round(px, 3), round(py, 3)]
+                               for px, py in t.polygon.exterior.coords[:-1]]
+                           for k, t in s.towers.items()}}
+
+    # --- the engine's checks --------------------------------------------------------------------
+
+    def validate(self, name: str) -> dict:
+        """Each tower against the engine's rules: wholly inside the land its own height's
+        setbacks leave (step 4's rules, `land_left_at`), out of every water body's buffer, and
+        the taller one's setback from every other tower (rule 7(a)(xii))."""
+        s = self.site(name)
+        b = s.setbacks
+        water = unary_union([w.kept_free for w in b.widening.water if w.buffer_m is not None]) \
+            if b.widening.water else Polygon()
+        out = {}
+        towers = list(s.towers.values())
+        for t in towers:
+            land, setback = land_left_at(b, t.floors)
+            outside = t.polygon.difference(land).area
+            checks = {"setback_m": setback,
+                      "inside_setbacks": outside <= FIT_M * t.polygon.length,
+                      "outside_sqm": round(outside, 3),
+                      "in_water_buffer_sqm": round(t.polygon.intersection(water).area, 3)}
+            gaps = {}
+            for other in towers:
+                if other is t:
+                    continue
+                need = max(setback, land_left_at(b, other.floors)[1])
+                apart = t.polygon.distance(other.polygon)
+                gaps[other.ident] = {"apart_m": round(apart, 3), "needs_m": need,
+                                     "holds": apart >= need - FIT_M}
+            checks["gaps"] = gaps
+            checks["holds"] = (checks["inside_setbacks"]
+                               and checks["in_water_buffer_sqm"] <= FIT_M * t.polygon.length
+                               and all(g["holds"] for g in gaps.values()))
+            out[t.ident] = checks
+        return out
+
+    def remaining(self, s: Site) -> Polygon:
+        """The buildable area less each tower and the setback it keeps round itself."""
+        if s.setbacks.stopped:
+            return Polygon()
+        kept = [t.polygon.buffer(land_left_at(s.setbacks, t.floors)[1], join_style="mitre")
+                for t in s.towers.values()]
+        return s.setbacks.left.difference(unary_union(kept)) if kept else s.setbacks.left
+
+    # --- proof: what FreeCAD holds against what the engine made ---------------------------------
+
+    def compare(self, name: str) -> dict:
+        """Read every drawn outline and zone back from FreeCAD and measure it against the
+        engine's own shape: the largest distance between them (Hausdorff, metres) and the area
+        (FreeCAD's mm² over 1,000,000 against the engine's m²)."""
+        s = self.site(name)
+        b = s.setbacks
+        engine = {"survey-boundary": b.copy.plot}
+        if b.widening.net is not None:
+            engine["net-plot"] = b.widening.net
+        if not b.stopped:
+            engine.update({"setback-zone": b.band, "buildable": b.left,
+                           "green-strip": b.green, "fire-lane": b.fire_lane})
+        engine.update({f"tower-{k}": t.polygon for k, t in s.towers.items()})
+        self.bridge.document(s.document)
+        rows = {}
+        for ident, shape in engine.items():
+            if shape is None or shape.is_empty:
+                continue
+            pieces = scene.parts(shape)
+            for n, piece in enumerate(sorted(pieces, key=lambda p: -p.area), 1):
+                key = ident if n == 1 else f"{ident}#{n}"
+                got = self.bridge.read(key)
+                if not got or not got.get("rings"):
+                    rows[key] = {"found": False}
+                    continue
+                rings = [[from_cad(p) for p in r] for r in got["rings"]]
+                cad = Polygon(rings[0], rings[1:])
+                engine_piece = piece if got["kind"] == "area" else Polygon(piece.exterior)
+                hausdorff = cad.exterior.hausdorff_distance(engine_piece.exterior)
+                cad_area = got["area"] / 1e6
+                share = abs(cad_area - engine_piece.area) / engine_piece.area
+                rows[key] = {"found": True, "kind": got["kind"],
+                             "engine_sqm": round(engine_piece.area, 4),
+                             "freecad_sqm": round(cad_area, 4),
+                             "area_difference_share": share,
+                             "largest_distance_m": hausdorff,
+                             "vertices": [len(engine_piece.exterior.coords) - 1,
+                                          len(rings[0])],
+                             "agrees": hausdorff <= MATCH_M and share <= MATCH_SHARE}
+        return {"site": name, "mode": s.mode, "tolerance_m": MATCH_M,
+                "tolerance_area_share": MATCH_SHARE, "objects": rows,
+                "all_agree": all(r.get("agrees") for r in rows.values())}
+
+    def setback_distances(self, name: str) -> dict:
+        """Each side of the net plot against the buildable outline as FreeCAD holds it: how far
+        in the outline lies from that side, beside the setback the engine asked of it."""
+        s = self.site(name)
+        b = s.setbacks
+        self.bridge.document(s.document)
+        got = self.bridge.read("buildable")
+        cad = Polygon([from_cad(p) for p in got["rings"][0]])
+        out = {}
+        for side in b.sides:
+            distance = side.line.distance(cad)
+            out[str(side.number)] = {"faces": side.faces, "length_m": round(side.length_m, 2),
+                                     "setback_m": side.metres, "measured_m": round(distance, 4),
+                                     "kept": distance >= side.metres - MATCH_M}
+        return {"site": name, "sides": out, "all_kept": all(v["kept"] for v in out.values())}
+
+    def save(self, name: str, file_name: str) -> str:
+        self.bridge.document(self.site(name).document)
+        return self.bridge.save(file_name)
+
+    def reopen(self, name: str, file_name: str) -> str:
+        """Close the saved drawing and open it again from the file; the site carries on in the
+        reopened document."""
+        s = self.site(name)
+        s.document = self.bridge.reopen(file_name)
+        return s.document
+

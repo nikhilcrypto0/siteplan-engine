@@ -1,0 +1,375 @@
+# siteplan live: the drawing end of the site-plan engine, inside a running FreeCAD.
+#
+# Run it once in FreeCAD (Macro > Macros... > siteplan_live.FCMacro > Execute), or start FreeCAD
+# with it: FreeCAD cad/siteplan_live.FCMacro. It listens on 127.0.0.1 only, behind a token it
+# writes beside the drawings, so another program or a web page cannot drive it. It draws,
+# updates, reads back and removes the engine's objects and saves or opens a drawing in its own
+# folder; it never runs code it is sent. The engine stays the source of truth: every number it
+# draws comes from the engine, in millimetres (FreeCAD's unit), and every rule is checked there.
+#
+# Each object carries the engine's id in a SiteplanId property, so drawing it again updates it in
+# place instead of adding a copy. Outlines are Draft wires (their points can be dragged and their
+# area is measured); zones with holes (a setback band, a green strip) are Part faces.
+
+import os
+import queue
+import secrets
+import threading
+import xmlrpc.client
+import xmlrpc.server
+from pathlib import Path
+
+import Draft
+import FreeCAD as App
+import FreeCADGui as Gui
+import Part
+from PySide import QtCore
+
+HOST = "127.0.0.1"  # never another address: the server is for this machine only
+LOOPBACK = ("127.0.0.1", "localhost", "::1")
+PORT = int(os.environ.get("SITEPLAN_CAD_PORT", "9877"))
+_HERE = globals().get("__file__")  # FreeCAD sets it when it runs a macro file
+ROOT = Path(os.environ.get("SITEPLAN_CAD_ROOT") or (
+    Path(_HERE).resolve().parent.parent / "out" / "cad" if _HERE
+    else Path.home() / "Documents" / "siteplan-cad")).resolve()
+TOKEN_FILE = ".bridge-token"
+TAG = "SiteplanId"
+LAYER_TAG = "SiteplanLayer"
+KINDS = ("outline", "area", "line", "text", "dimension")
+WAIT_S = 60.0
+PUMP_MS = 50
+SUFFIXES = (".FCStd", ".png")
+
+_jobs: queue.Queue = queue.Queue()
+
+
+def _doc():
+    doc = App.ActiveDocument
+    if doc is None:
+        doc = App.newDocument("Siteplan")
+    return doc
+
+
+def _find(doc, ident):
+    return [o for o in doc.Objects if getattr(o, TAG, None) == ident]
+
+
+def _v(p):
+    return App.Vector(float(p[0]), float(p[1]), 0.0)
+
+
+def _ring(points):
+    pts = [_v(p) for p in points]
+    if pts[0].distanceToPoint(pts[-1]) > 1e-9:
+        pts.append(pts[0])
+    return Part.makePolygon(pts)
+
+
+def _face(rings):
+    face = Part.Face(_ring(rings[0]))
+    for hole in rings[1:]:
+        face = face.cut(Part.Face(_ring(hole)))
+    return face
+
+
+def _is_layer(obj):
+    return getattr(obj, "Proxy", None) is not None and type(obj.Proxy).__name__ == "Layer"
+
+
+def _layer(doc, name, style):
+    """The Draft layer the engine calls `name`, found by its tag (FreeCAD renames a label that
+    another object already has, so the label is not a key)."""
+    layer = next((o for o in doc.Objects if _is_layer(o)
+                  and getattr(o, LAYER_TAG, None) == name), None)
+    if layer is None:
+        layer = Draft.make_layer(name)
+        layer.addProperty("App::PropertyString", LAYER_TAG, "Siteplan", "the engine's layer")
+        setattr(layer, LAYER_TAG, name)
+    if style and getattr(layer, "ViewObject", None) is not None:
+        vo = layer.ViewObject
+        if "line" in style:
+            vo.LineColor = tuple(style["line"])
+        if "fill" in style:
+            vo.ShapeColor = tuple(style["fill"])
+        if "transparency" in style:
+            vo.Transparency = int(style["transparency"])
+        if "width" in style:
+            vo.LineWidth = float(style["width"])
+    return layer
+
+
+def _tag(obj, ident, label, kind):
+    if not hasattr(obj, TAG):
+        obj.addProperty("App::PropertyString", TAG, "Siteplan", "the engine's id")
+        obj.addProperty("App::PropertyString", "SiteplanKind", "Siteplan", "how it is drawn")
+    setattr(obj, TAG, ident)
+    obj.SiteplanKind = kind
+    obj.Label = label
+
+
+def _make(doc, item):
+    kind = item["kind"]
+    if kind == "outline":
+        return Draft.make_wire([_v(p) for p in item["rings"][0]], closed=True, face=True)
+    if kind == "line":
+        return Draft.make_wire([_v(p) for p in item["points"]], closed=False, face=False)
+    if kind == "area":
+        obj = doc.addObject("Part::Feature", "Zone")
+        obj.Shape = _face(item["rings"])
+        return obj
+    if kind == "text":
+        return Draft.make_text(item["text"].split("\n"), _v(item["at"]))
+    return Draft.make_linear_dimension(_v(item["start"]), _v(item["end"]), _v(item["line"]))
+
+
+def _update(obj, item):
+    kind = item["kind"]
+    if kind == "outline":
+        obj.Points = [_v(p) for p in item["rings"][0]]
+        obj.Placement = App.Placement()
+    elif kind == "line":
+        obj.Points = [_v(p) for p in item["points"]]
+        obj.Placement = App.Placement()
+    elif kind == "area":
+        obj.Placement = App.Placement()
+        obj.Shape = _face(item["rings"])
+    elif kind == "text":
+        obj.Text = item["text"].split("\n")
+        obj.Placement = App.Placement(_v(item["at"]), App.Rotation())
+    else:
+        obj.Start, obj.End, obj.Dimline = (_v(item["start"]), _v(item["end"]),
+                                           _v(item["line"]))
+
+
+# --- what a client may ask (each runs on FreeCAD's own thread) --------------------------------
+
+def ping():
+    doc = App.ActiveDocument
+    return {"freecad": ".".join(App.Version()[:3]), "document": doc.Name if doc else None,
+            "objects": len([o for o in doc.Objects if hasattr(o, TAG)]) if doc else 0,
+            "folder": str(ROOT)}
+
+
+def document(name):
+    """Make the document named (or labelled) `name` the active one, starting it when there is
+    none; FreeCAD keeps only letters, digits and '_' in a document's name, so the label is how
+    it is found again."""
+    docs = App.listDocuments().values()
+    doc = next((d for d in docs if d.Name == name), None) or next(
+        (d for d in docs if d.Label == name), None)
+    if doc is None:
+        doc = App.newDocument(name)
+        doc.Label = name
+    App.setActiveDocument(doc.Name)
+    if Gui.getDocument(doc.Name) is not None:
+        Gui.ActiveDocument = Gui.getDocument(doc.Name)
+    return doc.Name
+
+
+def upsert(items, styles):
+    """Draw each item, or update the one already drawn with its id; return what happened."""
+    doc = _doc()
+    out = []
+    for item in items:
+        if item["kind"] not in KINDS:
+            raise ValueError(f"unknown kind {item['kind']!r}")
+        found = _find(doc, item["id"])
+        if found and getattr(found[0], "SiteplanKind", "") == item["kind"]:
+            obj, made = found[0], False
+            for extra in found[1:]:
+                doc.removeObject(extra.Name)
+            _update(obj, item)
+        else:
+            for old in found:
+                doc.removeObject(old.Name)
+            obj, made = _make(doc, item), True
+        _tag(obj, item["id"], item.get("label", item["id"]), item["kind"])
+        layer = _layer(doc, item["layer"], styles.get(item["layer"]))
+        if obj not in layer.Group:
+            for other in doc.Objects:  # an object lies on one layer
+                if other is not layer and _is_layer(other) and obj in other.Group:
+                    other.Group = [o for o in other.Group if o is not obj]
+            layer.Group = [*layer.Group, obj]
+        out.append({"id": item["id"], "name": obj.Name, "created": made})
+    doc.recompute()
+    return out
+
+
+def remove(ids):
+    doc = _doc()
+    gone = 0
+    for ident in ids:
+        for obj in _find(doc, ident):
+            doc.removeObject(obj.Name)
+            gone += 1
+    doc.recompute()
+    return gone
+
+
+def listing():
+    doc = App.ActiveDocument
+    if doc is None:
+        return []
+    layers = {o.Name: getattr(o, LAYER_TAG, o.Label) for o in doc.Objects if _is_layer(o)}
+    owner = {}
+    for name in layers:
+        for obj in doc.getObject(name).Group:
+            owner[obj.Name] = layers[name]
+    return [{"id": getattr(o, TAG), "name": o.Name, "label": o.Label,
+             "kind": getattr(o, "SiteplanKind", ""), "layer": owner.get(o.Name, "")}
+            for o in doc.Objects if hasattr(o, TAG)]
+
+
+def read(ident):
+    """An object as it stands now in FreeCAD, edits and moves included: its rings in
+    millimetres, the outer one first, and its area in mm²."""
+    doc = _doc()
+    found = _find(doc, ident)
+    if not found:
+        return None
+    obj = found[0]
+    kind = getattr(obj, "SiteplanKind", "")
+    out = {"id": ident, "name": obj.Name, "kind": kind, "type": obj.TypeId,
+           "points_editable": hasattr(obj, "Points"), "rings": []}
+    if kind == "dimension":
+        out["measured"] = float(obj.Start.distanceToPoint(obj.End))
+    shape = getattr(obj, "Shape", None)
+    if shape is None or shape.isNull():
+        return out
+    out["area"], out["length"] = float(shape.Area), float(shape.Length)
+    faces = shape.Faces
+    wires = ([faces[0].OuterWire] + [w for w in faces[0].Wires if not w.isSame(faces[0].OuterWire)]
+             if faces else shape.Wires)
+    for wire in wires:
+        out["rings"].append([[v.Point.x, v.Point.y] for v in wire.OrderedVertexes])
+    return out
+
+
+def move(ident, dx, dy):
+    """Shift an object in FreeCAD only, as a person moving it there would (its placement); the
+    engine knows nothing of it until it reads the object back."""
+    doc = _doc()
+    found = _find(doc, ident)
+    if not found:
+        raise ValueError(f"no object {ident!r}")
+    obj = found[0]
+    placement = obj.Placement
+    placement.Base = placement.Base + App.Vector(float(dx), float(dy), 0.0)
+    obj.Placement = placement
+    doc.recompute()
+    return obj.Name
+
+
+def _file(name):
+    path = (ROOT / name).resolve()
+    if path.parent != ROOT or path.suffix not in SUFFIXES:
+        raise ValueError(f"only a bare file name ending {', '.join(SUFFIXES)} in {ROOT}")
+    return path
+
+
+def save(name):
+    doc = _doc()
+    path = _file(name)
+    doc.saveAs(str(path))
+    return str(path)
+
+
+def reopen(name):
+    path = _file(name)
+    for doc_name, doc in list(App.listDocuments().items()):
+        if Path(doc.FileName or "").resolve() == path:
+            App.closeDocument(doc_name)
+    doc = App.openDocument(str(path))
+    App.setActiveDocument(doc.Name)
+    return doc.Name
+
+
+def view(fit):
+    if Gui.ActiveDocument is None:
+        return False
+    v = Gui.ActiveDocument.ActiveView
+    v.viewTop()
+    if fit:
+        v.fitAll()
+    return True
+
+
+def snapshot(name, width, height):
+    path = _file(name)
+    view(True)
+    Gui.ActiveDocument.ActiveView.saveImage(str(path), int(width), int(height), "White")
+    return str(path)
+
+
+CALLS = {f.__name__: f for f in (ping, document, upsert, remove, listing, read, move, save,
+                                 reopen, view, snapshot)}
+
+
+# --- the server: requests wait in a queue for FreeCAD's thread ---------------------------------
+
+def _pump():
+    while True:
+        try:
+            fn, args, done = _jobs.get_nowait()
+        except queue.Empty:
+            return
+        try:
+            done.put((True, fn(*args)))
+        except Exception as problem:  # noqa: BLE001 - the client gets the reason
+            done.put((False, f"{type(problem).__name__}: {problem}"))
+
+
+class _Requests(xmlrpc.server.SimpleXMLRPCRequestHandler):
+    """Only this machine's own programs: a request a browser sends (it carries an Origin) or one
+    addressed to another host name (DNS rebinding) is refused before it is read."""
+
+    rpc_paths = ("/RPC2",)
+
+    def do_POST(self):
+        host = (self.headers.get("Host") or "").rsplit(":", 1)[0].strip("[]")
+        if self.headers.get("Origin") is not None or host not in LOOPBACK:
+            self.send_error(403)
+            return
+        super().do_POST()
+
+
+class _Handler:
+    def __init__(self, token):
+        self.token = token
+
+    def _dispatch(self, method, params):
+        if method not in CALLS:
+            raise xmlrpc.client.Fault(404, f"no such call: {method}")
+        if not params or not secrets.compare_digest(str(params[0]), self.token):
+            raise xmlrpc.client.Fault(403, "wrong token")
+        done: queue.Queue = queue.Queue(maxsize=1)
+        _jobs.put((CALLS[method], params[1:], done))
+        ok, value = done.get(timeout=WAIT_S)
+        if not ok:
+            raise xmlrpc.client.Fault(500, value)
+        return value
+
+
+def start():
+    old = getattr(App, "_siteplan_live", None)
+    if old is not None:
+        old["server"].shutdown()
+        old["server"].server_close()
+        old["timer"].stop()
+    ROOT.mkdir(parents=True, exist_ok=True)
+    token = secrets.token_hex(16)
+    token_path = ROOT / TOKEN_FILE
+    token_path.write_text(token)
+    os.chmod(token_path, 0o600)
+    server = xmlrpc.server.SimpleXMLRPCServer((HOST, PORT), requestHandler=_Requests,
+                                              allow_none=True, logRequests=False)
+    server.register_instance(_Handler(token))
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    timer = QtCore.QTimer()
+    timer.timeout.connect(_pump)
+    timer.start(PUMP_MS)
+    App._siteplan_live = {"server": server, "timer": timer}
+    App.Console.PrintMessage(f"siteplan live: listening on {HOST}:{PORT}, drawings in {ROOT}\n")
+
+
+start()

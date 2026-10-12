@@ -50,6 +50,8 @@ from siteplan import (
 )
 from siteplan.adapters import legacy_site
 from siteplan.basis import Basis  # lives in basis.py so the contracts need not import this module
+from siteplan.cad import acceptance as cad_acceptance
+from siteplan.cad import live as cad_live
 from siteplan.contracts import accounting as ledger
 from siteplan.contracts import design_brief, prototype, resolved_rules, site_model
 from siteplan.legal import frontage, widths
@@ -1758,6 +1760,43 @@ REGISTRY: tuple[Constraint, ...] = (
         _pct(rules.MORTGAGE_FRACTION), Basis.LEGAL_RULE, rules.MORTGAGE_CLAUSE,
         ("rules.MORTGAGE_FRACTION",),
         note="Defined and not applied: it decides which flats sell first, not the drawing.",
+    ),
+    Constraint(
+        "Live CAD", "A test tower this far past a line (a strip this wide along its outline) still "
+                    "keeps it: drawing noise in the engine's checks of a footprint moved in "
+                    "FreeCAD.",
+        _m(cad_live.FIT_M), Basis.ENGINE_DESIGN_ASSUMPTION, "none (the engine's own)",
+        ("cad.live.FIT_M",),
+        note="A tolerance, the same 1 cm the steps use.",
+        settles="Nothing: a drawing tolerance.",
+    ),
+    Constraint(
+        "Live CAD", "FreeCAD and the engine agree on a shape when no vertex is further apart than "
+                    "this and the areas differ by less than this share.",
+        f"{_m(cad_live.MATCH_M)}; {cad_live.MATCH_SHARE:g}", Basis.ENGINE_DESIGN_ASSUMPTION,
+        "none (the engine's own: the acceptance tolerance of the CAD link)",
+        ("cad.live.MATCH_M", "cad.live.MATCH_SHARE"),
+        note="Measured agreement on Dhulapally is to 1e-14 m; the tolerance is far looser on "
+             "purpose, so only a real difference fails it.",
+        settles="Nothing: a test tolerance.",
+    ),
+    Constraint(
+        "Live CAD", "A test tower placed without a position stands at the middle of the "
+                    "buildable area, looked for to this fineness.",
+        _m(cad_live.POLE_M), Basis.ENGINE_DESIGN_ASSUMPTION, "none (the engine's own)",
+        ("cad.live.POLE_M",),
+        note="Where a test footprint lands, never a layout.",
+        settles="Nothing: a search tolerance.",
+    ),
+    Constraint(
+        "Live CAD", "The acceptance run moves its test tower this far east through MCP and this "
+                    "far south in FreeCAD itself, using the firm's two-core block when the kit "
+                    "has one.",
+        f"{_m(cad_acceptance.EAST_M)}; {_m(cad_acceptance.SOUTH_M)}",
+        Basis.ENGINE_DESIGN_ASSUMPTION, "the architect's example request (2026-10-12): move "
+        "Tower 1 three metres east", ("cad.acceptance.EAST_M", "cad.acceptance.SOUTH_M"),
+        note="Test moves, never a layout.",
+        settles="Nothing: a test.",
     ),
 )
 

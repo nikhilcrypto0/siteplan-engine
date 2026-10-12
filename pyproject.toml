@@ -19,6 +19,7 @@ siteplan = "siteplan.cli:main"
 siteplan-mcp = "siteplan.mcp_server:main"
 siteplan-agent-tools = "siteplan.agent.server:main"
 siteplan-agent = "siteplan.agent.launch:main"
+siteplan-cad-mcp = "siteplan.cad.server:main"
 
 [dependency-groups]
 dev = [
