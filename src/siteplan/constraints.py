@@ -1633,19 +1633,9 @@ REGISTRY: tuple[Constraint, ...] = (
         settles="Nothing: a drawing tolerance.",
     ),
     Constraint(
-        "Steps", "Step 5: the lowest block worth building; the height map steps down one floor "
-                 "at a time to it, and land where even it does not fit has no building.",
-        f"Stilt + {step_tot_lot.LOWEST_FLOORS}", Basis.FIRM_STANDARD,
-        "the architect's word (2026-10-11); the firm sets lowest_block_floors in the workspace",
-        ("steps.tot_lot.LOWEST_FLOORS", "steps.tot_lot.TotLot.lowest"),
-        note="Not a rule: the rules allow lower blocks. The engine's default until the firm sets "
-             "its own (ASSUMED_FOR_TEST).",
-        settles="The firm's word on the lowest block it builds.",
-    ),
-    Constraint(
-        "Steps", "Step 5: how deep the tot-lot strip reaches into the land a building fits on, "
-                 "along the sides from beside the gate; deeper only when the whole edge cannot "
-                 "hold the share at this depth.",
+        "Steps", "Step 5: how deep a corner's tot-lot strip reaches into the land left, along "
+                 "both sides of the corner; deeper only when the corners together cannot hold "
+                 "what the land where no building stands leaves.",
         _m(step_tot_lot.TOT_LOT_DEPTH_M), Basis.FIRM_STANDARD,
         "the engine's default until the firm sets tot_lot_depth_m in the workspace; the "
         "architect's word (2026-10-11): long along the side, not much into the usable space",

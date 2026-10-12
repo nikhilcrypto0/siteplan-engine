@@ -88,10 +88,9 @@ class WorkspaceDefaults(BaseModel):
     # The firm's own finished drawings kept in the workspace (file names). A debug run may use
     # them; a blind acceptance run refuses one given as its survey (blind.py).
     finished_plans: list[str] = []
-    # The architect's working figures for `siteplan steps` (2026-10-11), when the firm sets them:
-    # the lowest block worth building (Stilt + N) and how far the tot-lot strip reaches into the
-    # building land. Not rules; with none, the steps' own stand in.
-    lowest_block_floors: int | None = None
+    # The architect's working figure for `siteplan steps` (2026-10-11), when the firm sets it: how
+    # far a corner's tot-lot strip reaches into the land left. Not a rule; with none, the step's
+    # own stands in.
     tot_lot_depth_m: PositiveFloat | None = None
     status: dict[str, Provenance] = {}  # how far each standard is confirmed, when the file says
 

@@ -1,18 +1,18 @@
-"""Step 5: where buildings can stand, and the tot-lot, the architect's way (2026-10-11), for any
-site.
+"""Step 5: the tot-lot, the architect's way (2026-10-11), for any site, from step 4's land left.
 
-1. A height map. Where the tallest building step 2 allows does not fit, one floor lower is
-   tried, then the next, down to the lowest block worth building (Stilt + 6 unless the firm
-   says otherwise), each height keeping its own setbacks; the blocks are the firm's own, the
-   double-loaded kit and a slim one (one row of flats beside the corridor), turned either way.
-   Each part of the land is marked with the tallest building that fits there.
-2. The tot-lot: 10% of the whole plot for a high-rise site or a Group Development Scheme (rules
+1. Where a building can stand: the land step 4 leaves after the setbacks, where one of the
+   firm's blocks fits (the double-loaded kit and a slim one, one row of flats beside the
+   corridor, turned either way). Where none fits, no building stands, and no setback is kept
+   for one: rule 7(a)(vii)'s setbacks are left in and around the building.
+2. The gate, where the main road meets the plot, and the land before it, kept clear.
+3. The tot-lot: 10% of the whole plot for a high-rise site or a Group Development Scheme (rules
    7(a)(vii), 8(g)), 5% for any other plot above 750 m² (5(f)(vi)), in pockets at least 3 m
-   wide, over and above the setbacks. It is split equally over the major corners (the
-   architect, 2026-10-11): at each, a strip along both sides of the corner on the edge of the
-   building land, long and shallow, never over the gate. A corner that cannot hold its share
-   passes the rest to the others. A water body's buffer may count (3(a)(iii)(3)); the
-   gaps between blocks never do (7(a)(xii)).
+   wide. First all the land where no building stands, right up to the plot edge (the setback,
+   the green strip and the fire lane there serve no building), the part farthest from the
+   buildings first. What is still needed is split equally over the plot's major corners, a
+   strip along both sides of each on the edge of the land left, never over the gate; a corner
+   that cannot hold its part passes the rest to the others. A water body's buffer may count
+   (3(a)(iii)(3)); the gaps between blocks never do (7(a)(xii)).
 The club house comes once the tot-lot is right (the architect, same day)."""
 
 from __future__ import annotations
@@ -35,19 +35,19 @@ from siteplan.library import FlatLibrary
 from siteplan.prototypes.compose import compose_library
 from siteplan.steps.gate import on_net
 from siteplan.steps.inputs import Inputs, bearing, compass
-from siteplan.steps.setbacks import Setbacks, land_left_at
+from siteplan.steps.setbacks import Setbacks
 from siteplan.steps.survey_copy import SHORT_RUN_M, SurveyCopy
 
 CUT_TOLERANCE_M = 0.01  # how finely a strip's length or depth is placed; pieces this close are
 # one pocket; a width this short of the least still counts (a 3.000 m strip is 3 m wide)
 GRID_M = 0.001  # two outlines GEOS cannot overlay are snapped to this grid and tried again
-LOWEST_FLOORS = 6  # the lowest block worth building: the architect's word (2026-10-11)
 TOT_LOT_DEPTH_M = 6.0  # how far the tot-lot strip reaches into the building land, until the firm
 # sets its own: long along the side, not much into the usable space (the architect, 2026-10-11)
-FREE, WATER = "land no building fits on", "the water's buffer"
+CORNER_TURN_DEG = 30.0  # the edge of the building land turns at least this much at a corner
+IDLE, WATER, BUILDING = ("land where no building stands", "the water's buffer",
+                         "land a block fits on")
 FROM_LINE, FROM_EDGE = "the buffer from the line drawn", "the buffer from the plot's edge"
 MEET, DIFF = "intersection", "difference"
-CORNER_TURN_DEG = 30.0  # the edge of the building land turns at least this much at a corner
 
 
 @dataclass(frozen=True)
@@ -130,21 +130,10 @@ def firm_blocks(workspace: Path | None) -> Blocks | None:
 
 
 @dataclass(frozen=True)
-class Tier:
-    """One height of the height map."""
-
-    floors: int
-    setback_m: float  # the widest of its sides' setbacks
-    fits: BaseGeometry  # where one of the firm's blocks this tall fits, its setbacks kept
-    tallest: BaseGeometry  # the part where this is the tallest building that fits
-    band: BaseGeometry  # the setback land those blocks keep from the plot's edge
-
-
-@dataclass(frozen=True)
 class Pocket:
     polygon: BaseGeometry  # one piece, or pieces that touch
-    lies: str  # where in the plot: 'north'
-    on_sqm: tuple[tuple[str, float], ...]  # (FREE, WATER or 'Stilt + N land', m²)
+    lies: str  # where: 'where no building stands', 'at the north corner'
+    on_sqm: tuple[tuple[str, float], ...]  # (IDLE, WATER or BUILDING, m²)
 
     @property
     def area_sqm(self) -> float:
@@ -153,7 +142,7 @@ class Pocket:
 
 @dataclass(frozen=True)
 class Corner:
-    """A major corner of the building land and the tot-lot it takes."""
+    """A major corner of the land left and the tot-lot it takes."""
 
     number: int
     lies: str  # 'south-west', from the plot's middle
@@ -164,25 +153,20 @@ class Corner:
 
 @dataclass(frozen=True)
 class Placing:
-    """The height map and the tot-lot on one reading of the water's buffer."""
+    """Where buildings can stand and the tot-lot, on one reading of the water's buffer."""
 
     reading: str  # FROM_LINE, FROM_EDGE, or '' when there is no water
-    tiers: tuple[Tier, ...]  # tallest first
-    free: BaseGeometry  # land no building fits on, inside the edge's own setback
+    fits: BaseGeometry  # the land left where one of the firm's blocks fits
+    idle: BaseGeometry  # where no building stands, up to the plot edge, in usable pockets
     tot_lot: BaseGeometry
+    idle_taken: BaseGeometry  # the tot-lot laid where no building stands
     pockets: tuple[Pocket, ...]
     need_sqm: float
-    depth_m: float  # how deep the strip runs into the building land
-    edge: BaseGeometry  # the setback the plot's edge always keeps (ring)
-    standing: tuple[BaseGeometry, ...]  # each height's land where a block still fits once the
-    # tot-lot is out, measured again
+    depth_m: float  # how deep a corner's strip runs into the land left
     gate: BaseGeometry  # where the approach road comes in from the main road
     gate_zone: BaseGeometry  # kept clear before it: no tot-lot
-    corners: tuple[Corner, ...] = ()  # the major corners and the tot-lot at each
-
-    @property
-    def buildable(self) -> BaseGeometry:
-        return unary_union([tier.fits for tier in self.tiers])
+    corners: tuple[Corner, ...]  # the major corners that took the rest, and what each took
+    fits_after: BaseGeometry  # where a block still fits once the tot-lot is out
 
     @property
     def short_sqm(self) -> float:
@@ -190,26 +174,6 @@ class Placing:
 
     def on(self, kind: str) -> float:
         return sum(area for pocket in self.pockets for k, area in pocket.on_sqm if k == kind)
-
-    @property
-    def building_land_after(self) -> BaseGeometry:
-        """Where a building fits once the tot-lot is out: a strip it leaves too thin for a block
-        no longer counts."""
-        return unary_union(self.standing)
-
-    @property
-    def kept_setbacks(self) -> BaseGeometry:
-        """The setback land kept: beside where a building can still stand, each height's own,
-        and the edge's own everywhere."""
-        return unary_union([*(_overlay(tier.band, land.buffer(
-            tier.setback_m + CUT_TOLERANCE_M, join_style="mitre"), MEET)
-            for tier, land in zip(self.tiers, self.standing, strict=True)), self.edge])
-
-    def floors_lost_sqm(self) -> float:
-        """The tot-lot's area on building land, each square metre counted by the floors that
-        would stand there (Stilt + 10 land costs ten floors a square metre)."""
-        return sum(_overlay(self.tot_lot, tier.tallest, MEET).area * tier.floors
-                   for tier in self.tiers)
 
 
 @dataclass
@@ -223,8 +187,6 @@ class TotLot:
     plot_sqm: float = 0.0  # the whole plot, as the sheet writes it (or as drawn)
     plot_from: str = ""
     blocks: Blocks | None = None
-    lowest: int = LOWEST_FLOORS
-    lowest_from: str = ""
     depth_m: float = TOT_LOT_DEPTH_M
     depth_from: str = ""
     placings: tuple[Placing, ...] = ()  # the first is the one drawn
@@ -238,6 +200,11 @@ class TotLot:
     def net_need_sqm(self) -> float:
         net = self.setbacks.widening.net
         return self.share.fraction * net.area if self.share and net is not None else 0.0
+
+    @property
+    def setback_m(self) -> float:
+        """The widest setback step 4 keeps: what a building keeps round it."""
+        return max(self.setbacks.front_m, self.setbacks.open_space_m)
 
 
 def lay_out(inputs: Inputs, copy: SurveyCopy, setbacks: Setbacks) -> TotLot:
@@ -257,7 +224,7 @@ def lay_out(inputs: Inputs, copy: SurveyCopy, setbacks: Setbacks) -> TotLot:
     except NoBlocks as problem:
         return _stop(t, f"the firm's flat library cannot be used ({problem})", ask)
     if t.blocks is None:
-        return _stop(t, "the firm's blocks are not known, and the land no building fits on "
+        return _stop(t, "the firm's blocks are not known, and where no building can stand "
                         "is found with them", ask)
     _firm_figures(t)
     water = [w for w in setbacks.widening.water if w.buffer_m is not None]
@@ -270,9 +237,10 @@ def lay_out(inputs: Inputs, copy: SurveyCopy, setbacks: Setbacks) -> TotLot:
     zone = (_overlay(gate.buffer(setbacks.front_m + rules.FIRE_TURNING_RADIUS_M), net, MEET)
             if not gate.is_empty else Polygon())
     for reading, buffer in readings:
-        tiers = height_map(setbacks, t.blocks, t.lowest, buffer)
-        t.placings += (place(tiers, _free(net, tiers), buffer, setbacks.left, t.need_sqm,
-                             t.share, net, gate, zone, t.depth_m, t.blocks, reading),)
+        left = setbacks.left if buffer is None else _overlay(setbacks.left, buffer, DIFF)
+        fits = block_land_in(left, t.blocks)
+        t.placings += (place(fits, setbacks.left, buffer, t.need_sqm, t.share, net, gate, zone,
+                             t.setback_m, t.depth_m, t.blocks, reading),)
     return t
 
 
@@ -284,11 +252,6 @@ def _stop(t: TotLot, why: str, ask: str | None) -> TotLot:
 def _firm_figures(t: TotLot) -> None:
     """The architect's working figures, from the workspace when the firm sets them."""
     defaults = load_defaults(t.inputs.workspace) if t.inputs.workspace else None
-    set_lowest = defaults is not None and defaults.lowest_block_floors is not None
-    t.lowest = defaults.lowest_block_floors if set_lowest else LOWEST_FLOORS
-    t.lowest_from = ("the firm's workspace" if set_lowest else
-                     "the architect's word (2026-10-11), the engine's default until the firm "
-                     "sets lowest_block_floors")
     set_depth = defaults is not None and defaults.tot_lot_depth_m is not None
     t.depth_m = defaults.tot_lot_depth_m if set_depth else TOT_LOT_DEPTH_M
     t.depth_from = ("the firm's workspace" if set_depth else
@@ -302,39 +265,62 @@ def gate_of(s: Setbacks) -> BaseGeometry:
     return on_net(s.widening.net, s.height.road, s.widening.pieces)
 
 
-def height_map(s: Setbacks, blocks: Blocks, lowest: int,
-               buffer: BaseGeometry | None) -> tuple[Tier, ...]:
-    """From the tallest building step 2 allows down one floor at a time to the lowest worth
-    building: where a block of the firm's fits at each height, its own setbacks kept and no
-    building in a water body's buffer."""
-    net = s.widening.net
-    out, claimed = [], Polygon()
-    for floors in range(s.floors, min(s.floors, lowest) - 1, -1):
-        land, setback = land_left_at(s, floors)
-        band = _overlay(net, land, DIFF)
-        if buffer is not None:
-            land = _overlay(land, buffer, DIFF)
-        fits = block_land_in(land, blocks)
-        out.append(Tier(floors, setback, fits, _overlay(fits, claimed, DIFF), band))
-        claimed = unary_union([claimed, fits])
-    return tuple(out)
+def idle_land(net: Polygon, fits: BaseGeometry, setback_m: float, zone: BaseGeometry,
+              share: Share) -> BaseGeometry:
+    """Where no building stands: the net plot farther from every place a block fits than the
+    setback a building keeps, up to the plot edge, less the land before the gate, in pockets the
+    tot-lot can use."""
+    near = fits.buffer(setback_m + CUT_TOLERANCE_M, join_style="mitre")
+    return pockets_in(_overlay(_overlay(net, near, DIFF), zone, DIFF).buffer(0), share)
 
 
-def ring(net: Polygon, tiers: tuple[Tier, ...]) -> BaseGeometry:
-    """The setback the plot's edge always keeps, a building beside it or not: the lowest block's
-    (the architect's word, 2026-10-11: the outside boundary is never touched; the green strip and
-    the fire lane run in it)."""
-    return _overlay(net, net.buffer(-tiers[-1].setback_m, join_style="mitre"), DIFF)
+def place(fits: BaseGeometry, land: BaseGeometry, buffer: BaseGeometry | None, need_sqm: float,
+          share: Share, plot: Polygon, gate: BaseGeometry, zone: BaseGeometry, setback_m: float,
+          depth_m: float, blocks: Blocks | None = None, reading: str = "") -> Placing:
+    """The tot-lot: first the land where no building stands, up to the plot edge, the part
+    farthest from the buildings first; then what is still needed split equally over the major
+    corners of the land left (`land`), never over the gate."""
+    def keep(geometry: BaseGeometry) -> BaseGeometry:
+        return pockets_in(geometry, share)
+
+    idle = idle_land(plot, fits, setback_m, zone, share)
+    first = _far_first(idle, fits if not fits.is_empty else plot.centroid, need_sqm, keep)
+    rest = need_sqm - first.area
+    corners: tuple[Corner, ...] = ()
+    depth = depth_m
+    if rest > CUT_TOLERANCE_M:
+        shortest = blocks.shortest_m if blocks is not None else 0.0
+        seats = [seat for seat in corners_of_land(land, plot, major_edges(plot, shortest))
+                 if first.is_empty or seat.point.distance(first) > depth_m]
+        corners, depth = _at_corners(seats, land, zone, first, rest, depth_m, plot, keep)
+    tot_lot = unary_union([first, *(c.tot_lot for c in corners)])
+    pockets = ((Pocket(first, "where no building stands", _stands_on(first, fits, idle, buffer)),)
+               if not first.is_empty else ())
+    pockets += tuple(Pocket(c.tot_lot, f"at the {c.lies} corner",
+                            _stands_on(c.tot_lot, fits, idle, buffer))
+                     for c in corners if not c.tot_lot.is_empty)
+    after = _overlay(fits, tot_lot, DIFF)
+    fits_after = block_land_in(after, blocks) if blocks is not None else after
+    return Placing(reading, fits, idle, tot_lot, first, pockets, need_sqm, depth, gate, zone,
+                   corners, fits_after)
 
 
-def _free(net: Polygon, tiers: tuple[Tier, ...]) -> BaseGeometry:
-    """The net plot less every place a block fits, the setback land each keeps beside it and
-    the edge's own setback: no building can stand here."""
-    kept = [_overlay(tier.band, tier.fits.buffer(tier.setback_m + CUT_TOLERANCE_M,
-                                                 join_style="mitre"), MEET)
-            for tier in tiers]
-    used = unary_union([*(tier.fits for tier in tiers), *kept, ring(net, tiers)])
-    return _overlay(net, used, DIFF)
+def _far_first(idle: BaseGeometry, buildings: BaseGeometry, need: float,
+               keep) -> BaseGeometry:
+    """`need` of the land where no building stands, the part farthest from the buildings first
+    (all of it when it holds less)."""
+    if idle.is_empty or need <= CUT_TOLERANCE_M:
+        return Polygon()
+    if idle.area <= need:
+        return idle
+    low, high = 0.0, idle.hausdorff_distance(buildings)
+    while high - low > CUT_TOLERANCE_M:
+        middle = (low + high) / 2
+        if keep(_overlay(idle, buildings.buffer(middle), DIFF)).area >= need:
+            low = middle
+        else:
+            high = middle
+    return keep(_overlay(idle, buildings.buffer(low), DIFF))
 
 
 def major_edges(net: Polygon, shortest_m: float) -> tuple[tuple[str, tuple[Run, ...]], ...]:
@@ -362,8 +348,8 @@ def major_edges(net: Polygon, shortest_m: float) -> tuple[tuple[str, tuple[Run, 
 
 @dataclass(frozen=True)
 class Seat:
-    """Where a corner's tot-lot runs: along the building land's edge (`ring`, anticlockwise),
-    from the corner at `at` each way, as far as halfway to the next corner (`back`, `ahead`)."""
+    """Where a corner's strip runs: along the land left's edge (`ring`, anticlockwise), from the
+    corner at `at` each way, as far as halfway to the next corner (`back`, `ahead`)."""
 
     ring: LineString
     at: float
@@ -377,10 +363,10 @@ class Seat:
 
 def corners_of_land(land: BaseGeometry, net: Polygon,
                     edges: tuple[tuple[str, tuple[Run, ...]], ...]) -> list[Seat]:
-    """The major corners: where the building land's edge facing one major edge of the plot
-    turns, by at least CORNER_TURN_DEG and outward (a corner, not a notch), into the edge facing
-    the next. Each piece of the land's outline faces the plot's stretch nearest it; a stretch
-    facing a minor one lies between the two edges and the corner is in its middle."""
+    """The major corners: where the land left's edge facing one major edge of the plot turns,
+    by at least CORNER_TURN_DEG and outward (a corner, not a notch), into the edge facing the
+    next. Each piece of the land's outline faces the plot's stretch nearest it; a stretch facing
+    a minor one lies between the two edges and the corner is in its middle."""
     runs = [run for part in _parts(net) for run in straight_runs(part)]
     owner = {tuple(run.line.coords): i for i, (_, own) in enumerate(edges) for run in own}
     seats: list[Seat] = []
@@ -428,47 +414,32 @@ def _turns(pieces: list[tuple], total: float) -> list[float]:
     return sorted(out)
 
 
-def place(tiers: tuple[Tier, ...], free: BaseGeometry, buffer: BaseGeometry | None,
-          land: BaseGeometry, need_sqm: float, share: Share, plot: Polygon, gate: BaseGeometry,
-          zone: BaseGeometry, depth_m: float, blocks: Blocks | None = None,
-          reading: str = "") -> Placing:
-    """The tot-lot split equally over the major corners (the architect, 2026-10-11): at each, a
-    strip `depth_m` deep along both sides of the corner, on the edge of the building land
-    (`land`, inside every setback), never over the gate. A corner that cannot hold its share
-    passes the rest to the others equally; only when the corners together cannot hold the
-    tot-lot is the strip made deeper."""
-    def keep(geometry: BaseGeometry) -> BaseGeometry:
-        return pockets_in(geometry, share)
-
-    shortest = blocks.shortest_m if blocks is not None else 0.0
-    seats = corners_of_land(land, plot, major_edges(plot, shortest))
+def _at_corners(seats: list[Seat], land: BaseGeometry, zone: BaseGeometry,
+                taken: BaseGeometry, need: float, depth_m: float, plot: Polygon,
+                keep) -> tuple[tuple[Corner, ...], float]:
+    """`need` split equally over the corners, a strip along both sides of each; a corner that
+    cannot hold its part passes the rest to the others equally, and the strips are made deeper
+    only when the corners together cannot hold it."""
+    if not seats:
+        return (), depth_m
     # the corners with the least room first, so shared land goes to the one that needs it
-    alone = [_strip(seat, land, zone, Polygon(), math.inf, depth_m, keep).area for seat in seats]
+    alone = [_strip(seat, land, zone, taken, math.inf, depth_m, keep).area for seat in seats]
     order = sorted(range(len(seats)), key=lambda i: alone[i])
     queue = [seats[i] for i in order]
-    depth = _depth_for(queue, land, zone, need_sqm, depth_m, keep)
-    room = _water_fill(need_sqm, [g.area for g in _sequence(queue, land, zone, depth, keep)])
+    depth = _depth_for(queue, land, zone, taken, need, depth_m, keep)
+    room = _water_fill(need, [g.area for g in _sequence(queue, land, zone, taken, depth, keep)])
     shares, placed = [0.0] * len(seats), [Polygon()] * len(seats)
-    taken: list[BaseGeometry] = []
+    done: list[BaseGeometry] = [taken] if not taken.is_empty else []
     for i, give in zip(order, room, strict=True):
         shares[i] = give
-        placed[i] = _piece(seats[i], land, zone, unary_union(taken) if taken else Polygon(),
+        placed[i] = _piece(seats[i], land, zone, unary_union(done) if done else Polygon(),
                            give, depth, keep)
-        taken.append(placed[i])
+        done.append(placed[i])
     middle = (plot.centroid.x, plot.centroid.y)
-    corners = tuple(Corner(number, compass(bearing(middle, (seat.point.x, seat.point.y))),
-                           seat.point, give, piece)
-                    for number, (seat, give, piece) in enumerate(zip(seats, shares, placed,
-                                                                     strict=True), 1))
-    tot_lot = unary_union(placed) if placed else Polygon()
-    pockets = tuple(Pocket(corner.tot_lot, f"at the {corner.lies} corner",
-                           _stands_on(corner.tot_lot, free, buffer, tiers))
-                    for corner in corners if not corner.tot_lot.is_empty)
-    standing = tuple(_overlay(tier.fits, tot_lot, DIFF) if blocks is None
-                     else block_land_in(_overlay(tier.fits, tot_lot, DIFF), blocks)
-                     for tier in tiers)
-    return Placing(reading, tiers, free, tot_lot, pockets, need_sqm, depth, ring(plot, tiers),
-                   standing, gate, zone, corners)
+    return tuple(Corner(number, compass(bearing(middle, (seat.point.x, seat.point.y))),
+                        seat.point, give, piece)
+                 for number, (seat, give, piece) in enumerate(zip(seats, shares, placed,
+                                                                  strict=True), 1)), depth
 
 
 def _span(ring: LineString, start: float, end: float) -> list[LineString]:
@@ -493,24 +464,24 @@ def _strip(seat: Seat, land: BaseGeometry, zone: BaseGeometry, taken: BaseGeomet
     return keep(_overlay(_overlay(_overlay(band, land, MEET), zone, DIFF), taken, DIFF))
 
 
-def _sequence(seats: list[Seat], land: BaseGeometry, zone: BaseGeometry, depth: float,
-              keep) -> list[BaseGeometry]:
+def _sequence(seats: list[Seat], land: BaseGeometry, zone: BaseGeometry, taken: BaseGeometry,
+              depth: float, keep) -> list[BaseGeometry]:
     """Each corner's whole strip at this depth, less the ones before it (shared land once)."""
     out: list[BaseGeometry] = []
     for seat in seats:
-        out.append(_strip(seat, land, zone, unary_union(out) if out else Polygon(), math.inf,
-                          depth, keep))
+        before = unary_union([taken, *out]) if out else taken
+        out.append(_strip(seat, land, zone, before, math.inf, depth, keep))
     return out
 
 
-def _depth_for(seats: list[Seat], land: BaseGeometry, zone: BaseGeometry, need: float,
-               depth_m: float, keep) -> float:
+def _depth_for(seats: list[Seat], land: BaseGeometry, zone: BaseGeometry, taken: BaseGeometry,
+               need: float, depth_m: float, keep) -> float:
     """`depth_m`, or deeper when every corner's whole strip together holds less than the need:
     as deep as it takes, or as deep as the land allows."""
     def holds(depth: float) -> float:
-        return sum(g.area for g in _sequence(seats, land, zone, depth, keep))
+        return sum(g.area for g in _sequence(seats, land, zone, taken, depth, keep))
 
-    if not seats or holds(depth_m) >= need:
+    if holds(depth_m) >= need:
         return depth_m
     x0, y0, x1, y1 = land.bounds  # no strip is deeper than the land is across
     low, high = depth_m, max(depth_m, x1 - x0, y1 - y0)
@@ -558,12 +529,11 @@ def _piece(seat: Seat, land: BaseGeometry, zone: BaseGeometry, taken: BaseGeomet
     return _strip(seat, land, zone, taken, high, depth, keep)
 
 
-def _stands_on(part: BaseGeometry, free: BaseGeometry, buffer: BaseGeometry | None,
-               tiers: tuple[Tier, ...]) -> tuple[tuple[str, float], ...]:
+def _stands_on(part: BaseGeometry, fits: BaseGeometry, idle: BaseGeometry,
+               buffer: BaseGeometry | None) -> tuple[tuple[str, float], ...]:
     wet = _overlay(part, buffer, MEET).area if buffer is not None else 0.0
-    building = [(f"Stilt + {tier.floors} land", _overlay(part, tier.tallest, MEET).area)
-                for tier in tiers]
-    out = [(WATER, wet), (FREE, _overlay(part, free, MEET).area - wet), *building]
+    out = [(WATER, wet), (IDLE, _overlay(part, idle, MEET).area - wet),
+           (BUILDING, _overlay(part, fits, MEET).area)]
     return tuple((kind, area) for kind, area in out if area > CUT_TOLERANCE_M)
 
 
