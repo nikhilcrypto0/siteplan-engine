@@ -861,39 +861,28 @@ def test_the_slim_block_is_one_row_of_the_firms_flats_beside_the_corridor(tmp_pa
     assert blocks.narrowest_m == pytest.approx(depth)
 
 
-def test_where_no_building_stands_the_tot_lot_runs_to_the_plot_edge_first(tmp_path):
-    """The architect (2026-10-11): where no building stands, the tot-lot may run right up to
-    the plot edge, no setback band and no fire lane there (rule 7(a)(vii): setbacks are in and
-    around a building). The arm is 24 m wide: step 4's land left in it is 4 m, under every
-    block, so none stands there; beyond the 10 m the blocks below keep (a slim block reaches a
-    little way up the curve step 4 rounds where the arm meets the plot), the arm is free to the
-    plot edge and holds the whole 1,224 m², its far end first, costing no building land and
-    needing no corner."""
+def test_the_tot_lot_goes_first_where_no_building_stands_and_never_leaves_the_land_left(
+        tmp_path):
+    """The architect (2026-10-11): where no building stands first, and never outside the land
+    left for buildings (no setback, green strip or fire lane). The arm's land left is 4 m wide,
+    under every block, so none stands there: the tot-lot takes it first, its far end first; the
+    rest is split equally over the land left's other three major corners (the arm's own tip is
+    served by the land taken)."""
     t = _firm_step5(tmp_path, plot=ARMED)
     p = t.placings[0]
-    assert 1_224 < p.idle.area <= 24 * 60
-    assert t.need_sqm == pytest.approx(1_224) and 1_224 - 1 <= p.tot_lot.area <= 1_224 + 5
-    assert p.idle_taken.equals(p.tot_lot) and p.corners == ()
-    assert p.tot_lot.difference(box(0, 90, 24, 150)).area == pytest.approx(0, abs=0.5)
-    assert p.tot_lot.distance(LineString([(0, 150), (24, 150)])) < 0.01  # up to the plot edge
-    assert p.fits_after.area == pytest.approx(p.fits.area, abs=1)  # it costs no building land
-    assert "No corner is needed" in tot_lot_report.report(t).markdown()
-
-
-def test_what_the_free_land_cannot_hold_goes_to_the_major_corners(tmp_path):
-    """A shorter arm (24 x 30 m) holds less than the 1,152 m²; what is left is split equally
-    over the three major corners of the land left, the arm's own tip being served by the land
-    taken."""
-    t = _firm_step5(tmp_path, plot=[(0, 0), (120, 0), (120, 90), (24, 90), (24, 120), (0, 120)])
-    p = t.placings[0]
-    assert t.need_sqm == pytest.approx(1_152) and 500 < p.idle_taken.area <= 720
-    assert p.idle_taken.area == pytest.approx(p.idle.area, abs=1)  # all of it, first
+    land = t.setbacks.left
+    assert t.need_sqm == pytest.approx(1_224) and p.tot_lot.area >= 1_224 - 1
+    assert p.tot_lot.difference(land).area == pytest.approx(0, abs=0.01)  # inside the blue
+    assert p.tot_lot.distance(Polygon(ARMED).exterior) >= 10 - 0.05
+    assert 0 < p.idle_taken.area == pytest.approx(p.idle.area, abs=1)  # all of it, first
+    assert p.idle_taken.difference(box(10, 80, 24, 140)).area == pytest.approx(0, abs=1)
     points = sorted((round(c.point.x), round(c.point.y)) for c in p.corners)
     assert points == [(10, 10), (110, 10), (110, 80)]
     assert [c.share_sqm for c in p.corners] == pytest.approx(
-        [(1_152 - p.idle_taken.area) / 3] * 3, abs=0.1)
-    assert p.tot_lot.area >= 1_152 - 1
-    assert "THEN AT THE MAJOR CORNERS: 3" in tot_lot_report.report(t).markdown()
+        [(1_224 - p.idle_taken.area) / 3] * 3, abs=0.1)
+    text = tot_lot_report.report(t).markdown()
+    assert "WHERE NO BUILDING STANDS (inside the land left)" in text
+    assert "THEN AT THE MAJOR CORNERS: 3" in text
 
 
 def test_the_tot_lot_is_split_equally_over_the_major_corners(tmp_path):
@@ -955,9 +944,9 @@ def test_the_strip_is_made_deeper_only_when_the_corners_together_cannot_hold_it(
 
 
 def test_a_water_buffer_where_no_building_stands_holds_the_tot_lot(tmp_path):
-    """A lake's 30 m buffer along the west: no block stands in it, and beyond the 10 m the
-    blocks east of it keep, the land is free to the plot edge; on both readings of the buffer
-    it holds the whole tot-lot, the buffer counting (rule 3(a)(iii)(3)), clear of the gate."""
+    """A lake's 30 m buffer along the west: no block stands in the land left inside it, so on
+    both readings of the buffer it holds the whole tot-lot, the buffer counting (rule
+    3(a)(iii)(3)), inside the land left and clear of the gate."""
     survey = _survey(tmp_path / "survey.dxf", nala_x=0.0)
     t = _step5(_inputs(tmp_path, survey, water=[{"kind": "lake_10ha_or_more",
                                                  "survey_layer": "NALA"}], **HIGH_RISE))
@@ -965,6 +954,7 @@ def test_a_water_buffer_where_no_building_stands_holds_the_tot_lot(tmp_path):
     for p in t.placings:
         assert p.tot_lot.area >= 1_080 - 1.0 and p.corners == ()
         assert p.on(WATER) == pytest.approx(p.tot_lot.area, abs=1.0)
+        assert p.tot_lot.difference(t.setbacks.left).area == pytest.approx(0, abs=0.01)
         assert p.tot_lot.distance(p.gate) >= 19 - 0.1
 
 
@@ -1061,13 +1051,12 @@ def test_step_five_draws_step_fours_land_the_free_land_the_gate_and_the_tot_lot(
             "GATE-ZONE"} <= layers
     assert any(text.startswith("TOT-LOT") for _, _, text in pic.labels)
     text = tot_lot_report.report(t).markdown()
-    assert "WHERE NO BUILDING STANDS, up to the plot edge" in text
+    assert "WHERE NO BUILDING STANDS (inside the land left)" in text
     assert "The club house comes once the tot-lot is right." in text
     facts = tot_lot_report.facts(t)
     assert facts["strip_depth_m"] == pytest.approx(6)
     assert facts["readings"][0]["gate"] is not None
-    assert facts["readings"][0]["where_no_building_stands_taken_sqm"] == pytest.approx(1_224,
-                                                                                       abs=5)
+    assert facts["readings"][0]["where_no_building_stands_taken_sqm"] > 0
 
 
 def test_nothing_stands_in_front_of_the_gate(tmp_path):

@@ -2,16 +2,15 @@
 
 1. Where a building can stand: the land step 4 leaves after the setbacks, where one of the
    firm's blocks fits (the double-loaded kit and a slim one, one row of flats beside the
-   corridor, turned either way). Where none fits, no building stands, and no setback is kept
-   for one: rule 7(a)(vii)'s setbacks are left in and around the building.
+   corridor, turned either way). Where none fits, no building stands.
 2. The gate, where the main road meets the plot, and the land before it, kept clear.
 3. The tot-lot: 10% of the whole plot for a high-rise site or a Group Development Scheme (rules
    7(a)(vii), 8(g)), 5% for any other plot above 750 m² (5(f)(vi)), in pockets at least 3 m
-   wide. First all the land where no building stands, right up to the plot edge (the setback,
-   the green strip and the fire lane there serve no building), the part farthest from the
-   buildings first. What is still needed is split equally over the plot's major corners, a
-   strip along both sides of each on the edge of the land left, never over the gate; a corner
-   that cannot hold its part passes the rest to the others. A water body's buffer may count
+   wide, never outside the land left (the architect, 2026-10-11: no setback, green strip or
+   fire lane). First the land left where no building stands, the part farthest from the
+   buildings first. What is still needed is split equally over the major corners of the land
+   left, a strip along both sides of each, never over the gate; a corner that cannot hold its
+   part passes the rest to the others. A water body's buffer may count
    (3(a)(iii)(3)); the gaps between blocks never do (7(a)(xii)).
 The club house comes once the tot-lot is right (the architect, same day)."""
 
@@ -157,7 +156,7 @@ class Placing:
 
     reading: str  # FROM_LINE, FROM_EDGE, or '' when there is no water
     fits: BaseGeometry  # the land left where one of the firm's blocks fits
-    idle: BaseGeometry  # where no building stands, up to the plot edge, in usable pockets
+    idle: BaseGeometry  # the land left where no building stands, in usable pockets
     tot_lot: BaseGeometry
     idle_taken: BaseGeometry  # the tot-lot laid where no building stands
     pockets: tuple[Pocket, ...]
@@ -201,11 +200,6 @@ class TotLot:
         net = self.setbacks.widening.net
         return self.share.fraction * net.area if self.share and net is not None else 0.0
 
-    @property
-    def setback_m(self) -> float:
-        """The widest setback step 4 keeps: what a building keeps round it."""
-        return max(self.setbacks.front_m, self.setbacks.open_space_m)
-
 
 def lay_out(inputs: Inputs, copy: SurveyCopy, setbacks: Setbacks) -> TotLot:
     t = TotLot(inputs, copy, setbacks)
@@ -240,7 +234,7 @@ def lay_out(inputs: Inputs, copy: SurveyCopy, setbacks: Setbacks) -> TotLot:
         left = setbacks.left if buffer is None else _overlay(setbacks.left, buffer, DIFF)
         fits = block_land_in(left, t.blocks)
         t.placings += (place(fits, setbacks.left, buffer, t.need_sqm, t.share, net, gate, zone,
-                             t.setback_m, t.depth_m, t.blocks, reading),)
+                             t.depth_m, t.blocks, reading),)
     return t
 
 
@@ -265,25 +259,24 @@ def gate_of(s: Setbacks) -> BaseGeometry:
     return on_net(s.widening.net, s.height.road, s.widening.pieces)
 
 
-def idle_land(net: Polygon, fits: BaseGeometry, setback_m: float, zone: BaseGeometry,
+def idle_land(land: BaseGeometry, fits: BaseGeometry, zone: BaseGeometry,
               share: Share) -> BaseGeometry:
-    """Where no building stands: the net plot farther from every place a block fits than the
-    setback a building keeps, up to the plot edge, less the land before the gate, in pockets the
-    tot-lot can use."""
-    near = fits.buffer(setback_m + CUT_TOLERANCE_M, join_style="mitre")
-    return pockets_in(_overlay(_overlay(net, near, DIFF), zone, DIFF).buffer(0), share)
+    """Where no building stands: the land left where no block of the firm's fits, less the land
+    before the gate, in pockets the tot-lot can use. Never outside the land left (the architect,
+    2026-10-11)."""
+    return pockets_in(_overlay(_overlay(land, fits, DIFF), zone, DIFF).buffer(0), share)
 
 
 def place(fits: BaseGeometry, land: BaseGeometry, buffer: BaseGeometry | None, need_sqm: float,
-          share: Share, plot: Polygon, gate: BaseGeometry, zone: BaseGeometry, setback_m: float,
-          depth_m: float, blocks: Blocks | None = None, reading: str = "") -> Placing:
-    """The tot-lot: first the land where no building stands, up to the plot edge, the part
-    farthest from the buildings first; then what is still needed split equally over the major
-    corners of the land left (`land`), never over the gate."""
+          share: Share, plot: Polygon, gate: BaseGeometry, zone: BaseGeometry, depth_m: float,
+          blocks: Blocks | None = None, reading: str = "") -> Placing:
+    """The tot-lot, inside the land left (`land`): first where no building stands, the part
+    farthest from the buildings first; then what is still needed split equally over the land
+    left's major corners, never over the gate."""
     def keep(geometry: BaseGeometry) -> BaseGeometry:
         return pockets_in(geometry, share)
 
-    idle = idle_land(plot, fits, setback_m, zone, share)
+    idle = idle_land(land, fits, zone, share)
     first = _far_first(idle, fits if not fits.is_empty else plot.centroid, need_sqm, keep)
     rest = need_sqm - first.area
     corners: tuple[Corner, ...] = ()

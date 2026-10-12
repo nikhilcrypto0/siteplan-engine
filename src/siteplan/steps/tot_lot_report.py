@@ -42,25 +42,23 @@ def report(t: TotLot) -> StepReport:
         f"Took step 4's land left after the setbacks ({s.left.area:,.1f} m², Stilt + "
         f"{s.floors}) and marked where one of the firm's blocks fits on it: the kit and a slim "
         "block of one row of flats, turned either way.",
-        "Where none fits, no building stands: there no setback is kept for one, so the land is "
-        "free right up to the plot edge.",
+        "Where none fits, no building stands.",
         "Marked the gate, where the approach road comes in from the main road, and kept the "
         "land in front of it clear.",
-        f"Laid the tot-lot, {t.share.fraction:.0%} of the whole plot: first on the land where "
-        "no building stands, up to the plot edge"
+        f"Laid the tot-lot, {t.share.fraction:.0%} of the whole plot, inside the land left: "
+        "first where no building stands"
         + (f"; then what was still needed split equally over {len(p.corners)} major corners."
            if p.corners else "."),
     ]
     r.happening = [
-        "Where no building stands, the tot-lot runs right up to the plot edge (your word): the "
-        "setbacks are kept in and around a building, and none stands there.",
-        "That land goes first, the part farthest from the buildings first: it costs no building "
-        "land.",
+        "The tot-lot stays inside the land left for buildings (your word): it never takes a "
+        "setback, the green strip or the fire lane.",
+        "Land left where no building stands goes first, the part farthest from the buildings "
+        "first: it costs no building land.",
         "What it cannot hold is divided by the number of major corners and each corner takes "
         "its part (your word), a strip along both sides of the corner, long and shallow.",
         "A corner that cannot hold its part passes the rest to the other corners equally.",
         "Nothing covers the gate: the land in front of it is kept clear (your word).",
-        "Beside a building its setback is kept: the tot-lot never takes it there.",
         "The club house comes once the tot-lot is right (your word).",
     ]
     r.elements = [
@@ -107,9 +105,6 @@ def _rules(t: TotLot) -> list[RuleUsed]:
                     f"{sh.min_width_m:g} m wide and {sh.min_pocket_sqm:g} m².", clause)
            for whom, clause in sh.clauses]
     out += [
-        RuleUsed("Setbacks are round a building", "The setbacks are left in and around the "
-                 "building, so where no building stands none is kept.",
-                 rules.OPEN_SPACE_2012_CLAUSE),
         RuleUsed("Setbacks by height", "A building keeps Table IV's open space all round.",
                  rules.TABLE_IV_CLAUSE),
         RuleUsed("Gaps between blocks", "Never counted as tot-lot.",
@@ -145,11 +140,10 @@ def _choices(t: TotLot) -> list[Choice]:
                "blocks are the kit the firm's flat library composes and a slim block of one row "
                "of the same flats, as long as the kit's shortest.", "The firm draws no slim "
                f"block; this one is the engine's, from {blocks.source}."),
-        Choice(f"No building stands on land farther than {t.setback_m:g} m (the widest setback "
-               "step 4 keeps) from every place a block fits; that land, up to the plot edge, "
-               "goes to the tot-lot first, the part farthest from the buildings first.",
-               "Your word (2026-10-11): where no building stands, the tot-lot may run right up "
-               "to the plot edge, with no setback band or fire lane there."),
+        Choice("No building stands on the land left where no block fits; it goes to the "
+               "tot-lot first, the part farthest from the buildings first.", "Your word "
+               "(2026-10-11): where no building stands first, and never outside the land left "
+               "for buildings."),
         Choice(f"A major corner is where the land left's edge facing one major edge of the plot "
                f"turns outward, by at least {CORNER_TURN_DEG:g} degrees, into the edge facing the "
                f"next; a major edge is a run of sides facing the same way (a jog under "
@@ -183,7 +177,7 @@ def _output(t: TotLot) -> tuple[list[str], list[Table]]:
     s = t.setbacks
     lines = [f"Land left (step 4): {s.left.area:,.1f} m². A block fits on {p.fits.area:,.1f} m² "
              f"of it."]
-    lines.append(f"WHERE NO BUILDING STANDS, up to the plot edge: {p.idle.area:,.1f} m² the "
+    lines.append(f"WHERE NO BUILDING STANDS (inside the land left): {p.idle.area:,.1f} m² the "
                  "tot-lot can use.")
     if not p.gate.is_empty:
         lines.append(f"GATE: where {s.height.road.name} meets the plot, kept clear for "
@@ -193,8 +187,7 @@ def _output(t: TotLot) -> tuple[list[str], list[Table]]:
         lines.append(f"GATE: not known ({s.height.road.name} does not reach the plot).")
     lines.append(f"TOT-LOT NEEDED: {t.need_sqm:,.1f} m² ({t.share.fraction:.0%} of the whole "
                  f"plot's {t.plot_sqm:,.1f} m²). PLACED: {p.tot_lot.area:,.1f} m².")
-    lines.append(f"FIRST, where no building stands (up to the plot edge): "
-                 f"{p.idle_taken.area:,.1f} m².")
+    lines.append(f"FIRST, where no building stands: {p.idle_taken.area:,.1f} m².")
     if p.corners:
         each = (t.need_sqm - p.idle_taken.area) / len(p.corners)
         lines.append(f"THEN AT THE MAJOR CORNERS: {len(p.corners)}, so {each:,.1f} m² each, "
@@ -290,7 +283,7 @@ def picture(t: TotLot) -> Picture:
         Layer("WATER-BUFFER", "#5cc4dd", 4, "Water's buffer from the line drawn", fill=0.45,
               width=0.5),
         Layer("NO-BUILDING", "#8c8c8c", 8, "No building stands here (no block of the firm's "
-              "fits): free up to the plot edge", fill=0.30, width=0.8, dash="4 3"),
+              "fits)", fill=0.30, width=0.8, dash="4 3"),
         Layer("GATE-ZONE", "#d62828", 1, "Kept clear in front of the gate", fill=0.06,
               width=1.0, dash="6 4"),
         Layer("TOT-LOT", "#9acd32", 3, "The tot-lot", fill=0.9, width=1.5),
