@@ -5,7 +5,7 @@ from __future__ import annotations
 from shapely.geometry import Point
 
 from siteplan import rules
-from siteplan.steps import carried
+from siteplan.steps import carried, gate
 from siteplan.steps.drawing import Layer, Picture, colour_name, frame
 from siteplan.steps.inputs import compass_word
 from siteplan.steps.report import Choice, RuleUsed, StepReport, Table
@@ -260,6 +260,7 @@ def picture(copy: SurveyCopy) -> Picture:
         Layer("LEVELS", "#8a8a8a", 8, "Spot levels", width=1.0),
         Layer("INSIDE", "#6d6d6d", 8, "Inside the plot: listed, then ignored", width=2.0),
         Layer("SIDES", "#5a2a82", 6, ""),
+        gate.LAYER,
         Layer("NOTES", "#222222", 7, ""),
     ])
     p.add("BAND-12M", copy.band)
@@ -274,6 +275,7 @@ def picture(copy: SurveyCopy) -> Picture:
     for _, line in outside_water(copy.inputs):
         p.add("WATER", line.intersection(view))
     p.add("PLOT", plot)
+    gate.draw(p, gate.gate_line(plot, copy.access))
     for level in copy.inputs.survey.levels:
         if view.contains(Point(level.x, level.y)):
             p.add("LEVELS", Point(level.x, level.y))

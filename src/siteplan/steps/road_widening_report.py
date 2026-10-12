@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from siteplan import rules
-from siteplan.steps import carried
+from siteplan.steps import carried, gate
 from siteplan.steps.drawing import Layer, Picture, frame
 from siteplan.steps.report import Choice, RuleUsed, StepReport, Table
 from siteplan.steps.road_widening import (
@@ -363,6 +363,7 @@ def picture(w: Widening) -> Picture:
         Layer("SURVEYED", "#b0177e", 6, "The surveyed plot (step 1)", width=1.5, dash="6 4"),
         Layer("SPLAYS", "#111111", 7, "Corner cut where two roads meet (shown, not taken)",
               fill=0.8),
+        gate.LAYER,
         Layer("NOTES", "#222222", 7, ""),
     ])
     view = frame(w.copy.plot, DRAWN_AROUND_M)
@@ -386,6 +387,7 @@ def picture(w: Widening) -> Picture:
         p.add("SPLAYS", s.triangle)
         p.label("SPLAYS", (s.corner[0], s.corner[1] + 4.0),
                 "splay " + " or ".join(f"{leg:g} x {leg:g} m" for leg in s.legs_m))
+    gate.draw(p, gate.on_net(w.net, w.copy.access, w.pieces))
     centre = w.net.representative_point()
     p.label("NOTES", (centre.x, centre.y), f"NET PLOT {w.net.area:,.1f} m²\nperimeter "
             f"{w.net.length:,.2f} m")

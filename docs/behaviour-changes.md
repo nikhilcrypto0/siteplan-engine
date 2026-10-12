@@ -4,6 +4,22 @@ A characterization test (tests/manifest.py) pins what the engine produces today.
 only together with a normative replacement test and an entry here: what changed, why, the
 evidence, and the test that now holds the behaviour. Newest first.
 
+## 2026-10-11: `siteplan steps` step 5 (the tot-lot)
+
+Stage 3 of the stage-wise build: step 5 (`steps/tot_lot.py`, `steps/buildings.py`), the architect's way (2026-10-12): the buildings first and the tot-lot last, shown together. A height map down to Stilt + 7; the firm's blocks (its kit and a slim block of one row of its flats) in straight rows along each arm's longest edge, round a loop or a spine road; the gate (`steps/gate.py`) marked on every step's picture; the tot-lot (10% of the whole plot for a high-rise site or a Group Development Scheme, rules 7(a)(vii) and 8(g); 5% above 750 m², 5(f)(vi)) in the blocks' leftovers, never in a gap between blocks, a setback, a fire lane, a road or in front of the gate; blocks shortened or dropped, flats counted, when it would fall short; whole options side by side for the architect to choose one. No club house in this stage. `Inputs` carries the workspace, so a step can read the firm's flat library. No layout, check or verdict changes: the search, the validator and the legacy path read none of it.
+
+rules.py gains `OPEN_SPACE_2012_CLAUSE`, `GROUP_SCHEME_OPEN_SPACE_CLAUSE` and
+`BLOCK_GAP_NOT_OPEN_SPACE_CLAUSE` and `AMENITY_2012_CLAUSE` (the 2012 wording, pp.13-15 and 21). The rules' fingerprint moves with
+them, so the service's made-up baseline is re-pinned: the same notes, proposals, shown four,
+approval page and answer; only the digests move. Rule 5(f)(vi) (5% below high-rise) is now
+applied by the steps (inventory).
+
+Tests (normative): `tests/test_steps.py` (the 10%, 5% or none; the height map stepping down to the
+lowest block; the firm's settings; the slim block; an arm no building fits taking the club house
+and keeping off the edge; every corner on even land; a sharp corner cut straight across and a
+pocket stopping at its side's end; a water buffer holding the tot-lot; the stops; the picture;
+step 5 in the five-questions, carried and seven-files guards).
+
 ## 2026-10-11: `siteplan steps` steps 2 and 4 (the height the main road allows; setbacks)
 
 Stage 2 of the stage-wise build: step 2 (`steps/main_road_height.py`) reads the height the main
