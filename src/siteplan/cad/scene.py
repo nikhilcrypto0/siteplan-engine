@@ -33,9 +33,13 @@ FOOTPRINTS = "Building footprints"
 TOWERS = "Towers"
 PARKING = "Parking zones"
 AMENITIES = "Clubhouse and amenities"
+OPEN_SPACE = "Open space and tot-lot"
+FLATS = "Flats"
+CORES = "Lift and stair cores"
 NOTES = "Notes"
 LAYERS = (SURVEY, NET, GIVEN, SETBACK, BUILDABLE, DIMENSIONS, GREEN, FIRE, WATER, GATE,
-          OUTSIDE_ROADS, ROADS, FOOTPRINTS, TOWERS, PARKING, AMENITIES, NOTES)
+          OUTSIDE_ROADS, ROADS, FOOTPRINTS, TOWERS, FLATS, CORES, PARKING, OPEN_SPACE,
+          AMENITIES, NOTES)
 DIMENSION_SIDE_M = 5.0  # rendering: sides shorter than this get no dimension (jogs)
 DIMENSION_SHIFT_M = 1.5  # rendering: a dimension line sits this far along its side
 TEXT_SIZE_M = 2.0  # rendering: a label's height in the drawing, readable at site scale
@@ -63,7 +67,10 @@ def styles() -> dict[str, dict]:
             GATE: style("#d62828", width=6.0), OUTSIDE_ROADS: style("#d62828", "#f6dada", 75),
             ROADS: style("#5a5a5a", "#9a9a9a", 40), FOOTPRINTS: style("#111111", "#7ea6dc", 15),
             TOWERS: style("#111111", "#1f3f7a", 15, 2.5), PARKING: style("#6a3d9a", "#cab2d6", 40),
-            AMENITIES: style("#b15928", "#ffd8a8", 30), NOTES: style("#222222")}
+            AMENITIES: style("#b15928", "#ffd8a8", 30), NOTES: style("#222222"),
+            OPEN_SPACE: style("#4d9221", "#b8e186", 35), FLATS: style("#1f3f7a", "#7ea6dc", 20,
+                                                                         0.8),
+            CORES: style("#333333", "#8c8c8c", 10, 0.8)}
 
 
 def ring(coords) -> list[list[float]]:
@@ -222,6 +229,55 @@ def _shape_items(ident: str, label: str, layer: str, geometry: BaseGeometry) -> 
         elif hasattr(g, "geoms"):
             out += _shape_items(key, label, layer, g)
     return out
+
+
+def candidate_layers(plan, setback_zone: BaseGeometry | None, setback_words: str
+                     ) -> list[tuple[str, list[dict]]]:
+    """A candidate layout (service.render.plan_of: the engine's shapes for it, every tower with
+    its flats and cores placed) as CAD groups in the order to draw them: the ground first, then
+    each tower on its own, so the towers can be watched going down one by one."""
+    groups: list[tuple[str, list[dict]]] = []
+
+    def add(layer: str, ident: str, label: str, shapes) -> None:
+        items: list[dict] = []
+        for k, shape in enumerate(shapes, 1):
+            items += polygon_items(f"{ident}-{k}", label, layer, shape,
+                                   "area" if any(p.interiors for p in parts(shape))
+                                   else "outline")
+        if items:
+            groups.append((layer, items))
+
+    add(NET, "layout-net", "Net plot", [plan.plot])
+    add(SETBACK, "layout-setback", setback_words, [setback_zone] if setback_zone else [])
+    add(GREEN, "layout-green", "Green strip", plan.green_strip)
+    for n, (words, pieces) in enumerate(plan.roads, 1):  # two roads may share a name
+        add(ROADS, f"layout-road-{n}", f"{words.title()} ({n})", pieces)
+    add(FIRE, "layout-fire", "Fire hardstanding", plan.fire)
+    add(GATE, "layout-gate", "Main entrance", plan.gates)
+    add(PARKING, "layout-cellar", "Cellar", plan.cellars)
+    add(PARKING, "layout-ramp", "Ramp 1:8", plan.ramps)
+    add(PARKING, "layout-bay", "Parking bay", plan.bays)
+    add(OPEN_SPACE, "layout-open", "Tot-lot / open space", plan.open_space)
+    for n, (name, shape) in enumerate(plan.amenities, 1):  # two amenities may share a name
+        add(AMENITIES, f"layout-amenity-{n}", name, [shape])
+    if plan.club is not None:
+        add(AMENITIES, "layout-club", f"Club house, {plan.club_floors} floors", [plan.club])
+    for tower in plan.towers:
+        key = f"layout-{tower.name.lower().replace(' ', '-')}"
+        items = polygon_items(key, f"{tower.name}: {tower.flats_per_floor} flats a floor",
+                              TOWERS, tower.footprint, "outline")
+        items += [i for k, flat in enumerate(tower.flats, 1)
+                  for i in polygon_items(f"{key}-flat-{k}", f"{tower.name} flat {k}",
+                                         FLATS, flat, "outline")]
+        items += [i for k, core in enumerate(tower.cores, 1)
+                  for i in polygon_items(f"{key}-core-{k}", f"{tower.name} core {k}", CORES,
+                                         core, "outline")]
+        c = tower.footprint.centroid
+        items.append({"id": f"{key}-text", "label": f"{tower.name} label", "layer": NOTES,
+                      "kind": "text", "at": to_cad((c.x, c.y)), "size": TEXT_SIZE_M * 1500,
+                      "text": f"{tower.name}\n{tower.flats_per_floor}/floor"})
+        groups.append((f"{TOWERS}: {tower.name}", items))
+    return groups
 
 
 def step4_items(s: Setbacks) -> list[dict]:

@@ -200,3 +200,20 @@ def test_a_steps_picture_reaches_cad_layer_for_layer_with_its_colours(made_up):
     assert texts == len(picture.labels)
     ids = [i["id"] for _, items in groups for i in items]
     assert len(ids) == len(set(ids))
+
+
+def test_two_roads_or_amenities_with_one_name_stay_two_objects():
+    """Found on Dhulapally (2026-10-12): two roads with the same label shared an id, so the
+    second overwrote the first in FreeCAD. Every road and amenity now has its own id."""
+    from shapely.geometry import box
+
+    from siteplan.service.render import Plan
+
+    plan = Plan(plot=box(0, 0, 100, 100), towers=(),
+                roads=(("INTERNAL ROAD 9 M", (box(0, 0, 9, 50),)),
+                       ("INTERNAL ROAD 9 M", (box(50, 0, 59, 50),))),
+                fire=(), gates=(), green_strip=(), open_space=(), club=None, club_floors=0,
+                amenities=(("Gym", box(70, 70, 80, 80)), ("Gym", box(85, 85, 95, 95))),
+                ramps=(), cellars=(), bays=())
+    ids = [i["id"] for _, items in scene.candidate_layers(plan, None, "") for i in items]
+    assert len(ids) == len(set(ids)) == 5  # the plot, two roads, two amenities
