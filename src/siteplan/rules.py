@@ -440,6 +440,18 @@ AMENITY_CLAUSE = (
     "block that is not part of the residential blocks)"
 )
 
+# The 2012 wording, p.21 (one of the architect's seven files, what `siteplan steps` cites): "In
+# case of Group Housing Buildings where there are 100 units and above, a minimum 3% of the total
+# built up area shall be planned and developed for common amenities and facilities like convenient
+# shopping, committee hall / club house, creche, gymnasium etc. as per National Building Code of
+# India (NBC)-2005. Amenities block shall not be part of the residential blocks. However in case of
+# single apartment block, amenities can be provided in the same block."
+AMENITY_2012_CLAUSE = (
+    "G.O.168 rule 15(a)(x), p.21 (group housing of 100 units and above: a minimum 3% of the total "
+    "built up area for common amenities such as a club house, in a block that is not part of the "
+    "residential blocks)"
+)
+
 # A second amenities rule, read from the 2012 text on 2026-10-03 (p.16): "In case of very large
 # projects more than 5 acres, common amenities and facilities like shopping center, community
 # hall/club house etc. are required to be provided in minimum 5 % of the site area." It stands

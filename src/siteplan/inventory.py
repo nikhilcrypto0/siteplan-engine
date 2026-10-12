@@ -752,6 +752,17 @@ INVENTORY: tuple[Entry, ...] = (
         settles="A sanctioned plan's tot-lot and the area it was taken of.",
     ),
     Entry(
+        "Open space", "Group housing of 100 flats or more keeps a share of its built-up area for "
+                      "amenities, in a block of its own (the 2012 wording).",
+        f"at least {rules.AMENITY_MIN_BUILT_UP_FRACTION:.0%} of the built-up area",
+        rules.AMENITY_2012_CLAUSE, Reading.AS_WRITTEN, (Where.STEPS,), ("AMENITY_2012_CLAUSE",),
+        choice="Step 5 states it beside the architect's own club house figure (1% of the land "
+               "left after the setbacks, 2026-10-11, not a rule) and step 6 checks it once the "
+               "flats are known. The engine's other parts read the 2016 rewrite (AMENITY_CLAUSE), "
+               "outside the architect's seven files.",
+        settles="A sanctioned group-housing plan's amenities block.",
+    ),
+    Entry(
         "Open space", "The gap between two blocks is never counted as tot-lot (the 2012 "
                       "wording).",
         "never counted", rules.BLOCK_GAP_NOT_OPEN_SPACE_CLAUSE, Reading.AS_WRITTEN,

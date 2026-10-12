@@ -1633,6 +1633,48 @@ REGISTRY: tuple[Constraint, ...] = (
         settles="Nothing: a drawing tolerance.",
     ),
     Constraint(
+        "Steps", "Step 5: the lowest block worth building; the height map steps down one floor "
+                 "at a time to it, and land where even it does not fit has no building.",
+        f"Stilt + {step_tot_lot.LOWEST_FLOORS}", Basis.FIRM_STANDARD,
+        "the architect's word (2026-10-11); the firm sets lowest_block_floors in the workspace",
+        ("steps.tot_lot.LOWEST_FLOORS", "steps.tot_lot.TotLot.lowest"),
+        note="Not a rule: the rules allow lower blocks. The engine's default until the firm sets "
+             "its own (ASSUMED_FOR_TEST).",
+        settles="The firm's word on the lowest block it builds.",
+    ),
+    Constraint(
+        "Steps", "Step 5: the club house's footprint, as a share of the land left after the "
+                 "setbacks.",
+        _share(step_tot_lot.CLUB_HOUSE_LAND_SHARE), Basis.FIRM_STANDARD,
+        "the architect's figure (2026-10-11); the firm sets club_house_land_share in the "
+        "workspace",
+        ("steps.tot_lot.CLUB_HOUSE_LAND_SHARE", "steps.tot_lot.TotLot.club_share"),
+        note="Not a rule: rule 15(a)(x) asks at least 3% of the flats' built-up area for 100 "
+             "flats or more, which step 5 states beside it and step 6 checks.",
+        settles="The firm's club house sizes on its sanctioned schemes.",
+    ),
+    Constraint(
+        "Steps", "Step 5: two sides meeting at less than this inside the plot make a corner "
+                 "that takes a tot-lot pocket; a corner sharper than the second is cut straight "
+                 "across rather than spanned along its sides.",
+        f"{step_tot_lot.CORNER_DEG:g} and {step_tot_lot.SHARP_DEG:g} degrees",
+        Basis.ENGINE_DESIGN_ASSUMPTION, "none (the engine's own)",
+        ("steps.tot_lot.CORNER_DEG", "steps.tot_lot.SHARP_DEG"),
+        note="The architect said corners; what counts as a corner and how a sharp one is cut "
+             "are the engine's, named in the report.",
+        settles="The architect's drawings of tot-lots at corners.",
+    ),
+    Constraint(
+        "Steps", "Step 5: where the club house is tried: every turn this many degrees apart "
+                 "when no side gives one, and with its middle at points this share of its side "
+                 "apart.",
+        f"{step_tot_lot.CLUB_TURN_DEG:g} degrees; {_share(step_tot_lot.CLUB_STEP_SHARE)}",
+        Basis.ENGINE_DESIGN_ASSUMPTION, "none (the engine's own)",
+        ("steps.tot_lot.CLUB_TURN_DEG", "steps.tot_lot.CLUB_STEP_SHARE"),
+        note="A search grid: finer finds a place a hair closer to the main road.",
+        settles="Nothing: a search tolerance.",
+    ),
+    Constraint(
         "Steps", "The tot-lot (step 5): two outlines GEOS cannot overlay ('non-noded "
                  "intersection') are snapped to this grid and tried again.",
         _m(step_tot_lot.GRID_M), Basis.ENGINE_DESIGN_ASSUMPTION,

@@ -9,7 +9,7 @@ from pathlib import Path
 import ezdxf
 import pytest
 from shapely import wkt
-from shapely.geometry import LineString, Polygon, box
+from shapely.geometry import Polygon, box
 
 from siteplan import rules
 from siteplan.blind import BlindLeak
@@ -30,14 +30,15 @@ from siteplan.steps.run import run_steps
 from siteplan.steps.setbacks import set_back
 from siteplan.steps.survey_copy import ALONG, APART, CARRIED, ENDS, copy_survey
 from siteplan.steps.tot_lot import (
-    BLOCK,
-    THIN,
+    FREE,
     WATER,
-    Blocks,
+    Corner,
+    corner_region,
+    firm_blocks,
     lay_out,
-    place,
     pockets_in,
     share_for,
+    straight_cut,
 )
 
 TEST_CLASS = "normative"
@@ -48,21 +49,23 @@ PLOT = [(0, 0), (120, 0), (120, 90), (0, 90)]
 LIBRARY = Path(__file__).resolve().parents[1] / "examples" / "flat_library.example.json"
 
 
-def _workspace(folder):
+def _workspace(folder, **settings):
     """A workspace that names the example flat library, as a firm's names its own."""
     folder.mkdir(parents=True, exist_ok=True)
     (folder / LIBRARY.name).write_text(LIBRARY.read_text())
-    (folder / "siteplan.workspace.json").write_text(json.dumps({"flat_library": LIBRARY.name}))
+    (folder / "siteplan.workspace.json").write_text(json.dumps({"flat_library": LIBRARY.name,
+                                                                **settings}))
     return folder
 
 
 def _survey(path, *, south=True, east=True, far=True, short_road=False, west_road=False,
-            south_along=False, sump=False, detour=False, nala_x=-12.0, extras=False):
+            south_along=False, sump=False, detour=False, nala_x=-12.0, extras=False, plot=PLOT):
     doc = ezdxf.new("R2018")
     doc.header["$INSUNITS"] = 6
     msp = doc.modelspace()
-    msp.add_lwpolyline(PLOT, close=True, dxfattribs={"layer": "SITE-BOUNDARY"})
-    msp.add_text("AREA: 10800 SQ.MTS", height=2).set_placement((10, -60))
+    msp.add_lwpolyline(plot, close=True, dxfattribs={"layer": "SITE-BOUNDARY"})
+    area = Polygon(plot).area
+    msp.add_text(f"AREA: {area:.0f} SQ.MTS", height=2).set_placement((10, -60))
     road = {"layer": "ROAD"}
     if south:  # 9 m wide, running south from the plot and ending at it
         msp.add_lwpolyline([(50, -40), (50, 0)], dxfattribs=road)
@@ -810,9 +813,21 @@ def test_a_river_whose_buffer_waits_on_an_answer_is_never_said_to_be_laid_over(t
     assert any("waits on one answer" in line for line in report.output)
 
 
-# --- Step 5: the tot-lot ----------------------------------------------------------------------
+# --- Step 5: where buildings fit, the club house and the tot-lot ------------------------------
 
-EXAMPLE_BLOCKS = Blocks(24.13, (31.0, 24.13), 4, "the example library")
+# A 120 x 90 m plot with a 24 m wide arm 60 m long on its north-west: 12,240 m².
+ARMED = [(0, 0), (120, 0), (120, 90), (24, 90), (24, 150), (0, 150)]
+TEN = share_for(True, False, 10_000)
+CASES = Path(__file__).resolve().parent / "steps_data"
+
+
+def _tot_lot_inputs(inputs):
+    copy = copy_survey(inputs)
+    return inputs, copy, set_back(inputs, copy, height_for(inputs, copy), take_off(inputs, copy))
+
+
+def _step5(inputs):
+    return lay_out(*_tot_lot_inputs(inputs))
 
 
 def test_the_tot_lot_is_ten_percent_of_a_high_rise_or_group_scheme_and_five_below():
@@ -825,163 +840,150 @@ def test_the_tot_lot_is_ten_percent_of_a_high_rise_or_group_scheme_and_five_belo
     assert both.fraction == pytest.approx(0.10) and len(both.clauses) == 2  # one 10%, not two
 
 
-def test_with_blocks_fitting_everywhere_the_tot_lot_is_a_strip_at_the_far_end(tmp_path):
-    """Stilt + 10 leaves 100 x 70 m, all of it wide enough for a 24.13 m block. 10% of the whole
-    plot's 10,800 m² is 1,080 m²: a strip 1,080 / 70 = 15.43 m deep across the west end, the end
-    furthest from the main road on the east."""
-    t = lay_out(*_tot_lot_inputs(_inputs(tmp_path, **HIGH_RISE)))
-    p = t.placings[0]  # the nala 12 m off the west keeps nothing free outside the setbacks, so
-    assert all(q.tot_lot.equals(p.tot_lot) for q in t.placings)  # both readings agree
-    assert t.need_sqm == pytest.approx(1_080)
-    assert p.tot_lot.area == pytest.approx(1_080, abs=1.0) and len(p.pockets) == 1
-    minx, miny, maxx, maxy = p.tot_lot.bounds
-    assert (minx, miny, maxy) == pytest.approx((10, 10, 80), abs=0.05)
-    assert maxx == pytest.approx(10 + 1_080 / 70, abs=0.05)
-    assert p.on(BLOCK) == pytest.approx(1_080, abs=1.0) and p.on(THIN) == 0
-    assert p.grew_from == "far end"
-    assert p.after.area == pytest.approx(7_000 - 1_080, abs=1.0)
-    text = tot_lot_report.report(t).markdown()
-    assert "TOT-LOT NEEDED: 1,080.0 m² (10% of the whole plot's 10,800.0 m²)" in text
-    assert "furthest from the main road" in text
+def test_the_height_map_steps_down_one_floor_at_a_time_to_the_lowest_worth_building(tmp_path):
+    """Stilt + 10 keeps 10 m and fits 100 x 70 m; Stilt + 9 keeps 9 m, so it is the tallest that
+    fits on the 1 m ring outside that (102 x 72 less 100 x 70), and so on to Stilt + 6."""
+    t = _step5(_inputs(tmp_path, **HIGH_RISE))
+    p = t.placings[0]
+    assert [tier.floors for tier in p.tiers] == [10, 9, 8, 7, 6] and t.lowest == 6
+    assert [tier.setback_m for tier in p.tiers] == [10, 9, 8, 7, 7]
+    assert p.tiers[0].tallest.area == pytest.approx(100 * 70)
+    assert p.tiers[1].tallest.area == pytest.approx(102 * 72 - 100 * 70)
 
 
-def test_a_water_buffer_outside_the_setbacks_holds_the_tot_lot_and_saves_building_land(tmp_path):
-    """A lake's 30 m buffer along the west keeps 20 x 70 m outside the 10 m setback: it counts as
-    tot-lot (rule 3(a)(iii)(3)), so the 1,080 m² costs no building land."""
+def test_the_firm_sets_the_lowest_block_and_the_club_house_share(tmp_path):
+    survey = _survey(tmp_path / "survey.dxf")
+    folder = _workspace(tmp_path / "firm", lowest_block_floors=8, club_house_land_share=0.02)
+    t = _step5(from_project(survey, _project(tmp_path / "p.json", **HIGH_RISE), folder))
+    p = t.placings[0]
+    assert [tier.floors for tier in p.tiers] == [10, 9, 8] and "workspace" in t.lowest_from
+    assert p.club.area_sqm == pytest.approx(0.02 * t.setbacks.left.area)
+
+
+def test_the_slim_block_is_one_row_of_the_firms_flats_beside_the_corridor(tmp_path):
+    from siteplan.library import FlatLibrary
+
+    library = FlatLibrary.model_validate_json(LIBRARY.read_text())
+    blocks = firm_blocks(_workspace(tmp_path / "firm"))
+    what, length, depth = blocks.footprints[-1]
+    assert "slim" in what
+    assert depth == pytest.approx(library.flats[0].depth_m + library.corridor_width_m)
+    assert length == pytest.approx(min(length for _, length, _ in blocks.footprints))
+    assert blocks.narrowest_m == pytest.approx(depth)
+
+
+def test_an_arm_no_building_fits_takes_the_club_house_first_and_keeps_off_the_edge(tmp_path):
+    """The arm is 24 m wide: even Stilt + 6 keeps 7 m a side, leaving 10 m, under the slim
+    block's depth, so no building stands there. The plot's edge still keeps the lowest block's
+    7 m (the architect: the outside boundary is never touched); inside it, the arm is free and
+    takes the club house (1% of the land left) first, and the tot-lot the rest."""
+    survey = _survey(tmp_path / "survey.dxf", plot=ARMED)
+    t = _step5(_inputs(tmp_path, survey, **HIGH_RISE))
+    p = t.placings[0]
+    inner_arm = Polygon([(7, 100), (17, 100), (17, 143), (7, 143)])
+    assert p.free.intersection(inner_arm).area == pytest.approx(inner_arm.area, rel=0.02)
+    assert p.club.footprint is not None and p.club.footprint.within(inner_arm.buffer(7.01))
+    assert p.club.area_sqm == pytest.approx(0.01 * t.setbacks.left.area)
+    assert t.need_sqm == pytest.approx(1_224)
+    assert p.tot_lot.area >= 1_224 - 1.0 and p.on(FREE) > 300
+    edge = Polygon(ARMED).exterior
+    assert p.tot_lot.distance(edge) >= 7 - 0.01 and p.club.footprint.distance(edge) >= 5 - 0.01
+    assert p.tot_lot.intersection(p.club.footprint).area == pytest.approx(0, abs=0.01)
+
+
+def test_on_even_land_the_tot_lot_takes_every_corner(tmp_path):
+    """The 120 x 90 m plot: a block fits all of the land, so nothing is free. The 1,080 m² goes
+    to all four corners, which cost the same, never into setback land a building still keeps."""
+    t = _step5(_inputs(tmp_path, **HIGH_RISE))
+    p = t.placings[0]
+    assert p.corners == 4 and len(p.pockets) >= 4
+    assert 1_080 - 1.0 <= p.tot_lot.area <= 1_080 * 1.05 and p.short_sqm == 0
+    assert all(pocket.area_sqm >= 50 for pocket in p.pockets)
+    assert p.tot_lot.intersection(p.kept_setbacks).area == pytest.approx(0, abs=0.5)
+    assert p.tot_lot.difference(t.setbacks.widening.net).area == pytest.approx(0, abs=0.01)
+
+
+def test_a_corner_sharper_than_sixty_degrees_is_cut_straight_across():
+    """A 30 degree corner, 10 m along its middle: the triangle up to a cut square to it, never
+    a parallelogram along its sides (a spike). A right angle gives the square its sides span."""
+    import math
+
+    big = Polygon([(-100, -100), (100, -100), (100, 100), (-100, 100)])
+    half = math.radians(15)
+    sharp = Corner((0, 0), (math.cos(half), math.sin(half)),
+                   (math.cos(half), -math.sin(half)), 30.0, 100.0)
+    assert corner_region(sharp, 10, big).area == pytest.approx(10 * 10 * math.tan(half))
+    square = Corner((0, 0), (1.0, 0.0), (0.0, 1.0), 90.0, 100.0)
+    assert corner_region(square, 10, big).area == pytest.approx(100)
+    short = Corner((0, 0), (1.0, 0.0), (0.0, 1.0), 90.0, 6.0)  # a side only 6 m long
+    assert corner_region(short, 10, big).area == pytest.approx(36)  # never past its end
+
+
+def test_a_water_buffer_no_building_may_use_holds_the_tot_lot(tmp_path):
+    """A lake's 30 m buffer along the west: no building stands in it, so beyond the setback the
+    blocks beside it keep, it is free and holds the tot-lot, costing no building land."""
     survey = _survey(tmp_path / "survey.dxf", nala_x=0.0)
-    t = lay_out(*_tot_lot_inputs(_inputs(
-        tmp_path, survey, water=[{"kind": "lake_10ha_or_more", "survey_layer": "NALA"}],
-        **HIGH_RISE)))
+    t = _step5(_inputs(tmp_path, survey, water=[{"kind": "lake_10ha_or_more",
+                                                 "survey_layer": "NALA"}], **HIGH_RISE))
     assert len(t.placings) == 2  # the buffer from the line drawn and from the plot's edge
     for p in t.placings:
-        assert p.land.area == pytest.approx(80 * 70)
-        assert p.on(WATER) == pytest.approx(1_080, abs=1.0) and p.on(BLOCK) == 0
-        assert p.after.area == pytest.approx(80 * 70)
-    text = tot_lot_report.report(t).markdown()
-    assert "Took the land left for buildings from step 4 (7,000.0 m²)" in text
-    assert ("LAND LEFT FOR BUILDINGS, ROADS AND PARKING: 5,600.0 m² (5,600.0 m² left after the "
-            "setbacks and the water's buffer, less the tot-lot on it)") in text
-    assert "and on the water's buffer outside the setbacks" in text
-
-
-def test_land_no_block_fits_on_takes_the_tot_lot_first_and_the_rest_grows_beside_it():
-    """A 60 x 60 m square with a 10 m wide arm 40 m long: no 24.13 m block fits in the arm, so the
-    tot-lot goes there first, cut at the end away from the road on the west; what the arm cannot
-    hold grows into the square beside it, one piece."""
-    land = Polygon([(0, 0), (100, 0), (100, 10), (60, 10), (60, 60), (0, 60)])
-    road = LineString([(0, 0), (0, 60)])
-    ten = share_for(True, False, 10_000)
-    small = place(land, None, 300, ten, EXAMPLE_BLOCKS, road, land)
-    assert small.thin.area == pytest.approx(400) and small.on(BLOCK) == 0
-    assert small.tot_lot.area == pytest.approx(300, abs=1.0)
-    assert small.tot_lot.bounds[0] == pytest.approx(70, abs=0.05)  # the arm's far 30 m
-    large = place(land, None, 600, ten, EXAMPLE_BLOCKS, road, land)
-    assert large.on(THIN) == pytest.approx(400, abs=1.0)
-    assert large.on(BLOCK) == pytest.approx(200, abs=1.0)
-    assert len(large.pockets) == 1 and large.grew_from == "beside"
-
-
-def test_step_five_stops_and_asks_without_the_firms_blocks(tmp_path):
-    survey = _survey(tmp_path / "survey.dxf")
-    inputs = from_project(survey, _project(tmp_path / "p.json", **HIGH_RISE), tmp_path / "bare")
-    t = lay_out(*_tot_lot_inputs(inputs))
-    assert t.stopped and "flat_library" in t.ask
-    report = tot_lot_report.report(t)
-    assert report.stopped and "1,080.0 m²" in report.markdown()  # the size is still said
-
-
-def test_step_five_stops_when_step_four_has_no_land(tmp_path):
-    inputs = _inputs(tmp_path, gross_area_sqm=10_800, net_area_sqm=10_200, road_strip_side="S")
-    t = lay_out(*_tot_lot_inputs(inputs))
-    assert t.stopped and "step 4" in t.stopped
-    assert "carried unchanged (this step stopped)" in tot_lot_report.report(t).markdown()
-    facts = tot_lot_report.facts(t)
-    assert facts["needed"] is None and facts["need_sqm"] is None  # not known, never "no"
-
-
-def test_step_five_draws_the_tot_lot_and_the_land_no_block_fits_on(tmp_path):
-    t = lay_out(*_tot_lot_inputs(_inputs(tmp_path, **HIGH_RISE)))
-    p = tot_lot_report.picture(t)
-    layers = {name for name, _ in p.shapes}
-    assert {"TOT-LOT", "BLOCK-LAND", "SETBACK", "FIRE-LANE", "NET-PLOT"} <= layers
-    assert any(text.startswith("TOT-LOT 1,080") for _, _, text in p.labels)
-    facts = tot_lot_report.facts(t)
-    assert facts["need_sqm"] == pytest.approx(1_080) and facts["readings"][0]["pockets"]
-
-
-def _tot_lot_inputs(inputs):
-    copy = copy_survey(inputs)
-    return inputs, copy, set_back(inputs, copy, height_for(inputs, copy), take_off(inputs, copy))
-
-
-# --- What the review of step 5 found ----------------------------------------------------------
-
-TEN = share_for(True, False, 10_000)
-CASES = Path(__file__).resolve().parent / "steps_data"
+        assert p.tot_lot.area == pytest.approx(1_080, abs=2.0)
+        assert p.on(WATER) == pytest.approx(p.tot_lot.area, abs=1.0)
+        assert p.floors_lost_sqm() == pytest.approx(0, abs=0.5)
 
 
 def test_a_pocket_exactly_the_least_width_counts():
-    """An 88 x 3.0 m strip (a 9 m buffer outside a 6 m setback leaves one) is 3 m wide: it
-    counts, where the rounding of the width test once threw it out."""
+    """An 88 x 3.0 m strip is 3 m wide: it counts, where the rounding of the width test once
+    threw it out."""
     assert pockets_in(box(6, 6, 94, 9), TEN).area == pytest.approx(88 * 3, abs=0.5)
     assert pockets_in(box(6, 6, 94, 8.9), TEN).is_empty
 
 
+def test_five_percent_takes_pockets_of_fifteen_square_metres():
+    five = share_for(False, False, 3_000)
+    assert pockets_in(box(0, 0, 4, 5), five).area == pytest.approx(20)  # 20 m², 4 m wide
+    assert pockets_in(box(0, 0, 3.5, 4), five).is_empty  # 14 m², under 15
+    assert pockets_in(box(0, 0, 4, 5), TEN).is_empty  # under the 10% rule's 50 m²
+
+
 def test_outlines_geos_cannot_overlay_are_snapped_and_tried_again():
-    """A made-up plot (from the review's random probes) on which GEOS raised 'non-noded
-    intersection' and stopped the whole run: now it places, inside its land and buffer."""
+    """A made-up plot (from a review's random probes) on which GEOS raised 'non-noded
+    intersection' and stopped the whole run: now the cut across it comes out, inside it."""
     case = json.loads((CASES / "geos_non_noded_case.json").read_text())
-    land, net, road = (wkt.loads(case[k]) for k in ("land", "net", "road"))
-    wet = wkt.loads(case["wet"]) if case["wet"] else None
+    land = wkt.loads(case["land"])
+    region = land.union(wkt.loads(case["wet"])) if case["wet"] else land
     share = share_for(False, False, 3_000) if case["five"] else TEN
-    p = place(land, wet, case["need"], share, Blocks(25.79, (19.58, 25.79), 4, "made up"),
-              road, net)
-    room = land if wet is None else land.union(wet)
-    assert p.tot_lot.difference(room.buffer(0.01)).area == pytest.approx(0, abs=0.01)
-
-
-def test_the_land_a_block_fits_on_is_measured_again_after_the_tot_lot():
-    """40 x 30 m all fits a 24.13 m block; a 600 m² cut at the far end leaves 20 x 30 m, too
-    narrow for one: none is left, not the 600 m² a plain subtraction would say."""
-    land = box(0, 0, 40, 30)
-    p = place(land, None, 600, TEN, EXAMPLE_BLOCKS, LineString([(0, 0), (0, 30)]), land)
-    assert p.block_land.area == pytest.approx(1_200)
-    assert p.after.area == pytest.approx(600, abs=1.0) and p.block_land_after.is_empty
+    piece = straight_cut(region, (1.0, 0.0), region.area / 2, lambda g: pockets_in(g, share))
+    assert not piece.is_empty
+    assert piece.difference(region.buffer(0.01)).area == pytest.approx(0, abs=0.01)
 
 
 def test_land_that_cannot_hold_the_tot_lot_is_said_and_asked(tmp_path):
     from dataclasses import replace
 
-    t = lay_out(*_tot_lot_inputs(_inputs(tmp_path, **HIGH_RISE)))
-    land = box(0, 0, 20, 20)
-    short = place(land, None, 1_080, TEN, EXAMPLE_BLOCKS, LineString([(0, 0), (0, 20)]), land)
-    assert short.short_sqm == pytest.approx(1_080 - 400, abs=1.0)
+    t = _step5(_inputs(tmp_path, **HIGH_RISE))
+    short = replace(t.placings[0], need_sqm=t.placings[0].tot_lot.area + 500)
     report = tot_lot_report.report(replace(t, placings=(short,)))
-    assert any("THE LAND LEFT CANNOT HOLD THE TOT-LOT" in line for line in report.output)
+    assert any("THE LAND CANNOT HOLD THE TOT-LOT" in line for line in report.output)
     assert any("cannot hold the tot-lot" in q and "lower" in q for q in report.questions)
 
 
 def test_a_plot_the_rules_ask_no_tot_lot_of_says_so(tmp_path):
     from dataclasses import replace
 
-    t = lay_out(*_tot_lot_inputs(_inputs(tmp_path, **HIGH_RISE)))
+    t = _step5(_inputs(tmp_path, **HIGH_RISE))
     none = replace(t, share=None, placings=())
     report = tot_lot_report.report(none)
     assert report.output == ["No tot-lot is needed on this plot."] and report.picture is None
-    assert "cut short" not in report.markdown()
     assert tot_lot_report.facts(none)["needed"] is False
 
 
-def test_five_percent_takes_pockets_of_fifteen_square_metres():
-    """A plot below high-rise and below a group scheme: 5%, in pockets of 15 m² (rule
-    5(f)(vi)). An 8 x 3 m nib on the corner is too thin for a block but is a pocket."""
-    five = share_for(False, False, 3_000)
-    land = Polygon([(0, 0), (40, 0), (40, 30), (8, 30), (8, 33), (0, 33)])
-    p = place(land, None, five.fraction * 3_000, five, EXAMPLE_BLOCKS,
-              LineString([(40, 0), (40, 30)]), land)
-    assert five.min_pocket_sqm == pytest.approx(15)
-    assert p.tot_lot.area == pytest.approx(150, abs=1.0)
-    assert all(pocket.area_sqm >= 15 for pocket in p.pockets)
+def test_step_five_stops_and_asks_without_the_firms_blocks(tmp_path):
+    survey = _survey(tmp_path / "survey.dxf")
+    t = _step5(from_project(survey, _project(tmp_path / "p.json", **HIGH_RISE),
+                            tmp_path / "bare"))
+    assert t.stopped and "flat_library" in t.ask
+    assert "1,080.0 m²" in tot_lot_report.report(t).markdown()  # the size is still said
 
 
 def test_a_flat_library_that_cannot_be_read_stops_and_asks(tmp_path):
@@ -989,7 +991,29 @@ def test_a_flat_library_that_cannot_be_read_stops_and_asks(tmp_path):
     folder = tmp_path / "broken"
     folder.mkdir()
     (folder / "siteplan.workspace.json").write_text(json.dumps({"flat_library": "gone.json"}))
-    inputs = from_project(survey, _project(tmp_path / "p.json", **HIGH_RISE), folder)
-    t = lay_out(*_tot_lot_inputs(inputs))
+    t = _step5(from_project(survey, _project(tmp_path / "p.json", **HIGH_RISE), folder))
     assert t.stopped and "gone.json cannot be used" in t.stopped and "flat_library" in t.ask
+
+
+def test_step_five_stops_when_step_four_has_no_land(tmp_path):
+    t = _step5(_inputs(tmp_path, gross_area_sqm=10_800, net_area_sqm=10_200,
+                       road_strip_side="S"))
+    assert t.stopped and "step 4" in t.stopped
+    assert "carried unchanged (this step stopped)" in tot_lot_report.report(t).markdown()
+    facts = tot_lot_report.facts(t)
+    assert facts["needed"] is None and facts["need_sqm"] is None  # not known, never "no"
+
+
+def test_step_five_draws_the_height_map_the_club_house_and_the_tot_lot(tmp_path):
+    survey = _survey(tmp_path / "survey.dxf", plot=ARMED)
+    t = _step5(_inputs(tmp_path, survey, **HIGH_RISE))
+    pic = tot_lot_report.picture(t)
+    layers = {name for name, _ in pic.shapes}
+    assert {"STILT-10", "TOT-LOT", "CLUB-HOUSE", "SETBACK", "NET-PLOT"} <= layers
+    assert any(text.startswith("TOT-LOT") for _, _, text in pic.labels)
+    text = tot_lot_report.report(t).markdown()
+    assert "HEIGHT MAP, the tallest that fits: Stilt + 10" in text
+    assert "CLUB HOUSE: " in text and "placed (one)" in text
+    facts = tot_lot_report.facts(t)
+    assert facts["readings"][0]["club_house"]["placed"] and facts["lowest_floors"] == 6
 
