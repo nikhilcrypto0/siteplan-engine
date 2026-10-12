@@ -170,10 +170,33 @@ def test_freecad_s_end_listens_on_this_machine_only_and_never_runs_code_it_is_se
     calls = re.search(r"CALLS = \{f\.__name__: f for f in \(([^)]*)\)", text).group(1)
     assert {c.strip() for c in calls.split(",")} == {
         "ping", "document", "upsert", "remove", "listing", "read", "move", "save", "reopen",
-        "view", "snapshot"}
+        "view", "snapshot", "show_layer", "layers"}
 
 
 def test_the_bridge_needs_freecad_s_token(tmp_path):
     with pytest.raises(NoBridge):
         Bridge(tmp_path)
     assert from_cad(to_cad((12.345678901, -0.5))) == (12.345678901, -0.5)
+
+
+def test_a_steps_picture_reaches_cad_layer_for_layer_with_its_colours(made_up):
+    """Steps 1 and 2 go to CAD from their own pictures: every shape vertex for vertex, every
+    label as text, one CAD layer per picture layer in the picture's order, its colour kept."""
+    from siteplan.steps import survey_copy_report
+
+    session, _ = made_up
+    copy = session.site("plot").setbacks.copy
+    picture = survey_copy_report.picture(copy)
+    groups, styles = scene.picture_layers(picture, "Step 1")
+    names = [name for name, _ in groups]
+    drawn = [layer.name for layer in picture.layers
+             if any(n == layer.name for n, _ in picture.shapes + [(lb[0], 0) for lb in
+                                                                   picture.labels])]
+    assert names == [f"Step 1 · {n}" for n in drawn]
+    plot = next(items for name, items in groups if name == "Step 1 · PLOT")
+    assert [from_cad(p) for p in plot[0]["rings"][0]] == list(copy.plot.exterior.coords)[:-1]
+    assert styles["Step 1 · PLOT"]["line"] == scene._rgb("#b0177e")
+    texts = sum(1 for _, items in groups for i in items if i["kind"] == "text")
+    assert texts == len(picture.labels)
+    ids = [i["id"] for _, items in groups for i in items]
+    assert len(ids) == len(set(ids))

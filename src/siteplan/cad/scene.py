@@ -38,6 +38,7 @@ LAYERS = (SURVEY, NET, GIVEN, SETBACK, BUILDABLE, DIMENSIONS, GREEN, FIRE, WATER
           OUTSIDE_ROADS, ROADS, FOOTPRINTS, TOWERS, PARKING, AMENITIES, NOTES)
 DIMENSION_SIDE_M = 5.0  # rendering: sides shorter than this get no dimension (jogs)
 DIMENSION_SHIFT_M = 1.5  # rendering: a dimension line sits this far along its side
+TEXT_SIZE_M = 2.0  # rendering: a label's height in the drawing, readable at site scale
 
 
 def _rgb(hex_colour: str) -> list[float]:
@@ -172,6 +173,54 @@ def setback_items(s: Setbacks) -> list[dict]:
             out += polygon_items(f"water-{water.kind}", f"Buffer of the {water.kind}", WATER,
                                  water.kept_free, "area")
     out += setback_dimensions(s)
+    return out
+
+
+def picture_layers(picture, step: str) -> tuple[list[tuple[str, list[dict]]], dict[str, dict]]:
+    """A step's own picture (steps/drawing.Picture: the engine's shapes in metres, its layers,
+    colours and labels) as CAD items, one group per layer in the picture's own drawing order, and
+    each layer's style. Nothing is measured again: every vertex is the picture's. A polygon with
+    no hole is an outline (draggable points), one with holes an area; a line stays a line, a
+    point a point, a label a text."""
+    styles: dict[str, dict] = {}
+    groups: list[tuple[str, list[dict]]] = []
+    for layer in picture.layers:
+        name = f"{step} · {layer.name}"
+        prefix = f"{step.lower().replace(' ', '')}-{layer.name.lower()}"
+        items: list[dict] = []
+        for geometry in (g for n, g in picture.shapes if n == layer.name):
+            items += _shape_items(f"{prefix}-{len(items) + 1}", layer.legend or layer.name,
+                                  name, geometry)
+        for k, (_, at, text) in enumerate((x for x in picture.labels if x[0] == layer.name), 1):
+            items.append({"id": f"{prefix}-text-{k}", "label": text.split("\n")[0],
+                          "layer": name, "kind": "text", "at": to_cad(at), "text": text,
+                          "size": TEXT_SIZE_M * 1000})
+        if not items:
+            continue
+        fill = _rgb(layer.colour)
+        styles[name] = {"line": fill, "fill": fill, "width": layer.width,
+                        "transparency": round((1 - layer.fill) * 100) if layer.fill else 100,
+                        "dash": bool(layer.dash)}
+        groups.append((name, items))
+    return groups, styles
+
+
+def _shape_items(ident: str, label: str, layer: str, geometry: BaseGeometry) -> list[dict]:
+    out: list[dict] = []
+    for g in getattr(geometry, "geoms", [geometry]):
+        if g.is_empty:
+            continue
+        key = ident if not out else f"{ident}.{len(out) + 1}"
+        if isinstance(g, Polygon):
+            out += polygon_items(key, label, layer, g, "area" if g.interiors else "outline")
+        elif g.geom_type in ("LineString", "LinearRing"):
+            out.append({"id": key, "label": label, "layer": layer, "kind": "line",
+                        "points": [to_cad(p) for p in g.coords]})
+        elif g.geom_type == "Point":
+            out.append({"id": key, "label": label, "layer": layer, "kind": "point",
+                        "at": to_cad((g.x, g.y))})
+        elif hasattr(g, "geoms"):
+            out += _shape_items(key, label, layer, g)
     return out
 
 

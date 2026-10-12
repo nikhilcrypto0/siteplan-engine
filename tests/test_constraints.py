@@ -114,6 +114,7 @@ NOT_DOMAIN = {
     "validator.refusals.SHOWN": "how many offending numbers a refusal names",
     "cad.scene.DIMENSION_SIDE_M": "rendering: sides shorter than this get no CAD dimension",
     "cad.scene.DIMENSION_SHIFT_M": "rendering: how far along its side a dimension line sits",
+    "cad.scene.TEXT_SIZE_M": "rendering: a label's height in the CAD drawing",
     "validator.refusals.LIBRARY_MESSAGE_CHARS": "how much of a library's error a report keeps",
     "assistant.MAX_UNCLEAR": "how many unclear points of a brief the reply lists",
     "assistant.EXPLAIN_MAX_TOKENS": "the model's token allowance for an explanation",

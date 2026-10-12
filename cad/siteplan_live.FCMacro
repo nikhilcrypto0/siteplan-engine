@@ -35,7 +35,7 @@ ROOT = Path(os.environ.get("SITEPLAN_CAD_ROOT") or (
 TOKEN_FILE = ".bridge-token"
 TAG = "SiteplanId"
 LAYER_TAG = "SiteplanLayer"
-KINDS = ("outline", "area", "line", "text", "dimension")
+KINDS = ("outline", "area", "line", "point", "text", "dimension")
 WAIT_S = 60.0
 PUMP_MS = 50
 SUFFIXES = (".FCStd", ".png")
@@ -95,7 +95,22 @@ def _layer(doc, name, style):
             vo.Transparency = int(style["transparency"])
         if "width" in style:
             vo.LineWidth = float(style["width"])
+        if style.get("dash"):
+            vo.DrawStyle = "Dashed"
     return layer
+
+
+def _size(obj, item):
+    """A text's or a dimension's height in the drawing (millimetres), so it reads at site
+    scale; FreeCAD's default suits a machine part."""
+    size = item.get("size")
+    vo = getattr(obj, "ViewObject", None)
+    if not size or vo is None:
+        return
+    if hasattr(vo, "FontSize"):
+        vo.FontSize = float(size)
+    if hasattr(vo, "ArrowSize"):
+        vo.ArrowSize = float(size) / 3
 
 
 def _tag(obj, ident, label, kind):
@@ -117,6 +132,9 @@ def _make(doc, item):
         obj = doc.addObject("Part::Feature", "Zone")
         obj.Shape = _face(item["rings"])
         return obj
+    if kind == "point":
+        x, y = item["at"]
+        return Draft.make_point(float(x), float(y), 0.0)
     if kind == "text":
         return Draft.make_text(item["text"].split("\n"), _v(item["at"]))
     return Draft.make_linear_dimension(_v(item["start"]), _v(item["end"]), _v(item["line"]))
@@ -133,6 +151,8 @@ def _update(obj, item):
     elif kind == "area":
         obj.Placement = App.Placement()
         obj.Shape = _face(item["rings"])
+    elif kind == "point":
+        obj.X, obj.Y, obj.Z = float(item["at"][0]), float(item["at"][1]), 0.0
     elif kind == "text":
         obj.Text = item["text"].split("\n")
         obj.Placement = App.Placement(_v(item["at"]), App.Rotation())
@@ -184,6 +204,7 @@ def upsert(items, styles):
                 doc.removeObject(old.Name)
             obj, made = _make(doc, item), True
         _tag(obj, item["id"], item.get("label", item["id"]), item["kind"])
+        _size(obj, item)
         layer = _layer(doc, item["layer"], styles.get(item["layer"]))
         if obj not in layer.Group:
             for other in doc.Objects:  # an object lies on one layer
@@ -242,6 +263,8 @@ def read(ident):
              if faces else shape.Wires)
     for wire in wires:
         out["rings"].append([[v.Point.x, v.Point.y] for v in wire.OrderedVertexes])
+    if not wires and shape.Vertexes:  # a point
+        out["rings"].append([[v.Point.x, v.Point.y] for v in shape.Vertexes])
     return out
 
 
@@ -284,6 +307,28 @@ def reopen(name):
     return doc.Name
 
 
+def show_layer(name, visible):
+    """Show or hide every object on the engine's layer `name`; the count it touched."""
+    doc = _doc()
+    layer = next((o for o in doc.Objects if _is_layer(o)
+                  and getattr(o, LAYER_TAG, None) == name), None)
+    if layer is None:
+        raise ValueError(f"no layer {name!r}")
+    for obj in layer.Group:
+        if getattr(obj, "ViewObject", None) is not None:
+            obj.ViewObject.Visibility = bool(visible)
+    return len(layer.Group)
+
+
+def layers():
+    """The engine's layers in the active document, with how many objects each holds."""
+    doc = App.ActiveDocument
+    if doc is None:
+        return []
+    return [{"layer": getattr(o, LAYER_TAG), "objects": len(o.Group)}
+            for o in doc.Objects if _is_layer(o) and hasattr(o, LAYER_TAG)]
+
+
 def view(fit):
     if Gui.ActiveDocument is None:
         return False
@@ -302,7 +347,7 @@ def snapshot(name, width, height):
 
 
 CALLS = {f.__name__: f for f in (ping, document, upsert, remove, listing, read, move, save,
-                                 reopen, view, snapshot)}
+                                 reopen, view, snapshot, show_layer, layers)}
 
 
 # --- the server: requests wait in a queue for FreeCAD's thread ---------------------------------

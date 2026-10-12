@@ -89,6 +89,12 @@ class Bridge:
     def reopen(self, name: str) -> str:
         return self._call("reopen", name)
 
+    def show_layer(self, name: str, visible: bool) -> int:
+        return self._call("show_layer", name, visible)
+
+    def layers(self) -> list[dict]:
+        return self._call("layers")
+
     def view(self, fit: bool = True) -> bool:
         return self._call("view", fit)
 
