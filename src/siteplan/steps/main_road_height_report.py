@@ -7,7 +7,7 @@ import math
 from shapely.geometry import LineString, box
 
 from siteplan import rules
-from siteplan.steps import carried
+from siteplan.steps import carried, gate
 from siteplan.steps.drawing import Layer, Picture, frame
 from siteplan.steps.main_road_height import (
     DRAWN,
@@ -328,6 +328,7 @@ def picture(h: Height) -> Picture:
         Layer("MAIN-ROAD", "#d62828", 1, "The main road: its width sets the height", fill=0.45,
               width=2.0),
         Layer("MAIN-ROAD-MEETS", "#1f6fb2", 5, "Where the main road meets the plot", width=6.0),
+        gate.LAYER,
         Layer("NOTES", "#222222", 7, ""),
     ])
     view = frame(h.copy.plot, DRAWN_AROUND_M)
@@ -338,6 +339,7 @@ def picture(h: Height) -> Picture:
           if ground is not None else None)
     p.add("MAIN-ROAD-MEETS", road.frontage)
     p.add("PLOT", h.copy.plot)
+    gate.draw(p, gate.gate_line(h.copy.plot, road))
     centre = h.copy.plot.representative_point()
     p.label("NOTES", (centre.x, centre.y), _headline(h))
     return p

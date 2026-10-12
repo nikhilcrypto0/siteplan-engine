@@ -89,10 +89,10 @@ class WorkspaceDefaults(BaseModel):
     # them; a blind acceptance run refuses one given as its survey (blind.py).
     finished_plans: list[str] = []
     # The architect's working figures for `siteplan steps` (2026-10-11), when the firm sets them:
-    # the lowest block worth building (Stilt + N) and the club house's footprint as a share of
-    # the land left after the setbacks. Not rules; with none, the steps' own stand in.
+    # the lowest block worth building (Stilt + N) and how far the tot-lot strip reaches into the
+    # building land. Not rules; with none, the steps' own stand in.
     lowest_block_floors: int | None = None
-    club_house_land_share: PositiveFloat | None = None
+    tot_lot_depth_m: PositiveFloat | None = None
     status: dict[str, Provenance] = {}  # how far each standard is confirmed, when the file says
 
     def standard_status(self, key: str) -> Provenance:

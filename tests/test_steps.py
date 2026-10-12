@@ -8,7 +8,6 @@ from pathlib import Path
 
 import ezdxf
 import pytest
-from shapely import wkt
 from shapely.geometry import LineString, Polygon, box
 
 from siteplan import rules
@@ -30,15 +29,10 @@ from siteplan.steps.run import run_steps
 from siteplan.steps.setbacks import set_back
 from siteplan.steps.survey_copy import ALONG, APART, CARRIED, ENDS, copy_survey
 from siteplan.steps.tot_lot import (
-    FREE,
-    WATER,
-    Corner,
-    corner_region,
     firm_blocks,
     lay_out,
     pockets_in,
     share_for,
-    straight_cut,
 )
 
 TEST_CLASS = "normative"
@@ -813,12 +807,11 @@ def test_a_river_whose_buffer_waits_on_an_answer_is_never_said_to_be_laid_over(t
     assert any("waits on one answer" in line for line in report.output)
 
 
-# --- Step 5: where buildings fit, the club house and the tot-lot ------------------------------
+# --- Step 5: where buildings fit, and the tot-lot ----------------------------------------------
 
 # A 120 x 90 m plot with a 24 m wide arm 60 m long on its north-west: 12,240 m².
 ARMED = [(0, 0), (120, 0), (120, 90), (24, 90), (24, 150), (0, 150)]
 TEN = share_for(True, False, 10_000)
-CASES = Path(__file__).resolve().parent / "steps_data"
 
 
 def _tot_lot_inputs(inputs):
@@ -828,6 +821,12 @@ def _tot_lot_inputs(inputs):
 
 def _step5(inputs):
     return lay_out(*_tot_lot_inputs(inputs))
+
+
+def _firm_step5(tmp_path, plot=PLOT, **settings):
+    survey = _survey(tmp_path / "survey.dxf", plot=plot)
+    folder = _workspace(tmp_path / "firm", **settings)
+    return _step5(from_project(survey, _project(tmp_path / "p.json", **HIGH_RISE), folder))
 
 
 def test_the_tot_lot_is_ten_percent_of_a_high_rise_or_group_scheme_and_five_below():
@@ -851,13 +850,14 @@ def test_the_height_map_steps_down_one_floor_at_a_time_to_the_lowest_worth_build
     assert p.tiers[1].tallest.area == pytest.approx(102 * 72 - 100 * 70)
 
 
-def test_the_firm_sets_the_lowest_block_and_the_club_house_share(tmp_path):
-    survey = _survey(tmp_path / "survey.dxf")
-    folder = _workspace(tmp_path / "firm", lowest_block_floors=8, club_house_land_share=0.02)
-    t = _step5(from_project(survey, _project(tmp_path / "p.json", **HIGH_RISE), folder))
+def test_the_firm_sets_the_lowest_block_and_the_strip_depth(tmp_path):
+    t = _firm_step5(tmp_path, lowest_block_floors=8, tot_lot_depth_m=4.5)
     p = t.placings[0]
     assert [tier.floors for tier in p.tiers] == [10, 9, 8] and "workspace" in t.lowest_from
-    assert p.club.area_sqm == pytest.approx(0.02 * t.setbacks.left.area)
+    assert t.depth_m == p.depth_m == pytest.approx(4.5) and "workspace" in t.depth_from
+    land = t.setbacks.left
+    assert p.tot_lot.difference(land.exterior.buffer(4.5 + 0.01)).area == pytest.approx(
+        0, abs=0.01)
 
 
 def test_the_slim_block_is_one_row_of_the_firms_flats_beside_the_corridor(tmp_path):
@@ -872,66 +872,86 @@ def test_the_slim_block_is_one_row_of_the_firms_flats_beside_the_corridor(tmp_pa
     assert blocks.narrowest_m == pytest.approx(depth)
 
 
-def test_an_arm_no_building_fits_takes_the_club_house_first_and_keeps_off_the_edge(tmp_path):
+def test_the_tot_lot_is_split_equally_over_the_major_corners(tmp_path):
+    """The architect (2026-10-11): divide the tot-lot by the number of major corners and give
+    each corner its part, never over the gate. The land left has four corners; each takes 270
+    m², a strip 6 m deep along both sides of the corner, inside every setback; the two beside
+    the gate run away from it."""
+    t = _step5(_inputs(tmp_path, **HIGH_RISE))
+    p = t.placings[0]
+    land = t.setbacks.left
+    points = [(round(c.point.x, 2), round(c.point.y, 2)) for c in p.corners]
+    assert sorted(points) == [(10, 10), (10, 80), (110, 10), (110, 80)]
+    assert [c.share_sqm for c in p.corners] == pytest.approx([270] * 4, abs=0.1)
+    for corner in p.corners:
+        assert corner.tot_lot.area == pytest.approx(270, abs=1.0)
+        assert corner.tot_lot.distance(corner.point) < 0.01  # at its corner
+    assert 1_080 - 1.0 <= p.tot_lot.area <= 1_080 * 1.01 and p.short_sqm == 0
+    assert p.depth_m == pytest.approx(6) and t.depth_m == pytest.approx(6)
+    assert p.tot_lot.difference(land).area == pytest.approx(0, abs=0.01)  # inside every setback
+    assert p.tot_lot.difference(land.exterior.buffer(6 + 0.01)).area == pytest.approx(0, abs=0.01)
+    assert p.tot_lot.distance(p.gate) >= 19 - 0.1  # never over the gate
+    assert "MAJOR CORNERS: 4, so 270.0 m² each" in tot_lot_report.report(t).markdown()
+
+
+def test_an_inside_corner_is_no_major_corner_and_a_narrow_tip_is_one(tmp_path):
+    """The arm plot: the inside corner where the arm leaves the plot is a notch, not a corner,
+    and the arm's 4 m wide tip (two turns within a few metres) is one corner."""
+    t = _firm_step5(tmp_path, plot=ARMED)
+    points = [(round(c.point.x), round(c.point.y)) for c in t.placings[0].corners]
+    assert len(points) == 4 and (14, 80) not in points
+    assert sum(1 for x, y in points if y >= 135) == 1
+
+
+def test_a_major_edge_is_a_side_facing_one_way_as_long_as_the_firms_shortest_block():
+    """Two north stretches parted by a 1 m jog are one edge; a side shorter than the shortest
+    block is no major edge."""
+    from siteplan.steps.tot_lot import major_edges
+
+    jogged = Polygon([(0, 0), (100, 0), (100, 50), (60, 50), (60, 51), (0, 51)])
+    edges = major_edges(jogged, 19.58)
+    assert [faces for faces, _ in edges] == ["south", "east", "north", "west"]
+    assert sum(run.length for run in edges[2][1]) == pytest.approx(100)  # 40 m and 60 m
+    assert [faces for faces, _ in major_edges(jogged, 55)] == ["south", "north"]
+
+
+def test_the_strip_is_made_deeper_only_when_the_corners_together_cannot_hold_it(tmp_path):
+    """At 3 m the corners' whole stretches (each halfway to the next), less the land kept clear
+    before the gate, hold under 1,080 m², so every strip is made just deep enough."""
+    t = _firm_step5(tmp_path, tot_lot_depth_m=3.0)
+    p = t.placings[0]
+    assert t.depth_m == pytest.approx(3) and 3.5 < p.depth_m < 4.5
+    assert p.tot_lot.area >= 1_080 - 1.0 and p.short_sqm == 0
+    assert "The corners together at 3 m could not hold it" in tot_lot_report.report(t).markdown()
+
+
+def test_the_tot_lot_never_touches_the_outside_boundary(tmp_path):
     """The arm is 24 m wide: even Stilt + 6 keeps 7 m a side, leaving 10 m, under the slim
-    block's depth, so no building stands there. The plot's edge still keeps the lowest block's
-    7 m (the architect: the outside boundary is never touched); inside it, the arm is free and
-    takes the club house (1% of the land left) first, and the tot-lot the rest."""
-    survey = _survey(tmp_path / "survey.dxf", plot=ARMED)
-    t = _step5(_inputs(tmp_path, survey, **HIGH_RISE))
+    block's depth, so no building stands there and it is said to be free. The tot-lot keeps
+    inside every setback, never on the plot's edge (the architect: the outside boundary is never
+    touched)."""
+    t = _firm_step5(tmp_path, plot=ARMED)
     p = t.placings[0]
     inner_arm = Polygon([(7, 100), (17, 100), (17, 143), (7, 143)])
     assert p.free.intersection(inner_arm).area == pytest.approx(inner_arm.area, rel=0.02)
-    assert p.club.footprint is not None and p.club.footprint.within(inner_arm.buffer(7.01))
-    assert p.club.area_sqm == pytest.approx(0.01 * t.setbacks.left.area)
-    assert t.need_sqm == pytest.approx(1_224)
-    assert p.tot_lot.area >= 1_224 - 1.0 and p.on(FREE) > 200  # the arm less the club and its ring
-    edge = Polygon(ARMED).exterior
-    assert p.tot_lot.distance(edge) >= 7 - 0.01 and p.club.footprint.distance(edge) >= 5 - 0.01
-    assert p.tot_lot.intersection(p.club.footprint).area == pytest.approx(0, abs=0.01)
-    # a building: its own setback all round, never tot-lot
-    assert p.tot_lot.distance(p.club.footprint) >= p.club.setback_m - 0.01
+    assert t.need_sqm == pytest.approx(1_224) and p.tot_lot.area >= 1_224 - 1.0
+    # Stilt + 10's setback, to the few centimetres round corners are drawn in chords
+    assert p.tot_lot.distance(Polygon(ARMED).exterior) >= 10 - 0.05
+    assert p.tot_lot.difference(t.setbacks.left).area == pytest.approx(0, abs=0.01)
 
 
-def test_on_even_land_the_tot_lot_takes_every_corner(tmp_path):
-    """The 120 x 90 m plot: a block fits all of the land, so nothing is free. The 1,080 m² goes
-    to all four corners, which cost the same, never into setback land a building still keeps."""
-    t = _step5(_inputs(tmp_path, **HIGH_RISE))
-    p = t.placings[0]
-    assert p.corners == 4 and len(p.pockets) >= 4
-    assert 1_080 - 1.0 <= p.tot_lot.area <= 1_080 * 1.05 and p.short_sqm == 0
-    assert all(pocket.area_sqm >= 50 for pocket in p.pockets)
-    assert p.tot_lot.intersection(p.kept_setbacks).area == pytest.approx(0, abs=0.5)
-    assert p.tot_lot.difference(t.setbacks.widening.net).area == pytest.approx(0, abs=0.01)
-
-
-def test_a_corner_sharper_than_sixty_degrees_is_cut_straight_across():
-    """A 30 degree corner, 10 m along its middle: the triangle up to a cut square to it, never
-    a parallelogram along its sides (a spike). A right angle gives the square its sides span."""
-    import math
-
-    big = Polygon([(-100, -100), (100, -100), (100, 100), (-100, 100)])
-    half = math.radians(15)
-    sharp = Corner((0, 0), (math.cos(half), math.sin(half)),
-                   (math.cos(half), -math.sin(half)), 30.0, 100.0)
-    assert corner_region(sharp, 10, big).area == pytest.approx(10 * 10 * math.tan(half))
-    square = Corner((0, 0), (1.0, 0.0), (0.0, 1.0), 90.0, 100.0)
-    assert corner_region(square, 10, big).area == pytest.approx(100)
-    short = Corner((0, 0), (1.0, 0.0), (0.0, 1.0), 90.0, 6.0)  # a side only 6 m long
-    assert corner_region(short, 10, big).area == pytest.approx(36)  # never past its end
-
-
-def test_a_water_buffer_no_building_may_use_holds_the_tot_lot(tmp_path):
-    """A lake's 30 m buffer along the west: no building stands in it, so beyond the setback the
-    blocks beside it keep, it is free and holds the tot-lot, costing no building land."""
+def test_with_a_water_buffer_every_corner_still_takes_its_part(tmp_path):
+    """A lake's 30 m buffer along the west: both readings of it are laid, and on each the
+    tot-lot is split over the corners, inside the land left and clear of the gate; what lies in
+    the buffer counts (rule 3(a)(iii)(3))."""
     survey = _survey(tmp_path / "survey.dxf", nala_x=0.0)
     t = _step5(_inputs(tmp_path, survey, water=[{"kind": "lake_10ha_or_more",
                                                  "survey_layer": "NALA"}], **HIGH_RISE))
     assert len(t.placings) == 2  # the buffer from the line drawn and from the plot's edge
     for p in t.placings:
-        assert p.tot_lot.area == pytest.approx(1_080, abs=2.0)
-        assert p.on(WATER) == pytest.approx(p.tot_lot.area, abs=1.0)
-        assert p.floors_lost_sqm() == pytest.approx(0, abs=0.5)
+        assert p.tot_lot.area >= 1_080 - 1.0 and len(p.corners) == 4
+        assert p.tot_lot.difference(t.setbacks.left).area == pytest.approx(0, abs=0.01)
+        assert p.tot_lot.distance(p.gate) >= 19 - 0.1
 
 
 def test_a_pocket_exactly_the_least_width_counts():
@@ -948,16 +968,28 @@ def test_five_percent_takes_pockets_of_fifteen_square_metres():
     assert pockets_in(box(0, 0, 4, 5), TEN).is_empty  # under the 10% rule's 50 m²
 
 
-def test_outlines_geos_cannot_overlay_are_snapped_and_tried_again():
-    """A made-up plot (from a review's random probes) on which GEOS raised 'non-noded
-    intersection' and stopped the whole run: now the cut across it comes out, inside it."""
-    case = json.loads((CASES / "geos_non_noded_case.json").read_text())
-    land = wkt.loads(case["land"])
-    region = land.union(wkt.loads(case["wet"])) if case["wet"] else land
-    share = share_for(False, False, 3_000) if case["five"] else TEN
-    piece = straight_cut(region, (1.0, 0.0), region.area / 2, lambda g: pockets_in(g, share))
-    assert not piece.is_empty
-    assert piece.difference(region.buffer(0.01)).area == pytest.approx(0, abs=0.01)
+def test_outlines_geos_cannot_overlay_are_snapped_and_tried_again(monkeypatch):
+    """GEOS once raised 'non-noded intersection' on a made-up plot and stopped the whole run:
+    an overlay that fails is snapped to a millimetre grid and tried again."""
+    import shapely
+    from shapely.errors import GEOSException
+
+    from siteplan.steps import tot_lot
+
+    class Fussy:  # an outline GEOS refuses until it is snapped
+        def intersection(self, other):
+            raise GEOSException("TopologyException: found non-noded intersection")
+
+    snapped = []
+
+    def snap(geometry, grid):
+        snapped.append(grid)
+        return box(0, 0, 10, 10) if isinstance(geometry, Fussy) else shapely.set_precision(
+            geometry, grid)
+
+    monkeypatch.setattr(tot_lot, "set_precision", snap)
+    out = tot_lot._overlay(Fussy(), box(5, 5, 20, 20), tot_lot.MEET)
+    assert snapped == [tot_lot.GRID_M] * 2 and out.area == pytest.approx(25)
 
 
 def test_land_that_cannot_hold_the_tot_lot_is_said_and_asked(tmp_path):
@@ -1006,30 +1038,62 @@ def test_step_five_stops_when_step_four_has_no_land(tmp_path):
     assert facts["needed"] is None and facts["need_sqm"] is None  # not known, never "no"
 
 
-def test_step_five_draws_the_height_map_the_club_house_and_the_tot_lot(tmp_path):
+def test_step_five_draws_the_height_map_the_gate_and_the_tot_lot(tmp_path):
     survey = _survey(tmp_path / "survey.dxf", plot=ARMED)
     t = _step5(_inputs(tmp_path, survey, **HIGH_RISE))
     pic = tot_lot_report.picture(t)
     layers = {name for name, _ in pic.shapes}
-    assert {"STILT-10", "TOT-LOT", "CLUB-HOUSE", "SETBACK", "NET-PLOT"} <= layers
+    assert {"STILT-10", "TOT-LOT", "SETBACK", "NET-PLOT", "GATE", "GATE-ZONE"} <= layers
     assert any(text.startswith("TOT-LOT") for _, _, text in pic.labels)
     text = tot_lot_report.report(t).markdown()
     assert "HEIGHT MAP, the tallest that fits: Stilt + 10" in text
-    assert "CLUB HOUSE: " in text and "placed (one)" in text
+    assert "The club house comes once the tot-lot is right." in text
     facts = tot_lot_report.facts(t)
-    assert facts["readings"][0]["club_house"]["placed"] and facts["lowest_floors"] == 6
+    assert facts["lowest_floors"] == 6 and facts["strip_depth_m"] == pytest.approx(6)
+    assert facts["readings"][0]["gate"] is not None
 
 
 def test_nothing_stands_in_front_of_the_gate(tmp_path):
     """The main road runs the whole east side, so the gate is its middle 18 m (the widest main
-    approach road, rule 8(m)); nothing of the tot-lot or the club house comes within the front
-    setback (10 m) and a fire engine's 9 m turn of it."""
+    approach road, rule 8(m)); no tot-lot comes within the front setback (10 m) and a fire
+    engine's 9 m turn of it."""
     t = _step5(_inputs(tmp_path, **HIGH_RISE))
     p = t.placings[0]
     assert p.gate.length == pytest.approx(18, abs=0.05)
     assert p.gate.distance(LineString([(120, 0), (120, 90)])) < 0.01
-    near = 19 - 0.1  # the zone's round edge is drawn in short chords, a few centimetres in
-    assert p.tot_lot.distance(p.gate) >= near
-    if p.club.footprint is not None:
-        assert p.club.footprint.distance(p.gate) >= near
-    assert "GATE: kept clear for 19 m" in tot_lot_report.report(t).markdown()
+    assert p.tot_lot.distance(p.gate) >= 19 - 0.1  # the zone's round edge is in short chords
+    assert "GATE: where" in tot_lot_report.report(t).markdown()
+    assert "kept clear for 19 m in front" in tot_lot_report.report(t).markdown()
+
+
+def test_every_steps_picture_marks_the_gate(tmp_path):
+    """The architect (2026-10-11): there is no gate marking on any of the plans. The south road
+    is the main road here (9 m wide, ending at the plot), so every picture marks its 9 m."""
+    inputs = _inputs(tmp_path)
+    copy = copy_survey(inputs)
+    pictures = [survey_copy_report.picture(copy)] + [pic for *_, pic, _ in
+                                                     _later_steps(inputs, copy)]
+    assert len(pictures) == 5
+    for n, pic in enumerate(pictures, 1):
+        gates = [shape for name, shape in pic.shapes if name == "GATE"]
+        assert len(gates) == 1, n
+        assert gates[0].length == pytest.approx(9, abs=1.0), n
+        assert gates[0].distance(LineString([(50, 0), (59, 0)])) < 0.5, n
+        assert any(text == "GATE" for _, _, text in pic.labels), n
+
+
+def test_a_road_that_only_touches_the_plot_still_gets_a_gate_the_approach_road_fits():
+    """Rule 8(m): a main approach road is 9 to 18 m wide. A road meeting the plot over 3 m gets
+    a 9 m gate centred on the meeting; one meeting it over 40 m, its middle 18 m."""
+    from types import SimpleNamespace
+
+    from siteplan.steps.gate import gate_line
+
+    plot = Polygon(PLOT)
+    short = gate_line(plot, SimpleNamespace(frontage=LineString([(50, 0), (53, 0)])))
+    assert short.length == pytest.approx(9) and short.bounds == pytest.approx((47, 0, 56, 0))
+    corner = gate_line(plot, SimpleNamespace(frontage=LineString([(118, 0), (120, 0)])))
+    assert corner.length == pytest.approx(9)  # round the corner: 5.5 m south, 3.5 m east
+    assert corner.distance(Polygon([(119, 0), (120, 0), (120, 1)]).centroid) < 1
+    long = gate_line(plot, SimpleNamespace(frontage=LineString([(10, 0), (50, 0)])))
+    assert long.length == pytest.approx(18) and long.bounds == pytest.approx((21, 0, 39, 0))

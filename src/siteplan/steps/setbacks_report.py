@@ -5,7 +5,7 @@ from __future__ import annotations
 from shapely.geometry import mapping
 
 from siteplan import rules
-from siteplan.steps import carried
+from siteplan.steps import carried, gate
 from siteplan.steps.drawing import Layer, Picture, frame
 from siteplan.steps.report import Choice, RuleUsed, StepReport, Table
 from siteplan.steps.setbacks import FACES_ALONG_M, LANE_CROSSES_SQM, LONG_BLOCKS_M, Setbacks
@@ -329,6 +329,7 @@ def picture(s: Setbacks) -> Picture:
               width=0.5),
         Layer("NET-PLOT", "#2e8b3d", 3, "The net plot (step 3): setbacks are measured from it",
               width=3.0),
+        gate.LAYER,
         Layer("NOTES", "#222222", 7, ""),
     ])
     net = s.widening.net
@@ -342,6 +343,7 @@ def picture(s: Setbacks) -> Picture:
     p.add("FIRE-LANE", s.fire_lane)
     p.add("LEFT", s.left)
     p.add("NET-PLOT", net)
+    gate.draw(p, gate.on_net(net, s.height.road, s.widening.pieces))
     for side in s.sides:
         if side.length_m >= SHORT_RUN_M:
             p.label("NOTES", side_label_at(side, net, -side.metres / 2), f"{side.metres:g} m")

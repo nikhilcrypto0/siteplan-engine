@@ -5,21 +5,13 @@ from __future__ import annotations
 from shapely.geometry import mapping
 
 from siteplan import rules
-from siteplan.steps import carried
+from siteplan.steps import carried, gate
 from siteplan.steps.drawing import Layer, Picture, frame
 from siteplan.steps.report import Choice, RuleUsed, StepReport, Table
 from siteplan.steps.survey_copy import SHORT_RUN_M
-from siteplan.steps.tot_lot import (
-    CUT_TOLERANCE_M,
-    FREE,
-    SETBACK,
-    SHARP_DEG,
-    WATER,
-    Placing,
-    TotLot,
-)
+from siteplan.steps.tot_lot import CORNER_TURN_DEG, CUT_TOLERANCE_M, Placing, TotLot
 
-TITLE = "Where buildings fit, the club house and the tot-lot"
+TITLE = "Where buildings fit, and the tot-lot"
 DRAWN_AROUND_M = 30.0
 SHADES = ("#1f3f7a", "#2f5a9e", "#4f7fc0", "#7ea6dc", "#b3cdee")  # tallest to lowest
 
@@ -34,12 +26,11 @@ def report(t: TotLot) -> StepReport:
                          f"({t.share.fraction:.0%} of the whole plot's {t.plot_sqm:,.1f} m²); it "
                          "is not placed yet.")
         r.stopped = "Step 5 cannot go on yet: " + t.stopped + "."
-        r.happening = ["The height map, the club house and the tot-lot all start from the land "
-                       "left after the setbacks and the firm's blocks, so this step needs both."]
+        r.happening = ["The height map and the tot-lot start from the land left after the "
+                       "setbacks and the firm's blocks, so this step needs both."]
         r.elements = ["The land left for buildings (step 4) and the firm's flat library."]
         r.choices = [Choice("The step stops instead of placing anything on a guess.",
-                            "Where the tot-lot and the club house go moves every building after "
-                            "them.")]
+                            "Where the tot-lot goes moves every building after it.")]
         r.output = ["Nothing placed yet: the step needs the answer below."]
         r.tables = [_carried_table(t)]
         r.questions = [t.ask] if t.ask else []
@@ -54,34 +45,32 @@ def report(t: TotLot) -> StepReport:
         f"Tried every height from Stilt + {s.floors} down one floor at a time to Stilt + "
         f"{min(t.lowest, s.floors)}, each keeping its own setbacks, and marked where one of the "
         "firm's blocks fits: the kit and a slim block of one row of flats, turned either way.",
-        "Found the land where no building fits, inside the setback the plot's edge always "
-        "keeps.",
-        f"Tried the club house there first (one, {p.club.area_sqm:,.1f} m²): "
-        + ("placed." if p.club.footprint is not None else "it does not fit; step 6 finds it a "
-           "place."),
-        f"Placed the tot-lot, {t.share.fraction:.0%} of the whole plot: on the free land first, "
-        "then in the plot's corners that cost the fewest floors.",
+        "Marked the gate, where the approach road comes in from the main road, and kept the "
+        "land in front of it clear.",
+        f"Laid the tot-lot, {t.share.fraction:.0%} of the whole plot, split equally over the "
+        f"{len(p.corners)} major corners: at each a strip {p.depth_m:g} m deep along both sides "
+        "of the corner, clear of the gate.",
     ]
     r.happening = [
         "Tallest first: where the tallest building does not fit, one floor lower is tried, then "
         "the next (your idea). A lower building keeps smaller setbacks, so it fits narrower land.",
-        f"Below Stilt + {t.lowest} a block is not worth building: land where even that does not "
-        "fit has no building.",
-        "Where no building stands, the club house goes first and the tot-lot takes the rest.",
-        "The plot's edge always keeps a setback (your word): beside a building, its own "
-        "height's; where no building stands, the lowest block's. Nothing else touches it.",
-        "The tot-lot sits in the corners, the ones that cost the fewest floors, never grown out "
-        "of one place. The gaps between blocks never count; they come in step 6.",
+        f"Below Stilt + {t.lowest} a block is not worth building.",
+        "The tot-lot is divided by the number of major corners and each corner takes its part "
+        "(your word): long along the sides and shallow, not a block in the land the buildings "
+        "use.",
+        "A corner that cannot hold its part (the gate's clear land takes it, or the land there "
+        "is narrow) keeps what it holds, and the rest is split equally over the others.",
+        "Nothing covers the gate: the land in front of it is kept clear (your word).",
+        "The outside boundary is never touched: the tot-lot stays inside every setback.",
+        "The club house comes once the tot-lot is right (your word).",
     ]
     r.elements = [
         f"The land left after the setbacks (step 4): {s.left.area:,.1f} m².",
         f"The whole plot's area (step 1): {t.plot_sqm:,.1f} m², {t.plot_from}.",
+        f"The main road (step 2), {s.height.road.name}: the gate is where it meets the plot.",
         f"The firm's blocks: {len(t.blocks.footprints)}, from {t.blocks.source}.",
         f"The lowest block worth building: Stilt + {t.lowest}, {t.lowest_from}.",
-        f"The club house: {t.club_share:.0%} of the land left after the setbacks, "
-        f"{t.club_share_from}.",
-        f"The main road (step 2), {s.height.road.name}: the club house stands as near it as it "
-        "fits.",
+        f"The tot-lot strip's depth: {t.depth_m:g} m, {t.depth_from}.",
     ]
     if s.widening.water:
         r.elements.append("The water named in the project and its buffer (step 3).")
@@ -91,8 +80,8 @@ def report(t: TotLot) -> StepReport:
     r.output, r.tables = _output(t)
     r.questions = _questions(t)
     r.files = [("step5.svg", "the picture"), ("step5.dxf", "the same, to open in CAD (metres)"),
-               ("step5.json", "every number in this report, with the outlines of the tot-lot "
-                "and the club house")]
+               ("step5.json", "every number in this report, with the tot-lot's outline and "
+                "the gate")]
     return r
 
 
@@ -121,9 +110,6 @@ def _rules(t: TotLot) -> list[RuleUsed]:
     out += [
         RuleUsed("Setbacks by height", "Each height keeps its own open space all round (Table "
                  "IV; below 21 m its first row).", rules.TABLE_IV_CLAUSE),
-        RuleUsed("Setbacks are round the building", "The tot-lot is over and above 'the "
-                 "mandatory setbacks to be left in and around the building'.",
-                 rules.OPEN_SPACE_2012_CLAUSE),
         RuleUsed("Gaps between blocks", "Never counted as tot-lot.",
                  rules.BLOCK_GAP_NOT_OPEN_SPACE_CLAUSE),
         RuleUsed("The approach road", "The main approach road is "
@@ -131,10 +117,9 @@ def _rules(t: TotLot) -> list[RuleUsed]:
                  rules.INTERNAL_ROAD_CLAUSE),
         RuleUsed("A fire engine's turn", f"A turning radius of at least "
                  f"{rules.FIRE_TURNING_RADIUS_M:g} m.", rules.FIRE_ACCESS_CLAUSE),
-        RuleUsed("Amenities (the club house)", "Group housing of 100 flats or more: at least "
-                 f"{rules.AMENITY_MIN_BUILT_UP_FRACTION:.0%} of the flats' total built-up area, "
-                 "in a block of its own. Checked in step 6, when the flats are known.",
-                 rules.AMENITY_2012_CLAUSE),
+        RuleUsed("Amenities (the club house, a later step)", "Group housing of 100 flats or "
+                 f"more: at least {rules.AMENITY_MIN_BUILT_UP_FRACTION:.0%} of the flats' "
+                 "built-up area, in a block of its own.", rules.AMENITY_2012_CLAUSE),
     ]
     if t.setbacks.widening.water:
         out.append(RuleUsed("Water's buffer", "It may count as tot-lot (never as a setback).",
@@ -144,103 +129,90 @@ def _rules(t: TotLot) -> list[RuleUsed]:
 
 def _choices(t: TotLot) -> list[Choice]:
     blocks = t.blocks
-    short = min(min(length, depth) for _, length, depth in blocks.footprints)
-    out = [
+    s = t.setbacks
+    clear = s.front_m + rules.FIRE_TURNING_RADIUS_M
+    return [
         Choice(f"The {t.share.fraction:.0%} is of the whole plot, {t.plot_sqm:,.1f} m² "
                f"({t.plot_from}).", "Your rule (2026-10-11): the rule says 'total site area' "
                "and does not say whole or net." + (
                    " The whole plot is the larger, so the plan holds on either reading."
                    if t.need_sqm >= t.net_need_sqm else
                    f" Here the net plot is the larger: {t.net_need_sqm:,.1f} m² of it.")),
-        Choice(f"Heights from Stilt + {t.setbacks.floors} down to Stilt + {t.lowest}, one floor "
-               "at a time; the tallest that fits marks the land.", f"Your rule (2026-10-11): "
-               f"Stilt + {t.lowest} is the lowest block worth building ({t.lowest_from})."),
+        Choice(f"Heights from Stilt + {s.floors} down to Stilt + {t.lowest}, one floor at a "
+               "time; the tallest that fits marks the land.", f"Your rule (2026-10-11): Stilt "
+               f"+ {t.lowest} is the lowest block worth building ({t.lowest_from})."),
         Choice("The firm's blocks are the kit its flat library composes (the flats in equal "
                "shares) and a slim block made from the same flats: one row beside the corridor, "
                "as long as the kit's shortest block.", "Your rule (2026-10-11): shape the "
                "building to the land. The firm draws no slim block; this one is the engine's, "
                f"from {blocks.source}."),
         Choice(f"A block fits where the land is as wide as its short side (the narrowest, "
-               f"{short:.2f} m) and a piece holds its footprint's area.", "The block can be "
-               "turned either way; its area is a necessary test, its exact outline comes in "
-               "step 6."),
-        Choice("Beside a building the edge keeps that height's setback (measured square from "
-               "where its block fits); where no building stands, the lowest block's.",
-               "Your word (2026-10-11): the outside boundary is never touched; the green strip "
-               "and the fire lane run in it."),
-        Choice(f"The club house: one, a square of {t.club_share:.0%} of the land left after the "
-               "setbacks, keeping the setback of the lowest building Table III lists from the "
-               "plot's edge and all round it (the tot-lot stays outside), square to the land it "
-               "stands on, as near the main road as it fits.", "Your figure "
-               f"({t.club_share_from}); more than one only when the brief asks. Its gap to the "
-               "towers is kept when they are placed (step 6)."),
-        Choice(f"The gate is where the main road meets the plot (its middle "
-               f"{rules.MAIN_APPROACH_ROAD_M[1]:g} m when it meets more), and nothing stands "
-               f"within {t.setbacks.front_m + rules.FIRE_TURNING_RADIUS_M:g} m of it: the front "
-               "setback "
-               f"({t.setbacks.front_m:g} m) and a fire engine's {rules.FIRE_TURNING_RADIUS_M:g} m "
-               "turn.", "Common sense (your word): the approach road comes in there; no tot-lot or "
-               "club house blocks it. Step 6 places the road and may move the gate."),
-        Choice(f"The plot's corners are where two sides (jogs under {SHORT_RUN_M:g} m left out) "
-               "meet; a pocket spans both sides equally, and a corner sharper than "
-               f"{SHARP_DEG:g} degrees is cut straight across.", "Your rule (2026-10-11): the "
-               "corners, never one place grown out; a sharp corner spanned along its sides would "
-               "make a spike."),
-        Choice("The corners taken cost the fewest floors a square metre (Stilt + 10 land costs "
-               "ten), as many of them as cost the least in all, every corner when they cost the "
-               "same.", "The architect's 'least building land', counted in floors because a "
-               "low block's land is worth less than a tall one's."),
+               f"{blocks.narrowest_m:.2f} m) and a piece holds its footprint's area.", "The "
+               "block can be turned either way; its exact outline comes in step 6."),
+        Choice(f"The gate is where {s.height.road.name} meets the plot, as wide as the main "
+               f"approach road may be ({rules.MAIN_APPROACH_ROAD_M[0]:g} to "
+               f"{rules.MAIN_APPROACH_ROAD_M[1]:g} m): where the road meets less, the edge either "
+               "side of the meeting is taken; where it meets more, the middle. Nothing stands "
+               f"within {clear:g} m of it: the front setback ({s.front_m:g} m) and a fire "
+               f"engine's {rules.FIRE_TURNING_RADIUS_M:g} m turn.", "Your word: no tot-lot in "
+               "front of the gate. Step 6 places the road and may move the gate."),
+        Choice(f"A major corner is where the land facing one major edge of the plot turns "
+               f"outward, by at least {CORNER_TURN_DEG:g} degrees, into the land facing the next; "
+               f"a major edge is a run of sides facing the same way (a jog under {SHORT_RUN_M:g} "
+               f"m between them does not part them) at least as long as the firm's shortest "
+               f"block ({t.blocks.shortest_m:.2f} m). An inside corner (a notch) is not one.",
+               "Your word (2026-10-11): divide by the number of major corners. Which corners "
+               "count is the engine's reading; the table below names each."),
+        Choice(f"Each corner's part is a strip {t.depth_m:g} m deep along both sides of the "
+               "corner, on the edge of the land the tallest building keeps (inside every "
+               "setback), no further than halfway to the next corner and never in front of the "
+               "gate; the corners with the least room take theirs first. Deeper only when the "
+               "corners together cannot hold the tot-lot.", "Your word: long along the side, "
+               f"not much into the usable space, never over the gate. The {t.depth_m:g} m is "
+               f"{t.depth_from}."),
         Choice(f"A pocket's {t.share.min_width_m:g} m is checked by rolling a circle that wide "
                f"(less {CUT_TOLERANCE_M * 100:g} cm) through it; pieces within "
                f"{CUT_TOLERANCE_M * 100:g} cm of each other are one pocket.", "The rule gives "
                "the width, not how to measure it on a bent piece."),
     ]
-    if t.placings[0].reading:
-        out.append(Choice("The water's buffer counts as tot-lot only where no building's "
-                          "setback needs it.", "With the buffer and the setbacks overlapping "
-                          "(your rule), land in both is setback."))
-    return out
 
 
 def _output(t: TotLot) -> tuple[list[str], list[Table]]:
     p = t.placings[0]
+    s = t.setbacks
     lines = [_map_line(p)]
-    lines.append(f"Land no building fits on (inside the edge's setback): {p.free.area:,.1f} "
-                 "m².")
-    if p.club.footprint is not None:
-        lines.append(f"CLUB HOUSE: {p.club.area_sqm:,.1f} m² placed (one), with its own "
-                     f"{p.club.setback_m:g} m setback all round, kept free of the tot-lot.")
-    else:
-        lines.append(f"CLUB HOUSE: {p.club.area_sqm:,.1f} m² does not fit where no building "
-                     "stands; step 6 finds it a place.")
+    lines.append(f"Land no building fits on (inside the edge's setback): {p.free.area:,.1f} m².")
     if not p.gate.is_empty:
-        lines.append(f"GATE: kept clear for {t.setbacks.front_m + rules.FIRE_TURNING_RADIUS_M:g} m "
-                     f"in front of where {t.setbacks.height.road.name} meets the plot "
-                     f"({p.gate_zone.area:,.1f} m²): no tot-lot, no club house.")
+        lines.append(f"GATE: where {s.height.road.name} meets the plot, kept clear for "
+                     f"{s.front_m + rules.FIRE_TURNING_RADIUS_M:g} m in front "
+                     f"({p.gate_zone.area:,.1f} m²).")
     else:
-        lines.append(f"GATE: not known ({t.setbacks.height.road.name} does not reach the plot); "
-                     "nothing is kept clear for it yet.")
-    lines.append(f"Rule 15(a)(x) asks at least {rules.AMENITY_MIN_BUILT_UP_FRACTION:.0%} of the "
-                 f"flats' built-up area for 100 flats or more; your {t.club_share:.0%} of the "
-                 "land is checked against it in step 6, when the flats are known.")
+        lines.append(f"GATE: not known ({s.height.road.name} does not reach the plot); the "
+                     "tot-lot keeps clear of nothing.")
+    count = len(p.corners)
+    each = t.need_sqm / count if count else 0.0
     lines.append(f"TOT-LOT NEEDED: {t.need_sqm:,.1f} m² ({t.share.fraction:.0%} of the whole "
-                 f"plot's {t.plot_sqm:,.1f} m²). PLACED: {p.tot_lot.area:,.1f} m² in "
-                 f"{len(p.pockets)} pocket{'' if len(p.pockets) == 1 else 's'}"
-                 + (f", {p.corners} corner{'' if p.corners == 1 else 's'} of the plot"
-                    if p.corners else "") + ".")
-    lines.append("It stands on: " + _on_words(p) + ".")
-    lines.append(f"The building land it costs, counted in floors: {p.floors_lost_sqm():,.0f} m² "
-                 f"of floor (as much as {p.floors_lost_sqm() / t.setbacks.floors:,.1f} m² of "
-                 f"Stilt + {t.setbacks.floors} land).")
+                 f"plot's {t.plot_sqm:,.1f} m²). MAJOR CORNERS: {count}, so {each:,.1f} m² each. "
+                 f"PLACED: {p.tot_lot.area:,.1f} m², strips {p.depth_m:g} m deep, at "
+                 f"{len(p.pockets)} corner{'' if len(p.pockets) == 1 else 's'}.")
+    for corner in p.corners:
+        if corner.share_sqm < each - 0.05:
+            lines.append(f"Corner {corner.number} ({corner.lies}) holds only "
+                         f"{corner.share_sqm:,.1f} m²; the rest went to the other corners.")
+    if p.depth_m > t.depth_m + CUT_TOLERANCE_M:
+        lines.append(f"The corners together at {t.depth_m:g} m could not hold it, so the strips "
+                     f"are {p.depth_m:.2f} m deep.")
     lines.append(f"Land a building fits on: {p.buildable.area:,.1f} m² before, "
-                 f"{p.building_land_after.area:,.1f} m² after the tot-lot and the club house.")
+                 f"{p.building_land_after.area:,.1f} m² after (measured again: land the strip "
+                 "leaves too thin for a block no longer counts).")
     if p.short_sqm > 0:
         lines.append(f"THE LAND CANNOT HOLD THE TOT-LOT: it is short by {p.short_sqm:,.1f} m².")
     if f"{t.net_need_sqm:,.1f}" != f"{t.need_sqm:,.1f}":
         lines.append(f"Of the net plot instead it would be {t.net_need_sqm:,.1f} m² (shown, not "
                      "taken).")
     for other in t.placings[1:]:
-        if other.tot_lot.equals(p.tot_lot):
+        if other.tot_lot.equals(p.tot_lot) and other.building_land_after.equals(
+                p.building_land_after):
             lines.append(f"The same with {other.reading} (asked in step 3).")
             continue
         lines.append(f"With {other.reading} (asked in step 3): tot-lot {other.tot_lot.area:,.1f}"
@@ -250,30 +222,27 @@ def _output(t: TotLot) -> tuple[list[str], list[Table]]:
     for kind in t.waiting:
         lines.append(f"The {kind.replace('_', ' ')}'s buffer waits on one answer (step 3), so "
                      "it is not counted yet.")
+    lines.append("The club house comes once the tot-lot is right.")
     tiers = Table("The height map: the tallest building that fits, part by part",
                   ("Height", "Setback", "Land where it is the tallest that fits"),
                   tuple((f"Stilt + {tier.floors}", f"{tier.setback_m:g} m",
                          f"{tier.tallest.area:,.1f} m²") for tier in p.tiers))
-    pockets = Table("The tot-lot's pockets", ("Pocket", "Lies", "Area", "Stands on"),
-                    tuple((str(i), pocket.lies, f"{pocket.area_sqm:,.1f} m²",
-                           "; ".join(f"{kind}: {area:,.1f} m²" for kind, area in pocket.on_sqm
-                                     if f"{area:,.1f}" != "0.0"))
-                          for i, pocket in enumerate(p.pockets, 1)))
-    return lines, [tiers, pockets, _carried_table(t)]
+    corners = Table("The major corners and the tot-lot at each",
+                    ("Corner", "Lies", "Its part", "Placed"),
+                    tuple((str(c.number), c.lies, f"{c.share_sqm:,.1f} m²",
+                           f"{c.tot_lot.area:,.1f} m²") for c in p.corners))
+    pieces = Table("The tot-lot's pieces", ("Piece", "Lies", "Area", "Stands on"),
+                   tuple((str(i), pocket.lies, f"{pocket.area_sqm:,.1f} m²",
+                          "; ".join(f"{kind}: {area:,.1f} m²" for kind, area in pocket.on_sqm
+                                    if f"{area:,.1f}" != "0.0"))
+                         for i, pocket in enumerate(p.pockets, 1)))
+    return lines, [tiers, corners, pieces, _carried_table(t)]
 
 
 def _map_line(p: Placing) -> str:
     parts = [f"Stilt + {tier.floors} on {tier.tallest.area:,.1f} m²" for tier in p.tiers
              if f"{tier.tallest.area:,.1f}" != "0.0"]
     return "HEIGHT MAP, the tallest that fits: " + (", ".join(parts) or "nothing fits") + "."
-
-
-def _on_words(p: Placing) -> str:
-    kinds = [(FREE, p.on(FREE)), (SETBACK, p.on(SETBACK)), (WATER, p.on(WATER))]
-    kinds += [(f"Stilt + {tier.floors} land", p.on(f"Stilt + {tier.floors} land"))
-              for tier in p.tiers]
-    return ", ".join(f"{area:,.1f} m² of {kind}" for kind, area in kinds
-                     if f"{area:,.1f}" != "0.0") or "nothing"
 
 
 def _questions(t: TotLot) -> list[str]:
@@ -293,10 +262,10 @@ def _used_here(t: TotLot) -> dict[str, str]:
         if t.stopped:
             used[item.key] = "carried unchanged (this step stopped)"
         elif item.kind == carried.ROAD and item.key == main and t.placings:
-            used[item.key] = "the main road: the club house stands as near it as it fits"
+            used[item.key] = ("the main road: the gate is where it meets the plot; no tot-lot "
+                              "in front of it")
         elif item.kind == carried.WATER and t.placings and t.placings[0].reading:
-            used[item.key] = ("no building in its buffer; the buffer counts as tot-lot where no "
-                              "building's setback needs it")
+            used[item.key] = "no building in its buffer; the buffer may count as tot-lot"
         else:
             used[item.key] = "carried unchanged"
     return used
@@ -326,11 +295,10 @@ def picture(t: TotLot) -> Picture:
               width=0.5),
         Layer("GATE-ZONE", "#d62828", 1, "Kept clear in front of the gate", fill=0.06,
               width=1.0, dash="6 4"),
-        Layer("FREE", "#8c8c8c", 8, "No building fits here", fill=0.30,
-              width=0.8, dash="4 3"),
-        Layer("CLUB-HOUSE", "#7b2cbf", 6, "The club house", fill=0.80, width=1.5),
+        Layer("FREE", "#8c8c8c", 8, "No building fits here", fill=0.30, width=0.8, dash="4 3"),
         Layer("TOT-LOT", "#9acd32", 3, "The tot-lot", fill=0.85, width=1.5),
         Layer("NET-PLOT", "#2e8b3d", 3, "The net plot (step 3)", width=3.0),
+        gate.LAYER,
         Layer("NOTES", "#222222", 7, ""),
     ])
     view = frame(t.copy.plot, DRAWN_AROUND_M)
@@ -343,16 +311,13 @@ def picture(t: TotLot) -> Picture:
         pic.add("FIRE-LANE", s.fire_lane.intersection(kept))
     for water in s.widening.water:
         pic.add("WATER-BUFFER", water.kept_free)
-    pic.add("FREE", p.free_after)
+    pic.add("FREE", p.free)
     pic.add("GATE-ZONE", p.gate_zone)
-    if not p.gate.is_empty:
-        spot = p.gate.interpolate(0.5, normalized=True)
-        pic.label("NOTES", (spot.x, spot.y), "GATE")
-    if p.club.footprint is not None:
-        pic.add("CLUB-HOUSE", p.club.footprint)  # named in the legend; a label would sit on
-        # the tot-lot's beside it
     pic.add("TOT-LOT", p.tot_lot)
     pic.add("NET-PLOT", s.widening.net)
+    gate.draw(pic, p.gate)
+    for corner in p.corners:
+        pic.label("NOTES", (corner.point.x, corner.point.y), f"corner {corner.number}")
     for pocket in p.pockets:
         spot = pocket.polygon.representative_point()
         pic.label("NOTES", (spot.x, spot.y), f"TOT-LOT {pocket.area_sqm:,.1f} m²")
@@ -376,7 +341,7 @@ def facts(t: TotLot) -> dict:
                        for what, length, depth in t.blocks.footprints],
             "blocks_from": t.blocks.source,
             "lowest_floors": t.lowest, "lowest_from": t.lowest_from,
-            "club_house_land_share": t.club_share, "club_share_from": t.club_share_from,
+            "strip_depth_m": t.depth_m, "strip_depth_from": t.depth_from,
             "readings": [_placing_facts(p) for p in t.placings],
             "waiting": list(t.waiting)}
 
@@ -388,16 +353,16 @@ def _placing_facts(p: Placing) -> dict:
             "free_sqm": round(p.free.area, 2),
             "gate": mapping(p.gate) if not p.gate.is_empty else None,
             "gate_clear_sqm": round(p.gate_zone.area, 2),
-            "club_house": {"area_sqm": round(p.club.area_sqm, 2),
-                           "placed": p.club.footprint is not None,
-                           "setback_m": p.club.setback_m,
-                           "outline": mapping(p.club.footprint) if p.club.footprint else None},
             "tot_lot_sqm": round(p.tot_lot.area, 2),
-            "corners": p.corners,
+            "strip_depth_m": round(p.depth_m, 2),
+            "major_corners": [{"corner": c.number, "lies": c.lies,
+                               "at": [round(c.point.x, 2), round(c.point.y, 2)],
+                               "share_sqm": round(c.share_sqm, 2),
+                               "placed_sqm": round(c.tot_lot.area, 2)} for c in p.corners],
             "short_sqm": round(p.short_sqm, 2),
             "floors_lost_sqm": round(p.floors_lost_sqm(), 2),
             "building_land_sqm": round(p.buildable.area, 2),
             "building_land_after_sqm": round(p.building_land_after.area, 2),
-            "pockets": [{"lies": pocket.lies, "area_sqm": round(pocket.area_sqm, 2),
-                         "on": {k: round(a, 2) for k, a in pocket.on_sqm},
-                         "outline": mapping(pocket.polygon)} for pocket in p.pockets]}
+            "pieces": [{"lies": pocket.lies, "area_sqm": round(pocket.area_sqm, 2),
+                        "on": {k: round(a, 2) for k, a in pocket.on_sqm},
+                        "outline": mapping(pocket.polygon)} for pocket in p.pockets]}
