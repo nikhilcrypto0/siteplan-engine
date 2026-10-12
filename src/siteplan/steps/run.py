@@ -24,7 +24,7 @@ from siteplan.steps.survey_copy import copy_survey
 from siteplan.steps.tot_lot import lay_out
 
 LATER = {  # the architect's steps not built yet, each in a later stage
-    6: "Buildings, roads, parking and site works",
+    6: "Roads, parking, the club house and site works",
     7: "The final check of the whole plan",
 }
 

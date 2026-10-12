@@ -70,6 +70,7 @@ from siteplan.optimizer.search import land as search_land
 from siteplan.optimizer.search import layout as search_layout
 from siteplan.prototypes import compose
 from siteplan.prototypes import library as prototype_library
+from siteplan.steps import buildings as step_buildings
 from siteplan.steps import main_road_height as step_height
 from siteplan.steps import road_widening as step_widening
 from siteplan.steps import setbacks as step_setbacks
@@ -1652,30 +1653,53 @@ REGISTRY: tuple[Constraint, ...] = (
         settles="The architect's word on which corners of a plot take a tot-lot.",
     ),
     Constraint(
-        "Steps", "Step 5: how many tot-lot options the architect is shown to choose one from.",
-        f"{step_tot_lot.OPTIONS}", Basis.FIRM_STANDARD,
-        "the architect's word (2026-10-12), for the firm: the architect chooses between stages",
-        ("steps.tot_lot.OPTIONS",),
-        note="Not a rule: the number of different ideas offered; fewer when the engine's list "
-             "gives fewer different tot-lots.",
-        settles="The architect's word on how many options he wants.",
+        "Steps", "Step 5's buildings: a row that does not fit is tried again this much further "
+                 "on; a block this much too long for its stretch still fits.",
+        f"{_m(step_buildings.SWEEP_STEP_M)}; {_m(step_buildings.FIT_M)}",
+        Basis.ENGINE_DESIGN_ASSUMPTION, "none (the engine's own)",
+        ("steps.buildings.SWEEP_STEP_M", "steps.buildings.FIT_M"),
+        note="A search grid and a drawing tolerance: finer finds a row a metre closer.",
+        settles="Nothing: a search tolerance.",
     ),
     Constraint(
-        "Steps", "Step 5's ideas: a triangle's long side in times its small side (the small side "
-                 "toward the gate); a corner sharper than this is cut straight across; after the "
-                 "named ideas, every two and three of a site's corners; how little two tot-lots "
-                 "may differ and still be one option.",
-        f"{step_tot_lot.STEEP:g} or {step_tot_lot.SHALLOW:g} times; "
-        f"{step_tot_lot.SHARP_DEG:g} degrees; sets of {step_tot_lot.SETS}; "
+        "Steps", "Step 5's buildings: a bent plot is cut into arms at an inward corner turning "
+                 "in by more than this (the outline first smoothed by this much), with a cut no "
+                 "longer than this share of the smaller piece's length; two edges closer than "
+                 "this in direction give the same rows; the main part's rows are tried along "
+                 "this many of its longest edges.",
+        f"{step_buildings.REFLEX_DEG:g} degrees; {_m(step_buildings.NECK_SMOOTH_M)}; "
+        f"{step_buildings.NECK_SHARE:.0%}; {step_buildings.APART_DEG:g} degrees; "
+        f"{step_tot_lot.EDGES_TRIED} edges",
+        Basis.ENGINE_DESIGN_ASSUMPTION, "none (the engine's own reading of the architect's "
+        "'each arm takes its own edge', 2026-10-12)",
+        ("steps.buildings.REFLEX_DEG", "steps.buildings.NECK_SMOOTH_M",
+         "steps.buildings.NECK_SHARE", "steps.buildings.APART_DEG", "steps.tot_lot.EDGES_TRIED"),
+        note="Where an arm starts and which edges count as different are the engine's; the "
+             "report names each option's.",
+        settles="The architect's word on where a plot's arms part.",
+    ),
+    Constraint(
+        "Steps", "Step 5's tot-lot: each leftover piece is taken first up to this, so several "
+                 "medium pieces come before one big one; at a corner beside the gate a "
+                 "right-angled triangle whose long side is this many times its small side; two "
+                 "layouts whose blocks differ by less than this are one option.",
+        f"{step_tot_lot.MEDIUM_SQM:,.0f} m²; {step_tot_lot.STEEP:g} times; "
         f"{step_tot_lot.SAME_SQM:g} m²",
-        Basis.ENGINE_DESIGN_ASSUMPTION, "none (the engine's own; the triangle beside the gate is "
-        "the architect's word of 2026-10-12)",
-        ("steps.tot_lot.STEEP", "steps.tot_lot.SHALLOW", "steps.tot_lot.SHARP_DEG",
-         "steps.tot_lot.SETS", "steps.tot_lot.SAME_SQM", "steps.tot_lot.IDEAS",
-         "steps.tot_lot.Idea.ratio"),
-        note="Options for the architect to choose between, not rules; every option keeps the "
-             "same rules.",
-        settles="The architect's word on which ideas he wants offered and how steep a triangle.",
+        Basis.ENGINE_DESIGN_ASSUMPTION, "the reference plans' pockets (about 100 to 900 m²) and "
+        "the architect's word of 2026-10-12 (several medium pieces; a triangle small at the "
+        "gate)", ("steps.tot_lot.MEDIUM_SQM", "steps.tot_lot.STEEP", "steps.tot_lot.SAME_SQM"),
+        note="Shapes and sizes the architect described, not rules.",
+        settles="The architect's word on the pieces' sizes and the triangle's slope.",
+    ),
+    Constraint(
+        "Steps", "Step 5's density check: the approved Narsingi scheme's flats an acre, and how "
+                 "far below it (or above its inverse) an option is marked for a second look.",
+        f"{step_tot_lot.NARSINGI_FLATS_PER_ACRE:.1f} an acre; {step_tot_lot.SECOND_LOOK:.0%}",
+        Basis.ENGINE_DESIGN_ASSUMPTION, "the approved Narsingi scheme (367 flats on 3.95 "
+        "acres), the architect's check of 2026-10-12",
+        ("steps.tot_lot.NARSINGI_FLATS_PER_ACRE", "steps.tot_lot.SECOND_LOOK"),
+        note="A sense check against one approved plan, never a rule and never a limit.",
+        settles="Nothing: a comparison.",
     ),
     Constraint(
         "Steps", "The tot-lot (step 5): two outlines GEOS cannot overlay ('non-noded "
