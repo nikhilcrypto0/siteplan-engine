@@ -30,8 +30,16 @@ def front_runs(net: Polygon, side: str | None) -> list[LineString]:
 
 
 def access_zones(site: CanonicalSiteModel, net: Polygon, excluded) -> list[AccessZone]:
-    """One zone per unbroken stretch of frontage, less the exclusions."""
+    """One zone per unbroken stretch of frontage, less the exclusions; when the project pins the
+    entrance (`site.access.gate`), that stretch alone, so no layout moves it."""
     side = site.access.side.value
+    gate = site.access.gate
+    if gate is not None:
+        line = LineString(gate.value.points)
+        return [AccessZone(id="access-gate", road_id=site.access.road_id.value, side=side,
+                           frontage=gate.value, length_m=line.length,
+                           note=f"the entrance the project pins ({gate.source}, "
+                                f"{gate.status.value}): the main approach comes in here only")]
     runs = front_runs(net, side)
     if not runs:
         return []

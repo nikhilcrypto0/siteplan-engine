@@ -132,7 +132,9 @@ def site_model(project: Project, *, site_id: str | None = None, boundary: Polygo
                                 else Provenance.USER_CONFIRMED)},
                 "side": sourced(project, "access_side", s.access_side),
                 "dead_end": sourced(project, "road_dead_end", s.road_dead_end),
-                "joins_12m_street": sourced(project, "street_joins_12m", s.street_joins_12m)},
+                "joins_12m_street": sourced(project, "street_joins_12m", s.street_joins_12m),
+                **({"gate": sourced(project, "gate_m", {"points": s.gate_m})}
+                   if s.gate_m else {})},
         water=[{"id": f"water-{i}",
                 "water_class": sourced(project, "water", w.kind),
                 "drawn_as": w.survey_colour or f"layer {w.survey_layer}"}
@@ -342,6 +344,8 @@ def _site_fields(site: CanonicalSiteModel) -> tuple[dict, dict, dict, dict]:
     put("access_side", a.side.value, a.side)
     put("road_dead_end", a.dead_end.value, a.dead_end)
     put("street_joins_12m", a.joins_12m_street.value, a.joins_12m_street)
+    if a.gate is not None:
+        put("gate_m", [list(p) for p in a.gate.value.points], a.gate)
     if site.water:
         fields["water"] = [{"kind": w.water_class.value, **(
             {"survey_layer": w.drawn_as[len("layer "):]} if w.drawn_as.startswith("layer ")

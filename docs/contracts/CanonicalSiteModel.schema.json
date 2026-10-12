@@ -6,6 +6,17 @@
         "dead_end": {
           "$ref": "#/$defs/Sourced_Union_bool__NoneType__"
         },
+        "gate": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Sourced_Line_"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "joins_12m_street": {
           "$ref": "#/$defs/Sourced_Union_bool__NoneType__"
         },
@@ -494,6 +505,32 @@
       ],
       "title": "SourceKind",
       "type": "string"
+    },
+    "Sourced_Line_": {
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "default": "",
+          "title": "Source",
+          "type": "string"
+        },
+        "source_kind": {
+          "$ref": "#/$defs/SourceKind"
+        },
+        "status": {
+          "$ref": "#/$defs/Provenance"
+        },
+        "value": {
+          "$ref": "#/$defs/Line"
+        }
+      },
+      "required": [
+        "value",
+        "status",
+        "source_kind"
+      ],
+      "title": "Sourced[Line]",
+      "type": "object"
     },
     "Sourced_Literal__river____lake_10ha_or_more____lake_under_10ha____nala_over_10m____nala_up_to_10m___": {
       "additionalProperties": false,

@@ -13,8 +13,10 @@ C4-12 takes the open space where it is usable, which leaves other ground to the 
 two and four are others again, two of their road sets new (L_RING_PATH_B, SLIM_THREE_B); C4-14
 lets an approach cross the end kept for the open space when nothing else reaches the ring, so the
 configurations that end shut off lay out, those after them are numbered on, and eight proposals
-have their approach run through the park (the road sets ending _PARK and SLIM_PARK_PATH, new),
-docs/behaviour-changes.md.)
+have their approach run through the park (the road sets ending _PARK and SLIM_PARK_PATH, new);
+2026-10-12 tries the club house at the far end of the open ground as well as by the gate and keeps
+the one that leaves the more usable open space, so one L-plot proposal is another layout (L_ONE,
+new), docs/behaviour-changes.md.)
 
 The values pin exact output on the locked dependencies (uv.lock). They move only with a normative
 replacement and an entry in docs/behaviour-changes.md.
@@ -53,7 +55,8 @@ RECTANGLE_G = [(*RING, 4270.68), *_streets(1458.0), (*APPROACH, 340.23)]
 L_THREE = [(*RING, 3339.36), *_streets(410.0, 410.0, 410.0), (*APPROACH, 36.25)]
 L_THREE_PARK = [(*RING, 3339.36), *_streets(410.0, 410.0, 410.0), (*APPROACH, 348.57)]
 L_RING = [(*RING, 2711.34), (*APPROACH, 253.44)]
-L_ONE_PATH = [(*RING, 2425.68), *_streets(585.0), (*APPROACH, 108.43), _pathway(1, 36.3)]
+L_ONE = [(*RING, 2425.68), *_streets(585.0), (*APPROACH, 108.43)]
+L_ONE_PATH = [*L_ONE, _pathway(1, 36.3)]
 L_RING_PATH_B = [(*RING, 2729.34), (*APPROACH, 244.44), _pathway(1, 36.3)]
 SLIM_PARK_PATH = [(*RING, 3339.36), *_streets(410.0, 410.0, 410.0), (*APPROACH, 348.57),
                   _pathway(1, 36.3)]
@@ -77,8 +80,8 @@ PINNED = {
         "full-not_counted-ALL-29": L_RING,
         "full-ALL-allowed-7": L_THREE,
         "full-ALL-allowed-8": L_THREE_PARK,
-        "full-not_counted-ALL-30": L_ONE_PATH,
         "full-ALL-ALL-25": L_ONE_PATH,
+        "full-not_counted-ALL-16": L_ONE,
         "full-ALL-ALL-3": L_RING_PATH_B,
     },
     "l_plot_slim": {

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import Field, model_validator
+from pydantic import Field, model_serializer, model_validator
 
 from siteplan import rules
 from siteplan.contracts.accounting import OwnershipReconciliation
@@ -37,6 +37,18 @@ class Access(Part):
     side: Sourced[Side | None]
     dead_end: Sourced[bool | None]  # does the access road end at the plot
     joins_12m_street: Sourced[bool | None]  # does it join a street 12 m wide or more
+    # Where the entrance is, when the survey or the architect fixes it (2026-10-12): the stretch
+    # of the net plot's edge the main approach comes in on, and the only place it may. Absent
+    # from site models stored before it, and left out of the dump when absent, so a stored site
+    # model keeps its digest.
+    gate: Sourced[Line] | None = None
+
+    @model_serializer(mode="wrap")
+    def _as_stored_when_absent(self, handler):
+        dumped = handler(self)
+        if dumped.get("gate") is None:
+            dumped.pop("gate", None)
+        return dumped
 
 
 class Water(Part):

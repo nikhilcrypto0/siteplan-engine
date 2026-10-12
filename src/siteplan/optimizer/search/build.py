@@ -233,11 +233,14 @@ def _prototypes_used(placements: Sequence[Placement]) -> list[TowerPrototype]:
 def _declared_m(road: Road, laid: Laid, q: Quantities) -> float:
     """The width a road declares: the rule's and the firm's margin, the rule's alone for a ring
     the ground cut the tip of a corner off, the entrance's for the approach, the rule's for a
-    pathway."""
+    pathway, and its own for a street paved wider than the rule's (2026-10-12: a corridor two
+    columns share is paved across, and a declared 9 m under-reported it)."""
     if road.kind is RoadKind.LOOP:
         return q.legal_road_m if road.id in laid.clipped_rings else q.road_m
     if road.kind is RoadKind.APPROACH:
         return laid.entrance.width_m
+    if road.kind is RoadKind.INTERNAL and road.width_m > q.road_m:
+        return road.width_m  # a street shared by two columns, paved across their whole corridor
     return q.pathway_m if road.kind is RoadKind.PATHWAY else q.road_m
 
 

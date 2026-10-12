@@ -80,6 +80,14 @@ show (G.O.50's two notes under Table IV, the 2012 green strip and Table III word
 2.75 m room); only the digests move. And again the same day for step 5: rules.py gains the 2012
 wording of the tot-lot (rules 7(a)(vii) and 8(g)), of rule 7(a)(xii) and of rule 15(a)(x);
 only the digests move.
+Re-pinned on 2026-10-12, where the club house is also tried at the far corner of the open ground
+and the furnishing with the more usable open space kept, and a street paved wider than the rule's
+declares its own width: the same notes and the same four shown in flats and saleable area (maximum
+yield the 3 x S+10 of 360 flats and 488,400 sft, now `-85`, its twin; balanced the same 4 x S+10,
+renumbered `-91`; the open-space and robust ones the same); four lower proposals are others, and
+several stand their club house at the far end. With the second place switched off the proposals,
+the four shown and the answer are as before and only the digests move, the wide streets' declared
+widths.
 
 The values pin exact output on the locked dependencies (uv.lock). They move only with a normative
 replacement and an entry in docs/behaviour-changes.md.
@@ -109,32 +117,32 @@ PINNED = {
         "UNVERIFIED",
     ],
     "proposed": [
-        "full-not_counted-allowed-86",
-        "full-not_counted-allowed-91",
+        "full-not_counted-allowed-85",
         "full-not_counted-allowed-90",
-        "full-not_counted-allowed-98",
+        "full-not_counted-allowed-91",
         "full-ALL-allowed-29",
-        "full-ALL-allowed-31",
+        "full-ALL-allowed-30",
         "full-not_counted-ALL-57",
         "full-not_counted-ALL-58",
+        "full-not_counted-allowed-102",
         "full-not_counted-ALL-63",
         "full-ALL-allowed-35",
         "full-not_counted-ALL-65",
         "full-ALL-ALL-113",
         "full-ALL-allowed-52",
         "full-ALL-ALL-114",
-        "full-ALL-ALL-5",
+        "full-ALL-ALL-12",
     ],
-    "proposed_sha256": "86a30f9ea4331fb059dc85b135a4588111c8a7e5640d93024a1d3bd997de0f30",
+    "proposed_sha256": "cdb7834db3174c3a1110f8fad5d91e5d633ee5eca3102eb6146e60c34282c7b3",
     "shown": [
-        ["full-not_counted-allowed-90", "BALANCED"],
-        ["full-not_counted-allowed-86", "MAX_YIELD"],
+        ["full-not_counted-allowed-91", "BALANCED"],
+        ["full-not_counted-allowed-85", "MAX_YIELD"],
         ["full-not_counted-ALL-65", "CONVENTIONAL_OPEN_SPACE"],
         ["full-ALL-ALL-113", "ROBUST"],
     ],
-    "shown_digests": ["5fbdfba0719a35a1", "de91e3da89774eac",
+    "shown_digests": ["1ad4bbef1a3c3a4d", "52d131672c8dd453",
                       "ba97e9f1e364eb42", "6375e97300cd425a"],
-    "answer_sha256": "230e37bca31cae9f8b09abccaf6f3ff50fbc9bf084a5e694b9331ff9afe4348c",
+    "answer_sha256": "8b51820394a0da28c237a89a862130a5607917d12fcf58ad53964fc46601e67e",
     "approval_page_sha256": "cd3ebee2af46849756df643999df9b16d2cbc91d92c45101983782cff1eb0181",
 }
 PROPOSALS: list = []

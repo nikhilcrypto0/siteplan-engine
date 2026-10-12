@@ -125,6 +125,10 @@ class SiteIn(BaseModel):
     access_side: Literal["N", "NE", "E", "SE", "S", "SW", "W", "NW"] | None = Field(
         None, description="The side of the plot the access road runs along: the main entrance "
         "goes there")
+    gate_m: list[tuple[float, float]] | None = Field(
+        None, min_length=2, description="Where the entrance is: the stretch of the net plot's "
+        "edge the main approach comes in on (metres, the survey's frame), when the survey or the "
+        "architect fixes it; the layout search then never moves it")
     street_joins_12m: bool | None = Field(
         None, description="Does the access road join a street at least 12 m wide at one end "
         "(NBC 4.6(a))? Leave out when not known")

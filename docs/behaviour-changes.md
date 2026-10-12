@@ -4,6 +4,39 @@ A characterization test (tests/manifest.py) pins what the engine produces today.
 only together with a normative replacement test and an entry here: what changed, why, the
 evidence, and the test that now holds the behaviour. Newest first.
 
+## 2026-10-12: the pinned entrance, the club house in two places, a wide street's own width
+
+Three changes to the full search, asked for by the architect after the Dhulapally debug layouts
+(2026-10-12). No rule, road width, separation or validator check changes.
+
+- **A pinned entrance stays put.** `Access.gate` (`SiteIn.gate_m` in a project) pins the gate to
+  a stretch of the net plot's edge; `legal.frontage.access_zones` then gives that stretch alone,
+  so no layout moves the entrance. Evidence: on Dhulapally the search slid the gate 48 to 57 m
+  along a 213 m west side, away from the survey's GATE on the R6 road; pinned, every layout's gate
+  lies within 1 m of it. A site model without a gate is stored, and digested, as before (the field
+  is left out). Tests (normative): `tests/test_entrance_pin.py`, including the full search on a
+  made-up plot keeping every gate on the pinned 14 m (left to itself it takes the middle).
+- **The club house is tried in two places** (`layout._furnish_where_best`): nearest the gate, as
+  before, and nearest the far corner of the open ground (an arm of the plot, say); the furnishing
+  leaving the more usable open space (the objective's own measure) is kept, then the fewer cellar
+  levels, the gate's between equals. One club house, sized by the same 3% rule. Evidence: on
+  Dhulapally's debug run the BALANCED layout's club house now stands in the north arm. This moves
+  one of the L-plot's eight proposals in `test_search_road_ground.py` (characterization):
+  `full-not_counted-ALL-30` (ring, a street, the approach and a pathway) gives way to
+  `full-not_counted-ALL-16` (the same without the pathway, `L_ONE`); proven to be this change
+  alone by switching the second place off, which restores the old pin. It also moves the
+  service's made-up baseline (`test_service_proposals_baseline.py`, characterization): the same
+  four shown in flats and saleable area (maximum yield 360 flats and 488,400 sft, now its twin
+  `-85`; balanced the same 4 x S+10, renumbered `-91`; open space and robust unchanged), four
+  lower proposals others, several with the club house at the far end; with the second place
+  switched off, the proposals, the four shown and the answer are as before. Tests (normative):
+  `tests/test_club_positions.py`.
+- **A street paved wider than the rule's declares its own width** (`build._declared_m`): a
+  corridor two columns share is paved across, and declaring the rule's 9 m under-reported it.
+  The validator still measures the pavement and takes the lesser of measured and declared, so no
+  verdict can loosen. In the service's baseline this alone moves the digests of the two shown
+  layouts with a wide shared street. Tests (normative): `tests/test_street_width.py`.
+
 ## 2026-10-11: `siteplan steps` step 5 (the tot-lot)
 
 Stage 3 of the stage-wise build: step 5 (`steps/tot_lot.py`, `steps/buildings.py`), the architect's way (2026-10-12): the buildings first and the tot-lot last, shown together. A height map down to Stilt + 7; the firm's blocks (its kit and a slim block of one row of its flats) in straight rows along each arm's longest edge, round a loop or a spine road; the gate (`steps/gate.py`) marked on every step's picture; the tot-lot (10% of the whole plot for a high-rise site or a Group Development Scheme, rules 7(a)(vii) and 8(g); 5% above 750 m², 5(f)(vi)) in the blocks' leftovers, never in a gap between blocks, a setback, a fire lane, a road or in front of the gate; blocks shortened or dropped, flats counted, when it would fall short; whole options side by side for the architect to choose one. No club house in this stage. `Inputs` carries the workspace, so a step can read the firm's flat library. No layout, check or verdict changes: the search, the validator and the legacy path read none of it.

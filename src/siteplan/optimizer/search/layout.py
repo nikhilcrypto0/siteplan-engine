@@ -538,10 +538,7 @@ def lay_out(run: Run, ev: Evaluation) -> tuple[Laid | None, str]:
         # no fire band is laid round a block below the high-rise height, so no cellar runs under
         # one
         low=unary_union([f for f, tall in zip(footprints, high, strict=True) if not tall]))
-    furnished, why = _furnish(run, program)
-    repair = RAMP_FIRST if why == NO_RAMP else CLUB_OFF_OPEN if why.startswith(NO_OPEN) else None
-    if furnished is None and repair is not None:  # C4-07: the same blocks, the program laid again
-        furnished = _furnish(run, program, repair)[0]
+    furnished, why = _furnish_where_best(run, program)
     if furnished is None:
         return None, why
     strip = land.strip.difference(unary_union([entrance.gate, entrance.approach.buffer(0.01)])) \
@@ -589,6 +586,7 @@ class _Program:
     anchor: Point
     cores: list[BaseGeometry]
     low: BaseGeometry
+    club_anchor: Point | None = None  # where the club house is looked for; the gate's when None
 
 
 @dataclass(frozen=True)
@@ -600,6 +598,43 @@ class _Furnished:
     pockets: list[Polygon]
     facilities: list
     missed: list[str]
+
+
+def _furnish_where_best(run: Run, program: _Program) -> tuple[_Furnished | None, str]:
+    """The program laid with the club house nearest the gate, and again nearest the far end of the
+    open ground (an arm of the plot, say: 2026-10-12, the architect: let the club house try other
+    places); the furnishing that leaves the more usable open space (the objective's measure),
+    then the fewer cellar levels, is kept, the gate's between equals."""
+    tries = [program]
+    far = _far_point(program.open_land, program.anchor)
+    if far is not None:
+        tries.append(replace(program, club_anchor=far))
+    best, first_why = None, ""
+    for n, trial in enumerate(tries):
+        furnished, why = _furnish(run, trial)
+        repair = RAMP_FIRST if why == NO_RAMP else CLUB_OFF_OPEN if why.startswith(NO_OPEN) \
+            else None
+        if furnished is None and repair is not None:  # C4-07: the program laid again
+            furnished = _furnish(run, trial, repair)[0]
+        if n == 0:
+            first_why = why
+        if furnished is None:
+            continue
+        reach = ground.reach_of(unary_union([pl.footprint for pl in trial.placements]))
+        score = (ground.usable_open_sqm(unary_union(furnished.pockets), reach),
+                 -furnished.plan.levels, -n)
+        if best is None or score > best[0]:
+            best = (score, furnished)
+    return (best[1], "") if best else (None, first_why)
+
+
+def _far_point(ground_: BaseGeometry, gate: Point) -> Point | None:
+    """The corner of the ground farthest from the gate, or None when there is no ground."""
+    if ground_.is_empty:
+        return None
+    corners = [Point(c) for part in getattr(ground_, "geoms", [ground_])
+               for c in getattr(part, "exterior", part).coords]
+    return max(corners, key=gate.distance) if corners else None
 
 
 def _furnish(run: Run, program: _Program, repair: str | None = None
@@ -631,7 +666,7 @@ def _furnish(run: Run, program: _Program, repair: str | None = None
             ramps = [ramp]
             avoid = ramp.buffer(ground.CLEARANCE_M, join_style="mitre")
     club, club_floors, why = _club(run, p.land, p.buildable, p.zones, p.placements, p.tower_sqm,
-                                   p.units, p.angles, p.anchor, avoid)
+                                   p.units, p.angles, p.club_anchor or p.anchor, avoid)
     if why:
         return None, why
     club_sqm = club.area * club_floors if club is not None else 0.0
