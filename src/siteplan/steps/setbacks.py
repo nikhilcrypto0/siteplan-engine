@@ -147,6 +147,14 @@ def set_back(inputs: Inputs, copy: SurveyCopy, height: Height, widening: Widenin
     return s
 
 
+def land_left_at(s: Setbacks, floors: int) -> tuple[BaseGeometry, float]:
+    """The land a building of `floors` floors may stand on, each side keeping that height's own
+    setback (the rules step 4 applies), and the widest of those setbacks."""
+    net = s.widening.net
+    sides = _sides(s, net, _road_reach(s.copy, s.widening), floors)
+    return _band_and_left(net, sides)[1], max(side.metres for side in sides)
+
+
 def _stop(s: Setbacks, why: str, ask: str | None) -> Setbacks:
     s.stopped, s.ask = why, ask
     return s

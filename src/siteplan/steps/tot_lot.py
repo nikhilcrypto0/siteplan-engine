@@ -1,23 +1,27 @@
-"""Step 5: the tot-lot, the architect's way (2026-10-11), for any site, from step 4's land left.
+"""Step 5: where buildings can stand, and the tot-lot, the architect's way (2026-10-12), for any
+site.
 
-1. Where a building can stand: the land step 4 leaves after the setbacks, where one of the
-   firm's blocks fits (the double-loaded kit and a slim one, one row of flats beside the
-   corridor, turned either way). Where none fits, no building stands.
-2. The gate, where the main road meets the plot, and the land before it, kept clear.
+1. A height map. Where the tallest building step 2 allows does not fit, one floor lower is
+   tried, then the next, down to the lowest block worth building (Stilt + 7: his word), each
+   height keeping its own setbacks; the blocks are the firm's own, the double-loaded kit and a
+   slim one (one row of flats beside the corridor), turned either way. Each part of the land is
+   marked with the tallest building that fits there. The plot's edge always keeps a setback.
+2. The gate, where the main road meets the plot. Nothing stands in front of it: the way the
+   approach road comes straight in, as wide as the gate, and a fire engine's turn there.
 3. The tot-lot: 10% of the whole plot for a high-rise site or a Group Development Scheme (rules
    7(a)(vii), 8(g)), 5% for any other plot above 750 m² (5(f)(vi)), in pockets at least 3 m
-   wide, never outside the land left (the architect, 2026-10-11: no setback, green strip or
-   fire lane). First the land left where no building stands, the part farthest from the
-   buildings first. What is still needed is split equally over the major corners of the land
-   left, a strip along both sides of each, never over the gate; a corner that cannot hold its
-   part passes the rest to the others. A water body's buffer may count
-   (3(a)(iii)(3)); the gaps between blocks never do (7(a)(xii)).
-The club house comes once the tot-lot is right (the architect, same day)."""
+   wide, out of every setback. First the land no building fits on; then pockets at the plot's
+   major corners, the patch the corner's two sides make. Beside the gate a corner's pocket is a
+   right-angled triangle, its small side along the gate's side and the long slant away from it
+   (his word). Twenty different ways of choosing the corners and shaping the pockets are laid
+   out for the architect to choose one. A water body's buffer may count (3(a)(iii)(3)); the gaps
+   between blocks never do (7(a)(xii))."""
 
 from __future__ import annotations
 
 import math
 from dataclasses import dataclass, replace
+from itertools import combinations
 from pathlib import Path
 
 from shapely import set_precision
@@ -25,7 +29,7 @@ from shapely.errors import GEOSException
 from shapely.geometry import LineString, Point, Polygon
 from shapely.geometry.base import BaseGeometry
 from shapely.geometry.polygon import orient
-from shapely.ops import substring, unary_union
+from shapely.ops import unary_union
 
 from siteplan import rules
 from siteplan.geometry import Run, facing_deg, straight_runs
@@ -34,63 +38,78 @@ from siteplan.library import FlatLibrary
 from siteplan.prototypes.compose import compose_library
 from siteplan.steps.gate import on_net
 from siteplan.steps.inputs import Inputs, bearing, compass
-from siteplan.steps.setbacks import Setbacks
+from siteplan.steps.setbacks import Setbacks, land_left_at
 from siteplan.steps.survey_copy import SHORT_RUN_M, SurveyCopy
 
-CUT_TOLERANCE_M = 0.01  # how finely a strip's length or depth is placed; pieces this close are
-# one pocket; a width this short of the least still counts (a 3.000 m strip is 3 m wide)
+CUT_TOLERANCE_M = 0.01  # how finely a pocket's size is placed; pieces this close are one pocket;
+# a width this short of the least still counts (a 3.000 m strip is 3 m wide)
 GRID_M = 0.001  # two outlines GEOS cannot overlay are snapped to this grid and tried again
-TOT_LOT_DEPTH_M = 6.0  # how far the tot-lot strip reaches into the building land, until the firm
-# sets its own: long along the side, not much into the usable space (the architect, 2026-10-11)
-CORNER_TURN_DEG = 30.0  # the edge of the building land turns at least this much at a corner
-IDLE, WATER, BUILDING = ("land where no building stands", "the water's buffer",
-                         "land a block fits on")
+LOWEST_FLOORS = 7  # the lowest block worth building: the architect's word (2026-10-12)
+CORNER_TURN_DEG = 30.0  # the edge of the land turns at least this much at a major corner
+SHARP_DEG = 60.0  # a corner sharper than this is cut straight across, not spanned by its sides
+STEEP, SHALLOW = 3.0, 2.0  # a triangle's long side, in times its small side
+OPTIONS = 20  # how many tot-lots the architect is shown, to choose one (his word, 2026-10-12)
+SAME_SQM = 1.0  # two options whose tot-lots differ by less than this are the same
+FREE, WATER = "land no building fits on", "the water's buffer"
 FROM_LINE, FROM_EDGE = "the buffer from the line drawn", "the buffer from the plot's edge"
 MEET, DIFF = "intersection", "difference"
-OPTIONS = 10  # how many tot-lots the architect is shown, to choose one (his word, 2026-10-12)
-THINNER, DEEPER = 0.75, 1.5  # how much shallower or deeper than the firm's strip some ideas lay
-NEAR_GATE = 2  # the corners beside the gate, one each side (the architect's word, 2026-10-11)
-SAME_SQM = 1.0  # two options whose tot-lots differ by less than this are the same
-CORNER, EDGE = "corner", "edge"
-ALL, FAR, NEAR, CHEAPEST, LONGEST = "all", "far", "near", "cheapest", "longest"
+CHEAPEST, ALL, FAR, NEAR, COUNT, SET = "cheapest", "all", "far", "near", "count", "set"
+SETS = (2, 3)  # after the named ideas, every two and then every three of a site's corners
+AT_GATE, EVERY = "at the gate", "every"
 
 
 @dataclass(frozen=True)
 class Idea:
-    """One way of laying the tot-lot. Every idea keeps the same rules: inside the land left,
-    never over the gate, the whole share in pockets the rules allow."""
+    """One way of laying the tot-lot. Every idea keeps the same rules: the whole share, out of
+    every setback, never in front of the gate, triangles beside it."""
 
     words: str
-    free_first: bool = True  # the land left where no building stands goes first
-    at: str = CORNER  # CORNER: strips round the major corners; EDGE: at the major edges' middles
-    pick: str = ALL  # which of them: ALL, FAR (from the gate), NEAR, CHEAPEST or LONGEST
-    depth_times: float = 1.0  # the strip's depth, times the firm's
-    one_side: bool = False  # a corner's strip along its longer side only
+    free_first: bool = True  # the land no building fits on goes first
+    pick: str = CHEAPEST  # CHEAPEST: as many of the cheapest corners as cost the least in all;
+    # ALL; FAR (from the gate); NEAR (the two beside it); COUNT: the `count` cheapest; SET: the
+    # corners numbered in `members`
+    count: int = 0
+    members: tuple[int, ...] = ()
+    triangles: str = AT_GATE  # AT_GATE: the corners beside the gate; EVERY: every corner
+    ratio: float = STEEP  # a triangle's long side, in times its small side
 
 
-FIRST = "where no building stands first, then "
-IDEAS = (  # in the order the architect sees them; the first is the rule agreed on 2026-10-11
-    Idea(FIRST + "every major corner equally"),
-    Idea(FIRST + "every major corner equally, in thinner strips running longer along the "
-         "sides", depth_times=THINNER),
-    Idea(FIRST + "every major corner equally, in deeper strips running shorter along the sides",
-         depth_times=DEEPER),
-    Idea(FIRST + "every major corner equally, each strip along the corner's longer side only",
-         one_side=True),
-    Idea(FIRST + "only the major corners farthest from the gate", pick=FAR),
-    Idea(FIRST + "only the major corners nearest the gate, beside it, never over it", pick=NEAR),
-    Idea(FIRST + "only the major corners where it costs the least building land",
-         pick=CHEAPEST),
-    Idea(FIRST + "the middle of every major edge equally", at=EDGE),
-    Idea(FIRST + "one long strip in the middle of the longest edge", at=EDGE, pick=LONGEST),
-    Idea("every major corner equally, nothing taken first", free_first=False),
-    Idea(FIRST + "the middle of every major edge, in deeper strips", at=EDGE,
-         depth_times=DEEPER),
-    Idea(FIRST + "the major corners farthest from the gate, in deeper strips", pick=FAR,
-         depth_times=DEEPER),
-    Idea(FIRST + "the middle of the major edges farthest from the gate", at=EDGE, pick=FAR),
-    Idea("the middle of every major edge equally, nothing taken first", free_first=False,
-         at=EDGE),
+FIRST = "no-building land first, then "
+LATER = ", nothing taken first"
+IDEAS = (  # in the order the architect sees them; the first is the way of 2026-10-11
+    Idea(FIRST + "the corners that cost the fewest floors"),
+    Idea(FIRST + "every major corner equally", pick=ALL),
+    Idea(FIRST + "only the corners farthest from the gate", pick=FAR),
+    Idea(FIRST + "only the two corners beside the gate, as triangles", pick=NEAR),
+    Idea(FIRST + "the two cheapest corners", pick=COUNT, count=2),
+    Idea(FIRST + "the three cheapest corners", pick=COUNT, count=3),
+    Idea(FIRST + "the corners that cost the fewest floors, every one a triangle",
+         triangles=EVERY),
+    Idea(FIRST + "every major corner equally, every one a triangle", pick=ALL, triangles=EVERY),
+    Idea(FIRST + "the corners farthest from the gate, as triangles", pick=FAR, triangles=EVERY),
+    Idea(FIRST + "the two corners beside the gate, wider triangles", pick=NEAR, ratio=SHALLOW),
+    Idea(FIRST + "every major corner equally, wider triangles", pick=ALL, triangles=EVERY,
+         ratio=SHALLOW),
+    Idea(FIRST + "the two cheapest corners, as triangles", pick=COUNT, count=2,
+         triangles=EVERY),
+    Idea(FIRST + "the three cheapest corners, as triangles", pick=COUNT, count=3,
+         triangles=EVERY),
+    Idea("the corners that cost the fewest floors" + LATER, free_first=False),
+    Idea("every major corner equally" + LATER, free_first=False, pick=ALL),
+    Idea("the corners farthest from the gate" + LATER, free_first=False, pick=FAR),
+    Idea("the two corners beside the gate, as triangles" + LATER, free_first=False, pick=NEAR),
+    Idea("every major corner equally, every one a triangle" + LATER, free_first=False,
+         pick=ALL, triangles=EVERY),
+    Idea("the two cheapest corners" + LATER, free_first=False, pick=COUNT, count=2),
+    Idea("the three cheapest corners" + LATER, free_first=False, pick=COUNT, count=3),
+    Idea(FIRST + "the corners farthest from the gate, wider triangles", pick=FAR,
+         triangles=EVERY, ratio=SHALLOW),
+    Idea(FIRST + "the corners that cost the fewest floors, wider triangles", triangles=EVERY,
+         ratio=SHALLOW),
+    Idea("the two corners beside the gate, wider triangles" + LATER, free_first=False,
+         pick=NEAR, ratio=SHALLOW),
+    Idea("the corners farthest from the gate, as triangles" + LATER, free_first=False,
+         pick=FAR, triangles=EVERY),
 )
 
 
@@ -174,10 +193,21 @@ def firm_blocks(workspace: Path | None) -> Blocks | None:
 
 
 @dataclass(frozen=True)
+class Tier:
+    """One height of the height map."""
+
+    floors: int
+    setback_m: float  # the widest of its sides' setbacks
+    fits: BaseGeometry  # where one of the firm's blocks this tall fits, its setbacks kept
+    tallest: BaseGeometry  # the part where this is the tallest building that fits
+    band: BaseGeometry  # the setback land those blocks keep from the plot's edge
+
+
+@dataclass(frozen=True)
 class Pocket:
     polygon: BaseGeometry  # one piece, or pieces that touch
-    lies: str  # where: 'where no building stands', 'at the north corner'
-    on_sqm: tuple[tuple[str, float], ...]  # (IDLE, WATER or BUILDING, m²)
+    lies: str  # where: 'on the land no building fits on', 'at the north corner'
+    on_sqm: tuple[tuple[str, float], ...]  # (FREE, WATER or 'Stilt + N land', m²)
 
     @property
     def area_sqm(self) -> float:
@@ -186,32 +216,37 @@ class Pocket:
 
 @dataclass(frozen=True)
 class Corner:
-    """A major corner of the land left and the tot-lot it takes."""
+    """A major corner and the tot-lot it takes."""
 
     number: int
     lies: str  # 'south-west', from the plot's middle
     point: BaseGeometry
     share_sqm: float  # what it was given
     tot_lot: BaseGeometry
-    what: str = CORNER  # CORNER, or EDGE for an edge's middle
+    triangle: bool  # a right-angled triangle, its small side toward the gate
 
 
 @dataclass(frozen=True)
 class Placing:
-    """Where buildings can stand and the tot-lot, on one reading of the water's buffer."""
+    """The height map and the tot-lot on one reading of the water's buffer."""
 
     reading: str  # FROM_LINE, FROM_EDGE, or '' when there is no water
-    fits: BaseGeometry  # the land left where one of the firm's blocks fits
-    idle: BaseGeometry  # the land left where no building stands, in usable pockets
+    tiers: tuple[Tier, ...]  # tallest first
+    room: BaseGeometry  # the plot less its edge's setback: where a pocket may go
+    free: BaseGeometry  # land no building fits on, inside the edge's own setback
     tot_lot: BaseGeometry
-    idle_taken: BaseGeometry  # the tot-lot laid where no building stands
+    free_taken: BaseGeometry  # the tot-lot laid on the land no building fits on
     pockets: tuple[Pocket, ...]
     need_sqm: float
-    depth_m: float  # how deep a corner's strip runs into the land left
     gate: BaseGeometry  # where the approach road comes in from the main road
-    gate_zone: BaseGeometry  # kept clear before it: no tot-lot
-    corners: tuple[Corner, ...]  # the major corners that took the rest, and what each took
-    fits_after: BaseGeometry  # where a block still fits once the tot-lot is out
+    gate_zone: BaseGeometry  # kept clear in front of it: no tot-lot
+    corners: tuple[Corner, ...]  # the corners that took the rest, and what each took
+    standing: tuple[BaseGeometry, ...]  # each height's land where a block still fits once the
+    # tot-lot is out, measured again
+
+    @property
+    def buildable(self) -> BaseGeometry:
+        return unary_union([tier.fits for tier in self.tiers])
 
     @property
     def short_sqm(self) -> float:
@@ -219,6 +254,24 @@ class Placing:
 
     def on(self, kind: str) -> float:
         return sum(area for pocket in self.pockets for k, area in pocket.on_sqm if k == kind)
+
+    @property
+    def building_land_after(self) -> BaseGeometry:
+        """Where a building fits once the tot-lot is out: land it leaves too thin for a block
+        no longer counts."""
+        return unary_union(self.standing)
+
+    @property
+    def kept_setbacks(self) -> BaseGeometry:
+        """The setback land kept beside where a building can still stand, each height's own."""
+        return unary_union([_overlay(tier.band, land.buffer(
+            tier.setback_m + CUT_TOLERANCE_M, join_style="mitre"), MEET)
+            for tier, land in zip(self.tiers, self.standing, strict=True)])
+
+    def floors_lost_sqm(self) -> float:
+        """The tot-lot's area on building land, each square metre counted by the floors that
+        would stand there (Stilt + 10 land costs ten floors a square metre)."""
+        return _cost(self.tot_lot, self.tiers)
 
 
 @dataclass(frozen=True)
@@ -246,8 +299,7 @@ class TotLot:
     plot_sqm: float = 0.0  # the whole plot, as the sheet writes it (or as drawn)
     plot_from: str = ""
     blocks: Blocks | None = None
-    depth_m: float = TOT_LOT_DEPTH_M
-    depth_from: str = ""
+    lowest: int = LOWEST_FLOORS
     placings: tuple[Placing, ...] = ()  # option 1's, the first the one drawn
     options: tuple[Option, ...] = ()  # the tot-lots the architect chooses from
     waiting: tuple[str, ...] = ()  # water whose buffer waits on an answer (step 3)
@@ -263,7 +315,9 @@ class TotLot:
 
 
 def lay_out(inputs: Inputs, copy: SurveyCopy, setbacks: Setbacks,
-            ideas: tuple[Idea, ...] = IDEAS) -> TotLot:
+            ideas: tuple[Idea, ...] | None = None) -> TotLot:
+    """The height map and the tot-lot options: `ideas`, or the named ideas and then the sets of
+    the site's own corners, until OPTIONS different tot-lots."""
     t = TotLot(inputs, copy, setbacks)
     if setbacks.stopped:
         return _stop(t, "step 4 has no land left for buildings yet, and the tot-lot is taken "
@@ -280,9 +334,8 @@ def lay_out(inputs: Inputs, copy: SurveyCopy, setbacks: Setbacks,
     except NoBlocks as problem:
         return _stop(t, f"the firm's flat library cannot be used ({problem})", ask)
     if t.blocks is None:
-        return _stop(t, "the firm's blocks are not known, and where no building can stand "
+        return _stop(t, "the firm's blocks are not known, and the land no building fits on "
                         "is found with them", ask)
-    _firm_figures(t)
     water = [w for w in setbacks.widening.water if w.buffer_m is not None]
     t.waiting = tuple(w.kind for w in setbacks.widening.water if w.buffer_m is None)
     readings = [("", None)] if not water else [
@@ -290,16 +343,16 @@ def lay_out(inputs: Inputs, copy: SurveyCopy, setbacks: Setbacks,
         (FROM_EDGE, unary_union([w.edge_kept_free for w in water]))]
     net = setbacks.widening.net
     gate = gate_of(setbacks)
-    zone = (_overlay(gate.buffer(setbacks.front_m + rules.FIRE_TURNING_RADIUS_M), net, MEET)
-            if not gate.is_empty else Polygon())
-    lands = [(reading, buffer, block_land_in(
-        setbacks.left if buffer is None else _overlay(setbacks.left, buffer, DIFF), t.blocks))
-        for reading, buffer in readings]
+    zone = in_front_of(gate, net, setbacks.front_m + rules.FIRE_TURNING_RADIUS_M)
+    maps = [(reading, buffer, height_map(setbacks, t.blocks, t.lowest, buffer))
+            for reading, buffer in readings]
+    if ideas is None:
+        ideas = IDEAS + corner_sets(net, maps[0][2], t.blocks)
     options: list[Option] = []
     for idea in ideas:
-        placings = tuple(place(fits, setbacks.left, buffer, t.need_sqm, t.share, net, gate, zone,
-                               t.depth_m, t.blocks, reading, idea)
-                         for reading, buffer, fits in lands)
+        placings = tuple(place(tiers, buffer, t.need_sqm, t.share, net, gate, zone, t.blocks,
+                               reading, idea)
+                         for reading, buffer, tiers in maps)
         twin = next((i for i, o in enumerate(options)
                      if _overlay(o.placing.tot_lot, placings[0].tot_lot, "symmetric_difference")
                      .area < SAME_SQM), None)
@@ -314,19 +367,29 @@ def lay_out(inputs: Inputs, copy: SurveyCopy, setbacks: Setbacks,
     return t
 
 
+def corner_sets(net: Polygon, tiers: tuple[Tier, ...], blocks: Blocks) -> tuple[Idea, ...]:
+    """Every two, then every three, of the site's major corners, named by where they lie: first
+    with the no-building land taken first, then each set as triangles."""
+    seats = corners_of_land(room_of(net, tiers), net, major_edges(net, blocks.shortest_m))
+    middle = (net.centroid.x, net.centroid.y)
+    words = [compass(bearing(middle, (s.point.x, s.point.y))) for s in seats]
+    names = [f"{w} ({i + 1})" if words.count(w) > 1 else w for i, w in enumerate(words)]
+    out = []
+    for size in SETS:
+        for members in combinations(range(len(seats)), size):
+            where = " and ".join(names[i] for i in members)
+            out.append(Idea(f"{FIRST}the {where} corners", pick=SET, members=members))
+    for size in SETS:
+        for members in combinations(range(len(seats)), size):
+            where = " and ".join(names[i] for i in members)
+            out.append(Idea(f"{FIRST}the {where} corners, as triangles", pick=SET,
+                            members=members, triangles=EVERY))
+    return tuple(out)
+
+
 def _stop(t: TotLot, why: str, ask: str | None) -> TotLot:
     t.stopped, t.ask = why, ask
     return t
-
-
-def _firm_figures(t: TotLot) -> None:
-    """The architect's working figures, from the workspace when the firm sets them."""
-    defaults = load_defaults(t.inputs.workspace) if t.inputs.workspace else None
-    set_depth = defaults is not None and defaults.tot_lot_depth_m is not None
-    t.depth_m = defaults.tot_lot_depth_m if set_depth else TOT_LOT_DEPTH_M
-    t.depth_from = ("the firm's workspace" if set_depth else
-                    "the engine's default for the architect's 'long along the side, not much "
-                    "into the usable space', until the firm sets tot_lot_depth_m")
 
 
 def gate_of(s: Setbacks) -> BaseGeometry:
@@ -335,62 +398,114 @@ def gate_of(s: Setbacks) -> BaseGeometry:
     return on_net(s.widening.net, s.height.road, s.widening.pieces)
 
 
-def idle_land(land: BaseGeometry, fits: BaseGeometry, zone: BaseGeometry,
-              share: Share) -> BaseGeometry:
-    """Where no building stands: the land left where no block of the firm's fits, less the land
-    before the gate, in pockets the tot-lot can use. Never outside the land left (the architect,
-    2026-10-11)."""
-    return pockets_in(_overlay(_overlay(land, fits, DIFF), zone, DIFF).buffer(0), share)
+def in_front_of(gate: BaseGeometry, net: Polygon, turn_m: float) -> BaseGeometry:
+    """The land in front of the gate, never tot-lot (the architect, 2026-10-12): the way the
+    approach road comes straight in, as wide as the gate, across the plot; and the turn a fire
+    engine makes coming in, `turn_m` round the gate. Beside the gate, along the edge, is not in
+    front of it."""
+    if gate.is_empty:
+        return Polygon()
+    (ax, ay), (bx, by) = gate.coords[0], gate.coords[-1]
+    length = math.hypot(bx - ax, by - ay)
+    if length <= CUT_TOLERANCE_M:
+        return _overlay(gate.buffer(turn_m), net, MEET)
+    nx, ny = -(by - ay) / length, (bx - ax) / length
+    middle = gate.interpolate(0.5, normalized=True)
+    if not net.contains(Point(middle.x + nx, middle.y + ny)):
+        nx, ny = -nx, -ny
+    x0, y0, x1, y1 = net.bounds
+    far = 2 * math.hypot(x1 - x0, y1 - y0)
+    way_in = Polygon([(ax, ay), (bx, by), (bx + nx * far, by + ny * far),
+                      (ax + nx * far, ay + ny * far)])
+    return _overlay(unary_union([way_in, gate.buffer(turn_m)]), net, MEET)
 
 
-def place(fits: BaseGeometry, land: BaseGeometry, buffer: BaseGeometry | None, need_sqm: float,
-          share: Share, plot: Polygon, gate: BaseGeometry, zone: BaseGeometry, depth_m: float,
-          blocks: Blocks | None = None, reading: str = "", idea: Idea = IDEAS[0]) -> Placing:
-    """The tot-lot, inside the land left (`land`), as the idea lays it: first (when it says so)
-    where no building stands, the part farthest from the buildings first; then what is still
-    needed split equally over the major corners or edges it picks, never over the gate."""
+def height_map(s: Setbacks, blocks: Blocks, lowest: int,
+               buffer: BaseGeometry | None) -> tuple[Tier, ...]:
+    """From the tallest building step 2 allows down one floor at a time to the lowest worth
+    building: where a block of the firm's fits at each height, its own setbacks kept and no
+    building in a water body's buffer."""
+    net = s.widening.net
+    out, claimed = [], Polygon()
+    for floors in range(s.floors, min(s.floors, lowest) - 1, -1):
+        land, setback = land_left_at(s, floors)
+        band = _overlay(net, land, DIFF)
+        if buffer is not None:
+            land = _overlay(land, buffer, DIFF)
+        fits = block_land_in(land, blocks)
+        out.append(Tier(floors, setback, fits, _overlay(fits, claimed, DIFF), band))
+        claimed = unary_union([claimed, fits])
+    return tuple(out)
+
+
+def room_of(net: Polygon, tiers: tuple[Tier, ...]) -> BaseGeometry:
+    """The plot less the setback its edge always keeps, a building beside it or not: the lowest
+    block's (the outside boundary is never touched; the green strip and the fire lane run in
+    it)."""
+    return net.buffer(-tiers[-1].setback_m, join_style="mitre")
+
+
+def _free(tiers: tuple[Tier, ...], room: BaseGeometry) -> BaseGeometry:
+    """The room less every place a block fits and the setback land each keeps beside it: no
+    building can stand here."""
+    kept = [_overlay(tier.band, tier.fits.buffer(tier.setback_m + CUT_TOLERANCE_M,
+                                                 join_style="mitre"), MEET)
+            for tier in tiers]
+    used = unary_union([*(tier.fits for tier in tiers), *kept])
+    return _overlay(room, used, DIFF)
+
+
+def place(tiers: tuple[Tier, ...], buffer: BaseGeometry | None, need_sqm: float, share: Share,
+          plot: Polygon, gate: BaseGeometry, zone: BaseGeometry, blocks: Blocks | None = None,
+          reading: str = "", idea: Idea = IDEAS[0]) -> Placing:
+    """The tot-lot as the idea lays it: first (when it says so) the land no building fits on,
+    the part farthest from the buildings first; then pockets at the major corners it picks, an
+    equal share each, never in front of the gate and out of every setback."""
     def keep(geometry: BaseGeometry) -> BaseGeometry:
         return pockets_in(geometry, share)
 
-    idle = idle_land(land, fits, zone, share)
-    first = (_far_first(idle, fits if not fits.is_empty else plot.centroid, need_sqm, keep)
+    room = room_of(plot, tiers)
+    free = _free(tiers, room)
+    buildable = unary_union([tier.fits for tier in tiers])
+    first = (_far_first(keep(_overlay(free, zone, DIFF)),
+                        buildable if not buildable.is_empty else plot.centroid, need_sqm, keep)
              if idea.free_first else Polygon())
     rest = need_sqm - first.area
     corners: tuple[Corner, ...] = ()
-    depth = depth_m * idea.depth_times
     if rest > CUT_TOLERANCE_M:
         shortest = blocks.shortest_m if blocks is not None else 0.0
-        seats = _seats(idea, corners_of_land(land, plot, major_edges(plot, shortest)), land,
-                       zone, gate, first, fits, rest, depth, keep)
-        corners, depth = _at_corners(seats, land, zone, first, rest, depth, plot, keep, idea.at)
+        seats = corners_of_land(room, plot, major_edges(plot, shortest))
+        out = unary_union([zone, first]) if not first.is_empty else zone
+        corners = _at_corners(idea, seats, gate, room, tiers, out, rest, plot, keep)
     tot_lot = unary_union([first, *(c.tot_lot for c in corners)])
-    pockets = ((Pocket(first, "where no building stands", _stands_on(first, fits, idle, buffer)),)
-               if not first.is_empty else ())
-    pockets += tuple(Pocket(c.tot_lot, f"at the {c.lies} {c.what}",
-                            _stands_on(c.tot_lot, fits, idle, buffer))
+    pockets = ((Pocket(first, "on the land no building fits on",
+                       _stands_on(first, free, buffer, tiers)),) if not first.is_empty else ())
+    pockets += tuple(Pocket(c.tot_lot, f"at the {c.lies} corner"
+                            + (" (a triangle)" if c.triangle else ""),
+                            _stands_on(c.tot_lot, free, buffer, tiers))
                      for c in corners if not c.tot_lot.is_empty)
-    after = _overlay(fits, tot_lot, DIFF)
-    fits_after = block_land_in(after, blocks) if blocks is not None else after
-    return Placing(reading, fits, idle, tot_lot, first, pockets, need_sqm, depth, gate, zone,
-                   corners, fits_after)
+    standing = tuple(_overlay(tier.fits, tot_lot, DIFF) if blocks is None
+                     else block_land_in(_overlay(tier.fits, tot_lot, DIFF), blocks)
+                     for tier in tiers)
+    return Placing(reading, tiers, room, free, tot_lot, first, pockets, need_sqm, gate, zone,
+                   corners, standing)
 
 
-def _far_first(idle: BaseGeometry, buildings: BaseGeometry, need: float,
-               keep) -> BaseGeometry:
-    """`need` of the land where no building stands, the part farthest from the buildings first
-    (all of it when it holds less)."""
-    if idle.is_empty or need <= CUT_TOLERANCE_M:
+def _far_first(free: BaseGeometry, buildings: BaseGeometry, need: float, keep) -> BaseGeometry:
+    """`need` of the land no building fits on, the part farthest from the buildings first (all
+    of it when it holds less)."""
+    if free.is_empty or need <= CUT_TOLERANCE_M:
         return Polygon()
-    if idle.area <= need:
-        return idle
-    low, high = 0.0, idle.hausdorff_distance(buildings)
+    if free.area <= need:
+        return free
+    low, high = 0.0, free.hausdorff_distance(buildings)
     while high - low > CUT_TOLERANCE_M:
         middle = (low + high) / 2
-        if keep(_overlay(idle, buildings.buffer(middle), DIFF)).area >= need:
+        if keep(_overlay(free, buildings.buffer(middle), DIFF)).area >= need:
             low = middle
         else:
             high = middle
-    return keep(_overlay(idle, buildings.buffer(low), DIFF))
+    return keep(_overlay(free, buildings.buffer(low), DIFF))
 
 
 def major_edges(net: Polygon, shortest_m: float) -> tuple[tuple[str, tuple[Run, ...]], ...]:
@@ -418,8 +533,8 @@ def major_edges(net: Polygon, shortest_m: float) -> tuple[tuple[str, tuple[Run, 
 
 @dataclass(frozen=True)
 class Seat:
-    """Where a corner's strip runs: along the land left's edge (`ring`, anticlockwise), from the
-    corner at `at` each way, as far as halfway to the next corner (`back`, `ahead`)."""
+    """A major corner of the land a pocket may take: on its edge (`ring`, anticlockwise) at `at`,
+    its sides running back and ahead as far as halfway to the next corners (`back`, `ahead`)."""
 
     ring: LineString
     at: float
@@ -430,13 +545,21 @@ class Seat:
     def point(self) -> BaseGeometry:
         return self.ring.interpolate(self.at)
 
+    def side(self, ahead: bool) -> tuple[tuple[float, float], float]:
+        """The unit way along one side from the corner, and how far the pocket may run on it."""
+        reach = self.ahead if ahead else self.back
+        end = self.ring.interpolate((self.at + (reach if ahead else -reach)) % self.ring.length)
+        here = self.point
+        length = math.hypot(end.x - here.x, end.y - here.y) or 1.0
+        return ((end.x - here.x) / length, (end.y - here.y) / length), reach
+
 
 def corners_of_land(land: BaseGeometry, net: Polygon,
                     edges: tuple[tuple[str, tuple[Run, ...]], ...]) -> list[Seat]:
-    """The major corners: where the land left's edge facing one major edge of the plot turns,
-    by at least CORNER_TURN_DEG and outward (a corner, not a notch), into the edge facing the
-    next. Each piece of the land's outline faces the plot's stretch nearest it; a stretch facing
-    a minor one lies between the two edges and the corner is in its middle."""
+    """The major corners: where the land's edge facing one major edge of the plot turns, by at
+    least CORNER_TURN_DEG and outward (a corner, not a notch), into the edge facing the next.
+    Each piece of the land's outline faces the plot's stretch nearest it; a stretch facing a
+    minor one lies between the two edges and the corner is in its middle."""
     runs = [run for part in _parts(net) for run in straight_runs(part)]
     owner = {tuple(run.line.coords): i for i, (_, own) in enumerate(edges) for run in own}
     seats: list[Seat] = []
@@ -484,129 +607,163 @@ def _turns(pieces: list[tuple], total: float) -> list[float]:
     return sorted(out)
 
 
-def _at_corners(seats: list[Seat], land: BaseGeometry, zone: BaseGeometry,
-                taken: BaseGeometry, need: float, depth_m: float, plot: Polygon,
-                keep, what: str = CORNER) -> tuple[tuple[Corner, ...], float]:
-    """`need` split equally over the corners, a strip along both sides of each; a corner that
-    cannot hold its part passes the rest to the others equally, and the strips are made deeper
-    only when the corners together cannot hold it."""
-    if not seats:
-        return (), depth_m
-    # the corners with the least room first, so shared land goes to the one that needs it
-    alone = [_strip(seat, land, zone, taken, math.inf, depth_m, keep).area for seat in seats]
-    order = sorted(range(len(seats)), key=lambda i: alone[i])
-    queue = [seats[i] for i in order]
-    depth = _depth_for(queue, land, zone, taken, need, depth_m, keep)
-    room = _water_fill(need, [g.area for g in _sequence(queue, land, zone, taken, depth, keep)])
-    shares, placed = [0.0] * len(seats), [Polygon()] * len(seats)
-    done: list[BaseGeometry] = [taken] if not taken.is_empty else []
-    for i, give in zip(order, room, strict=True):
-        shares[i] = give
-        placed[i] = _piece(seats[i], land, zone, unary_union(done) if done else Polygon(),
-                           give, depth, keep)
-        done.append(placed[i])
-    middle = (plot.centroid.x, plot.centroid.y)
-    return tuple(Corner(number, compass(bearing(middle, (seat.point.x, seat.point.y))),
-                        seat.point, give, piece, what)
-                 for number, (seat, give, piece) in enumerate(zip(seats, shares, placed,
-                                                                  strict=True), 1)), depth
+def beside_gate(seats: list[Seat], gate: BaseGeometry) -> list[Seat]:
+    """The corners on either side of the gate along the land's edge: the one below it and the
+    one above it."""
+    if gate.is_empty or not seats:
+        return []
+    middle = gate.interpolate(0.5, normalized=True)
+    out: list[Seat] = []
+    for ring in {id(s.ring): s.ring for s in seats}.values():
+        own = sorted((s for s in seats if s.ring is ring), key=lambda s: s.at)
+        here = ring.project(middle)
+        ahead = next((s for s in own if s.at >= here), own[0])
+        back = next((s for s in reversed(own) if s.at < here), own[-1])
+        out += [ahead] if ahead is back else [back, ahead]
+    return sorted(out, key=lambda s: s.point.distance(middle))[:2]
 
 
-def _seats(idea: Idea, corners: list[Seat], land: BaseGeometry, zone: BaseGeometry,
-           gate: BaseGeometry, taken: BaseGeometry, fits: BaseGeometry, rest: float,
-           depth: float, keep) -> list[Seat]:
-    """Where an idea lays what the free land left: the major corners, or the middles of the
-    stretches between them (the major edges), less any the land already taken serves, then the
-    ones it picks."""
-    seats = corners if idea.at == CORNER else _edge_middles(corners)
-    seats = [s for s in seats if taken.is_empty or s.point.distance(taken) > depth]
-    if len(seats) > 1 and idea.pick != ALL:
-        half = math.ceil(len(seats) / 2)
-        by_gate = sorted(seats, key=lambda s: s.point.distance(gate)) if not gate.is_empty \
-            else seats
-        if idea.pick == FAR:
-            seats = by_gate[-half:]
-        elif idea.pick == NEAR:
-            seats = by_gate[:NEAR_GATE]
-        elif idea.pick == LONGEST:
-            seats = [max(seats, key=lambda s: s.back + s.ahead)]
-        elif idea.pick == CHEAPEST:
-            each = rest / len(seats)
-            cost = [_overlay(_piece(s, land, zone, taken, each, depth, keep), fits, MEET).area
-                    for s in seats]
-            seats = [seats[i] for i in sorted(range(len(seats)), key=lambda i: cost[i])[:half]]
-    if idea.one_side:
-        seats = [Seat(s.ring, s.at, s.back if s.back >= s.ahead else 0.0,
-                      s.ahead if s.ahead > s.back else 0.0) for s in seats]
-    return seats
+def _shape(seat: Seat, size: float, triangle: bool, ratio: float,
+           gate: BaseGeometry) -> BaseGeometry:
+    """The land a corner's pocket takes at one size: the patch its two sides make, `size` along
+    each (no further than halfway to the next corner); a right-angled triangle, its small side
+    along the side toward the gate and its long slant away; at a corner sharper than SHARP_DEG,
+    everything within `size` of it, cut straight across."""
+    (ax, ay), back = seat.side(False)
+    (bx, by), ahead = seat.side(True)
+    p = seat.point
+    cx, cy = p.x, p.y
+    angle = math.degrees(math.acos(max(-1.0, min(1.0, ax * bx + ay * by))))
+    if angle < SHARP_DEG:
+        mx, my = ax + bx, ay + by
+        norm = math.hypot(mx, my) or 1.0
+        mx, my = mx / norm, my / norm
+        far = size + back + ahead
+        cone = Polygon([(cx, cy), (cx + ax * far, cy + ay * far), (cx + bx * far, cy + by * far)])
+        across = Polygon([(cx - my * far, cy + mx * far), (cx + my * far, cy - mx * far),
+                          (cx + my * far + mx * size, cy - mx * far + my * size),
+                          (cx - my * far + mx * size, cy + mx * far + my * size)])
+        return _overlay(cone, across, MEET)
+    if not triangle:
+        a, b = min(size, back), min(size, ahead)
+        return Polygon([(cx, cy), (cx + ax * a, cy + ay * a),
+                        (cx + ax * a + bx * b, cy + ay * a + by * b), (cx + bx * b, cy + by * b)])
+    toward_back = gate.is_empty or Point(cx + ax, cy + ay).distance(gate) <= Point(
+        cx + bx, cy + by).distance(gate)
+    (sx, sy), small_reach, (lx, ly), long_reach = (
+        ((ax, ay), back, (bx, by), ahead) if toward_back else ((bx, by), ahead, (ax, ay), back))
+    small, long = min(size / ratio, small_reach), min(size, long_reach)
+    return Polygon([(cx, cy), (cx + sx * small, cy + sy * small), (cx + lx * long, cy + ly * long)])
 
 
-def _edge_middles(corners: list[Seat]) -> list[Seat]:
-    """The middle of each stretch of the land left's edge between two major corners, reaching
-    to both."""
-    rings: dict[int, list[Seat]] = {}
-    for seat in corners:
-        rings.setdefault(id(seat.ring), []).append(seat)
-    out = []
-    for seats in rings.values():
-        ring, total = seats[0].ring, seats[0].ring.length
-        ats = sorted(s.at for s in seats)
-        for k, at in enumerate(ats):
-            gap = (ats[(k + 1) % len(ats)] - at) % total or total
-            out.append(Seat(ring, (at + gap / 2) % total, gap / 2, gap / 2))
-    return out
-
-
-def _span(ring: LineString, start: float, end: float) -> list[LineString]:
-    """The stretch of a closed edge from `start` to `end` (either may lie past its ends)."""
-    total = ring.length
-    if end - start >= total:
-        return [ring]
-    shift = math.floor(start / total) * total
-    start, end = start - shift, end - shift
-    spans = [(start, end)] if end <= total else [(start, total), (0.0, end - total)]
-    return [substring(ring, a, b) for a, b in spans if b > a]
-
-
-def _strip(seat: Seat, land: BaseGeometry, zone: BaseGeometry, taken: BaseGeometry,
-           half: float, depth: float, keep) -> BaseGeometry:
-    """A strip `depth` deep along both sides of the corner, `half` each way (no further than
-    halfway to the next corner), on the land, clear of the gate and of what is taken."""
-    if half <= 0:
+def _pocket(seat: Seat, size: float, triangle: bool, ratio: float, gate: BaseGeometry,
+            room: BaseGeometry, tiers: tuple[Tier, ...], out: BaseGeometry, keep) -> BaseGeometry:
+    """A corner's pocket at one size: its shape on the room, less the setback each building
+    left beside it keeps, less what is out (the land before the gate, what is taken)."""
+    region = _overlay(_shape(seat, size, triangle, ratio, gate), room, MEET)
+    if region.is_empty:
         return Polygon()
-    pieces = _span(seat.ring, seat.at - min(half, seat.back), seat.at + min(half, seat.ahead))
-    band = unary_union([p.buffer(depth, cap_style="flat", join_style="round") for p in pieces
-                        if p.length >= CUT_TOLERANCE_M])  # a hair's length has no direction
-    return keep(_overlay(_overlay(_overlay(band, land, MEET), zone, DIFF), taken, DIFF))
+    kept = []
+    for tier in tiers:  # only the buildings within a setback of the pocket can need one in it
+        reach = tier.setback_m + CUT_TOLERANCE_M
+        near = _overlay(tier.fits, region.buffer(reach, join_style="mitre"), MEET)
+        if not near.is_empty:
+            kept.append(_overlay(tier.band, _overlay(near, region, DIFF).buffer(
+                reach, join_style="mitre"), MEET))
+    region = _overlay(region, unary_union(kept), DIFF) if kept else region
+    return keep(_overlay(region, out, DIFF))
 
 
-def _sequence(seats: list[Seat], land: BaseGeometry, zone: BaseGeometry, taken: BaseGeometry,
-              depth: float, keep) -> list[BaseGeometry]:
-    """Each corner's whole strip at this depth, less the ones before it (shared land once)."""
-    out: list[BaseGeometry] = []
-    for seat in seats:
-        before = unary_union([taken, *out]) if out else taken
-        out.append(_strip(seat, land, zone, before, math.inf, depth, keep))
-    return out
-
-
-def _depth_for(seats: list[Seat], land: BaseGeometry, zone: BaseGeometry, taken: BaseGeometry,
-               need: float, depth_m: float, keep) -> float:
-    """`depth_m`, or deeper when every corner's whole strip together holds less than the need:
-    as deep as it takes, or as deep as the land allows."""
-    def holds(depth: float) -> float:
-        return sum(g.area for g in _sequence(seats, land, zone, taken, depth, keep))
-
-    if holds(depth_m) >= need:
-        return depth_m
-    x0, y0, x1, y1 = land.bounds  # no strip is deeper than the land is across
-    low, high = depth_m, max(depth_m, x1 - x0, y1 - y0)
-    if holds(high) < need:
-        return high
+def _sized(seat: Seat, area: float, triangle: bool, ratio: float, gate: BaseGeometry,
+           room: BaseGeometry, tiers: tuple[Tier, ...], out: BaseGeometry, keep) -> BaseGeometry:
+    """The smallest pocket at the corner that holds `area` (the largest it can be when none
+    does)."""
+    if area <= CUT_TOLERANCE_M:
+        return Polygon()
+    top = (seat.back + seat.ahead) * max(ratio, 1.0)
+    biggest = _pocket(seat, top, triangle, ratio, gate, room, tiers, out, keep)
+    if biggest.area <= area:
+        return biggest
+    low, high = 0.0, top
     while high - low > CUT_TOLERANCE_M:
         middle = (low + high) / 2
-        low, high = (low, middle) if holds(middle) >= need else (middle, high)
-    return high
+        if _pocket(seat, middle, triangle, ratio, gate, room, tiers, out, keep).area >= area:
+            high = middle
+        else:
+            low = middle
+    return _pocket(seat, high, triangle, ratio, gate, room, tiers, out, keep)
+
+
+def _at_corners(idea: Idea, seats: list[Seat], gate: BaseGeometry, room: BaseGeometry,
+                tiers: tuple[Tier, ...], out: BaseGeometry, need: float, plot: Polygon,
+                keep) -> tuple[Corner, ...]:
+    """`need` in pockets at the corners the idea picks, an equal share each; a corner that cannot
+    hold its share passes the rest to the others, and when the picked corners together cannot
+    hold it the cheapest of the rest join them."""
+    if not seats:
+        return ()
+    near = {id(s) for s in beside_gate(seats, gate)}
+
+    def triangle(seat: Seat) -> bool:
+        return idea.triangles == EVERY or id(seat) in near
+
+    def rate(seat: Seat) -> float:
+        pocket = _sized(seat, need / len(seats), triangle(seat), idea.ratio, gate, room, tiers,
+                        out, keep)
+        return _cost(pocket, tiers) / max(pocket.area, CUT_TOLERANCE_M)
+
+    ranked = sorted(seats, key=rate)
+    if idea.pick == ALL:
+        chosen = list(seats)
+    elif idea.pick == FAR:
+        far = sorted(seats, key=lambda s: -s.point.distance(gate)) if not gate.is_empty else seats
+        chosen = far[:math.ceil(len(seats) / 2)]
+    elif idea.pick == NEAR:
+        chosen = [s for s in seats if id(s) in near] or ranked[:1]
+    elif idea.pick == COUNT:
+        chosen = ranked[:idea.count]
+    elif idea.pick == SET:
+        chosen = [seats[i] for i in idea.members if i < len(seats)]
+    else:  # CHEAPEST: as many of the cheapest as cost the least in all (a tie keeps more)
+        best = None
+        for k in range(1, len(ranked) + 1):
+            laid = _lay(ranked[:k], need, triangle, idea.ratio, gate, room, tiers, out, keep)
+            if sum(g.area for _, _, g in laid) < need - CUT_TOLERANCE_M:
+                continue
+            cost = round(sum(_cost(g, tiers) for _, _, g in laid))
+            if best is None or cost <= best[0]:
+                best = (cost, ranked[:k])
+        chosen = list(best[1]) if best else list(ranked)
+    laid = _lay(chosen, need, triangle, idea.ratio, gate, room, tiers, out, keep)
+    for extra in [s for s in ranked if s not in chosen]:  # the picked ones cannot hold it all
+        if sum(g.area for _, _, g in laid) >= need - CUT_TOLERANCE_M:
+            break
+        chosen.append(extra)
+        laid = _lay(chosen, need, triangle, idea.ratio, gate, room, tiers, out, keep)
+    middle = (plot.centroid.x, plot.centroid.y)
+    return tuple(Corner(number, compass(bearing(middle, (s.point.x, s.point.y))), s.point, give,
+                        piece, triangle(s))
+                 for number, (s, give, piece) in enumerate(laid, 1))
+
+
+def _lay(chosen: list[Seat], need: float, triangle, ratio: float, gate: BaseGeometry,
+         room: BaseGeometry, tiers: tuple[Tier, ...], out: BaseGeometry,
+         keep) -> list[tuple[Seat, float, BaseGeometry]]:
+    """An equal share at each chosen corner, the ones with the least room first so land two
+    corners share goes to the one that needs it; a corner that cannot hold its share passes the
+    rest to the others equally."""
+    room_at = [_sized(s, need, triangle(s), ratio, gate, room, tiers, out, keep).area
+               for s in chosen]
+    order = sorted(range(len(chosen)), key=lambda i: room_at[i])
+    gives = _water_fill(need, [room_at[i] for i in order])
+    placed: dict[int, tuple[float, BaseGeometry]] = {}
+    taken = [out]
+    for i, give in zip(order, gives, strict=True):
+        piece = _sized(chosen[i], give, triangle(chosen[i]), ratio, gate, room, tiers,
+                       unary_union(taken), keep)
+        placed[i] = (give, piece)
+        taken.append(piece)
+    return [(chosen[i], *placed[i]) for i in range(len(chosen))]
 
 
 def _water_fill(need: float, room: list[float]) -> list[float]:
@@ -627,29 +784,17 @@ def _water_fill(need: float, room: list[float]) -> list[float]:
     return given
 
 
-def _piece(seat: Seat, land: BaseGeometry, zone: BaseGeometry, taken: BaseGeometry,
-           area: float, depth: float, keep) -> BaseGeometry:
-    """The shortest strip round the corner that holds `area`."""
-    if area <= CUT_TOLERANCE_M:
-        return Polygon()
-    whole = max(seat.back, seat.ahead)
-    if _strip(seat, land, zone, taken, whole, depth, keep).area <= area:
-        return _strip(seat, land, zone, taken, whole, depth, keep)
-    low, high = 0.0, whole
-    while high - low > CUT_TOLERANCE_M:
-        middle = (low + high) / 2
-        if _strip(seat, land, zone, taken, middle, depth, keep).area >= area:
-            high = middle
-        else:
-            low = middle
-    return _strip(seat, land, zone, taken, high, depth, keep)
+def _cost(geometry: BaseGeometry, tiers: tuple[Tier, ...]) -> float:
+    """Floors a square metre summed: what the geometry takes from the building land."""
+    return sum(_overlay(geometry, tier.tallest, MEET).area * tier.floors for tier in tiers)
 
 
-def _stands_on(part: BaseGeometry, fits: BaseGeometry, idle: BaseGeometry,
-               buffer: BaseGeometry | None) -> tuple[tuple[str, float], ...]:
+def _stands_on(part: BaseGeometry, free: BaseGeometry, buffer: BaseGeometry | None,
+               tiers: tuple[Tier, ...]) -> tuple[tuple[str, float], ...]:
     wet = _overlay(part, buffer, MEET).area if buffer is not None else 0.0
-    out = [(WATER, wet), (IDLE, _overlay(part, idle, MEET).area - wet),
-           (BUILDING, _overlay(part, fits, MEET).area)]
+    building = [(f"Stilt + {tier.floors} land", _overlay(part, tier.tallest, MEET).area)
+                for tier in tiers]
+    out = [(WATER, wet), (FREE, _overlay(part, free, MEET).area - wet), *building]
     return tuple((kind, area) for kind, area in out if area > CUT_TOLERANCE_M)
 
 

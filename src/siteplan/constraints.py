@@ -1633,17 +1633,13 @@ REGISTRY: tuple[Constraint, ...] = (
         settles="Nothing: a drawing tolerance.",
     ),
     Constraint(
-        "Steps", "Step 5: how deep a corner's tot-lot strip reaches into the land left, along "
-                 "both sides of the corner; deeper only when the corners together cannot hold "
-                 "what the land where no building stands leaves.",
-        _m(step_tot_lot.TOT_LOT_DEPTH_M), Basis.FIRM_STANDARD,
-        "the engine's default until the firm sets tot_lot_depth_m in the workspace; the "
-        "architect's word (2026-10-11): long along the side, not much into the usable space",
-        ("steps.tot_lot.TOT_LOT_DEPTH_M", "steps.tot_lot.TotLot.depth_m"),
-        note="Not a rule: the rules ask pockets at least 3 m wide (15 m² below high-rise, 50 m² "
-             "above). Twice the least width, so a pocket keeps room to play in "
-             "(ASSUMED_FOR_TEST until the firm says).",
-        settles="The firm's tot-lot depth on its sanctioned schemes.",
+        "Steps", "Step 5: the lowest block worth building; the height map steps down one floor "
+                 "at a time to it, and land where even it does not fit has no building.",
+        f"Stilt + {step_tot_lot.LOWEST_FLOORS}", Basis.FIRM_STANDARD,
+        "the architect's word (2026-10-12), for the firm",
+        ("steps.tot_lot.LOWEST_FLOORS", "steps.tot_lot.TotLot.lowest"),
+        note="Not a rule: the rules allow lower blocks.",
+        settles="The firm's word on the lowest block it builds.",
     ),
     Constraint(
         "Steps", "Step 5: the edge of the building land turns outward at least this much where "
@@ -1665,18 +1661,21 @@ REGISTRY: tuple[Constraint, ...] = (
         settles="The architect's word on how many options he wants.",
     ),
     Constraint(
-        "Steps", "Step 5's ideas: how much shallower or deeper than the firm's strip some lay "
-                 "theirs; how many corners beside the gate one takes; how little two tot-lots "
+        "Steps", "Step 5's ideas: a triangle's long side in times its small side (the small side "
+                 "toward the gate); a corner sharper than this is cut straight across; after the "
+                 "named ideas, every two and three of a site's corners; how little two tot-lots "
                  "may differ and still be one option.",
-        f"{step_tot_lot.THINNER:g} and {step_tot_lot.DEEPER:g} times the depth; "
-        f"{step_tot_lot.NEAR_GATE} corners; {step_tot_lot.SAME_SQM:g} m²",
-        Basis.ENGINE_DESIGN_ASSUMPTION, "none (the engine's own; the corners beside the gate are "
-        "the architect's word of 2026-10-11)",
-        ("steps.tot_lot.THINNER", "steps.tot_lot.DEEPER", "steps.tot_lot.NEAR_GATE",
-         "steps.tot_lot.SAME_SQM", "steps.tot_lot.IDEAS"),
+        f"{step_tot_lot.STEEP:g} or {step_tot_lot.SHALLOW:g} times; "
+        f"{step_tot_lot.SHARP_DEG:g} degrees; sets of {step_tot_lot.SETS}; "
+        f"{step_tot_lot.SAME_SQM:g} m²",
+        Basis.ENGINE_DESIGN_ASSUMPTION, "none (the engine's own; the triangle beside the gate is "
+        "the architect's word of 2026-10-12)",
+        ("steps.tot_lot.STEEP", "steps.tot_lot.SHALLOW", "steps.tot_lot.SHARP_DEG",
+         "steps.tot_lot.SETS", "steps.tot_lot.SAME_SQM", "steps.tot_lot.IDEAS",
+         "steps.tot_lot.Idea.ratio"),
         note="Options for the architect to choose between, not rules; every option keeps the "
              "same rules.",
-        settles="The architect's word on which ideas he wants offered.",
+        settles="The architect's word on which ideas he wants offered and how steep a triangle.",
     ),
     Constraint(
         "Steps", "The tot-lot (step 5): two outlines GEOS cannot overlay ('non-noded "
