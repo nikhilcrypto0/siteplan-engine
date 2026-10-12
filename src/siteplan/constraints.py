@@ -1656,6 +1656,29 @@ REGISTRY: tuple[Constraint, ...] = (
         settles="The architect's word on which corners of a plot take a tot-lot.",
     ),
     Constraint(
+        "Steps", "Step 5: how many tot-lot options the architect is shown to choose one from.",
+        f"{step_tot_lot.OPTIONS}", Basis.FIRM_STANDARD,
+        "the architect's word (2026-10-12), for the firm: the architect chooses between stages",
+        ("steps.tot_lot.OPTIONS",),
+        note="Not a rule: the number of different ideas offered; fewer when the engine's list "
+             "gives fewer different tot-lots.",
+        settles="The architect's word on how many options he wants.",
+    ),
+    Constraint(
+        "Steps", "Step 5's ideas: how much shallower or deeper than the firm's strip some lay "
+                 "theirs; how many corners beside the gate one takes; how little two tot-lots "
+                 "may differ and still be one option.",
+        f"{step_tot_lot.THINNER:g} and {step_tot_lot.DEEPER:g} times the depth; "
+        f"{step_tot_lot.NEAR_GATE} corners; {step_tot_lot.SAME_SQM:g} m²",
+        Basis.ENGINE_DESIGN_ASSUMPTION, "none (the engine's own; the corners beside the gate are "
+        "the architect's word of 2026-10-11)",
+        ("steps.tot_lot.THINNER", "steps.tot_lot.DEEPER", "steps.tot_lot.NEAR_GATE",
+         "steps.tot_lot.SAME_SQM", "steps.tot_lot.IDEAS"),
+        note="Options for the architect to choose between, not rules; every option keeps the "
+             "same rules.",
+        settles="The architect's word on which ideas he wants offered.",
+    ),
+    Constraint(
         "Steps", "The tot-lot (step 5): two outlines GEOS cannot overlay ('non-noded "
                  "intersection') are snapped to this grid and tried again.",
         _m(step_tot_lot.GRID_M), Basis.ENGINE_DESIGN_ASSUMPTION,

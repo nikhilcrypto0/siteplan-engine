@@ -9,7 +9,13 @@ from siteplan.steps import carried, gate
 from siteplan.steps.drawing import Layer, Picture, frame
 from siteplan.steps.report import Choice, RuleUsed, StepReport, Table
 from siteplan.steps.survey_copy import SHORT_RUN_M
-from siteplan.steps.tot_lot import CORNER_TURN_DEG, CUT_TOLERANCE_M, Placing, TotLot
+from siteplan.steps.tot_lot import (
+    CORNER_TURN_DEG,
+    CUT_TOLERANCE_M,
+    SAME_SQM,
+    Placing,
+    TotLot,
+)
 
 TITLE = "Where buildings fit, and the tot-lot"
 DRAWN_AROUND_M = 30.0
@@ -49,8 +55,13 @@ def report(t: TotLot) -> StepReport:
         "first where no building stands"
         + (f"; then what was still needed split equally over {len(p.corners)} major corners."
            if p.corners else "."),
+        f"Laid out {len(t.options)} options for the tot-lot, each a different idea, every one "
+        "keeping the same rules, for you to choose one; the one above is option 1.",
     ]
     r.happening = [
+        f"You choose (your word, 2026-10-12): {len(t.options)} options, each a different idea "
+        "of where the tot-lot goes, all inside the same rules; step 6 builds round the one you "
+        "choose.",
         "The tot-lot stays inside the land left for buildings (your word): it never takes a "
         "setback, the green strip or the fire lane.",
         "Land left where no building stands goes first, the part farthest from the buildings "
@@ -165,6 +176,13 @@ def _choices(t: TotLot) -> list[Choice]:
                f"within {clear:g} m of it: the front setback ({s.front_m:g} m) and a fire "
                f"engine's {rules.FIRE_TURNING_RADIUS_M:g} m turn.", "Your word: no tot-lot in "
                "front of the gate. Step 6 places the road and may move the gate."),
+        Choice(f"The {len(t.options)} options are the first {len(t.options)} different ones "
+               "of the engine's list of ideas, in its order: option 1 is the rule agreed on "
+               "2026-10-11, the rest change one thing each (the strip's depth, one side only, "
+               "which corners, the edges' middles instead of the corners, nothing taken first); "
+               f"two ideas whose tot-lots differ by less than {SAME_SQM:g} m² are one option.",
+               "Your word (2026-10-12): give the architect options to choose from. Which ideas "
+               "are offered is the engine's choice; say which to add or drop."),
         Choice(f"A pocket's {t.share.min_width_m:g} m is checked by rolling a circle that wide "
                f"(less {CUT_TOLERANCE_M * 100:g} cm) through it; pieces within "
                f"{CUT_TOLERANCE_M * 100:g} cm of each other are one pocket.", "The rule gives "
@@ -175,7 +193,10 @@ def _choices(t: TotLot) -> list[Choice]:
 def _output(t: TotLot) -> tuple[list[str], list[Table]]:
     p = t.placings[0]
     s = t.setbacks
-    lines = [f"Land left (step 4): {s.left.area:,.1f} m². A block fits on {p.fits.area:,.1f} m² "
+    lines = [f"{len(t.options)} OPTIONS for you to choose from: the first table below. Option 1 "
+             "is drawn in step5.svg and set out here; each option is drawn in "
+             "step5-option-NN.svg.",
+             f"Land left (step 4): {s.left.area:,.1f} m². A block fits on {p.fits.area:,.1f} m² "
              f"of it."]
     lines.append(f"WHERE NO BUILDING STANDS (inside the land left): {p.idle.area:,.1f} m² the "
                  "tot-lot can use.")
@@ -221,7 +242,7 @@ def _output(t: TotLot) -> tuple[list[str], list[Table]]:
         lines.append(f"The {kind.replace('_', ' ')}'s buffer waits on one answer (step 3), so "
                      "it is not counted yet.")
     lines.append("The club house comes once the tot-lot is right.")
-    tables = []
+    tables = [_options_table(t)]
     if p.corners:
         tables.append(Table("The major corners and the tot-lot at each",
                             ("Corner", "Lies", "Its part", "Placed"),
@@ -236,14 +257,37 @@ def _output(t: TotLot) -> tuple[list[str], list[Table]]:
     return lines, tables
 
 
+def _options_table(t: TotLot) -> Table:
+    rows = []
+    for o in t.options:
+        p = o.placing
+        lost = p.fits.area - p.fits_after.area
+        smallest = min((q.area_sqm for q in p.pockets), default=0.0)
+        idea = o.idea.words[0].upper() + o.idea.words[1:] + (
+            f" (the same as: {'; '.join(o.same)})" if o.same else "")
+        short = max(q.short_sqm for q in o.placings)
+        rows.append((str(o.number), idea, f"{p.tot_lot.area:,.1f} m²", str(len(p.pockets)),
+                     f"{smallest:,.1f} m²", f"{p.depth_m:.2f} m",
+                     f"{p.fits_after.area:,.1f} m²", f"{lost:,.1f} m²",
+                     f"SHORT BY {short:,.1f} m²" if short > 0 else "holds it"))
+    return Table("The options: choose one", ("Option", "The idea", "Tot-lot", "Pieces",
+                                             "Smallest piece", "Strip depth",
+                                             "Land a block fits on after", "Building land it "
+                                             "takes", "Every reading of the water"),
+                 tuple(rows))
+
+
 def _questions(t: TotLot) -> list[str]:
-    short = [p for p in t.placings if p.short_sqm > 0]
-    if not short:
-        return []
-    worst = max(short, key=lambda p: p.short_sqm)
-    return [f"The plot cannot hold the tot-lot: it is short by {worst.short_sqm:,.1f} m² "
-            f"(Stilt + {t.setbacks.floors}). Should the buildings be lower (smaller setbacks), "
-            "or is the tot-lot to be found elsewhere?"]
+    out = [f"Which tot-lot option do you choose (1 to {len(t.options)})? Each is drawn in "
+           "step5-option-NN.svg; step 6 lays the buildings round the one you choose."]
+    short = [p for p in (*t.placings, *(q for o in t.options for q in o.placings))
+             if p.short_sqm > 0]
+    if short:
+        worst = max(short, key=lambda p: p.short_sqm)
+        out.append(f"The plot cannot hold the tot-lot: it is short by {worst.short_sqm:,.1f} m² "
+                   f"(Stilt + {t.setbacks.floors}). Should the buildings be lower (smaller "
+                   "setbacks), or is the tot-lot to be found elsewhere?")
+    return out
 
 
 def _used_here(t: TotLot) -> dict[str, str]:
@@ -270,10 +314,20 @@ def _carried_table(t: TotLot) -> Table:
                        for item in carried.found_in(t.copy)))
 
 
-def picture(t: TotLot) -> Picture:
-    p = t.placings[0]
+def option_pictures(t: TotLot) -> list[tuple[str, Picture]]:
+    """Every option drawn on its own, to choose from."""
+    return [(f"step5-option-{o.number:02d}", picture(t, o.number)) for o in t.options]
+
+
+def picture(t: TotLot, number: int = 0) -> Picture:
+    """Option 1 as the step's picture, or option `number` titled with its idea."""
+    option = t.options[number - 1] if number else None
+    p = option.placing if option else t.placings[0]
     s = t.setbacks
-    pic = Picture(f"Step 5: {TITLE}", t.inputs.site, layers=[
+    title = (f"Step 5: tot-lot option {number} of {len(t.options)}" if option
+             else f"Step 5: {TITLE}")
+    subtitle = f"{t.inputs.site}; {option.idea.words}" if option else t.inputs.site
+    pic = Picture(title, subtitle, layers=[
         Layer("LEFT", "#4f86c6", 5, "Land left for buildings (step 4)", fill=0.18, width=1.5),
         Layer("SETBACK", "#f08c00", 30, "Setback: no building here", fill=0.30, width=0.5),
         Layer("GREEN-STRIP", "#2e8b3d", 3, f"{rules.PERIPHERAL_GREEN_STRIP_M:g} m green strip "
@@ -305,7 +359,7 @@ def picture(t: TotLot) -> Picture:
     pic.add("NET-PLOT", s.widening.net)
     gate.draw(pic, p.gate)
     for corner in p.corners:
-        pic.label("NOTES", (corner.point.x, corner.point.y), f"corner {corner.number}")
+        pic.label("NOTES", (corner.point.x, corner.point.y), f"{corner.what} {corner.number}")
     for pocket in p.pockets:
         spot = pocket.polygon.representative_point()
         pic.label("NOTES", (spot.x, spot.y), f"TOT-LOT {pocket.area_sqm:,.1f} m²")
@@ -329,6 +383,9 @@ def facts(t: TotLot) -> dict:
                        for what, length, depth in t.blocks.footprints],
             "blocks_from": t.blocks.source,
             "strip_depth_m": t.depth_m, "strip_depth_from": t.depth_from,
+            "options": [{"option": o.number, "idea": o.idea.words, "same_as": list(o.same),
+                         "readings": [_placing_facts(q) for q in o.placings]}
+                        for o in t.options],
             "readings": [_placing_facts(p) for p in t.placings],
             "waiting": list(t.waiting)}
 

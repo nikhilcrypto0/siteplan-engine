@@ -3,6 +3,7 @@ reads the height the main road allows, step 3 takes off the land given up for ro
 step 4 keeps the setbacks from every side, step 5 places the tot-lot, and every step's
 report answers the same five questions. Made-up land only."""
 
+import itertools
 import json
 from pathlib import Path
 
@@ -29,6 +30,7 @@ from siteplan.steps.run import run_steps
 from siteplan.steps.setbacks import set_back
 from siteplan.steps.survey_copy import ALONG, APART, CARRIED, ENDS, copy_survey
 from siteplan.steps.tot_lot import (
+    SAME_SQM,
     WATER,
     firm_blocks,
     lay_out,
@@ -284,6 +286,8 @@ def test_the_command_writes_every_step_and_exits_1_when_one_stopped_to_ask(tmp_p
     _workspace(tmp_path)  # the firm's flat library, which step 5 needs
     assert main(["steps", str(survey), "--project", str(done), "--out",
                  str(tmp_path / "a")]) == 0
+    for n in range(1, 11):  # every tot-lot option drawn, for the architect to choose
+        assert (tmp_path / "a" / "step5" / f"step5-option-{n:02d}.svg").exists()
     asks = _project(tmp_path / "asks.json", gross_area_sqm=10_800, net_area_sqm=10_200,
                     road_strip_side="S")
     assert main(["steps", str(survey), "--project", str(asks), "--out",
@@ -883,6 +887,29 @@ def test_the_tot_lot_goes_first_where_no_building_stands_and_never_leaves_the_la
     text = tot_lot_report.report(t).markdown()
     assert "WHERE NO BUILDING STANDS (inside the land left)" in text
     assert "THEN AT THE MAJOR CORNERS: 3" in text
+
+
+def test_step_five_offers_the_architect_ten_different_tot_lots(tmp_path):
+    """The architect (2026-10-12) chooses between stages, so step 5 lays ten different
+    tot-lots, every one by the same rules: the whole share in pockets the rules allow, inside
+    the land left, never over the gate. Option 1 is the rule agreed on 2026-10-11."""
+    t = _step5(_inputs(tmp_path, **HIGH_RISE))
+    land = t.setbacks.left
+    assert len(t.options) == 10 and t.options[0].placings == t.placings
+    for option in t.options:
+        p = option.placing
+        assert p.tot_lot.area >= t.need_sqm - 1, option.number
+        assert p.tot_lot.difference(land).area == pytest.approx(0, abs=0.01), option.number
+        assert p.tot_lot.distance(p.gate) >= 19 - 0.1, option.number
+        assert all(q.area_sqm >= 50 for q in p.pockets), option.number
+    for a, b in itertools.combinations(t.options, 2):  # ten different ideas, not copies
+        assert a.placing.tot_lot.symmetric_difference(b.placing.tot_lot).area >= SAME_SQM
+    text = tot_lot_report.report(t).markdown()
+    assert "10 OPTIONS for you to choose from" in text and "The options: choose one" in text
+    assert "Which tot-lot option do you choose (1 to 10)?" in text
+    assert len(tot_lot_report.facts(t)["options"]) == 10
+    stems = [stem for stem, _ in tot_lot_report.option_pictures(t)]
+    assert stems[0] == "step5-option-01" and stems[-1] == "step5-option-10"
 
 
 def test_the_tot_lot_is_split_equally_over_the_major_corners(tmp_path):

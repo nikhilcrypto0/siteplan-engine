@@ -57,6 +57,9 @@ def run_steps(inputs: Inputs, out: Path) -> list[StepReport]:
     _write(out / "step5", "step5", fifth,
            None if fifth.picture is None else tot_lot_report.picture(tot_lot),
            tot_lot_report.facts(tot_lot))
+    if fifth.picture is not None:
+        for stem, option in tot_lot_report.option_pictures(tot_lot):
+            option.write(out / "step5", stem)
     _index(out, inputs, [first, second, third, fourth, fifth])
     return [first, second, third, fourth, fifth]
 
