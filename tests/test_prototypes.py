@@ -136,8 +136,15 @@ def test_a_prototype_is_a_double_loaded_slab_with_cores_across_the_full_depth(ki
 
 def test_a_block_is_laid_out_the_way_todays_towers_are(library):
     """The generator's own towers (towers.build_tower) put the core after the first half of each
-    group of flats; a prototype of the same flats is the same drawing, turned to run along x."""
+    group of flats; a prototype of the same flats is the same drawing, turned to run along x.
+
+    Of the double-loaded families only: `build_tower` lays a flat each side of the corridor and
+    builds nothing else, so a single-loaded block (one row of flats, half the depth) has no tower
+    of today's to be the same drawing as. `test_single_loaded.py` holds that family's own
+    geometry."""
     for family, plan in FAMILY_PLANS.items():
+        if plan.single_loaded:
+            continue
         served = library.model_copy(
             update={"flats_per_core_per_side": plan.flats_per_core_per_side})
         prototype = compose_prototype(served, family, MIX)

@@ -68,10 +68,20 @@ class MixTracker:
 
 @dataclass(frozen=True)
 class BlockPlan:
-    """How a family is built: the cores a block has and the flats each serves on a side."""
+    """How a family is built: the cores a block has, the flats each serves on a side, and whether
+    the corridor is loaded on both sides or one. A single-loaded block carries one row of flats
+    along its corridor, so it is about half as deep as a double-loaded one of the same flats and
+    takes land a double-loaded block cannot stand on (a narrow arm of a plot); it buys that depth
+    with a corridor serving half as many flats, which the objective weighs like any other."""
 
     cores: int
     flats_per_core_per_side: int
+    single_loaded: bool = False
+
+    @property
+    def sides(self) -> int:
+        """The sides of the corridor the flats stand on: two, or one when single-loaded."""
+        return 1 if self.single_loaded else 2
 
     @property
     def flats_per_side(self) -> int:
@@ -79,7 +89,7 @@ class BlockPlan:
 
     @property
     def flats_per_floor(self) -> int:
-        return 2 * self.flats_per_side
+        return self.sides * self.flats_per_side
 
 
 FAMILY_PLANS: dict[PrototypeFamily, BlockPlan] = {
@@ -87,14 +97,25 @@ FAMILY_PLANS: dict[PrototypeFamily, BlockPlan] = {
     PrototypeFamily.SINGLE_CORE: BlockPlan(cores=1, flats_per_core_per_side=3),
     PrototypeFamily.TWO_CORE_MEDIUM: BlockPlan(cores=2, flats_per_core_per_side=2),
     PrototypeFamily.TWO_CORE_LARGE: BlockPlan(cores=2, flats_per_core_per_side=3),
+    PrototypeFamily.SINGLE_LOADED: BlockPlan(cores=1, flats_per_core_per_side=2,
+                                             single_loaded=True),
 }
 
 
+# A single-loaded block is a design choice, not something a flat library settles: it halves the
+# depth, so it stands on ground no double-loaded block can take (a narrow arm of a plot), and
+# pays for it with a corridor and a core serving half as many flats. The firm asks for it by
+# name (`compose_library(..., families=...)`), as it sets its own longest block; no site gets one
+# unasked, so no layout made before this one moves.
+BY_REQUEST = (PrototypeFamily.SINGLE_LOADED,)
+
+
 def servable_families(library: FlatLibrary) -> list[PrototypeFamily]:
-    """The families the library's cores can serve: a core may not serve more flats on a side
-    than the library says it does."""
+    """The families the library's cores can serve, those a firm asks for by name left out
+    (`BY_REQUEST`): a core may not serve more flats on a side than the library says it does."""
     return [family for family, plan in FAMILY_PLANS.items()
-            if plan.flats_per_core_per_side <= library.flats_per_core_per_side]
+            if plan.flats_per_core_per_side <= library.flats_per_core_per_side
+            and family not in BY_REQUEST]
 
 
 def checked_mix(library: FlatLibrary, unit_mix: dict[str, float] | None) -> dict[str, float]:
@@ -155,7 +176,7 @@ def compose_prototype(library: FlatLibrary, family: PrototypeFamily,
     flats = pick_flats(library, checked_mix(library, unit_mix), plan.flats_per_side)
     return _lay_out(f"{family.value.lower().replace('_', '-')}-{plan.flats_per_floor}", family,
                     split_evenly(flats, plan.cores), library, source_kind,
-                    source or _source_of(library))
+                    source or _source_of(library), sides=plan.sides)
 
 
 def compose_library(library: FlatLibrary, unit_mix: dict[str, float] | None = None, *,
@@ -235,36 +256,45 @@ def _corridor_runs(row: _Row) -> list[tuple[float, float]]:
 
 
 def _lay_out(prototype_id: str, family: PrototypeFamily, groups: list[list[FlatType]],
-             library: FlatLibrary, source_kind: SourceKind, source: str) -> TowerPrototype:
-    """The groups of flats as a prototype: a flat each side of the corridor, centred on the
-    origin with the block's long axis along x."""
+             library: FlatLibrary, source_kind: SourceKind, source: str,
+             sides: int = 2) -> TowerPrototype:
+    """The groups of flats as a prototype, centred on the origin with the block's long axis along
+    x: a flat each side of the corridor, or (`sides` of 1) one row of flats along it, the corridor
+    against the other wall, which halves the block's depth."""
     row = _row(groups, library.core_width_m)
     depth = library.flats[0].depth_m
-    half_corridor = library.corridor_width_m / 2
-    span = half_corridor + depth  # from the corridor's centre line to the outer wall
+    corridor_m = library.corridor_width_m
+    half_corridor = corridor_m / 2
+    # from the block's centre line to the outer wall: half of the corridor and every row of flats
+    span = (corridor_m + sides * depth) / 2
     shift = row.length / 2
 
     def along(a: float, b: float, y0: float, y1: float) -> Shape:
         return _rect(a - shift, y0, b - shift, y1)
 
-    sides = ((half_corridor, span), (-span, -half_corridor))
-    modules = [{"id": f"m{2 * i + side + 1}", "type_id": flat.name, "category": flat.bhk,
+    if sides == 1:  # the corridor against one wall, the flats along the other
+        corridor_band = (-span, -span + corridor_m)
+        bands = ((-span + corridor_m, span),)
+    else:
+        corridor_band = (-half_corridor, half_corridor)
+        bands = ((half_corridor, span), (-span, -half_corridor))
+    modules = [{"id": f"m{sides * i + side + 1}", "type_id": flat.name, "category": flat.bhk,
                 "shape": along(x0, x1, y0, y1), "saleable_sqft": flat.saleable_sqft,
                 "carpet_sqft": flat.carpet_sqft, "built_up_sqft": flat.built_up_sqft}
                for i, (flat, x0, x1) in enumerate(row.flats)
-               for side, (y0, y1) in enumerate(sides)]
+               for side, (y0, y1) in enumerate(bands)]
     gross = row.length * 2 * span
-    own = 2 * depth * sum(x1 - x0 for _, x0, x1 in row.flats)
+    own = sides * depth * sum(x1 - x0 for _, x0, x1 in row.flats)
     return TowerPrototype(
         id=prototype_id, family=family, source_kind=source_kind, source=source,
         footprint=along(0.0, row.length, -span, span), length_m=_clean(row.length),
         depth_m=_clean(2 * span), cores=len(row.cores), modules=modules,
         core_zones=[{"shape": along(start, end, -span, span), "lifts": LIFTS_PER_CORE,
                      "stairs": STAIRS_PER_CORE} for start, end in row.cores],
-        corridor=[along(start, end, -half_corridor, half_corridor)
-                  for start, end in _corridor_runs(row)],
+        corridor=[along(start, end, *corridor_band) for start, end in _corridor_runs(row)],
         per_floor={"flats": len(modules),
                    "flats_by_type": dict(Counter(m["category"] for m in modules)),
                    "gross_floor_sqm": _clean(gross), "flats_own_sqm": _clean(own),
                    "common_core_sqm": _clean(gross - own),
-                   "saleable_sqft": _clean(2 * sum(f.saleable_sqft for f, _, _ in row.flats))})
+                   "saleable_sqft": _clean(sides * sum(f.saleable_sqft
+                                                       for f, _, _ in row.flats))})

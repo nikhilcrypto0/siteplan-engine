@@ -23,6 +23,7 @@ class PrototypeFamily(StrEnum):
     SINGLE_CORE = "SINGLE_CORE"
     TWO_CORE_MEDIUM = "TWO_CORE_MEDIUM"
     TWO_CORE_LARGE = "TWO_CORE_LARGE"
+    SINGLE_LOADED = "SINGLE_LOADED"  # one row of flats along the corridor, about half the depth
     LEGACY_RECTANGLE = "LEGACY_RECTANGLE"  # a tower as the prototype generator laid it
 
 
