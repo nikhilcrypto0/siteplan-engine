@@ -16,7 +16,7 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Any
 
-from pydantic import Field, PositiveInt, model_validator
+from pydantic import Field, PositiveInt, model_serializer, model_validator
 
 from siteplan import rules
 from siteplan.contracts.common import (
@@ -260,6 +260,19 @@ class Objectives(Part):
     priorities: dict[Priority, float] = {}  # weights; a priority left out counts as 1
     soft_preferences: list[SoftPreference] = []
     search_budget_s: float | None = Field(None, gt=0)
+    # A study (2026-10-12, the architect): the buildings and the club house only, no open space
+    # and no facility laid or kept room for, so the land they leave shows where the tot-lot can
+    # go. Every result is STUDY, NOT A LEGAL LAYOUT: the validator still fails the missing
+    # tot-lot (rule 7(a)(vii)); the optimizer alone, asked for a study, does not refuse a layout
+    # for that one check. Left out of a stored brief when off, so no digest moves.
+    study: bool = False
+
+    @model_serializer(mode="wrap")
+    def _as_stored_when_off(self, handler):
+        dumped = handler(self)
+        if dumped.get("study") is False:
+            dumped.pop("study")
+        return dumped
 
     @model_validator(mode="after")
     def _weights(self) -> Objectives:

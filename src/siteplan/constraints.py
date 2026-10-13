@@ -70,6 +70,7 @@ from siteplan.optimizer.search import fit as search_fit
 from siteplan.optimizer.search import ground as search_ground
 from siteplan.optimizer.search import land as search_land
 from siteplan.optimizer.search import layout as search_layout
+from siteplan.optimizer.search import raising as search_raising
 from siteplan.prototypes import compose
 from siteplan.prototypes import library as prototype_library
 from siteplan.steps import buildings as step_buildings
@@ -1228,6 +1229,18 @@ REGISTRY: tuple[Constraint, ...] = (
              "the floor where a twelve-flat block here takes 16%.",
         settles="The firm's own core drawings (a firm's library may set core_depth_m), and the "
                 "architect's word on what the saleable figure covers.",
+    ),
+    Constraint(
+        "Towers", "Raising a laid layout's blocks (2026-10-12): a distance this close to what is "
+                  "asked meets it, and the planted strip counts as all round the plot when its "
+                  "drawing misses the whole by no more than this share.",
+        f"{search_raising.TOL_M:g} m; {search_raising.STRIP_SLACK:g} of the strip",
+        Basis.ENGINE_DESIGN_ASSUMPTION, "none (optimizer.search.raising)",
+        ("optimizer.search.raising.TOL_M", "optimizer.search.raising.STRIP_SLACK"),
+        note="A block rises only where its own setback, the strip its band asks, the zone the "
+             "ring was laid for and the taller one's gap to every neighbour hold; the raised "
+             "layout is laid out again and judged by the validator like any other.",
+        settles="Nothing: tolerances; the validator measures the raised layout itself.",
     ),
     Constraint(
         "Towers", "How much the full search looks at: where the columns start, the floor counts "

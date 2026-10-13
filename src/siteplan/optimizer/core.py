@@ -100,7 +100,7 @@ def optimize(site: CanonicalSiteModel, rules: ResolvedRules, brief: DesignBrief,
     for pick in selection.picks:
         final = _annotated(pick.scored, pick.point)
         report = validator.validate(site, rules, brief, final, envelope)
-        reasons = why_refused(final, report, inputs)
+        reasons = why_refused(final, report, inputs, study=brief.objectives.study)
         if reasons:  # only a validator that contradicts itself gets here
             rejected.append(Rejection(final.candidate_id, final.strategy, tuple(reasons)))
             continue

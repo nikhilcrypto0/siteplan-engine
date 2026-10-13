@@ -399,6 +399,11 @@
           },
           "title": "Soft Preferences",
           "type": "array"
+        },
+        "study": {
+          "default": false,
+          "title": "Study",
+          "type": "boolean"
         }
       },
       "title": "Objectives",

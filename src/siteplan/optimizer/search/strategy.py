@@ -41,6 +41,8 @@ from shapely.geometry.base import BaseGeometry
 
 from siteplan import validator as independent
 from siteplan.contracts import CandidateLayout, DesignBrief, ValidationReport
+from siteplan.contracts.validation import LegalVerdict
+from siteplan.optimizer.guard import STUDY_NOT_LAID, held_to
 from siteplan.optimizer.interfaces import Budget, Proposal, SearchContext, Validator
 from siteplan.optimizer.objective import Scores, measure
 from siteplan.optimizer.pareto import Scored, leaders, pareto_front, same_idea, select
@@ -58,6 +60,7 @@ from siteplan.optimizer.search.layout import (
     lay_out,
     make_run,
 )
+from siteplan.optimizer.search.raising import raised
 from siteplan.optimizer.search.readings import Profile, profiles
 from siteplan.optimizer.search.verdicts import RestsOn, caveats, failed, rests_on
 from siteplan.towers import orientations
@@ -65,6 +68,8 @@ from siteplan.towers import orientations
 NAME = "FULL"
 ROOM_FAILURES = ("no room", "open space", "no approach", "no road touches", "the ring road")
 RETRY_SCALE = 1.3
+STUDY_CAVEAT = (f"STUDY, NOT A LEGAL LAYOUT: the tot-lot is not laid yet ({STUDY_NOT_LAID}, "
+                "G.O.168 rule 7(a)(vii)); the land left is where it will go")
 # The share of the time budget spent when evaluating stops and when laying out stops; judging
 # may use the rest.
 EVALUATE_SHARE = 0.35
@@ -164,7 +169,43 @@ class FullSearchStrategy:
         queues = self._evaluate(context, run, wanted, tally, _Stage(budget, EVALUATE_SHARE))
         laid = self._lay_out(context, run, queues, tally, _Stage(budget, LAY_OUT_SHARE))
         laid += self._improve(run, laid, tally, _Stage(budget, LAY_OUT_SHARE))
+        laid += self._raise(run, laid, tally, _Stage(budget, LAY_OUT_SHARE))
         return self._judge(context, run, laid, tally, _Stage(budget, 1.0))
+
+    def _raise(self, run: Run, laid: list[tuple[Profile, Config, object]], tally: Tally,
+               stage: _Stage) -> list[tuple[Profile, Config, object]]:
+        """Each profile's most valuable layouts with their blocks raised to the tallest each one's
+        own place allows, a block at a column's end moved along it where that frees a floor
+        (raising.py, 2026-10-12); laid out again, so the club house, the cellars and the ramp are
+        those of the flats it now holds. What lays out is a layout of its own beside the one it
+        came from, and the validator judges it like any other."""
+        found: list[tuple[Profile, Config, object]] = []
+        seen = {_signature(ev) for _, _, (ev, _) in laid}
+        by_profile: dict[str, list[tuple[Profile, Config, Evaluation]]] = {}
+        for profile, config, (ev, _) in laid:
+            by_profile.setdefault(profile.key, []).append((profile, config, ev))
+        for items in by_profile.values():
+            items.sort(key=lambda item: -item[2].value)  # stable: between equals, as laid
+            for profile, config, ev in items[:self.limits.judged_per_profile]:
+                if stage.expired():
+                    tally.exhausted = True
+                    return found
+                for nudge in (True, False):  # moved along its column, else in place
+                    taller = _guarded(lambda r, e, n=nudge: raised(r, e, nudge=n), run, ev)
+                    if isinstance(taller, Failure):
+                        tally.reasons[taller.reason] += 1
+                        continue
+                    if taller is None or _signature(taller) in seen:
+                        continue
+                    seen.add(_signature(taller))
+                    result, why = _guarded(lay_out, run, taller, failed=(None, ""))
+                    if result is None:
+                        tally.reasons[why] += 1
+                        continue
+                    tally.laid += 1
+                    found.append((profile, config, (taller, result)))
+                    break
+        return found
 
     def _evaluate(self, context: SearchContext, run: Run, wanted: Sequence[Profile],
                   tally: Tally, stage: _Stage) -> dict[str, list[Evaluation]]:
@@ -352,12 +393,13 @@ class FullSearchStrategy:
             report = self.validator.validate(site, rules, brief, candidate, run.envelope)
             tally.judged += 1
             problems = failed(report)
-            if report.verdict.legal.value == "FAIL":
+            if held_to(report, brief.objectives.study) is LegalVerdict.FAIL:
                 tally.rejected.append(f"{candidate.candidate_id}: "
                                       + ("; ".join(problems) or "a blocking discrepancy"))
                 continue
+            study = [STUDY_CAVEAT] if brief.objectives.study else []
             noted = candidate.model_copy(update={
-                "caveats": [*candidate.caveats, *caveats(report)]})
+                "caveats": [*candidate.caveats, *study, *caveats(report)]})
             judged.append(Judged(noted, report, scores, rests_on(report), profile))
         return judged
 

@@ -137,8 +137,9 @@ class Run:
     def reserve_target_sqm(self) -> float:
         club_floors = self.brief.program.club_house.floors or CLUB_FLOORS
         club = CLUB_ASSUMED_SHARE_OF_NET * self.plot.net.area * 2 / club_floors
+        facilities = 0.0 if self.brief.objectives.study else FACILITY_ROOM_SQM  # a study lays none
         return (RESERVE_OPEN_FACTOR * self.q.open_space_sqm + RESERVE_CLUB_FACTOR * club
-                + RAMP_RESERVE_SQM + FACILITY_ROOM_SQM)
+                + RAMP_RESERVE_SQM + facilities)
 
 
 def make_run(site: CanonicalSiteModel, rules: ResolvedRules, brief: DesignBrief,
@@ -692,7 +693,8 @@ def _furnish(run: Run, program: _Program, repair: str | None = None
         return None, (f"{NO_OPEN} {total:,.0f} m² of pockets 3 m wide, "
                       f"{q.open_space_sqm:,.0f} m² needed")
     room = p.buildable.difference(unary_union(keep_off)) if keep_off else p.buildable
-    facilities, missed = ground.place_facilities(run.brief.program.amenities, rules, pockets,
+    wanted = [] if run.brief.objectives.study else run.brief.program.amenities  # a study: none
+    facilities, missed = ground.place_facilities(wanted, rules, pockets,
                                                  room, club, p.angles,
                                                  club.centroid if club else p.anchor)
     return _Furnished(club, club_floors, plan, ramps, pockets, facilities, missed), ""

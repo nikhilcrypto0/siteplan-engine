@@ -93,7 +93,9 @@ def quantities(site: CanonicalSiteModel, rules: ResolvedRules, brief: DesignBrie
         lane_m=lane, reach_m=_reach(rules, lane), turnings=tuple(_turnings(rules, lane)),
         pocket_width_m=rules.open_space.min_width_m.value,
         pocket_sqm=rules.open_space.min_pocket_sqm.value,
-        open_space_sqm=margins.open_space_target_sqm(legal_open, share),
+        # a study lays no open space and keeps no room for it (Objectives.study)
+        open_space_sqm=0.0 if brief.objectives.study
+        else margins.open_space_target_sqm(legal_open, share),
         open_space_legal_sqm=legal_open,
         strip_width_m=rules.green_strip.width_m.value,
         strip_from_setback_m=rules.green_strip.where_setback_from_m.value,

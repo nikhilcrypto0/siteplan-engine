@@ -4,6 +4,44 @@ A characterization test (tests/manifest.py) pins what the engine produces today.
 only together with a normative replacement test and an entry here: what changed, why, the
 evidence, and the test that now holds the behaviour. Newest first.
 
+## 2026-10-12: the search raises each block to the tallest its own place allows
+
+The architect, on the Dhulapally study: room in height, not land; "taller in the middle, lower at
+the edges", for every site. After the repair pass the search tries each profile's most valuable
+layouts again with every block raised, a floor class at a time, while the class it rises to keeps
+its own setback from the plot line, the planted strip its band asks (only where the land has it all
+round), the setback zone the ring was laid for (where the profile keeps roads out of setbacks),
+the taller one's gap to every neighbour, and its class of building (a pathway-served block stays
+within 12 m); a block at a column's end that the gap to its neighbour in the column holds down is
+moved along the column, on the land the columns may stand on, and where that layout does not lay
+out (a tender's turn at the ring's corner, say) the raise is tried in place
+(`optimizer/search/raising.py`, `FullSearchStrategy._raise`). What lays out is laid out again (the
+club house, cellars and ramp for the flats it now holds) and judged by the validator like any other
+layout, beside the one it came from. Tests (normative): `tests/test_search_raising.py`.
+
+On Dhulapally's study the probe's in-place raises were found to need the 2 m planted strip (from
+a 9 m setback, G.O.Ms.No.7 of 2016), which a layout laid for Stilt + 8 does not have all round;
+and every tower already touched the ring road and its streets, so no column could spread for 10 m
+gaps.
+
+## 2026-10-12: a study mode (buildings and the club house only)
+
+The architect asked for a study of Dhulapally with no tot-lot, open space or facility, so the land
+the buildings and the one club house leave shows where the 10% tot-lot can go later.
+`Objectives.study` (default off, left out of a stored brief when off, so no digest moves):
+
+- the search lays no open space and no facility and keeps no room for them
+  (`quantities`: the open space to lay is 0; `Run.reserve_target_sqm` keeps no facility room;
+  `_furnish` lays none);
+- the validator is unchanged and still fails the missing tot-lot (G.O.168 rule 7(a)(vii));
+- the optimizer alone, asked for a study, does not refuse a layout for that one check
+  (`guard.held_to`, `why_refused(..., study=True)`, the strategy's own judging); every other
+  FAIL and every blocking cross-check refuses it as before, and the service's export never
+  passes `study`;
+- every result carries the caveat STUDY, NOT A LEGAL LAYOUT (`strategy.STUDY_CAVEAT`).
+
+Nothing changes when the flag is off. Tests (normative): `tests/test_study_mode.py`.
+
 ## 2026-10-12: step 4 keeps the whole setback at a corner; towers labelled with their height
 
 - **The firm's amenity file is a catalogue, not a program.** A project lays a facility only

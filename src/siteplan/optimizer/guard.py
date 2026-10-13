@@ -55,9 +55,25 @@ def inputs_of(site: CanonicalSiteModel, rules: ResolvedRules, brief: DesignBrief
     return digest(site), digest(rules), digest(brief)
 
 
-def why_refused(candidate: CandidateLayout, report: ValidationReport, inputs: Inputs
-                ) -> list[str]:
-    """Why a candidate may not be returned on this report; empty when it may."""
+# The one check a study does not lay for (Objectives.study): rule 7(a)(vii)'s tot-lot, laid later
+# from the land the study leaves. Its FAIL stays in the report; only the refusal skips it.
+STUDY_NOT_LAID = "Organized open space (tot-lot)"
+
+
+def held_to(report: ValidationReport, study: bool) -> LegalVerdict:
+    """The legal verdict a layout is refused on: the report's own, or in a study the verdict of
+    every check but the tot-lot's (and every blocking cross-check)."""
+    if not study:
+        return legal_verdict(report.legal, report.cross_checks)
+    return legal_verdict([c for c in report.legal if c.finding.rule != STUDY_NOT_LAID],
+                         report.cross_checks)
+
+
+def why_refused(candidate: CandidateLayout, report: ValidationReport, inputs: Inputs,
+                *, study: bool = False) -> list[str]:
+    """Why a candidate may not be returned on this report; empty when it may. `study` is the
+    optimizer's alone to pass, for a study brief (Objectives.study): the missing tot-lot is then
+    not a reason, every other one is; the service's export never passes it."""
     reasons = []
     if report.candidate_ref != digest(candidate):
         reasons.append("the report judged another candidate")
@@ -67,9 +83,10 @@ def why_refused(candidate: CandidateLayout, report: ValidationReport, inputs: In
     if report.verdict.legal is not expected:
         reasons.append(f"the report's verdict {report.verdict.legal} does not follow from its "
                        f"checks ({expected})")
-    if LegalVerdict.FAIL in (report.verdict.legal, expected):
+    if held_to(report, study) is LegalVerdict.FAIL:
         reasons += [f"{c.finding.rule}: {c.finding.measured} (needs {c.finding.required})"
-                    for c in report.legal if c.finding.status is Status.FAIL]
+                    for c in report.legal if c.finding.status is Status.FAIL
+                    and not (study and c.finding.rule == STUDY_NOT_LAID)]
         reasons += [f"{d.item}: the {d.source} says {d.theirs}, the validator found {d.ours}"
                     for d in report.cross_checks if d.blocks_pass]
     return reasons
@@ -84,7 +101,7 @@ def guard(candidates: Sequence[CandidateLayout], validator: Validator,
     rejected: list[Rejection] = []
     for candidate in candidates:
         report = validator.validate(site, rules, brief, candidate, envelope)
-        reasons = why_refused(candidate, report, inputs)
+        reasons = why_refused(candidate, report, inputs, study=brief.objectives.study)
         if reasons:
             rejected.append(Rejection(candidate.candidate_id, candidate.strategy, tuple(reasons)))
         else:
