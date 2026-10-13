@@ -146,8 +146,9 @@ class InspectEnvelope(ProjectFiles):
     pass
 
 
-class ListPrototypes(Frozen):
-    project_file: FileName  # its unit mix picks the flats of each prototype
+class ListPrototypes(ProjectFiles):
+    """The project file's unit mix picks the flats of each prototype; with the survey, the floor
+    plates its land takes are listed beside them (2026-10-13)."""
 
 
 class ProposeLayouts(ProjectFiles):
@@ -346,6 +347,8 @@ class PrototypeOut(Frozen):
     length_m: float
     depth_m: float
     saleable_sqft_per_floor: float
+    preliminary: bool = False  # a floor plate sized to the land, not the firm's drawing
+    note: str = ""  # a plate's schedule and what in it is assumed
 
 
 class PrototypesResult(Frozen):
@@ -354,6 +357,7 @@ class PrototypesResult(Frozen):
     unit_mix: dict[str, float]
     prototypes: list[PrototypeOut]  # the kit the search may use
     left_out: list[str] = []  # composed, but longer than the firm's longest block
+    plates: list[str] = []  # the floor plates in the kit, each PRELIMINARY, or why none
 
 
 class UnresolvedItem(Frozen):

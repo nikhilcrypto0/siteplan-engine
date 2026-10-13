@@ -30,6 +30,7 @@ from siteplan.contracts import CandidateLayout, DesignBrief, ValidationReport, d
 from siteplan.contracts.common import Provenance, SourceKind
 from siteplan.intake import WORKSPACE_FILE, load_defaults
 from siteplan.project import Project
+from siteplan.prototypes.plates import PLATE_SOURCE
 from siteplan.service import (
     ListPrototypes,
     OpenProject,
@@ -181,8 +182,9 @@ def test_the_search_and_the_validator_are_given_those_standards(run):
 
 def test_no_tower_is_longer_than_the_firms_longest_block(run):
     [(_, kit)] = run.optimized
-    assert {p.id for p in kit} == {"single-core-small-4", "single-core-6", "two-core-medium-8"}
-    assert all(max(p.length_m, p.depth_m) <= LONGEST_M for p in kit)
+    families = [p for p in kit if not p.source.startswith(PLATE_SOURCE)]
+    assert {p.id for p in families} == {"single-core-small-4", "single-core-6", "two-core-medium-8"}
+    assert all(max(p.length_m, p.depth_m) <= LONGEST_M for p in kit)  # the plates too
     folder = run.ws / "out" / run.proposed.run_id
     assert run.proposed.candidates
     for summary in run.proposed.candidates:
@@ -198,7 +200,9 @@ def test_no_tower_is_longer_than_the_firms_longest_block(run):
                     if c.finding.rule == "Firm standards and parking preferences")
         assert "longest block" not in firm.finding.measured
     left_out = [n for n in run.proposed.notes if n.startswith("Prototype ")]
-    assert len(left_out) == 1 and all(IN_THE_PROJECT in n for n in left_out)
+    assert all(IN_THE_PROJECT in n for n in left_out)
+    families_out = [n for n in left_out if not n.startswith("Prototype plate-")]
+    assert len(families_out) == 1 and "two-core-large-12" in families_out[0]
 
 
 def test_the_architect_is_shown_each_standard_and_where_it_came_from(run):
@@ -262,5 +266,6 @@ def test_a_longest_block_no_prototype_fits_stops_before_anyone_is_asked(run, tmp
     result = Service(run.ws, out, approver).propose_layouts(ProposeLayouts(
         project_file="tiny.project.json", survey_file=SURVEY, brief=BRIEF, intent=INTENT))
     assert result.status is ProposeStatus.STOPPED and result.run_id is None
-    assert len(result.notes) == 4 and "longest block" in result.next
+    left_out = [n for n in result.notes if n.startswith("Prototype ")]
+    assert len(left_out) == len(result.notes) >= 4 and "longest block" in result.next
     assert approver.asked == [] and audit.read(out) == []

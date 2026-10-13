@@ -24,6 +24,7 @@ from siteplan.contracts.resolved_rules import TableVColumn
 from siteplan.guards import sanitize_brief
 from siteplan.intake import Draft
 from siteplan.optimizer.search.verdicts import rests_on
+from siteplan.prototypes.plates import PLATE_SOURCE, Plate
 from siteplan.service.judge import unresolved_items
 from siteplan.service.models import (
     MAX_TEXT_CHARS,
@@ -255,11 +256,23 @@ def envelope_result(project_name: str, site: CanonicalSiteModel,
 
 
 def prototype_out(p: TowerPrototype) -> PrototypeOut:
+    plate = p.source.startswith(PLATE_SOURCE)
     return PrototypeOut(id=p.id, family=p.family.value, cores=p.cores,
                         flats_per_floor=p.per_floor.flats,
                         flats_by_type=dict(p.per_floor.flats_by_type),
                         length_m=round(p.length_m, 2), depth_m=round(p.depth_m, 2),
-                        saleable_sqft_per_floor=round(p.per_floor.saleable_sqft, 1))
+                        saleable_sqft_per_floor=round(p.per_floor.saleable_sqft, 1),
+                        preliminary=plate, note=p.source if plate else "")
+
+
+def plate_line(plate: Plate) -> str:
+    """What the architect is told of a floor plate the search is given (2026-10-13)."""
+    p, a = plate.prototype, plate.account
+    return (f"Floor plate {p.id}, PRELIMINARY: {p.per_floor.flats} flats a floor, "
+            f"{p.length_m:.1f} x {p.depth_m:.1f} m, sized to this site's land "
+            f"({', '.join(plate.fits)}); gross {a.gross_sqm:,.1f} m², "
+            f"flats {a.flats_own_sqm:,.1f}, cores {a.cores_sqm:,.1f}, "
+            f"{'open gallery' if a.gallery else 'corridor'} {a.corridor_sqm:,.1f}; {a.note()}")
 
 
 # --- candidates and reports ------------------------------------------------------------------

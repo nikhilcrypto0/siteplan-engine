@@ -43,6 +43,7 @@ from siteplan import validator
 from siteplan.area_statement import render as render_statement
 from siteplan.blind import blind_leaks, finished_values
 from siteplan.contracts import (
+    BuildableEnvelope,
     CandidateLayout,
     CanonicalSiteModel,
     DesignBrief,
@@ -63,7 +64,7 @@ from siteplan.optimizer.guard import Validated, inputs_of, why_refused
 from siteplan.optimizer.search import FullSearchStrategy
 from siteplan.optimizer.search.verdicts import rests_on
 from siteplan.project import Project
-from siteplan.prototypes import compose_library
+from siteplan.prototypes.plates import kit_for
 from siteplan.service import audit, brief, judge, render, report, standards, store, summaries
 from siteplan.service.models import (
     RUN_ID_CHARS,
@@ -241,25 +242,36 @@ class Service:
         return summaries.envelope_result(loaded.project.name, site, env)
 
     def list_prototypes(self, request: ListPrototypes) -> PrototypesResult:
-        """The tower prototypes composed from the firm's flat library for the project's mix:
+        """The tower prototypes composed from the firm's flat library for the project's mix and,
+        once the net plot is known, the floor plates the site's land takes (each PRELIMINARY):
         those within the firm's longest block, which the search may use, and those it leaves
         out."""
         _expect(request, ListPrototypes)
-        loaded = self._load(ProjectFiles(project_file=request.project_file))
+        loaded = self._load(request)
         layout = loaded.project.layout
         if layout is None:
             raise ServiceError("The project file has no unit mix; start it through the intake "
                                "flow (siteplan start).")
         library = self._library(loaded.defaults)
         longest = loaded.standard("max_tower_length_m")
-        kit, left_out = standards.within_longest_block(
-            compose_library(library, layout.unit_mix, source_kind=SourceKind.FIRM_STANDARD),
-            longest.value, longest.source)
+        site = self._site(loaded)
+        try:
+            env = envelope(site, self._rules(site, loaded.project))
+        except NetPlotUnknown:
+            env = None  # the library's families alone until the net plot is known
+        said = [] if env is not None else [NO_PLATES_YET]
+        composed, plates = kit_for(
+            library, layout.unit_mix, env,
+            loading_pct=loaded.standard("common_area_pct").value,
+            source_kind=SourceKind.FIRM_STANDARD)
+        kit, left_out = standards.within_longest_block(composed, longest.value, longest.source)
+        kept = {p.id for p in kit}
         return PrototypesResult(
             flat_library=loaded.defaults.flat_library,
             flat_library_status=loaded.standard("flat_library").status,
             unit_mix=dict(layout.unit_mix),
-            prototypes=[summaries.prototype_out(p) for p in kit], left_out=left_out)
+            prototypes=[summaries.prototype_out(p) for p in kit], left_out=left_out,
+            plates=[*said, *(summaries.plate_line(p) for p in plates if p.prototype.id in kept)])
 
     def propose_layouts(self, request: ProposeLayouts) -> ProposeResult:
         """Ask the architect to approve the interpreted request, then run the full search and
@@ -279,7 +291,7 @@ class Service:
             return ProposeResult(status=ProposeStatus.STOPPED, next=str(error))
         design = brief.design(loaded.project, loaded.defaults, self._amenities(loaded.defaults),
                               request.intent, words)
-        kit, left_out = _kit(library, design)
+        kit, left_out = _kit(library, design, env)
         if not kit:
             return ProposeResult(status=ProposeStatus.STOPPED, notes=left_out, next=NO_PROTOTYPE)
         title = f"Generate layout options for {loaded.project.name}"
@@ -557,14 +569,25 @@ def _repeats(run_id: str, at: str) -> str:
             "same inputs again")
 
 
-def _kit(library: FlatLibrary, design: DesignBrief) -> tuple[list[TowerPrototype], list[str]]:
-    """The prototypes the search is given: the firm's flats composed for the brief's mix, none
-    longer than the firm's longest block the brief holds; and those left out, with why."""
-    composed = compose_library(library, design.program.unit_mix.value,
+NO_PLATES_YET = ("No floor plates sized to the land are listed: the net plot is not known "
+                 "(name the survey beside the project file).")
+
+
+def _kit(library: FlatLibrary, design: DesignBrief, env: BuildableEnvelope | None
+         ) -> tuple[list[TowerPrototype], list[str]]:
+    """The prototypes the search is given: the firm's flats composed for the brief's mix and,
+    beside them, the floor plates this site's land takes (prototypes.plates, each PRELIMINARY),
+    none longer than the firm's longest block the brief holds; and what the architect is told:
+    each prototype left out, with why, and each plate kept, with its schedule."""
+    composed, plates = kit_for(library, design.program.unit_mix.value, env,
+                               loading_pct=design.firm_standards.common_area_loading_pct.value,
                                source_kind=SourceKind.FIRM_STANDARD)
     longest = design.firm_standards.max_tower_length_m
-    return standards.within_longest_block(composed, longest.value if longest else None,
-                                          longest.source if longest else "")
+    kit, left_out = standards.within_longest_block(composed, longest.value if longest else None,
+                                                   longest.source if longest else "")
+    kept = {p.id for p in kit}
+    return kit, [*left_out, *(summaries.plate_line(p) for p in plates
+                              if p.prototype.id in kept)]
 
 
 def _proposed(proposal: Validated, shown: set[str]) -> store.ProposedCandidate:

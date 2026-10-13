@@ -4,6 +4,49 @@ A characterization test (tests/manifest.py) pins what the engine produces today.
 only together with a normative replacement test and an entry here: what changed, why, the
 evidence, and the test that now holds the behaviour. Newest first.
 
+## 2026-10-13: floor plates sized to the land join the search, each PRELIMINARY
+
+The architect asked for blocks shaped to land the firm's families do not fit, competing
+everywhere rather than only where the families fail. `prototypes/compose.py` gains `PlateSpec`
+and `compose_plate` (the families and single rows are now composed through it, byte for byte
+the same: every prototype of both example libraries was dumped before and after);
+`prototypes/plates.py` composes, for the brief's own mix, single rows of 3, 4, 6 and 8 flats
+(enclosed corridor and open gallery, kept apart, each with its own schedule) and double-loaded
+plates of 2 to 6 flats a side, keeps those that stand whole in a region of a band's land (the
+envelope's width profiles, the net plot before its setbacks left out; width and length only
+screen, the rectangle is tested against the region's shape), and gives the search a diverse
+shortlist of 8 beside the families (`kit_for`). Each flat type keeps its library saleable; a
+plate's area schedule (gross, flats, cores, corridor or gallery, effective loading) says when its
+geometry needs more common floor than the firm's loading pays for, and never raises the saleable.
+Every plate is PRELIMINARY: its prototype's source says what is assumed (derived flat frontages,
+core and corridor sizes, and egress, lifts, accessibility, ventilation and gallery counting not
+checked); the validator adds an INFO program finding, "Floor plate: PRELIMINARY", to a layout
+that uses one (no legal check changes); the approval page and `list_prototypes` (which now takes
+the survey) name each plate with its schedule. The search's main column depth is still set by
+the families alone: a plate of that depth joins their columns, another depth competes through the
+mixed-depth and fringe configurations.
+
+Evidence, the production service on made-up land with the example library, families alone
+against families and plates: an L with a 34 m arm, where no family fits, 0 layouts against 5
+(the most 85 flats, 113,650 sft, the three shown program MET); a 40 m wide slanted strip, 2
+against 8 (the same 96-flat maximum, and program-MET options of 64 and 48 flats from single rows
+where the families' are PARTLY_MET); an irregular pentagon, the same 360-flat maximum yield, plates
+in 8 of 15 proposals, the balanced option 300 flats MET where it was 260 PARTLY_MET, the
+open-space option 158 flats where it was 186 and the robust one PARTLY_MET where it was MET. A
+first shortlist that also tried each flat type alone lost the pentagon's 360-flat layout (a
+3BHK-only plate sells the most a floor, won the columns and missed the mix), so plates are
+composed for the brief's mix only; and a plate that is one of the library's own blocks (the same
+size, cores and flats a floor) is not offered, so the shortlist holds only new blocks. On the two
+real sites (DEBUG runs, figures kept out of git) the plates were screened and offered but the
+search showed no layout built from one: the maximum yield was the same layout, while the
+secondary alternatives moved with the larger set the search judges (one balanced option fewer
+flats, one open-space option fewer flats). The service's own baseline on made-up land moves the
+same way (`tests/test_service_proposals_baseline.py`, re-pinned: maximum yield and robust the same
+layouts, the balanced option more flats, the open-space option a 120-flat layout of plates).
+Tests (normative): `tests/test_plates.py`, `tests/test_service_plates.py`; the service's tests of
+the firm's longest block (`tests/test_service_standards.py`) now hold the families and the plates
+alike to it.
+
 ## 2026-10-13: the architect's answers are recorded as his; a fire-band test of access
 
 - `resolve(..., answered={reading: who})` records a selected reading as the architect's answer

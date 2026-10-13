@@ -71,7 +71,7 @@ from siteplan.optimizer.search import ground as search_ground
 from siteplan.optimizer.search import land as search_land
 from siteplan.optimizer.search import layout as search_layout
 from siteplan.optimizer.search import raising as search_raising
-from siteplan.prototypes import compose
+from siteplan.prototypes import compose, plates
 from siteplan.prototypes import library as prototype_library
 from siteplan.steps import buildings as step_buildings
 from siteplan.steps import main_road_height as step_height
@@ -1210,6 +1210,30 @@ REGISTRY: tuple[Constraint, ...] = (
              "lifts and stair are placeholders until egress is modelled (the validator reports "
              "egress NOT_CHECKED).",
         settles="The firm's own block types and core drawings.",
+    ),
+    Constraint(
+        "Towers", "The floor plates sized to the land (prototypes.plates, 2026-10-13): which are "
+                  "tried, how a plate is tested against a region of land, how many reach the "
+                  "search, and when a plate's floor counts as paid for by the loading.",
+        "single rows of " + ", ".join(f"{n} flats on {c} core(s)"
+                                      for n, c in plates.SINGLE_ROW_LENGTHS) +
+        f", enclosed and open gallery; double-loaded at "
+        f"{', '.join(map(str, plates.DOUBLE_PER_SIDE))} flats a side; slid {plates.FIT_STEP_M:g} m "
+        f"at a time, an edge within {plates.FIT_TOL_M:g} m standing in it; the "
+        f"{plates.SHORTLIST} most different that fit reach the search; a floor within "
+        f"{plates.LOADING_TOL_SQM:g} m² of what the loading pays for is not short",
+        Basis.ENGINE_DESIGN_ASSUMPTION, "none (prototypes.plates)",
+        ("prototypes.plates.SINGLE_ROW_LENGTHS", "prototypes.plates.DOUBLE_PER_SIDE",
+         "prototypes.plates.FIT_STEP_M", "prototypes.plates.FIT_TOL_M",
+         "prototypes.plates.SHORTLIST", "prototypes.plates.LOADING_TOL_SQM"),
+        note="Search bounds and tolerances, not law and not the firm's: every length and depth "
+             "comes from the library's flats, cores and corridor, and every plate is PRELIMINARY "
+             "(its prototype's source says what is assumed). The fit test slides a plate "
+             f"{plates.FIT_STEP_M:g} m at a time, so on land of an odd shape a plate with less "
+             f"than {plates.FIT_STEP_M:g} m to spare may be missed; it is never placed where it "
+             "does not stand whole.",
+        settles="The firm's own plate types, and the standards a plate is not checked against "
+                "(egress, lifts, accessibility, ventilation, how an open gallery counts).",
     ),
     Constraint(
         "Towers", "How a library's flats make a typical floor: what a flat's width x depth stands "

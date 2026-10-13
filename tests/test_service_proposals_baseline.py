@@ -105,6 +105,14 @@ and robust are the same layouts. Every proposal keeps the way clear and none fai
 (`test_no_layout_proposed_or_shown_lays_open_space_in_front_of_the_gate`). With the rule switched
 off the notes, the proposals, the four shown and the answer are as before; only the digests move,
 the pockets written from another first corner (the same ground).
+Re-pinned on 2026-10-13 again, where the search is also given floor plates sized to the land
+(prototypes.plates), each PRELIMINARY and named with its schedule on the approval page and in the
+notes (PLATE_NOTES): maximum yield and robust are the same layouts (`-86`, 480 flats and 651,200
+sft; `ALL-ALL-1`); balanced is `-218` (384 flats, 522,960 sft) where it was `-109` (376 flats,
+511,440 sft); the open-space option is `ALL-ALL-136`, 120 flats of plates leaving the most usable
+open space, where it was `-77` (306 flats). Six of the fifteen proposed use a plate, and none
+fails the law (each judged by the independent validator). With the plates switched off the
+proposals, the four shown and the answer are those of the pin before.
 
 The values pin exact output on the locked dependencies (uv.lock). They move only with a normative
 replacement and an entry in docs/behaviour-changes.md.
@@ -127,43 +135,95 @@ from siteplan.service import service as service_module
 
 TEST_CLASS = "characterization"
 
+# The floor plates the made-up land takes, each said with its schedule (2026-10-13).
+PLATE_NOTES = [
+    ("Floor plate plate-dl10-c2-3x2BHK-A-2x3BHK-A, PRELIMINARY: 10 flats a floor, 52.0 x 24.1 "
+     "m, sized to this site's land (0-7 m: region 1, 7-15 m: region 1, 15-18 m: region 1, 21 "
+     "m: region 1, 21-24 m: region 1, 24-27 m: region 1, 27-30 m: region 1); gross 1,254.0 m², "
+     "flats 1,055.3, cores 120.0, corridor 78.7; effective loading 1.030: the geometry needs "
+     "195.5 m² (18%) more floor than the 1.22 loading pays for; the saleable area is not "
+     "raised to cover it"),
+    ("Floor plate plate-sr8-c2-6x2BHK-A-2x3BHK-A, PRELIMINARY: 8 flats a floor, 89.1 x 13.1 m, "
+     "sized to this site's land (0-7 m: region 1, 7-15 m: region 1, 15-18 m: region 1, 21 m: "
+     "region 1, 21-24 m: region 1, 24-27 m: region 1, 27-30 m: region 1); gross 1,170.2 m², "
+     "flats 815.4, cores 165.0, corridor 189.8; effective loading 0.835: the geometry needs "
+     "369.1 m² (46%) more floor than the 1.22 loading pays for; the saleable area is not "
+     "raised to cover it"),
+    ("Floor plate plate-sr8g-c2-6x2BHK-A-2x3BHK-A, PRELIMINARY: 8 flats a floor, 89.1 x 13.1 "
+     "m, sized to this site's land (0-7 m: region 1, 7-15 m: region 1, 15-18 m: region 1, 21 "
+     "m: region 1, 21-24 m: region 1, 24-27 m: region 1, 27-30 m: region 1); gross 1,170.2 m², "
+     "flats 815.4, cores 165.0, open gallery 189.8; effective loading 0.835: the geometry "
+     "needs 369.1 m² (46%) more floor than the 1.22 loading pays for; the saleable area is not "
+     "raised to cover it"),
+    ("Floor plate plate-sr6-c2-4x2BHK-A-2x3BHK-A, PRELIMINARY: 6 flats a floor, 72.1 x 13.1 m, "
+     "sized to this site's land (0-7 m: region 1, 7-15 m: region 1, 15-18 m: region 1, 21 m: "
+     "region 1, 21-24 m: region 1, 24-27 m: region 1, 27-30 m: region 1); gross 946.5 m², "
+     "flats 627.9, cores 165.0, corridor 153.5; effective loading 0.799: the geometry needs "
+     "326.6 m² (53%) more floor than the 1.22 loading pays for; the saleable area is not "
+     "raised to cover it"),
+    ("Floor plate plate-sr6g-c2-4x2BHK-A-2x3BHK-A, PRELIMINARY: 6 flats a floor, 72.1 x 13.1 "
+     "m, sized to this site's land (0-7 m: region 1, 7-15 m: region 1, 15-18 m: region 1, 21 "
+     "m: region 1, 21-24 m: region 1, 24-27 m: region 1, 27-30 m: region 1); gross 946.5 m², "
+     "flats 627.9, cores 165.0, open gallery 153.5; effective loading 0.799: the geometry "
+     "needs 326.6 m² (53%) more floor than the 1.22 loading pays for; the saleable area is not "
+     "raised to cover it"),
+    ("Floor plate plate-sr4-c1-3x2BHK-A-1x3BHK-A, PRELIMINARY: 4 flats a floor, 44.6 x 13.1 m, "
+     "sized to this site's land (0-7 m: region 1, 7-15 m: region 1, 15-18 m: region 1, 21 m: "
+     "region 1, 21-24 m: region 1, 24-27 m: region 1, 27-30 m: region 1); gross 585.1 m², "
+     "flats 407.7, cores 82.5, corridor 94.9; effective loading 0.835: the geometry needs "
+     "184.5 m² (46%) more floor than the 1.22 loading pays for; the saleable area is not "
+     "raised to cover it"),
+    ("Floor plate plate-sr4g-c1-3x2BHK-A-1x3BHK-A, PRELIMINARY: 4 flats a floor, 44.6 x 13.1 "
+     "m, sized to this site's land (0-7 m: region 1, 7-15 m: region 1, 15-18 m: region 1, 21 "
+     "m: region 1, 21-24 m: region 1, 24-27 m: region 1, 27-30 m: region 1); gross 585.1 m², "
+     "flats 407.7, cores 82.5, open gallery 94.9; effective loading 0.835: the geometry needs "
+     "184.5 m² (46%) more floor than the 1.22 loading pays for; the saleable area is not "
+     "raised to cover it"),
+    ("Floor plate plate-sr3-c1-2x2BHK-A-1x3BHK-A, PRELIMINARY: 3 flats a floor, 36.0 x 13.1 m, "
+     "sized to this site's land (0-7 m: region 1, 7-15 m: region 1, 15-18 m: region 1, 21 m: "
+     "region 1, 21-24 m: region 1, 24-27 m: region 1, 27-30 m: region 1); gross 473.2 m², "
+     "flats 314.0, cores 82.5, corridor 76.8; effective loading 0.799: the geometry needs "
+     "163.3 m² (53%) more floor than the 1.22 loading pays for; the saleable area is not "
+     "raised to cover it"),
+]
 PINNED = {
     "notes": [
-        "FULL: 1536 configurations evaluated, 150 laid out, 24 judged by the validator, "
-        "15 proposed",
-        "FULL: 3 of 15 proposed hold under every reading of the open questions; the others each "
-        "name the readings they rest on",
-        "FULL: every layout leaves the height above sea level and the 45 t loading of the paving "
-        "UNVERIFIED",
+        *PLATE_NOTES,
+        ("FULL: 1536 configurations evaluated, 219 laid out, 24 judged by the validator, 15 "
+         "proposed"),
+        ("FULL: 3 of 15 proposed hold under every reading of the open questions; the others each "
+         "name the readings they rest on"),
+        ("FULL: every layout leaves the height above sea level and the 45 t loading of the paving "
+         "UNVERIFIED"),
     ],
     "proposed": [
         "full-not_counted-allowed-86",
-        "full-not_counted-allowed-89",
-        "full-not_counted-ALL-147",
+        "full-not_counted-allowed-91",
         "full-ALL-allowed-30",
+        "full-not_counted-allowed-218",
+        "full-not_counted-ALL-215",
         "full-not_counted-allowed-109",
-        "full-not_counted-ALL-59",
-        "full-not_counted-ALL-60",
-        "full-ALL-allowed-36",
-        "full-not_counted-allowed-133",
-        "full-not_counted-ALL-77",
-        "full-ALL-allowed-41",
-        "full-ALL-allowed-51",
+        "full-not_counted-ALL-62",
+        "full-ALL-allowed-32",
+        "full-not_counted-ALL-169",
+        "full-ALL-allowed-213",
+        "full-not_counted-ALL-79",
         "full-ALL-ALL-1",
-        "full-ALL-ALL-114",
-        "full-ALL-ALL-13",
+        "full-ALL-ALL-116",
+        "full-ALL-allowed-165",
+        "full-ALL-ALL-136",
     ],
-    "proposed_sha256": "6d6d1e0ce710fa2e04d4cb2cac51dc17b89fc2c364a06e30a4328653231abd49",
+    "proposed_sha256": "7c6b6fbd3cdf19d5bce9bed99d50945e181db3c07bf7f1e37475fbccb4cea218",
     "shown": [
-        ["full-not_counted-allowed-109", "BALANCED"],
+        ["full-not_counted-allowed-218", "BALANCED"],
         ["full-not_counted-allowed-86", "MAX_YIELD"],
-        ["full-not_counted-ALL-77", "CONVENTIONAL_OPEN_SPACE"],
+        ["full-ALL-ALL-136", "CONVENTIONAL_OPEN_SPACE"],
         ["full-ALL-ALL-1", "ROBUST"],
     ],
-    "shown_digests": ["63b380600ed90e28", "3095876e00b9243e",
-                      "57956b5219b11d01", "659c49d445391096"],
-    "answer_sha256": "9a05c21fc6a7dee4efaee0c17617276a3fc58e34e6d4ae28cd8468a4e6abef69",
-    "approval_page_sha256": "cd3ebee2af46849756df643999df9b16d2cbc91d92c45101983782cff1eb0181",
+    "shown_digests": ["24143760404fbc19", "3095876e00b9243e",
+                      "0557a3cff3687533", "659c49d445391096"],
+    "answer_sha256": "6926dbedc51fc2b2e9797d9a5d7b47d51fdf242516aee3da120723b5a60afa4a",
+    "approval_page_sha256": "2b9223fec60c0f2988b8ade6b34bb309ab94b2935c794437dad5a125cb6ce087",
 }
 PROPOSALS: list = []
 CONTEXTS: list = []

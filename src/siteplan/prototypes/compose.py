@@ -34,6 +34,7 @@ from __future__ import annotations
 import math
 from collections import Counter
 from dataclasses import dataclass
+from enum import StrEnum
 
 from shapely.geometry import box
 from shapely.geometry.polygon import orient
@@ -51,6 +52,50 @@ STAIRS_PER_CORE = 1
 MIX_SUM_TOLERANCE = 0.01  # the brief's own tolerance on a unit mix adding up to 1
 COMPOSED_SOURCES = (SourceKind.ENGINE_DEFAULT, SourceKind.FIRM_STANDARD)
 EDGE_M = 1e-6  # how near a flat's end must be to a core's to stand beside it
+
+
+class Loading(StrEnum):
+    """How a plate's flats stand on its corridor."""
+
+    DOUBLE_LOADED = "DOUBLE_LOADED"  # flats both sides of the corridor, the same flat opposite
+    SINGLE_ROW = "SINGLE_ROW"  # one row of flats beside the corridor
+
+
+class Corridor(StrEnum):
+    """What a single row's corridor is: both are preliminary design alternatives (2026-10-13,
+    the architect), neither taken as compliant."""
+
+    ENCLOSED = "ENCLOSED"
+    OPEN_GALLERY = "OPEN_GALLERY"
+
+
+@dataclass(frozen=True)
+class PlateSpec:
+    """A floor plate to compose from a flat library (2026-10-13): how its flats stand on the
+    corridor, the flats along one side in order (a double-loaded plate has the same flat
+    opposite each), its cores (one after the first half of each group of flats) and its
+    corridor."""
+
+    loading: Loading
+    flats: tuple[str, ...]  # flat type names, the library's
+    cores: int = 1
+    corridor: Corridor = Corridor.ENCLOSED
+
+    @property
+    def key(self) -> tuple:
+        return (self.loading.value, self.flats, self.cores, self.corridor.value)
+
+    @property
+    def flats_per_floor(self) -> int:
+        return len(self.flats) * (2 if self.loading is Loading.DOUBLE_LOADED else 1)
+
+    def default_id(self) -> str:
+        """A prototype id that says what the plate is: e.g. plate-sr3g-2x2BHK-B-1x3BHK-B."""
+        kind = "sr" if self.loading is Loading.SINGLE_ROW else "dl"
+        gallery = "g" if self.corridor is Corridor.OPEN_GALLERY else ""
+        counts = Counter(self.flats)
+        return (f"plate-{kind}{self.flats_per_floor}{gallery}-c{self.cores}-"
+                + "-".join(f"{n}x{name}" for name, n in sorted(counts.items())))
 
 
 class MixTracker:
@@ -163,9 +208,62 @@ def compose_prototype(library: FlatLibrary, family: PrototypeFamily,
         raise ValueError(f"a composed prototype comes from the engine's default or the firm's "
                          f"standard library, not {source_kind.value}")
     flats = pick_flats(library, checked_mix(library, unit_mix), plan.flats_per_side)
-    return _lay_out(f"{family.value.lower().replace('_', '-')}-{plan.flats_per_floor}", family,
-                    split_evenly(flats, plan.cores), library, source_kind,
-                    source or _source_of(library))
+    spec = PlateSpec(Loading.DOUBLE_LOADED, tuple(f.name for f in flats), plan.cores)
+    return compose_plate(library, spec, prototype_id=(
+        f"{family.value.lower().replace('_', '-')}-{plan.flats_per_floor}"), family=family,
+        source_kind=source_kind, source=source)
+
+
+def compose_plate(library: FlatLibrary, spec: PlateSpec, *,
+                  reference_own: dict[str, float] | None = None, prototype_id: str | None = None,
+                  family: PrototypeFamily | None = None,
+                  source_kind: SourceKind = SourceKind.ENGINE_DEFAULT,
+                  source: str | None = None) -> TowerPrototype:
+    """One floor plate from a spec (2026-10-13): the generalised composer. A double-loaded plate
+    is laid as every family is; a single row of flats beside an enclosed corridor or an open
+    gallery is laid with each flat as large as its type's own area in `reference_own` (a
+    double-loaded block of the same library), so a flat is the same flat in every plate.
+    Refused: a flat the library does not have, cores that would each serve more flats a side
+    than the library says one may, an open gallery on a double-loaded plate."""
+    if source_kind not in COMPOSED_SOURCES:
+        raise ValueError(f"a composed prototype comes from the engine's default or the firm's "
+                         f"standard library, not {source_kind.value}")
+    by_name = {f.name: f for f in library.flats}
+    unknown = sorted(set(spec.flats) - set(by_name))
+    if unknown:
+        raise ValueError(f"the flat library has no {unknown}")
+    if not 1 <= spec.cores <= len(spec.flats):
+        raise ValueError(f"{spec.cores} core(s) for {len(spec.flats)} flat(s) a side")
+    if math.ceil(len(spec.flats) / spec.cores) > library.flats_per_core_per_side:
+        raise ValueError(f"each core would serve {math.ceil(len(spec.flats) / spec.cores)} "
+                         f"flats a side; this library's cores serve "
+                         f"{library.flats_per_core_per_side}")
+    flats = [by_name[name] for name in spec.flats]
+    pid = prototype_id or spec.default_id()
+    if spec.loading is Loading.DOUBLE_LOADED:
+        if spec.corridor is not Corridor.ENCLOSED:
+            raise ValueError("a double-loaded plate's corridor is enclosed")
+        return _lay_out(pid, family or _family_of(spec), split_evenly(flats, spec.cores),
+                        library, source_kind, source or _source_of(library))
+    if reference_own is None:
+        raise ValueError("a single row needs each flat type's own area (reference_own)")
+    missing = sorted(set(spec.flats) - set(reference_own))
+    if missing:
+        raise ValueError(f"the reference block has no {missing} to size a single row from")
+    depth = library.flats[0].depth_m
+    sized = [f.model_copy(update={"width_m": round(reference_own[f.name] / depth, COORD_DIGITS)})
+             for f in flats]
+    groups = _even_length(split_evenly(sized, spec.cores), spec.cores * library.core_width_m)
+    return _single_row(pid, groups, library, source_kind,
+                       gallery=spec.corridor is Corridor.OPEN_GALLERY)
+
+
+def _family_of(spec: PlateSpec) -> PrototypeFamily:
+    """The double-loaded family a plate is nearest: its cores and its flats a side."""
+    per_side = len(spec.flats)
+    if spec.cores == 1:
+        return PrototypeFamily.SINGLE_CORE_SMALL if per_side <= 2 else PrototypeFamily.SINGLE_CORE
+    return PrototypeFamily.TWO_CORE_MEDIUM if per_side <= 4 else PrototypeFamily.TWO_CORE_LARGE
 
 
 def compose_library(library: FlatLibrary, unit_mix: dict[str, float] | None = None, *,
@@ -387,6 +485,10 @@ SINGLE_ROW_SOURCE = ("ENGINE-COMPOSED single-row block, PRELIMINARY: one row of 
                      "and windows on the corridor side are not checked.")
 
 
+GALLERY_SOURCE = (" Its corridor is drawn as an OPEN GALLERY: whether a gallery counts in the "
+                  "built-up area, and as open for fire and ventilation, is not known.")
+
+
 def compose_single_rows(library: FlatLibrary, unit_mix: dict[str, float] | None,
                         reference: TowerPrototype, *,
                         source_kind: SourceKind = SourceKind.ENGINE_DEFAULT
@@ -397,32 +499,23 @@ def compose_single_rows(library: FlatLibrary, unit_mix: dict[str, float] | None,
     block of the same library), so a flat is the same flat whichever block it stands in and the
     single-row block, with fewer flats to share its core and corridor, honestly carries more
     floor a flat. Labelled engine-composed and preliminary in its source."""
-    if source_kind not in COMPOSED_SOURCES:
-        raise ValueError(f"a composed prototype comes from the engine's default or the firm's "
-                         f"standard library, not {source_kind.value}")
     own: dict[str, float] = {}
     for module in reference.modules:
         own.setdefault(module.type_id, module.shape.area_sqm)
-    depth = library.flats[0].depth_m
     mix = checked_mix(library, unit_mix)
-    out = []
-    for count in SINGLE_ROW_FLATS:
-        picked = pick_flats(library, mix, count)
-        missing = sorted({f.name for f in picked} - set(own))
-        if missing:
-            raise ValueError(f"the reference block has no {missing} to size a single row from")
-        flats = [f.model_copy(update={"width_m": round(own[f.name] / depth, COORD_DIGITS)})
-                 for f in picked]
-        [flats] = _even_length([flats], library.core_width_m)
-        out.append(_single_row(f"single-row-{count}", flats, library, source_kind))
-    return out
+    return [compose_plate(library, PlateSpec(Loading.SINGLE_ROW, tuple(
+        f.name for f in pick_flats(library, mix, count))), reference_own=own,
+        prototype_id=f"single-row-{count}", source_kind=source_kind)
+        for count in SINGLE_ROW_FLATS]
 
 
-def _single_row(prototype_id: str, flats: list[FlatType], library: FlatLibrary,
-                source_kind: SourceKind) -> TowerPrototype:
-    """The flats in a row, a core in line after the first half, the corridor along one side:
-    centred on the origin, its long side along x (turned a quarter if shorter than deep)."""
-    row = _row([flats], library.core_width_m)
+def _single_row(prototype_id: str, groups: list[list[FlatType]], library: FlatLibrary,
+                source_kind: SourceKind, *, gallery: bool = False) -> TowerPrototype:
+    """The groups of flats in a row, a core in line after the first half of each, the corridor
+    (or open gallery) along one side: centred on the origin, its long side along x (turned a
+    quarter if shorter than deep)."""
+    flats = [flat for group in groups for flat in group]
+    row = _row(groups, library.core_width_m)
     depth = flats[0].depth_m
     corridor = library.corridor_width_m
     half = (depth + corridor) / 2
@@ -443,7 +536,8 @@ def _single_row(prototype_id: str, flats: list[FlatType], library: FlatLibrary,
     long_m, short_m = (2 * half, row.length) if turned else (row.length, 2 * half)
     return TowerPrototype(
         id=prototype_id, family=PrototypeFamily.SINGLE_ROW, source_kind=source_kind,
-        source=SINGLE_ROW_SOURCE, footprint=turn(along(0.0, row.length, -half, half)),
+        source=SINGLE_ROW_SOURCE + (GALLERY_SOURCE if gallery else ""),
+        footprint=turn(along(0.0, row.length, -half, half)),
         length_m=_clean(long_m), depth_m=_clean(short_m), cores=len(row.cores), modules=modules,
         core_zones=[{"shape": turn(along(start, end, *flat_band)), "lifts": LIFTS_PER_CORE,
                      "stairs": STAIRS_PER_CORE} for start, end in row.cores],

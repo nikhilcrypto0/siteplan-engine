@@ -66,6 +66,7 @@ from siteplan.optimizer.search.quantities import Quantities, quantities
 from siteplan.optimizer.search.readings import FloorClass, Profile, floor_classes
 from siteplan.optimizer.search.road_graph import NODE_SNAP_M, Road
 from siteplan.optimizer.search.turns import Turning, junction_turns, loop_turns
+from siteplan.prototypes.plates import PLATE_SOURCE
 from siteplan.towers import orientations
 
 EPS_LAND_M = 0.02  # ground a block must stand this far inside, so no rounding puts it over a line
@@ -147,10 +148,13 @@ def make_run(site: CanonicalSiteModel, rules: ResolvedRules, brief: DesignBrief,
              envelope: BuildableEnvelope, kit: Sequence[TowerPrototype],
              profiles: Sequence[Profile], with_margins: bool = True) -> Run:
     q = quantities(site, rules, brief, with_margins)
+    # The library's own blocks set the main depth; a floor plate sized to the land (2026-10-13)
+    # joins the columns of that depth, or competes as another depth, never outvotes them.
     depths: dict[float, list[TowerPrototype]] = {}
-    for prototype in kit:
+    for prototype in [p for p in kit if not p.source.startswith(PLATE_SOURCE)] or kit:
         depths.setdefault(round(prototype.depth_m, 2), []).append(prototype)
-    depth, used = max(depths.items(), key=lambda item: (len(item[1]), item[0]))
+    depth, _ = max(depths.items(), key=lambda item: (len(item[1]), item[0]))
+    used = [p for p in kit if round(p.depth_m, 2) == depth]
     classes = {profile.key: {p.id: floor_classes(rules, brief, p, profile) for p in kit}
                for profile in profiles}
     plot = plot_of(site, envelope)

@@ -23,6 +23,9 @@ from siteplan.validator.readings import plain, verdict
 from siteplan.validator.shapes import polygon_of, sides_of
 
 BRIEF = "the brief"
+# How prototypes.plates.PLATE_SOURCE begins: the validator keeps its own copy (it imports no
+# generator module) and reads each block's own declared source.
+PLATE_MARK = "ENGINE-COMPOSED floor plate, PRELIMINARY"
 UNITS_TARGET_TOLERANCE = 0.05  # a units target is met within this share
 SIZE_SLACK_SQM = 0.5
 
@@ -170,6 +173,21 @@ def _standards_check(brief: DesignBrief, candidate: CandidateLayout,
                  BRIEF)
 
 
+def _plate_check(towers: tuple[TowerGeometry, ...]) -> Check | None:
+    """Blocks drawn from a floor plate sized to the land (2026-10-13): said, never judged. Its
+    flats, cores and corridor are the library's; egress, lifts, accessibility, ventilation and
+    how an open gallery counts are not checked, so the plate is PRELIMINARY."""
+    used = sorted({t.prototype.id for t in towers if t.prototype.source.startswith(PLATE_MARK)})
+    if not used:
+        return None
+    names = ", ".join(t.name for t in towers if t.prototype.id in used)
+    return plain(Family.PROGRAM, "Floor plate: PRELIMINARY", Status.INFO,
+                 f"{names} drawn from {', '.join(used)}",
+                 "the firm's own plate types, and the standards a plate is not checked against",
+                 "each prototype's source", note="a floor plate sized to this site's land from "
+                 "the flat library; its prototype's source lists what is assumed")
+
+
 def program_checks(brief: DesignBrief, candidate: CandidateLayout,
                    towers: tuple[TowerGeometry, ...], rules: ResolvedRules) -> list[Check]:
     counts = units_by_type(towers)
@@ -179,4 +197,6 @@ def program_checks(brief: DesignBrief, candidate: CandidateLayout,
     height = _height_check(brief, towers)
     out += [height] if height else []
     out.append(_standards_check(brief, candidate, towers))
+    plate = _plate_check(towers)
+    out += [plate] if plate else []
     return out
