@@ -203,6 +203,20 @@ REGISTRY: tuple[Constraint, ...] = (
              "worked out from floors (HeightRules.lowest_floor_raise_m).",
     ),
     Constraint(
+        "Height", "The datum a height is measured from: the ground at each block, taken as level "
+                  "with the abutting road.",
+        "the ground at the block (no levels used)", Basis.ENGINE_DESIGN_ASSUMPTION,
+        "none (optimizer.floors, validator.measure)",
+        note="Rule 2(e) measures 'from the abutting road and in case of undulated terrain ... "
+             "average of the corresponding ground level'. The engine uses no level: it starts "
+             "every height at the ground under the block. Where the ground stands below the "
+             "road the engine's heights are greater than the rule's (stricter); where it stands "
+             "above, they are smaller (more lenient). Survey levels are read in step 1 and only "
+             "reported.",
+        settles="Road and ground levels taken into the heights, or the authority's reading of "
+                "rule 2(e) on sloping land.",
+    ),
+    Constraint(
         "Height", "A parking stilt's floor stands this far above the ground the height is "
                   "measured from, so a block's height is this raise plus its storeys.",
         _m(rules.COVERED_PARKING_RAISE_M), Basis.UNRESOLVED_INTERPRETATION,
@@ -263,7 +277,8 @@ REGISTRY: tuple[Constraint, ...] = (
              "sets it. The club house keeps the same gap from every tower. Two blocks below "
              "21 m are not open: rule 5(f)(xiii) says the tallest block's side setback. What "
              "a block below 21 m and a high-rise keep between them is open here too (rule "
-             "8(j): Table III column 10 or Table IV column 4, 'as the case may be').",
+             "8(j): Table III column 10 or Table IV column 4, 'as the case may be'). Carried "
+             "as the reading mixed_height_spacing.",
         settles="A sanctioned plan with two blocks of different heights.",
     ),
     Constraint(
@@ -501,7 +516,8 @@ REGISTRY: tuple[Constraint, ...] = (
         "the larger of the net and the gross", Basis.UNRESOLVED_INTERPRETATION,
         rules.OPEN_SPACE_CLAUSE,
         note="The text says 'total site area' without saying gross or net; the layout meets "
-             "the larger so it passes either way, and the checker tests both.",
+             "the larger so it passes either way, and the checker tests both (the reading "
+             "open_space_basis).",
         settles="A sanctioned plan's tot-lot share and the site area it was taken of.",
     ),
     Constraint(
@@ -569,7 +585,9 @@ REGISTRY: tuple[Constraint, ...] = (
         ("grounds.WATER_FIRE_CLEARANCE_M",),
         note="Rule 3(a)(ii) forbids buildings in the buffer and 3(a)(iii)(3) lets it count as "
              "open space; neither says whether vehicles may use it. The buffer, the Table IV "
-             "setback and this clearance are a union, never added together.",
+             "setback and this clearance are a union, never added together. Carried as the "
+             "reading road_in_water_buffer, which no check reads yet: its alternative changes "
+             "no verdict.",
         settles="A sanctioned plan with a road or fire lane inside a water buffer, or HMDA's or "
                 "the irrigation department's word.",
     ),
@@ -601,7 +619,8 @@ REGISTRY: tuple[Constraint, ...] = (
         _m(access.APPROACH_M), Basis.ENGINE_DESIGN_ASSUMPTION, "none (access.APPROACH_M)",
         ("access.APPROACH_M",),
         note="The law is the 9 to 18 m range (the internal-roads entry); taking the minimum "
-             "frees land for towers. The report says the authority may ask for more.",
+             "frees land for towers. The report says the authority may ask for more. Carried "
+             "as the reading approach_width.",
         settles="The firm's or the authority's preferred approach width.",
     ),
     Constraint(
@@ -793,9 +812,10 @@ REGISTRY: tuple[Constraint, ...] = (
         note="The order gives the 9 m, not where it is measured. The outer-edge reading is the "
              "one that fits the state's 7 m minimum setback and the 7 m rule 13(c)(vii) keeps "
              "for fire vehicles; a 9 m centreline would need 7.76 m. The 6.88 m is derived from "
-             "this reading and is nowhere written in the rule. Kept as the conservative test. "
-             "The full search takes both readings from the resolved rules and keeps the larger "
-             "band, outer radius less inner radius x sin 45 degrees for a square corner "
+             "this reading and is nowhere written in the rule. It is the more lenient of the "
+             "two readings (fire_turning_radius, selected outer_edge by default). The full "
+             "search takes the readings the resolved rules carry and keeps the larger band, "
+             "outer radius less inner radius x sin 45 degrees for a square corner "
              "(optimizer.search.quantities.QUARTER_TURN).",
         settles="The fire NOC of a sanctioned high-rise, or the layout agreed with the Chief "
                 "Fire Officer, which 4.6(c) asks for.",
@@ -835,8 +855,9 @@ REGISTRY: tuple[Constraint, ...] = (
              "ASSUMED_FOR_TEST. G.O.Ms.No.7 of 2016 rewrote the clause as 'upto 3% of the total "
              "built up area (or) 50,000 Sft. whichever is lower', which may make 3% a ceiling "
              "and adds a cap (it binds above about 1.67 million sft built-up). Not settled "
-             "law: the checker labels its finding so, and reports a block above the cap "
-             "UNVERIFIED.",
+             "law (the reading amenity_share, selected minimum_3_percent by default): under "
+             "the default the cap is never tested; only with the reading left open does the "
+             "checker report a block above the cap UNVERIFIED.",
         settles="The amenities area on a sanctioned plan of 100 units or more against its "
                 "built-up area, or the architect's reading of the 2016 wording.",
     ),
@@ -935,7 +956,53 @@ REGISTRY: tuple[Constraint, ...] = (
         f"{_pct(rules.VISITOR_PARKING_FRACTION)} of the Table V area", Basis.LEGAL_RULE,
         rules.VISITOR_PARKING_CLAUSE, ("rules.VISITOR_PARKING_FRACTION",),
         note="The share is the order's; reading 'on ground' as the stilt or the surface is an "
-             "interpretation the inventory records.",
+             "interpretation the inventory records (the reading visitor_parking).",
+    ),
+    Constraint(
+        "Open space", "Whether a tot-lot must stand on soft ground to count as organised open "
+                      "space.",
+        "both readings evaluated (tot_lot_surface)", Basis.UNRESOLVED_INTERPRETATION,
+        rules.OPEN_SPACE_CLAUSE,
+        note="The rule names greenery, a tot-lot and soft landscaping, and says nothing of the "
+             "tot-lot's surface.",
+        settles="A sanctioned plan whose counted tot-lot is paved, or the authority's reading.",
+    ),
+    Constraint(
+        "Open space", "Whether the rule's 'etc.' takes in open recreation other than the uses it "
+                      "names.",
+        "both readings evaluated (open_space_other_uses)", Basis.UNRESOLVED_INTERPRETATION,
+        rules.OPEN_SPACE_CLAUSE,
+        note="A court, a pool or a paved deck counts under one reading and not the other.",
+        settles="The organised open space a sanctioned plan's area statement counts.",
+    ),
+    Constraint(
+        "Open space", "Which wording of rule 7(a)(viii)'s 2 m planting strip applies.",
+        "G.O.Ms.No.7 of 2016 (setbacks of 9 m and above) unless a project selects the 2012 "
+        "wording (green_strip_order)", Basis.UNRESOLVED_INTERPRETATION,
+        rules.PERIPHERAL_GREEN_STRIP_CLAUSE,
+        note="Carried only when a project selects it; the bands are built from the selection "
+             "and no check reads the reading itself. The architect confirmed G.O.Ms.No.7 of "
+             "2016 on 2026-10-13 (G.O.Ms.No.50 of 2019 keeps its amendments 'as it is').",
+        settles="The order the authority applies.",
+    ),
+    Constraint(
+        "Roads", "Which width of the access road Table IV reads when the master plan widens it.",
+        "both readings carried (table_iv_road_width)", Basis.UNRESOLVED_INTERPRETATION,
+        rules.ROAD_WIDENING_CLAUSE,
+        note="Carried only for a road with a master-plan width. No check reads the reading: "
+             "the validator uses the master-plan width when land is surrendered "
+             "(validator.blocks.road_width), the legacy path always.",
+        settles="An approval letter on a road due for widening: which width it used.",
+    ),
+    Constraint(
+        "Parking", "Whether visitors' parking may use a side or rear setback wider than 6 m.",
+        "not used (visitor_parking_in_setback)", Basis.UNRESOLVED_INTERPRETATION,
+        rules.VISITOR_PARKING_CLAUSE,
+        note="The stricter reading: no bay stands in a setback (NBC 4.6(c) keeps the open "
+             "spaces round a high-rise free of parking). No check reads the reading: its "
+             "alternative changes no verdict.",
+        settles="A sanctioned high-rise plan with visitors' bays in a side or rear setback, or "
+                "the fire department's reading.",
     ),
     Constraint(
         "Parking", "Cellar ramps: the single ramp's width, the pair's, and the gradient.",
@@ -962,7 +1029,9 @@ REGISTRY: tuple[Constraint, ...] = (
         Basis.UNRESOLVED_INTERPRETATION, rules.CELLAR_SETBACK_CLAUSE,
         note="Re-read on 2026-10-01: '0.5m additional setback for every additional cellar floor "
              "shall be insisted' fixes the amounts, not whether the upper floors keep the "
-             "smaller setback. The stricter reading is taken; it matters only from two cellars.",
+             "smaller setback. The stricter reading is taken (cellar_extra_setback = "
+             "all_levels); it matters only from two cellars. No check reads the reading yet: "
+             "its alternative changes no verdict.",
         settles="The cellar section on a sanctioned plan with two or more cellars.",
     ),
     Constraint(

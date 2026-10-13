@@ -20,6 +20,8 @@ from siteplan.contracts.resolved_rules import (
     AMENITY_SHARE,
     CIRCULATION_IN_SETBACK,
     FIRE_TURNING_RADIUS,
+    GO7_2016,
+    GREEN_STRIP_ORDER,
     MIXED_HEIGHT_SPACING,
     NBC_FIRE_HEIGHT,
     OPEN_SPACE_BASIS,
@@ -46,6 +48,8 @@ from siteplan.legal.readings import (
     CELLAR_EXTRA_SETBACK,
     ROAD_IN_WATER_BUFFER,
     TABLE_IV_ROAD_WIDTH,
+    VISITOR_PARKING_IN_SETBACK,
+    interpretations,
 )
 from siteplan.legal.resolve import AIRPORT_CLAUSE, resolve, rules_digest
 
@@ -142,12 +146,20 @@ AUDITED_READINGS = {
     "NBC's own high-rise line, the stilt included": NBC_FIRE_HEIGHT,
     "How much of a block must face a road for it to open onto one": OPENS_ONTO_ROAD,
     "A parking stilt's floor stands this far above the ground": STILT_RAISE,
+    "Whether a tot-lot must stand on soft ground": TOT_LOT_SURFACE,
+    "Whether the rule's 'etc.' takes in open recreation": OPEN_SPACE_OTHER_USES,
+    "Which wording of rule 7(a)(viii)'s 2 m planting strip applies": GREEN_STRIP_ORDER,
+    "Which width of the access road Table IV reads": TABLE_IV_ROAD_WIDTH,
+    "Whether visitors' parking may use a side or rear setback": VISITOR_PARKING_IN_SETBACK,
 }
 
 
 def test_every_reading_the_audit_leaves_open_is_carried_as_an_interpretation():
     rules = resolve(load("rectangle", "CanonicalSiteModel"))
     carried = {i.id for i in rules.interpretations}
+    # carried only on some sites: a road the master plan widens, a project's green-strip wording
+    carried |= {r["id"] for r in interpretations(master_plan_road=True,
+                                                 selections={GREEN_STRIP_ORDER: GO7_2016})}
     open_ones = [c.what for c in REGISTRY if c.basis is ConstraintBasis.UNRESOLVED_INTERPRETATION]
     for what in open_ones:
         reading = next((r for start, r in AUDITED_READINGS.items() if what.startswith(start)), None)

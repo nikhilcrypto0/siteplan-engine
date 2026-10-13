@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from itertools import groupby
 
-from siteplan import rules
+from siteplan import rules, scope
 
 
 class Reading(StrEnum):
@@ -97,17 +97,22 @@ INVENTORY: tuple[Entry, ...] = (
         Reading.AS_WRITTEN, (*_BOTH, Where.FLOORS), ("HIGH_RISE_THRESHOLD_M", "HIGH_RISE_CLAUSE"),
     ),
     Entry(
-        "Height", "Height is measured from the abutting road, and the stilt floor counts in it.",
-        "stilt + floors x floor-to-floor height",
+        "Height", "Height is measured from the abutting road; whether the stilt floor counts in "
+                  "the height that picks the Table IV row is an open reading.",
+        "stilt + floors x floor-to-floor height (counted) or floors only (not counted)",
         "G.O.168 rule 2(e) (the stilt exclusion in rule 5(c) is written for Table III)",
         Reading.INTERPRETED, (*_BOTH, Where.FLOORS),
-        choice="The stilt counts. Rule 2(e) leaves out only the parapet, staircase head room, "
-               "lift room and water tank; the one stilt exclusion, rule 5(c), covers the Table III "
-               "buildings below high-rise; rule 7(xvi) of 2016 leaves out only parking floors "
-               "above the ground floor. Rule 5's own heading calls the buildings it governs "
-               "'below 18m in height inclusive of Stilt / Parking Floor' (p.9), which leans to "
-               "counting the stilt for the class. The floors calculator gives the answer both "
-               "ways.",
+        choice="Both readings are evaluated (stilt_in_rule_height, ALL by default); a project "
+               "may select one for a study, and a result that rests on it is not settled law. "
+               "Rule 2(e) leaves out only the parapet, staircase head room, lift room and water "
+               "tank; the one stilt exclusion, rule 5(c), covers the Table III buildings below "
+               "high-rise; rule 7(xvi) of 2016 leaves out only parking floors above the ground "
+               "floor. Rule 5's own heading calls the buildings it governs 'below 18m in height "
+               "inclusive of Stilt / Parking Floor' (p.9), which leans to counting the stilt for "
+               "the class. 'Stilt + N' (one stilt and N floors) is the floor arrangement, a "
+               "project input, and settles neither reading. The datum is not modelled: heights "
+               "start at the ground at each block, taken as level with the abutting road "
+               "(ENGINE_DESIGN_ASSUMPTION in constraints.py).",
         settles="A sanctioned stilt + N floors high-rise whose approved setback or road width "
                 "fits one reading and not the other. The firm's own Dhulapally drawing (not "
                 "sanctioned) keeps the setbacks of its blocks without their stilt.",
@@ -234,9 +239,10 @@ INVENTORY: tuple[Entry, ...] = (
         Reading.NOT_MODELLED,
         choice="Not drawn. Where no existing road runs along any side, the campus gives a 12 m, "
                "two-lane public road along one edge, and the road-widening concessions (TDR, "
-               "setback relaxation or extra floors) are granted for it. Dhulapally fits: its "
-               "roads all end at the plot, and the firm's plan gives a 40 ft (12.2 m) road along "
-               "the east, the 1,163 m² cut from the surveyed land.",
+               "setback relaxation or extra floors) are granted for it. It does not apply where "
+               "'an existing abutting peripheral road' runs on any side; whether a road that "
+               "ends at the plot is one is a site question for the architect, as is whether "
+               "land the firm gives up is this road or road widening.",
     ),
     Entry(
         "Road", "Internal roads of a group development scheme: a main approach road, other and "
@@ -324,8 +330,8 @@ INVENTORY: tuple[Entry, ...] = (
                "holds (heights are metres), so a block up to 15 m is read as 'up to 5 floors' "
                "(9 m) and one above it as six floors (12 m), the line Table III's own 15 m "
                "draws and rule 5(e) confirms with its 12 m above 15 m. A scheme of more than "
-               "100 units needs 12 m whatever its height, which the validator knows (the "
-               "units), not the rules.",
+               "100 units needs 12 m whatever its height: not checked yet (the validator holds "
+               "the units, but no check reads TABLE_II_B2_UNITS_OVER).",
         settles="A sanctioned non-high-rise group scheme on a 9 m road with six floors or more "
                 "than 100 units, or one refused for them.",
     ),
@@ -643,11 +649,11 @@ INVENTORY: tuple[Entry, ...] = (
         ("NO_OPENING_REDUCTION_M", "NO_OPENING_LIMITS_M", "NO_OPENING_CLAUSE",
          "LONG_BLOCK_FROM_M", "LONG_BLOCK_SHARE", "LONG_BLOCK_LESS_M", "LONG_BLOCK_MAX_M",
          "LONG_BLOCK_CLAUSE"),
-        choice="`siteplan steps` (step 4) applies the notes as G.O.50 prints them, the architect's "
-               "seven files being its only rule source: the long-block note sets the open space "
-               "for each length of block; the 1 m less is shown as an option of the building's "
-               "own design. G.O.Ms.No.65 of 2019, not one of the seven files, deleted the "
-               "long-block note, and the engine's other parts follow it.",
+        choice="`siteplan steps` (step 4) shows both notes as G.O.50 prints them and applies "
+               "neither: the long-block figure is calculated for each length of block and "
+               "displayed only, and the 1 m less is shown as an option of the building's own "
+               "design. G.O.Ms.No.65 of 2019 deleted the long-block note; no layout or check "
+               "applies it.",
         settles="A sanctioned plan of a block longer than 40 m, or the architect's word.",
     ),
     Entry(
@@ -1057,8 +1063,9 @@ INVENTORY: tuple[Entry, ...] = (
                "3% with no cap, which is the 2012 wording, so the test is conservative. Since "
                "2016 the rule reads 'upto 3% ... (or) 50,000 Sft. whichever is lower': that "
                "adds a cap (it binds above about 1.67 million sft built-up) and may make 3% a "
-               "ceiling rather than a floor. The checker says so on its finding and reports a "
-               "block above the cap UNVERIFIED.",
+               "ceiling rather than a floor. Under the default reading (amenity_share = "
+               "minimum_3_percent) the cap is never tested; only when the reading is left open "
+               "(ALL) does the checker test it, reporting a block above the cap UNVERIFIED.",
         settles="The amenities area on a sanctioned plan of 100 units or more, against its "
                 "built-up area.",
     ),
@@ -1104,6 +1111,9 @@ INVENTORY: tuple[Entry, ...] = (
                "as Hyderabad names them. The rule modifies earlier provisions that are unread.",
         settles="A sanctioned scheme that used TDR floors, and the provisions this one modifies.",
     ),
+    # What the engine does not check, from the one register of it (scope.py).
+    *(Entry("Not checked", r.name, "", r.clause, Reading.NOT_MODELLED,
+            choice=f"{r.kind.value}: {r.why}.") for r in scope.NOT_CHECKED),
 )
 
 

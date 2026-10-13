@@ -48,6 +48,7 @@ ROAD_IN_WATER_BUFFER = "road_in_water_buffer"
 CELLAR_EXTRA_SETBACK = "cellar_extra_setback"
 TABLE_IV_ROAD_WIDTH = "table_iv_road_width"  # carried only when a master-plan width is known
 NAMED_USES = "'greenery, tot lot or soft landscaping, etc.'"
+SELECTED_BY_PROFILE = "selected by a test profile"  # the marker an answer later replaces
 
 # The three denominators of the organised open space: ResolvedRules gives the area under each.
 OPEN_SPACE_READINGS = ("gross_before_surrender", "gross_after_surrender", "net_after_surrender")
@@ -330,10 +331,12 @@ def interpretations(*, master_plan_road: bool = False,
         reading["selected"] = chosen
         reading["status"] = Provenance.UNVERIFIED if chosen == ALL else (
             Provenance.ASSUMED_FOR_TEST)
-        reading["sources"] = [*reading["sources"], "selected by a test profile"]
+        reading["sources"] = [*reading["sources"], SELECTED_BY_PROFILE]
     for reading_id, who in (answered or {}).items():  # the architect's answer, not a test's
         if reading_id not in known or known[reading_id]["selected"] == ALL:
             raise ValueError(f"answered: '{reading_id}' is not a selected reading")
         known[reading_id]["status"] = Provenance.USER_CONFIRMED
-        known[reading_id]["sources"] = [*known[reading_id]["sources"][:-1], who]
+        # the answer takes the place of the test profile's marker, never of a legal source
+        kept = [s for s in known[reading_id]["sources"] if s != SELECTED_BY_PROFILE]
+        known[reading_id]["sources"] = [*kept, who]
     return readings

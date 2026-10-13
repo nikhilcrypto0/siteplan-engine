@@ -42,7 +42,7 @@ SERVED = "Internal roads: every block served"
 PATHWAYS = "Internal roads: blocks up to 12 m (pathways)"
 BELOW = "Fire access below 21 m (rule 15(a)(i))"
 RULE_15_A_I = ('"The building requirements and standards other than heights and setbacks '
-               'specified in the National Building Code - 2005 shall be complied with."')
+               'specified in the National Building Code 2016 shall be complied with."')
 
 
 def _counted(inputs):
@@ -222,7 +222,9 @@ def test_what_the_rest_of_the_code_asks_below_21_m_is_not_checked_and_says_why()
     report = with_low_bands(all_low(fixture("rectangle"))).report()
     c = check(report, BELOW)
     assert c.finding.status is Z.NOT_CHECKED and BELOW in report.not_checked
-    assert "rule 15(a)(i), p.20" in c.finding.note and RULE_15_A_I in c.finding.note
+    # the text in force: G.O.Ms.No.50 of 2019 substituted the 2012 wording, which named NBC 2005
+    assert "substituted by G.O.Ms.No.50 of 2019" in c.finding.note
+    assert RULE_15_A_I in c.finding.note and "2005" not in c.finding.note
     assert "1.2(b)(6)" in c.finding.note and "4.3.2.2" in c.finding.note
     assert "not shown on a site plan" in c.finding.note
     assert "other than heights and setbacks" in c.finding.required

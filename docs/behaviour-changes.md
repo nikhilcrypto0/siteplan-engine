@@ -4,6 +4,36 @@ A characterization test (tests/manifest.py) pins what the engine produces today.
 only together with a normative replacement test and an entry here: what changed, why, the
 evidence, and the test that now holds the behaviour. Newest first.
 
+## 2026-10-13: the register and its wording corrected (regulatory audit, phase 0; no verdict changes)
+
+From the regulatory audit of 2026-10-13. No check, figure or verdict changes.
+- **The validator's note on rule 15(a)(i)** quoted the 2012 text ("National Building Code -
+  2005"). G.O.Ms.No.50 of 2019, Amendment-1, substituted it with NBC 2016, the reading the
+  checks already used. It now quotes the text in force (`validator/fire.LOW_FIRE_RULE`). Test:
+  `tests/test_validator_low_blocks_site.py`.
+- **The inventory rows that claimed more than the code does are corrected:**
+  - the stilt row: both readings are evaluated, and Stilt + N is the floor arrangement;
+  - Table II's 100-unit road: not checked;
+  - the long-block note: displayed by step 4, never applied;
+  - the amenity cap: tested only with the reading open.
+- **The rule 8(k) row** no longer says Dhulapally fits; that is a site question.
+- **A new register of what is not checked** (`scope.py`), listed in the inventory. It covers:
+  - the building services the firm designs by hand: STP and solid waste, services plan, EV
+    charging, dual piping, digital infrastructure;
+  - conditions of the permission: TDR loading above the 10th floor, the authority, the fire NOC;
+  - checks that need a site fact: the approach road's surface, areas without high-rise, defence.
+  Tests: `tests/test_scope.py`.
+- **The number audit now names every open reading** the resolver carries:
+  - five had no row: `tot_lot_surface`, `open_space_other_uses`, `green_strip_order`,
+    `table_iv_road_width`, `visitor_parking_in_setback`;
+  - the fire-turning row no longer calls its reading the conservative one (it is the lenient
+    one);
+  - the height datum, the ground at each block, is recorded as an engine assumption.
+  Test: `test_every_reading_the_resolver_carries_has_a_row`.
+- **Recording the architect's answer** (`resolve(..., answered=...)`) replaced a reading's last
+  source, a legal clause for a reading selected by default. It now drops only the test profile's
+  marker. Test: `test_an_answer_never_takes_the_place_of_a_legal_source`.
+
 ## 2026-10-13: floor plates sized to the land join the search, each PRELIMINARY
 
 The architect asked for blocks shaped to land the firm's families do not fit, competing

@@ -59,3 +59,19 @@ def test_a_block_is_served_when_its_fire_band_meets_a_road_along_6_m():
     corner = box(-10, -10, -5, 4)  # the band only nicks a road off the block's corner
     assert opens_onto(_Block, corner, FIRE_BAND, None, 6.0) is False
     assert opens_onto(_Block, six_away, FIRE_BAND, None, None) is None  # no width: unknown
+
+
+def test_an_answer_never_takes_the_place_of_a_legal_source():
+    """Recording an answer drops only the test profile's marker; every source the reading cites
+    stays (it once replaced the last source, a legal one for a reading selected by default)."""
+    from siteplan.contracts.resolved_rules import FIRE_TURNING_RADIUS
+    from siteplan.legal.readings import SELECTED_BY_PROFILE
+
+    default = resolve(SITE).interpretation(FIRE_TURNING_RADIUS)
+    answered = resolve(SITE, answered={FIRE_TURNING_RADIUS: SAID}).interpretation(
+        FIRE_TURNING_RADIUS)
+    assert answered.sources == [*default.sources, SAID]
+    selected = resolve(SITE, selections={OPENS_ONTO_ROAD: FIRE_BAND},
+                       answered={OPENS_ONTO_ROAD: SAID}).interpretation(OPENS_ONTO_ROAD)
+    assert SELECTED_BY_PROFILE not in selected.sources and selected.sources[-1] == SAID
+    assert selected.sources[:-1] == resolve(SITE).interpretation(OPENS_ONTO_ROAD).sources

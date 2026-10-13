@@ -49,6 +49,7 @@ EXEMPT = {
     "dxf_survey": "survey reading: what a drawing settles is a SITE_INPUT, EXTRACTED",
     "guards": "the model's guards: cleaning a brief, checking the numbers the model quotes",
     "inventory": "the rule inventory: it lists rules.py, which this audit classifies",
+    "scope": "the register of what is not checked: clauses and reasons, no number any check uses",
     "layout_export": "rendering only: an option as DXF",
     "llm": "the model's transport: token budgets, timeouts and retries",
     "mcp_server": "MCP plumbing: listing and brief limits, the approval's timeout",
@@ -410,3 +411,14 @@ def test_the_command_prints_the_audit(capsys):
     assert main(["constraints", "--markdown"]) == 0
     out = capsys.readouterr().out
     assert out.startswith("| Basis |") and f"{len(REGISTRY)} constraints:" in out
+
+
+def test_every_reading_the_resolver_carries_has_a_row():
+    """An open reading of the law (legal/readings.py) is never absent from the audit: each is
+    named in a row that says what it is and what would settle it (2026-10-13)."""
+    from siteplan.contracts.resolved_rules import GO7_2016, GREEN_STRIP_ORDER
+    from siteplan.legal.readings import interpretations
+
+    text = Path(siteplan.__file__).with_name("constraints.py").read_text()
+    carried = interpretations(master_plan_road=True, selections={GREEN_STRIP_ORDER: GO7_2016})
+    assert [r["id"] for r in carried if r["id"] not in text] == []

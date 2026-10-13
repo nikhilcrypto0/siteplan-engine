@@ -61,13 +61,14 @@ from siteplan.validator.shapes import (
 from siteplan.validator.turning import junction_turns, road_bends, round_block, turning_for
 from siteplan.validator.zones import bearings_near, compass_name, faces
 
-# Rule 15(a)(i), read on page 20 of fixtures/rules/go168-2012.pdf (the 2012 text). Rule 15(b)(iv)
-# brings NBC's fire protection requirements to a high-rise alone; a building below that height is
-# held to the Code's requirements other than heights and setbacks, and the rule gives no figure
-# for what those ask of a fire vehicle's access.
-LOW_FIRE_RULE = ("G.O.168 rule 15(a)(i), p.20: \"The building requirements and standards other "
-                 "than heights and setbacks specified in the National Building Code - 2005 shall "
-                 "be complied with.\"")
+# Rule 15(a)(i) as G.O.Ms.No.50 of 2019, Amendment-1, substituted it (read on the order's page
+# image, p.1; the 2012 text named NBC 2005). Rule 15(b)(iv) brings NBC's fire protection
+# requirements to a high-rise alone; a building below that height is held to the Code's
+# requirements other than heights and setbacks, and the rule gives no figure for what those ask of
+# a fire vehicle's access.
+LOW_FIRE_RULE = ("G.O.168 rule 15(a)(i) as substituted by G.O.Ms.No.50 of 2019, Amendment-1: \"The "
+                 "building requirements and standards other than heights and setbacks specified "
+                 "in the National Building Code 2016 shall be complied with.\"")
 LOW_FIRE_CLAUSE = ("G.O.168 rule 15(a)(i) (a building below the high-rise height: the National "
                    "Building Code's requirements and standards other than heights and setbacks)")
 REACH_MIN_SQM = 1.0  # a lane that only touches a block's band at a point does not reach it
