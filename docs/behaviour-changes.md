@@ -4,6 +4,61 @@ A characterization test (tests/manifest.py) pins what the engine produces today.
 only together with a normative replacement test and an entry here: what changed, why, the
 evidence, and the test that now holds the behaviour. Newest first.
 
+## 2026-10-13: the architect's answers are recorded as his; a fire-band test of access
+
+- `resolve(..., answered={reading: who})` records a selected reading as the architect's answer
+  (USER_CONFIRMED, his words as its source) where a selection alone is a test's
+  (ASSUMED_FOR_TEST). An answer to a reading left open is refused.
+- `opens_onto_road` may also carry `fire_band`, offered only when a project selects it
+  (`resolved_rules.OPTIONAL_READINGS`; the contract takes an optional answer only then, so every
+  stored contract and every other site reads as before). The architect: no rule asks a length of
+  facade on a road; a block over 12 m is served by the internal roads (G.O.168 8(l), 8(m)) and,
+  for NBC, "the approach to the building and open spaces on all its sides shall be not less than
+  6 m" (Part 3 4.6(c)): under `fire_band` a block is served when its fire band, the rules' clear
+  width (`fire.clear_width_m`) drawn round it, meets a road along at least that width
+  (`validator.roads.opens_onto`).
+- Dhulapally's runs take his answers of 2026-10-13: roads may run in the setback
+  (`circulation_in_setback: allowed`; the strip planted, no ramp in the front setback, no parking
+  in the fire band, all checked as before), NBC's own 15 m line for fire access below 21 m
+  (`nbc_fire_height: nbc_line`), and `opens_onto_road: fire_band`.
+
+Tests (normative): `tests/test_architects_answers.py`.
+
+## 2026-10-12: the full search lays no tot-lot in front of the gate
+
+The architect's rule (2026-10-11, kept by `siteplan steps` since): nothing in front of the gate,
+its way straight in. The full search's open space had no such rule, and on Dhulapally's first
+proposal laid 29.6 m² of a pocket there. The stretch of the plot line the gate opens, swept
+straight in across the plot (`layout.gate_way_in`), is now taken out of the room the pockets may
+use. A design rule of the architect's, not an order's; the validator is unchanged. Tests
+(normative): `tests/test_gate_way.py`. Characterization re-pinned: in
+`tests/test_search_road_ground.py` two proposals on each made-up L-plot had pockets in front of
+the gate (shown by switching `gate_way_in` off, which restores the old pins exactly); they give
+way to another three-street layout (`L_THREE_GATE`) and the proposals come in another order. On
+the main L-plot the two it replaced had kept the way clear already: the way in cuts the open land
+the pockets are chosen from, which moves the choice; on the slim one they had 0.20 m² in it. In
+`tests/test_service_proposals_baseline.py` the open-space option shown, `full-not_counted-ALL-67`
+(330 flats), laid 38.28 m² of a pocket in front of the gate; it is `-77` (306 flats, 4,477 m² of
+tot-lot, none there), maximum yield, balanced and robust the same layouts. Checked on both L-plots
+and the service's land with the independent validator: every proposal has its one gate met by the
+approach road, no pocket in its way in, and no legal FAIL (two proposals on the slim L-plot and two
+on the service's land miss the unit mix, as before). New tests: `tests/test_gate_way.py` (a slanted
+side, the way stopping at the plot line, both L-plots) and the baseline's
+`test_no_layout_proposed_or_shown_lays_open_space_in_front_of_the_gate`.
+
+## 2026-10-12: a project may take G.O.168's own 2012 wording of the planting strip
+
+The architect: his seven files carry G.O.168's 2012 text of rule 7(a)(viii), where every high-rise
+keeps a 2 m planting strip all round whatever its setback, not G.O.Ms.No.7 of 2016's, where only a
+setback of 9 m and above does. A new open reading, `green_strip_order` (`go7_2016` the engine's
+default, `go168_2012`), carried only when a project selects it, so no other site's rules, digests
+or pinned output move. Selected, the green strip's threshold is 0 m (clause
+`rules.GREEN_STRIP_2012_CLAUSE`) and every high-rise band asks the strip; the search lays it and
+the validator checks it from the same figure. Dhulapally does not select it: the architect
+(2026-10-13) points to G.O.Ms.No.50 of 2019, which keeps "all other amendments covered in
+G.O.Ms.No.7 MA dt 05.01.2016 ... as it is", so the 2016 threshold stands. Tests (normative):
+`tests/test_green_strip_order.py`.
+
 ## 2026-10-12: the search raises each block to the tallest its own place allows
 
 The architect, on the Dhulapally study: room in height, not land; "taller in the middle, lower at

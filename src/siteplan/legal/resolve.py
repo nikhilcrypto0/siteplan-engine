@@ -21,6 +21,9 @@ from siteplan.contracts.common import Basis, FacilityUse, Provenance, digest
 from siteplan.contracts.resolved_rules import (
     ALL,
     COVERED_PARKING,
+    GO7_2016,
+    GO168_2012,
+    GREEN_STRIP_ORDER,
     STILT_RAISE,
     Applicability,
     BandKind,
@@ -94,7 +97,8 @@ def rules_digest() -> str:
 
 
 def resolve(site: CanonicalSiteModel, *, selections: dict[str, str] | None = None,
-            when_open: WhenOpen = WhenOpen.STOP) -> ResolvedRules:
+            when_open: WhenOpen = WhenOpen.STOP,
+            answered: dict[str, str] | None = None) -> ResolvedRules:
     """The law for this site. `selections` maps an open reading's id to the reading a test profile
     takes; `when_open` says what to do when whose rules apply is not established (CONSERVATIVE
     plans the stricter Table V column, labelled as a test mode; STOP leaves the share open)."""
@@ -109,15 +113,15 @@ def resolve(site: CanonicalSiteModel, *, selections: dict[str, str] | None = Non
         category=_category(site, group),
         jurisdiction={"table_v_column": column, "when_open": when_open,
                       "note": jurisdiction_note},
-        height=_height(site, road, (selections or {}).get(STILT_RAISE, COVERED_PARKING)),
+        height=_height(site, road, (selections or {}).get(STILT_RAISE, COVERED_PARKING),
+                       _strip_from_m(selections)),
         setbacks=_setbacks(),
         spacing={"clause": rules.BLOCK_SPACING_CLAUSE},
         open_space=_open_space(site),
         green_strip={
             "width_m": _rv(rules.PERIPHERAL_GREEN_STRIP_M, rules.PERIPHERAL_GREEN_STRIP_CLAUSE,
                            unit="m"),
-            "where_setback_from_m": _rv(rules.PERIPHERAL_GREEN_STRIP_FROM_SETBACK_M,
-                                        rules.PERIPHERAL_GREEN_STRIP_CLAUSE, unit="m"),
+            "where_setback_from_m": _strip_threshold(selections),
             "frontage_m": _rv(rules.NON_HIGH_RISE_FRONTAGE_STRIP_M,
                               rules.NON_HIGH_RISE_GREEN_STRIP_CLAUSE, unit="m"),
             "periphery_m": _rv(rules.NON_HIGH_RISE_PERIPHERY_STRIP_M,
@@ -135,7 +139,8 @@ def resolve(site: CanonicalSiteModel, *, selections: dict[str, str] | None = Non
         amenities=_amenities(),
         water={"buffer_m_by_class": _rv(dict(rules.WATER_BUFFER_M), rules.WATER_BUFFER_CLAUSE,
                                         unit="m")},
-        interpretations=interpretations(master_plan_road=master_plan, selections=selections))
+        interpretations=interpretations(master_plan_road=master_plan, selections=selections,
+                                        answered=answered))
 
 
 def _rv(value, clause: str, *, unit: str = "", note: str = "", **over) -> dict:
@@ -158,18 +163,35 @@ def _category(site: CanonicalSiteModel, group: bool) -> dict:
 # --- Height ----------------------------------------------------------------------------------
 
 
-def _height(site: CanonicalSiteModel, road: Road | None, raise_reading: str) -> dict:
+def _height(site: CanonicalSiteModel, road: Road | None, raise_reading: str,
+            strip_from_m: float) -> dict:
     return {
         "measures": MEASURES,
         "high_rise_from_m": _rv(rules.HIGH_RISE_THRESHOLD_M, rules.HIGH_RISE_CLAUSE, unit="m"),
         "high_rise": _high_rise(site, road),
         "tdr_band_m": _rv(rules.TDR_BAND_M, rules.TDR_BAND_CLAUSE, unit="m"),
         "tdr_plot_sqm": _rv(rules.TDR_PLOT_RANGE_SQM, rules.TDR_BAND_CLAUSE, unit="m²"),
-        "bands": _bands(site, _widths(road)),
+        "bands": _bands(site, _widths(road), strip_from_m),
         "limits": [*_road_limits(road), _dead_end_limit(site), _airport_limit(site)],
         "stilt_raise_m": _stilt_raise(raise_reading),
         "plinth_m": _rv(rules.PLINTH_MIN_M, rules.PLINTH_CLAUSE, unit="m"),
         "raise_interpretation": STILT_RAISE}
+
+
+def _strip_from_m(selections: dict[str, str] | None) -> float:
+    """The setback from which a high-rise keeps the 2 m planting strip: 9 m under G.O.Ms.No.7 of
+    2016, every high-rise under G.O.168's 2012 wording when a project selects it (green_strip_order,
+    2026-10-12: the architect's seven files carry the 2012 text)."""
+    chosen = (selections or {}).get(GREEN_STRIP_ORDER, GO7_2016)
+    return 0.0 if chosen == GO168_2012 else rules.PERIPHERAL_GREEN_STRIP_FROM_SETBACK_M
+
+
+def _strip_threshold(selections: dict[str, str] | None) -> dict:
+    from_m = _strip_from_m(selections)
+    if from_m == 0.0:
+        return _rv(0.0, rules.GREEN_STRIP_2012_CLAUSE, unit="m",
+                   note=f"the {GO168_2012} reading of {GREEN_STRIP_ORDER}: every high-rise")
+    return _rv(from_m, rules.PERIPHERAL_GREEN_STRIP_CLAUSE, unit="m")
 
 
 def _stilt_raise(reading: str) -> dict:
@@ -191,7 +213,8 @@ def _widths(road: Road | None) -> tuple[non_high_rise.Width, ...]:
     return tuple((w.value, w.status) for w in given if w)
 
 
-def _bands(site: CanonicalSiteModel, widths: tuple[non_high_rise.Width, ...]) -> list[dict]:
+def _bands(site: CanonicalSiteModel, widths: tuple[non_high_rise.Width, ...],
+           strip_from_m: float) -> list[dict]:
     """Every height in exactly one band. Below the high-rise height, the lines of the plot's
     Table III row, each with its setbacks and the road it asks, then what the row leaves open
     (legal/non_high_rise.py: not permitted, or open through TDR), all read on the height above
@@ -207,8 +230,9 @@ def _bands(site: CanonicalSiteModel, widths: tuple[non_high_rise.Width, ...]) ->
         plot_sqm=plot.value, plot_status=plot.status, gross_sqm=own.gross_sqm.value,
         gross_status=own.gross_sqm.status, widths=widths, high_rise_from_m=start)]
     exactly = {"above_m": start, "up_to_m": start, "above_inclusive": True}
-    high = [_high_rise_band(exactly, rules.band_for_height(start), plot, widths),
-            *(_high_rise_band({"above_m": row.above_m, "up_to_m": row.up_to_m}, row, plot, widths)
+    high = [_high_rise_band(exactly, rules.band_for_height(start), plot, widths, strip_from_m),
+            *(_high_rise_band({"above_m": row.above_m, "up_to_m": row.up_to_m}, row, plot, widths,
+                              strip_from_m)
               for row in rules.TABLE_IV if row.above_m >= start)]
     return [*below, *high]
 
@@ -234,7 +258,8 @@ def _below_band(stretch: non_high_rise.Stretch, plot_sqm: float) -> dict:
     return band
 
 
-def _high_rise_band(edges: dict, row: rules.HeightBand, plot, widths) -> dict:
+def _high_rise_band(edges: dict, row: rules.HeightBand, plot, widths, strip_from_m: float
+                    ) -> dict:
     """A row of Table IV as a band. The front is the higher of column 4 and the Building Line
     (rule 7(a)(xi)), kept only where it is higher, and the band says on which road that rests;
     it carries the 2 m planting strip where the setback is 9 m or more (rule 7(a)(viii))."""
@@ -247,7 +272,7 @@ def _high_rise_band(edges: dict, row: rules.HeightBand, plot, widths) -> dict:
             + (f"; {rules.BUILDING_LINE_HIGH_RISE_CLAUSE}" if on_the_road else ""),
             "status": weakest(Provenance.VERIFIED, *(s for _, s in widths if on_the_road),
                               *([] if settled else [Provenance.UNVERIFIED]))}
-    if row.min_open_space_m >= rules.PERIPHERAL_GREEN_STRIP_FROM_SETBACK_M:
+    if row.min_open_space_m >= strip_from_m:
         band["green_strip_m"] = rules.PERIPHERAL_GREEN_STRIP_M
     return band
 

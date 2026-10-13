@@ -24,12 +24,17 @@ from siteplan.contracts.resolved_rules import (
     APPROACH_WIDTH,
     CIRCULATION_IN_SETBACK,
     COVERED_PARKING,
+    FIRE_BAND,
     FIRE_TURNING_RADIUS,
+    GO7_2016,
+    GO168_2012,
+    GREEN_STRIP_ORDER,
     MIXED_HEIGHT_SPACING,
     NBC_FIRE_HEIGHT,
     OPEN_SPACE_BASIS,
     OPEN_SPACE_OTHER_USES,
     OPENS_ONTO_ROAD,
+    OPTIONAL_READINGS,
     PLINTH,
     STILT_IN_RULE_HEIGHT,
     STILT_RAISE,
@@ -55,6 +60,24 @@ def _reading(reading_id: str, question: str, alternatives: dict[str, str], selec
     return {"id": reading_id, "question": question, "alternatives": alternatives,
             "selected": selected, "basis": basis, "status": status, "sources": sources,
             "settles": settles}
+
+
+OPTIONAL_MEANINGS = {OPENS_ONTO_ROAD: {
+    FIRE_BAND: f"the block's {rules.FIRE_TENDER_MIN_WIDTH_M:g} m fire band (NBC Part 3 4.6(c)) "
+               f"meets the road along at least {rules.FIRE_TENDER_MIN_WIDTH_M:g} m; no length of "
+               "facade on the road is asked"}}
+
+
+def _green_strip_order() -> dict:
+    return _reading(
+        GREEN_STRIP_ORDER,
+        "Which wording of rule 7(a)(viii)'s 2 m planting strip applies: G.O.Ms.No.7 of 2016 (only "
+        "where the setback is 9 m and above) or G.O.168's own 2012 text (every high-rise)?",
+        {GO7_2016: "the strip only where the setback is 9 m and above (G.O.Ms.No.7 of 2016)",
+         GO168_2012: "every high-rise keeps the strip, whatever its setback (G.O.168, 2012)"},
+        GO7_2016,
+        sources=[rules.PERIPHERAL_GREEN_STRIP_CLAUSE, rules.GREEN_STRIP_2012_CLAUSE],
+        settles="the order the authority applies; the architect's seven files carry the 2012 text")
 
 
 def _defaults(master_plan_road: bool) -> list[dict]:
@@ -283,12 +306,19 @@ def _defaults(master_plan_road: bool) -> list[dict]:
 
 
 def interpretations(*, master_plan_road: bool = False,
-                    selections: dict[str, str] | None = None) -> list[dict]:
+                    selections: dict[str, str] | None = None,
+                    answered: dict[str, str] | None = None) -> list[dict]:
     """Every open reading, as Interpretation fields. `selections` maps a reading's id to the
     reading a test profile takes (or ALL): recorded ASSUMED_FOR_TEST, and refused when the id or
     the reading is not one this site carries."""
     readings = _defaults(master_plan_road)
+    if GREEN_STRIP_ORDER in (selections or {}):  # carried only when a project selects it
+        readings.append(_green_strip_order())
     known = {r["id"]: r for r in readings}
+    for reading_id, extra in OPTIONAL_READINGS.items():  # offered only when selected
+        if (selections or {}).get(reading_id) in extra and reading_id in known:
+            known[reading_id]["alternatives"] = {**known[reading_id]["alternatives"],
+                                                 **OPTIONAL_MEANINGS[reading_id]}
     for reading_id, chosen in (selections or {}).items():
         if reading_id not in known:
             raise ValueError(f"selections: no open reading '{reading_id}' "
@@ -301,4 +331,9 @@ def interpretations(*, master_plan_road: bool = False,
         reading["status"] = Provenance.UNVERIFIED if chosen == ALL else (
             Provenance.ASSUMED_FOR_TEST)
         reading["sources"] = [*reading["sources"], "selected by a test profile"]
+    for reading_id, who in (answered or {}).items():  # the architect's answer, not a test's
+        if reading_id not in known or known[reading_id]["selected"] == ALL:
+            raise ValueError(f"answered: '{reading_id}' is not a selected reading")
+        known[reading_id]["status"] = Provenance.USER_CONFIRMED
+        known[reading_id]["sources"] = [*known[reading_id]["sources"][:-1], who]
     return readings

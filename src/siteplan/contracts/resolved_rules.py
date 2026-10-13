@@ -63,6 +63,9 @@ GROSS_AFTER_SURRENDER = "gross_after_surrender"
 NET_AFTER_SURRENDER = "net_after_surrender"
 STATE_LINE, NBC_LINE = "state_line", "nbc_line"
 TOUCH, FRONTAGE = "touch", "frontage"
+# An answer offered only when a project selects it (2026-10-13, the architect): a block opens
+# onto a road when its 6 m fire band (NBC Part 3 4.6(c)) meets the road along at least 6 m.
+FIRE_BAND = "fire_band"
 
 READINGS: dict[str, tuple[str, ...]] = {
     STILT_IN_RULE_HEIGHT: (COUNTED, NOT_COUNTED),
@@ -79,10 +82,16 @@ READINGS: dict[str, tuple[str, ...]] = {
     OPENS_ONTO_ROAD: (TOUCH, FRONTAGE),
 }
 REQUIRED_INTERPRETATIONS = tuple(READINGS)
+# Answers a reading may also carry, only when a project selects one of them.
+OPTIONAL_READINGS: dict[str, tuple[str, ...]] = {OPENS_ONTO_ROAD: (FIRE_BAND,)}
 # Carried since 2026-10-10 and not required, so a contract stored before it still reads: whether a
 # parking stilt's floor is raised as NBC Part 3 12.1.2's covered parking or as 12.1.1's plinth.
 STILT_RAISE = "stilt_raise"
 COVERED_PARKING, PLINTH = "covered_parking", "plinth"
+# Carried only when a project selects it (2026-10-12), so every other ResolvedRules reads as before:
+# which order's wording of rule 7(a)(viii)'s planting strip applies.
+GREEN_STRIP_ORDER = "green_strip_order"
+GO7_2016, GO168_2012 = "go7_2016", "go168_2012"
 RAISE_FIELDS = ("stilt_raise_m", "plinth_m", "raise_interpretation")  # absent from stored 1.3
 
 
@@ -677,7 +686,7 @@ class ResolvedRules(Contract):
             raise ValueError(f"missing interpretation(s): {missing}")
         for name, readings in READINGS.items():
             given = set(self.interpretation(name).alternatives)
-            if given != set(readings):
+            if not set(readings) <= given <= set(readings) | set(OPTIONAL_READINGS.get(name, ())):
                 raise ValueError(f"{name}: its readings are {sorted(readings)}, not "
                                  f"{sorted(given)}")
         if set(self.open_space.requirement_sqm_by_reading) != set(READINGS[OPEN_SPACE_BASIS]):

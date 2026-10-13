@@ -32,6 +32,7 @@ from siteplan.validator.network import TOUCH_M, dead_end_check, entrance_connect
 from siteplan.validator.readings import (
     ALLOWED,
     AUTHORITY_CHOICE,
+    FIRE_BAND,
     FRONTAGE,
     MINIMUM_APPROACH,
     NOT_ALLOWED,
@@ -251,22 +252,35 @@ def _cul_de_sac_checks(ctx: Context, ground: Ground) -> list[Check]:
 
 
 def opens_onto(t: TowerGeometry, land: BaseGeometry, reading: str,
-               frontage_m: float | None) -> bool | None:
+               frontage_m: float | None, band_m: float | None = None) -> bool | None:
     """Whether a block opens onto this ground under a reading of opens_onto_road: any part of it
-    within half a metre (touch), or an unbroken stretch of its outline at least `frontage_m` long
-    facing it (frontage). None for a reading this validator cannot evaluate, or for frontage when
-    the rules give no pathway width to measure it by."""
+    within half a metre (touch), an unbroken stretch of its outline at least `frontage_m` long
+    facing it (frontage), or its fire band, `band_m` drawn round it (NBC Part 3 4.6(c)), meeting
+    it along at least `band_m` (fire_band, offered when a project selects it). None for a reading
+    this validator cannot evaluate, or when the rules give no width to measure it by."""
     if reading == TOUCH:
         return not land.is_empty and t.footprint.distance(land) <= TOUCH_M
     if reading == FRONTAGE and frontage_m is not None:
         return longest_frontage(t.footprint, land, TOUCH_M) + TOL_M >= frontage_m
+    if reading == FIRE_BAND and band_m is not None:
+        return not land.is_empty and _band_meets(t, land, band_m) + TOL_M >= band_m
     return None
 
 
-def _off_road(t: TowerGeometry, roads: BaseGeometry, reading: str) -> str:
-    """A block that does not open onto a road, and how little of it faces one."""
-    faces = longest_frontage(t.footprint, roads, TOUCH_M) if reading == FRONTAGE else 0.0
-    return f"{t.name} (faces a road for {faces:.1f} m)" if faces > 0 else t.name
+def _band_meets(t: TowerGeometry, land: BaseGeometry, band_m: float) -> float:
+    """How far a block's fire band meets the ground: the longest unbroken stretch of the band's
+    outline within half a metre of it (the band lying over a road counts all the way)."""
+    return longest_frontage(t.footprint.buffer(band_m, join_style="mitre"), land, TOUCH_M)
+
+
+def _off_road(t: TowerGeometry, roads: BaseGeometry, reading: str,
+              band_m: float | None = None) -> str:
+    """A block that does not open onto a road, and how little of it (or of its fire band) faces
+    one."""
+    faces = (longest_frontage(t.footprint, roads, TOUCH_M) if reading == FRONTAGE else
+             _band_meets(t, roads, band_m) if reading == FIRE_BAND and band_m else 0.0)
+    whose = "its fire band meets a road" if reading == FIRE_BAND else "faces a road"
+    return f"{t.name} ({whose} for {faces:.1f} m)" if faces > 0 else t.name
 
 
 def _served_check(ctx: Context, ground: Ground) -> Check | None:
@@ -281,22 +295,23 @@ def _served_check(ctx: Context, ground: Ground) -> Check | None:
     lane = _ground_of(ctx, ground, RoadKind.PERIMETER_LANE)
     paths = ctx.drawn.pathway_land
     frontage = circ.pathway_width_m.value if circ.pathway_width_m else None
+    band = ctx.rules.fire.clear_width_m.value
     required = f"every block above {limit:g} m on an internal road, not a pathway"
 
     def cell(a: Assignment) -> Cell:
         reading = a[OPENS_ONTO_ROAD]
-        on = {t.name: opens_onto(t, roads, reading, frontage) for t in tall}
+        on = {t.name: opens_onto(t, roads, reading, frontage, band) for t in tall}
         if None in on.values():
             return unknown_reading(OPENS_ONTO_ROAD, reading)
         off = [t for t in tall if not on[t.name]]
-        cut_off = [t for t in off if not opens_onto(t, lane, reading, frontage)]
+        cut_off = [t for t in off if not opens_onto(t, lane, reading, frontage, band)]
         lane_only = [t for t in off if t not in cut_off]
         if cut_off:
             by_path = [t.name for t in cut_off if not paths.is_empty
                        and t.footprint.distance(paths) <= TOUCH_M]
             said = (f"; a pathway reaches {', '.join(by_path)}, and rule 8(l) allows one only "
                     f"for blocks up to {limit:g} m" if by_path else "")
-            shown = ", ".join(_off_road(t, roads, reading) for t in cut_off)
+            shown = ", ".join(_off_road(t, roads, reading, band) for t in cut_off)
             return Cell(Status.FAIL, f"not on a road: {shown}{said}", required)
         if lane_only:
             return Cell(Status.UNVERIFIED,
@@ -342,6 +357,7 @@ def _pathway_check(ctx: Context, ground: Ground) -> Check | None:
     if wide is None and paths:
         doubts.append("the rules give no pathway width yet, so a pathway's width is not held")
     frontage = wide.value if wide else None
+    band = ctx.rules.fire.clear_width_m.value
     width_text = (f"at least {wide.value:g} m wide " if wide else "")
     required = (f"every block up to {limit:g} m on an internal road, or reached by a pathway "
                 f"{width_text}branching out of one")
@@ -350,7 +366,7 @@ def _pathway_check(ctx: Context, ground: Ground) -> Check | None:
         reading = a[OPENS_ONTO_ROAD]
         found, unsure, by_path = list(problems), list(doubts), 0
         for t in short:
-            on = opens_onto(t, roads, reading, frontage)
+            on = opens_onto(t, roads, reading, frontage, band)
             if on is None:
                 return unknown_reading(OPENS_ONTO_ROAD, reading)
             if on:
@@ -360,11 +376,12 @@ def _pathway_check(ctx: Context, ground: Ground) -> Check | None:
                 by_path += 1
             elif any(t.footprint.distance(_usable(p, ground)) <= TOUCH_M for p in paths):
                 found.append(f"{t.name}'s pathway does not meet rule 8(l)")
-            elif opens_onto(t, lane, reading, frontage):
+            elif opens_onto(t, lane, reading, frontage, band):
                 unsure.append(f"{t.name} is on the perimeter lane only, which is not "
                               "established as an 8(m) road")
             else:
-                found.append(f"{_off_road(t, roads, reading)} is reached by no road or pathway")
+                found.append(f"{_off_road(t, roads, reading, band)} is reached by no road or "
+                             "pathway")
         status = Status.FAIL if found else Status.UNVERIFIED if unsure else Status.PASS
         if status is Status.PASS:
             shown = (f"all {len(short)} on an internal road" if not by_path else

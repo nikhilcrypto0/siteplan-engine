@@ -96,6 +96,15 @@ ground (maximum yield 4 x S+10, 480 flats and 651,200 sft, where it was 3 x S+10
 the proposals, the four shown and the answer are as before; only the digests move, a flat's
 outline now written from its first corner as the geometry library orders it (the same rectangles,
 the same per-floor numbers).
+Re-pinned on 2026-10-13, where the open space keeps off the gate's way in (the architect's rule):
+the open-space option shown was `full-not_counted-ALL-67` (S+9, S+9 and five S+5, 330 flats,
+444,700 sft), which laid 38.28 m² of a pocket in front of the gate; it is `-77` (S+9, S+9, S+5,
+S+5, 306 flats, 415,140 sft, 4,477 m² of tot-lot, none in front of the gate). The way in cuts the
+open land the pockets are chosen from, so seven other proposals are others; maximum yield, balanced
+and robust are the same layouts. Every proposal keeps the way clear and none fails the law
+(`test_no_layout_proposed_or_shown_lays_open_space_in_front_of_the_gate`). With the rule switched
+off the notes, the proposals, the four shown and the answer are as before; only the digests move,
+the pockets written from another first corner (the same ground).
 
 The values pin exact output on the locked dependencies (uv.lock). They move only with a normative
 replacement and an entry in docs/behaviour-changes.md.
@@ -107,10 +116,12 @@ import hashlib
 import json
 
 import pytest
+from shapely.ops import unary_union
 from test_service import Approver, _propose, make_workspace
 
 from siteplan.contracts import digest
 from siteplan.optimizer.search import FullSearchStrategy
+from siteplan.optimizer.search.layout import gate_way_in
 from siteplan.service import Service
 from siteplan.service import service as service_module
 
@@ -118,7 +129,7 @@ TEST_CLASS = "characterization"
 
 PINNED = {
     "notes": [
-        "FULL: 1536 configurations evaluated, 151 laid out, 24 judged by the validator, "
+        "FULL: 1536 configurations evaluated, 150 laid out, 24 judged by the validator, "
         "15 proposed",
         "FULL: 3 of 15 proposed hold under every reading of the open questions; the others each "
         "name the readings they rest on",
@@ -128,33 +139,34 @@ PINNED = {
     "proposed": [
         "full-not_counted-allowed-86",
         "full-not_counted-allowed-89",
-        "full-not_counted-allowed-92",
-        "full-not_counted-ALL-145",
+        "full-not_counted-ALL-147",
         "full-ALL-allowed-30",
-        "full-not_counted-ALL-144",
         "full-not_counted-allowed-109",
-        "full-not_counted-ALL-58",
+        "full-not_counted-ALL-59",
+        "full-not_counted-ALL-60",
         "full-ALL-allowed-36",
-        "full-ALL-allowed-31",
-        "full-not_counted-ALL-67",
+        "full-not_counted-allowed-133",
+        "full-not_counted-ALL-77",
+        "full-ALL-allowed-41",
         "full-ALL-allowed-51",
         "full-ALL-ALL-1",
-        "full-ALL-ALL-3",
-        "full-ALL-ALL-12",
+        "full-ALL-ALL-114",
+        "full-ALL-ALL-13",
     ],
-    "proposed_sha256": "4ca5c871d1490c874717be255203e3c398238e46d77e0821faa50f849a869d38",
+    "proposed_sha256": "6d6d1e0ce710fa2e04d4cb2cac51dc17b89fc2c364a06e30a4328653231abd49",
     "shown": [
         ["full-not_counted-allowed-109", "BALANCED"],
         ["full-not_counted-allowed-86", "MAX_YIELD"],
-        ["full-not_counted-ALL-67", "CONVENTIONAL_OPEN_SPACE"],
+        ["full-not_counted-ALL-77", "CONVENTIONAL_OPEN_SPACE"],
         ["full-ALL-ALL-1", "ROBUST"],
     ],
-    "shown_digests": ["28f3992360f0e54f", "3095876e00b9243e",
-                      "0b97e931a9f26ef3", "6568befe46a1b0a7"],
-    "answer_sha256": "64a767154b0c514b37a912696bdbfbf12c5822748305f4bc028a3cdfaf82bd26",
+    "shown_digests": ["63b380600ed90e28", "3095876e00b9243e",
+                      "57956b5219b11d01", "659c49d445391096"],
+    "answer_sha256": "9a05c21fc6a7dee4efaee0c17617276a3fc58e34e6d4ae28cd8468a4e6abef69",
     "approval_page_sha256": "cd3ebee2af46849756df643999df9b16d2cbc91d92c45101983782cff1eb0181",
 }
 PROPOSALS: list = []
+CONTEXTS: list = []
 
 
 class Recording(FullSearchStrategy):
@@ -163,6 +175,7 @@ class Recording(FullSearchStrategy):
     def propose(self, context):
         proposal = super().propose(context)
         PROPOSALS.append(proposal)
+        CONTEXTS.append(context)
         return proposal
 
 
@@ -207,6 +220,18 @@ def test_select_shows_the_same_three_and_the_model_gets_the_same_answer(observed
     assert observed["shown"] == PINNED["shown"]
     assert observed["shown_digests"] == PINNED["shown_digests"]
     assert observed["answer_sha256"] == PINNED["answer_sha256"]
+
+
+def test_no_layout_proposed_or_shown_lays_open_space_in_front_of_the_gate(observed):
+    """The gate's way in kept clear (2026-10-13): before, the open-space option shown on this
+    land, full-not_counted-ALL-67, laid 38.28 m² of a pocket in front of the gate."""
+    net = CONTEXTS[-1].site.net_plot.value.to_shapely()
+    proposed = {c.candidate_id: c for c in PROPOSALS[-1].candidates}
+    assert {name for name, _ in observed["shown"]} <= set(proposed)
+    for c in proposed.values():
+        way = unary_union([gate_way_in(net, g.shape.to_shapely()) for g in c.circulation.gates])
+        pockets = unary_union([s.to_shapely() for s in c.program.open_space])
+        assert way.area > 0 and pockets.intersection(way).area < 1e-6, c.candidate_id
 
 
 def test_the_architect_is_asked_the_same_approval(observed):

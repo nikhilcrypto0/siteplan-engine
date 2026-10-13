@@ -1231,6 +1231,18 @@ REGISTRY: tuple[Constraint, ...] = (
                 "architect's word on what the saleable figure covers.",
     ),
     Constraint(
+        "Open space", "No tot-lot in front of the gate: the stretch of the plot line the gate "
+                      "opens, "
+                      "swept straight in across the plot, is kept from the open space's pockets; "
+                      "a gate is taken to open the plot line within this distance of it.",
+        f"{search_layout.GATE_TOUCH_M:g} m", Basis.ENGINE_DESIGN_ASSUMPTION,
+        "the architect, 2026-10-11 (as `siteplan steps` keeps it)",
+        ("optimizer.search.layout.GATE_TOUCH_M",),
+        note="A design rule of the architect's, not an order's: the gate's way straight in stays "
+             "clear of the tot-lot.",
+        settles="Nothing: a drawing tolerance on a design rule the architect set.",
+    ),
+    Constraint(
         "Towers", "Raising a laid layout's blocks (2026-10-12): a distance this close to what is "
                   "asked meets it, and the planted strip counts as all round the plot when its "
                   "drawing misses the whole by no more than this share.",

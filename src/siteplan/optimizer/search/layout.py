@@ -74,6 +74,7 @@ FACILITY_ROOM_SQM = 300.0
 RESERVE_OPEN_FACTOR = 1.15
 RESERVE_CLUB_FACTOR = 1.6
 RAMP_RESERVE_SQM = 280.0
+GATE_TOUCH_M = 0.01  # how near the plot line a gate's opening is taken to lie
 CLUB_ASSUMED_SHARE_OF_NET = 0.0375  # built-up area over the plot, times the club's share
 CLUB_FLOORS = 2  # the club house's storeys when the brief gives none
 SIDES = ("N", "S", "E", "W")
@@ -536,6 +537,7 @@ def lay_out(run: Run, ev: Evaluation) -> tuple[Laid | None, str]:
         stilts=_stilts(footprints, unary_union([roads, lanes, *pathways]), q),
         roads=roads, tower_sqm=tower_sqm, units=units, angles=angles, angle_deg=frame.angle_deg,
         anchor=entrance.gate.centroid, cores=_cores(placements),
+        gate_way=gate_way_in(run.plot.net, entrance.gate),
         # no fire band is laid round a block below the high-rise height, so no cellar runs under
         # one
         low=unary_union([f for f, tall in zip(footprints, high, strict=True) if not tall]))
@@ -588,6 +590,7 @@ class _Program:
     cores: list[BaseGeometry]
     low: BaseGeometry
     club_anchor: Point | None = None  # where the club house is looked for; the gate's when None
+    gate_way: BaseGeometry = EMPTY  # the gate's width straight in across the plot: no tot-lot
 
 
 @dataclass(frozen=True)
@@ -599,6 +602,30 @@ class _Furnished:
     pockets: list[Polygon]
     facilities: list
     missed: list[str]
+
+
+def gate_way_in(net: Polygon, gate: Polygon) -> BaseGeometry:
+    """The ground in front of the gate: the stretch of the plot line the gate opens, swept
+    straight in across the whole plot (the architect, 2026-10-11: no tot-lot in front of the gate,
+    its way straight in; `siteplan steps` keeps the same). Empty where the gate opens no stretch."""
+    opening = net.exterior.intersection(gate.buffer(GATE_TOUCH_M))
+    lines = [g for g in getattr(opening, "geoms", [opening]) if g.length > 0]
+    if not lines:
+        return EMPTY
+    stretch = max(lines, key=lambda g: g.length)
+    (ax, ay), (bx, by) = stretch.coords[0], stretch.coords[-1]
+    length = math.hypot(bx - ax, by - ay)
+    if length == 0:
+        return EMPTY
+    nx, ny = -(by - ay) / length, (bx - ax) / length
+    mid = ((ax + bx) / 2 + nx * GATE_TOUCH_M, (ay + by) / 2 + ny * GATE_TOUCH_M)
+    if not net.contains(Point(mid)):
+        nx, ny = -nx, -ny
+    minx, miny, maxx, maxy = net.bounds
+    reach = math.hypot(maxx - minx, maxy - miny)
+    swept = Polygon([(ax, ay), (bx, by), (bx + nx * reach, by + ny * reach),
+                     (ax + nx * reach, ay + ny * reach)])
+    return swept.intersection(net)
 
 
 def _furnish_where_best(run: Run, program: _Program) -> tuple[_Furnished | None, str]:
@@ -687,6 +714,7 @@ def _furnish(run: Run, program: _Program, repair: str | None = None
     keep_off = [g.buffer(ground.CLEARANCE_M, join_style="mitre") for g in [club, *ramps]
                 if g is not None]
     pocket_room = p.open_land.difference(unary_union(keep_off)) if keep_off else p.open_land
+    pocket_room = pocket_room.difference(p.gate_way)  # never in front of the gate
     pockets, total = ground.choose_open_space(
         pocket_room, q, angle, unary_union([pl.footprint for pl in p.placements]))
     if total + 1e-6 < q.open_space_sqm:
