@@ -1238,7 +1238,9 @@ REGISTRY: tuple[Constraint, ...] = (
         f"{_lim.offsets} column offsets over one pitch (a block's depth and the larger of the "
         f"road and {strategy.PITCH_GAP_M:g} m); positions along a column every "
         f"{columns.STEP_M:g} m, a gap kept at the figure asked plus {columns.GAP_SLACK_M:g} m; "
-        f"the {_lim.heights} tallest counts; for each profile {_lim.laid_per_profile} laid of "
+        f"the {_lim.heights} tallest counts, and (only when asked, "
+        f"Limits.heights_by_setback) the tallest keeping each other depth of setback; "
+        f"for each profile {_lim.laid_per_profile} laid of "
         f"up to {_lim.attempts_per_profile} tried, {_lim.judged_per_profile} judged and "
         f"{_lim.per_profile_proposed} proposed; evaluating stops at "
         f"{_pct(strategy.EVALUATE_SHARE)} of the time budget and laying out at "
@@ -1256,7 +1258,11 @@ REGISTRY: tuple[Constraint, ...] = (
          "optimizer.search.columns.GAP_SLACK_M", "optimizer.search.fringe.FRINGE_DIRECTIONS"),
         note="Search bounds, never rules: a wider search can only add options, and the "
              "validator judges every candidate. A firm's design margin on the gap is added "
-             "apart (design_margins.tower_gap_extra_m).",
+             "apart (design_margins.tower_gap_extra_m). What a configuration allows sets the "
+             "setback it keeps, its planting strip and the width of its streets, whatever it "
+             "places, so a lower ceiling is a different scheme and not merely a lower one; of two "
+             "counts asking the same ground only the taller is tried, and the extra "
+             "ceilings are off by default.",
         settles="Nothing: search breadth.",
     ),
     Constraint(

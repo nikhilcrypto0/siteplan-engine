@@ -58,7 +58,7 @@ from siteplan.optimizer.search.layout import (
     lay_out,
     make_run,
 )
-from siteplan.optimizer.search.readings import Profile, profiles
+from siteplan.optimizer.search.readings import FloorClass, Profile, profiles
 from siteplan.optimizer.search.verdicts import RestsOn, caveats, failed, rests_on
 from siteplan.towers import orientations
 
@@ -79,12 +79,34 @@ class Limits:
 
     offsets: int = 8  # where the columns start, across one pitch
     heights: int = 3  # the tallest block a configuration allows: this many floor counts, top down
+    # and, with `heights_by_setback`, the tallest count that keeps each other depth of setback.
+    # What a configuration allows sets the setback it keeps, its planting strip and the width of
+    # its streets, whatever it ends up placing (layout.evaluate), so a lower ceiling is a
+    # different scheme and not merely a worse one: shallower setbacks round the whole plot and
+    # narrower streets between the columns, which on a tight or a bent plot can hold more. Of two
+    # counts that ask the same ground the taller allows everything the lower does, so only the
+    # tallest of each is worth a configuration. Nothing here is a rule: the objective judges what
+    # each lays out.
+    heights_by_setback: bool = False
     # configurations laid out exactly for each profile, and the most tried to get them: for each
     # kind of configuration, with blocks below 21 m and without
     laid_per_profile: int = 14
     attempts_per_profile: int = 60
     judged_per_profile: int = 6  # candidates the validator judges, for each profile
     per_profile_proposed: int = 4  # the most proposed for each profile
+
+
+def _by_setback(classes: Sequence[FloorClass]) -> list[int]:
+    """The tallest floor count that keeps each depth of ground a configuration may ask: its
+    setback zone, its planting strip and the gap that sets its streets (`layout.evaluate` reads
+    exactly these from what a configuration allows). Of two counts that ask the same the taller
+    allows every block the lower does, so the lower is a configuration that can only lay out
+    less."""
+    tallest: dict[tuple[float, float, float], int] = {}
+    for cls in classes:
+        key = (cls.zone_m, cls.strip_m, cls.gap_m)
+        tallest[key] = max(tallest.get(key, 0), cls.floors)
+    return sorted(tallest.values(), reverse=True)
 
 
 @dataclass(frozen=True)
@@ -176,8 +198,11 @@ class FullSearchStrategy:
         angles = orientations(run.plot.net)
         configs: dict[bool, list[tuple]] = {False: [], True: []}
         for profile in wanted:
-            floors = sorted({c.floors for found in run.classes[profile.key].values()
-                             for c in found}, reverse=True)[:self.limits.heights]
+            classes = [c for found in run.classes[profile.key].values() for c in found]
+            every = sorted({c.floors for c in classes}, reverse=True)
+            floors = dict.fromkeys([*every[:self.limits.heights],
+                                    *(_by_setback(classes)
+                                      if self.limits.heights_by_setback else ())])
             for angle in angles:
                 for tallest in floors:
                     for step in range(self.limits.offsets):
