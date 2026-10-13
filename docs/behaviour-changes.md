@@ -4,6 +4,70 @@ A characterization test (tests/manifest.py) pins what the engine produces today.
 only together with a normative replacement test and an entry here: what changed, why, the
 evidence, and the test that now holds the behaviour. Newest first.
 
+## 2026-10-13: the setback soft along a bent plot, and a single-loaded block the firm may ask for
+
+Why an arm of a plot stood empty while the firm's own drawing fills it. Dhulapally's survey was
+read (gross 20,128.6 m², the surveyor's drawing, never the finished plan) and its narrow arm
+measured: **3,075 m², 32.8 m across**. Two things kept every block out of it, and only the second
+is what the elbow actually needed. No rule, setback figure, road width or validator check changes.
+
+- **The setback zone is as deep as the blocks in each part of the plot ask, not one depth round
+  the whole plot for the tallest of them** (`geometry.elbow_regions`, `land.zone_ground`,
+  `validator.zones.zone_pieces`). Table IV gives a setback to a *building* by its height, so what
+  the law asks round the plot is asked of the buildings; one depth everywhere was the engine's own
+  simplification. A plot is cut at a reflex corner that turns its line 45 degrees or more into
+  parts that each run their own way (Dhulapally's turns 81.3 degrees, at (70.2, 144.3), splitting
+  17,054 m² of body from the 3,075 m² arm); each part is as deep as the deepest block that can
+  stand in it, a part no block stands in keeps the deepest depth of all (never more lenient than
+  before), and a block keeps its own setback along the plot line near it wherever it stands. A
+  plot with no elbow is one part and is unchanged. The search lays the zone the way the validator
+  measures it, and a configuration that leaves a relieved part empty is laid again with the one
+  depth. Evidence: on the real arm it lifts the land a block below 21 m may stand on from 896 m²
+  to 2,039.6 m². **It changed no layout on Dhulapally**, because of the second item: all eight
+  proposals are identical with it and without. Tests (normative): `tests/test_elbow_setback.py`.
+- **A single-loaded block, one row of flats along the corridor, about half the depth**
+  (`PrototypeFamily.SINGLE_LOADED`, `compose.BlockPlan.single_loaded`). Every family the kit could
+  compose was double-loaded, `depth = corridor + 2 x flat depth`, so **every prototype was 24.13 m
+  deep whatever its length** and the families differed only in length. The arm leaves 22.8 m
+  between Table III's shallowest 5 m side setbacks, so no block in the kit fitted it at any
+  height; the firm's own Tower-5 there is single-loaded (5,350 sft a floor). The new family
+  composes 31.00 x **13.13 m**, 2 flats a floor. It is **a design choice, not something a flat
+  library settles** (it buys the depth with a corridor and a core serving half as many flats), so
+  the firm asks for it by name (`compose.BY_REQUEST`, `compose_library(..., families=...)`) as it
+  sets its own longest block: it is not in `servable_families`, no site gets one unasked, and
+  **every prototype composed before this one is unchanged, byte for byte**. Tests (normative):
+  `tests/test_single_loaded.py`.
+- **A lower ceiling may be tried as a scheme of its own** (`Limits.heights_by_setback`, off by
+  default, so nothing moves). What a configuration *allows* sets the setback it keeps, its
+  planting strip and the width of its streets, whatever it ends up *placing*
+  (`layout.evaluate`), and only the three tallest floor counts were ever tried as ceilings: a
+  run that placed S+5 blocks still kept a S+10 ceiling's 10 m setback and wide streets round the
+  whole plot. Of two counts that ask the same ground the taller allows every block the lower
+  does, so the set worth trying is the tallest count keeping each *distinct* setback
+  (`strategy._by_setback`), not an arbitrary count from the bottom.
+
+### What still keeps every block out of Dhulapally's arm, measured
+
+With the slim block asked for, the arm's blockers are now **reachability, not depth or setback**.
+Measured on the real arm (3,075 m², 32.8 m across) with the composed 13.13 m block: it stands
+there at S+1 to S+8 (`fit_rectangle` finds room; 2,039.6 m² of land at Table III's 5 m setback),
+but **a ring road never fits round it** at any height, and rule 8(l)'s pathway may serve it only
+to S+3 (12.00 m, the rule's own limit) and only within 30 m of the ring (NBC 4.3.2.2), while the
+arm runs 115 m. In 16 candidates over two runs (with the slim block and without) **no residential
+block entered the arm at all** — only the club house — and the search's own note says of the
+arm's 21.3 m tip that a block there "is left at most 13.1 m, less than the narrowest prototype
+(13.13 m deep)": short by 3 cm.
+
+A block with a street down **one** side would fit (5 + 13.13 + 9 + 5 = 32.13 m against 32.8 m),
+but a cluster's land is the roadable ground eroded by the ring's width on *every* side
+(`land.make_land`), because the ring is drawn round the blocks. **Single-sided access up a narrow
+arm is not modelled**, and rule 8(m) bars a dead end without a cul-de-sac head.
+
+**This is a question for the architect, not a value to relax.** The firm's own Tower-5 stands in
+that arm at stilt + 6 (about 21 m, 5,350 sft a floor) served by two 23 ft (7.0 m) driveways:
+narrower than rule 8(m)'s 9 m road and taller than the 12 m to which rule 8(l) allows a 6 m
+pathway, on either reading. Nothing here changes a rule, and no rule value moved.
+
 ## 2026-10-12: the pinned entrance, the club house in two places, a wide street's own width
 
 Three changes to the full search, asked for by the architect after the Dhulapally debug layouts
