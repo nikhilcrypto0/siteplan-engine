@@ -85,6 +85,7 @@ def _legal_checks(ctx: Context, ground: Ground, ledger: accounting.Ledger
                       blocks.road_width_check(ctx)),
             *permission.permission_checks(ctx),
             *blocks.height_limit_checks(ctx), *_present(blocks.tdr_check(ctx)),
+            *_present(blocks.earlier_line_check(ctx)), blocks.rule_set_check(ctx),
             *_present(blocks.prototype_height_check(ctx))]),
         ("Setbacks and gaps", lambda: blocks.setback_checks(ctx) + blocks.spacing_checks(ctx)),
         ("Roads", lambda: roads.road_checks(ctx, ground)
@@ -150,8 +151,10 @@ def _judge(site: CanonicalSiteModel, rules: ResolvedRules, brief: DesignBrief,
     legal, found = _legal_checks(ctx, ground, ledger)
     legal = _under_the_other_raise(ctx, legal)
     units = program.units_by_type(ctx.towers)
-    counting = min((v for k, v in found.items() if k.startswith("open_space_counting_sqm")),
-                   default=0.0)
+    # the generator's claim is compared with what counts under the readings the study selected,
+    # which it planned for, where it selected any; else under every reading (2026-10-13)
+    counting = found.get(open_space.STUDY_COUNTING, min(
+        (v for k, v in found.items() if k.startswith("open_space_counting_sqm")), default=0.0))
     discrepancies = _discrepancies(ctx, ground, ledger, envelope, legal, found, counting, units)
     design = targets.design_targets(ctx, ground, found)
     try:

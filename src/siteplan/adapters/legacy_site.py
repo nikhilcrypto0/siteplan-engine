@@ -150,7 +150,13 @@ def site_model(project: Project, *, site_id: str | None = None, boundary: Polygo
         spot_levels=draft.on_site_levels if draft else 0,
         place=_place(draft),
         jurisdiction={"authority": sourced(project, "authority", s.authority),
-                      "inside_cure": sourced(project, "inside_cure", s.inside_cure)},
+                      "inside_cure": sourced(project, "inside_cure", s.inside_cure),
+                      **({"application_status": sourced(project, "application_status",
+                                                        s.application_status)}
+                         if s.application_status else {}),
+                      **({"application_date": sourced(project, "application_date",
+                                                      s.application_date)}
+                         if s.application_date else {})},
         coordinates=sourced(project, "site_coordinates", s.site_coordinates)
         if s.site_coordinates else None,
         proposed_floors=sourced(project, "proposed_floors", s.proposed_floors)

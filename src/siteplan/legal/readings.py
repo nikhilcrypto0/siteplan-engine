@@ -308,7 +308,8 @@ def _defaults(master_plan_road: bool) -> list[dict]:
 
 def interpretations(*, master_plan_road: bool = False,
                     selections: dict[str, str] | None = None,
-                    answered: dict[str, str] | None = None) -> list[dict]:
+                    answered: dict[str, str] | None = None,
+                    assumed: dict[str, str] | None = None) -> list[dict]:
     """Every open reading, as Interpretation fields. `selections` maps a reading's id to the
     reading a test profile takes (or ALL): recorded ASSUMED_FOR_TEST, and refused when the id or
     the reading is not one this site carries."""
@@ -339,4 +340,9 @@ def interpretations(*, master_plan_road: bool = False,
         # the answer takes the place of the test profile's marker, never of a legal source
         kept = [s for s in known[reading_id]["sources"] if s != SELECTED_BY_PROFILE]
         known[reading_id]["sources"] = [*kept, who]
+    for reading_id, where in (assumed or {}).items():  # a study's assumption, said where from
+        if reading_id not in known or known[reading_id]["selected"] == ALL:
+            raise ValueError(f"assumed: '{reading_id}' is not a selected reading")
+        kept = [s for s in known[reading_id]["sources"] if s != SELECTED_BY_PROFILE]
+        known[reading_id]["sources"] = [*kept, f"{where} (a study assumption)"]
     return readings

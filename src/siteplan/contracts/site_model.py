@@ -8,6 +8,8 @@ is None, and the pipeline stops and asks.
 
 from __future__ import annotations
 
+from datetime import date
+from enum import StrEnum
 from typing import Literal
 
 from pydantic import Field, model_serializer, model_validator
@@ -73,9 +75,31 @@ class PlaceName(Part):
     district: str | None = None
 
 
+class ApplicationStatus(StrEnum):
+    """Where the building permission application stands (2026-10-13), which decides which
+    orders bind it where an order names no commencement date (G.O.Ms.No.95 of 2026)."""
+
+    NOT_FILED = "NOT_FILED"  # a new scheme: the rules in force when it is filed apply
+    FILED = "FILED"  # received by the authority, on application_date
+    SANCTIONED = "SANCTIONED"  # permission granted on an application received on that date
+
+
 class Jurisdiction(Part):
     authority: Sourced[str | None]  # whose building rules apply: GHMC, CMC, HMDA, DTCP, ...
     inside_cure: Sourced[bool | None]
+    # Since 2026-10-13: the application's status and the date it was received, each with how it
+    # is known. Absent from site models stored before, and left out of the dump when absent, so a
+    # stored site model keeps its digest; absent means not known.
+    application_status: Sourced[ApplicationStatus | None] | None = None
+    application_date: Sourced[date | None] | None = None
+
+    @model_serializer(mode="wrap")
+    def _as_stored_when_absent(self, handler):
+        dumped = handler(self)
+        for key in ("application_status", "application_date"):
+            if dumped.get(key) is None:
+                dumped.pop(key, None)
+        return dumped
 
 
 class CanonicalSiteModel(Contract):

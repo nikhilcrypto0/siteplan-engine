@@ -315,13 +315,11 @@ def _cmd_envelope(args: argparse.Namespace) -> int:
     from siteplan.contracts.common import Status
     from siteplan.legal.debug_drawing import notes, write_debug_dxf, write_debug_svg
     from siteplan.legal.envelope import envelope
-    from siteplan.legal.resolve import resolve
-    from siteplan.legal.site import readings_of, site_from_project
+    from siteplan.legal.site import resolve_project, site_from_project
 
     project = _load_project(args.project)
     site = site_from_project(project, args.survey)
-    selections, when_open = readings_of(project)
-    resolved = resolve(site, selections=selections, when_open=when_open)
+    resolved = resolve_project(site, project)
     found = envelope(site, resolved)
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)

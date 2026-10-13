@@ -82,6 +82,9 @@ def caveats(report: ValidationReport) -> list[str]:
 
 
 def failed(report: ValidationReport) -> list[str]:
-    """Why a report may not be offered: the legal checks that FAIL."""
-    return [f"{c.finding.rule}: {c.finding.measured}" for c in report.legal
-            if c.finding.status is Status.FAIL and c.family is not Family.PROGRAM]
+    """Why a report may not be offered: the legal checks that FAIL, under every reading or under
+    the readings the study selected (2026-10-13)."""
+    return [f"{c.finding.rule}: {c.finding.measured}"
+            + ("" if c.finding.status is Status.FAIL else " (under the readings selected)")
+            for c in report.legal if c.family is not Family.PROGRAM
+            and (c.selected_status or c.finding.status) is Status.FAIL]

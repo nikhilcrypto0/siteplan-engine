@@ -24,10 +24,12 @@ from siteplan.contracts.common import Line, SourceKind, shapes_from
 from siteplan.contracts.resolved_rules import (
     CIRCULATION_IN_SETBACK,
     STILT_IN_RULE_HEIGHT,
+    ResolvedRules,
     WhenOpen,
 )
 from siteplan.contracts.site_model import CanonicalSiteModel
 from siteplan.intake import extract, load_defaults
+from siteplan.legal.resolve import resolve
 from siteplan.project import Project
 from siteplan.provenance import Provenance, weakest
 from siteplan.runner import NET_AREA_TOLERANCE_SQM, load_plot, read_survey
@@ -65,8 +67,34 @@ def readings_of(project: Project) -> tuple[dict[str, str], WhenOpen]:
     if "circulation_in_setback" in stated:
         selections[CIRCULATION_IN_SETBACK] = "allowed" if layout.circulation_in_setback else (
             "not_allowed")
+    for reading_id, chosen in (layout.readings if layout is not None else {}).items():
+        said = selections.get(reading_id)
+        if said is not None and said != chosen.reading:
+            raise ValueError(f"layout: {reading_id} is '{said}' by its switch and "
+                             f"'{chosen.reading}' in readings; say it once")
+        selections[reading_id] = chosen.reading
     conservative = "conservative_parking" in stated and layout.conservative_parking
     return selections, WhenOpen.CONSERVATIVE if conservative else WhenOpen.STOP
+
+
+def sources_of(project: Project) -> tuple[dict[str, str], dict[str, str]]:
+    """Where each reading the project file selects came from (layout.readings): the architect's
+    answers, recorded USER_CONFIRMED, and a study's assumptions, kept ASSUMED_FOR_TEST, each by
+    interpretation id, for `resolve`'s `answered` and `assumed` (2026-10-13)."""
+    chosen = project.layout.readings if project.layout is not None else {}
+    answered = {i: c.source for i, c in chosen.items() if c.status == "USER_CONFIRMED"}
+    assumed = {i: c.source for i, c in chosen.items() if c.status == "ASSUMED_FOR_TEST"}
+    return answered, assumed
+
+
+def resolve_project(site: CanonicalSiteModel, project: Project) -> ResolvedRules:
+    """The law for a project's site with the readings and test mode its file states, each with
+    its source: the one path from a project file to the rules (the service, `siteplan
+    envelope`). A selection stays an interpretation the validator judges both ways."""
+    selections, when_open = readings_of(project)
+    answered, assumed = sources_of(project)
+    return resolve(site, selections=selections, when_open=when_open, answered=answered,
+                   assumed=assumed)
 
 
 def _placeable(site: CanonicalSiteModel) -> bool:

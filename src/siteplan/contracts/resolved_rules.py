@@ -412,11 +412,16 @@ class HeightRules(Part):
     stilt_raise_m: RuleValue[float] | None = None
     plinth_m: RuleValue[float] | None = None
     raise_interpretation: str | None = None  # the reading stilt_raise_m rests on
+    # Since 2026-10-13: the high-rise line G.O.Ms.No.95 replaced (18 m, rule 2(f) of 2012), carried
+    # where it may bind this application (received before G.O.95, or not known when): a block from
+    # it up to high_rise_from_m is then not settled either way. None where it cannot bind; absent
+    # from rules stored before and left out of the dump then, so they keep their digest.
+    earlier_high_rise_m: RuleValue[float] | None = None
 
     @model_serializer(mode="wrap")
     def _as_stored_when_absent(self, handler):
         dumped = handler(self)
-        for key in RAISE_FIELDS:
+        for key in (*RAISE_FIELDS, "earlier_high_rise_m"):
             if dumped.get(key) is None:
                 dumped.pop(key, None)
         return dumped

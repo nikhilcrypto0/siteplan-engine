@@ -171,6 +171,19 @@ REGISTRY: tuple[Constraint, ...] = (
         ("rules.HIGH_RISE_THRESHOLD_M",),
     ),
     Constraint(
+        "Height", "The high-rise line G.O.Ms.No.95 replaced, carried where it may bind an "
+                  "application received before that order, or one not known when.",
+        _m(rules.HIGH_RISE_2012_M), Basis.LEGAL_RULE, rules.HIGH_RISE_2012_CLAUSE,
+        ("rules.HIGH_RISE_2012_M",),
+        note="The 2012 order's figure as written. G.O.95 (dated 21-03-2026) names no commencement "
+             "date and no transitional clause, so whether it binds such an application is not "
+             "settled: a block of 18 to 21 m is then CONDITIONAL (validator.blocks."
+             "earlier_line_check), never settled either way. A scheme not yet filed is judged "
+             "on 21 m alone.",
+        settles="The order's Gazette date, and the authority's practice on applications "
+                "pending when it came in.",
+    ),
+    Constraint(
         "Height", "The road a height needs (Table IV column 3).", _road_rows, Basis.LEGAL_RULE,
         rules.TABLE_IV_CLAUSE, ("rules.TABLE_IV",),
         note="The same table gives the setbacks; the rows are one tuple.",

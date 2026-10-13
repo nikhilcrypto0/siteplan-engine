@@ -580,6 +580,17 @@
           "title": "Bands",
           "type": "array"
         },
+        "earlier_high_rise_m": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RuleValue_float_"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "high_rise": {
           "$ref": "#/$defs/HighRiseEligibility"
         },

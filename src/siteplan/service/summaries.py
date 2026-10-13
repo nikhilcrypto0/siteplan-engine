@@ -213,7 +213,8 @@ def rules_result(project_name: str, rules: ResolvedRules) -> RulesResult:
         when_open=rules.jurisdiction.when_open.value,
         parking_share_pct=share.value if share is not None else None,
         interpretations=[InterpretationOut(id=i.id, question=i.question, selected=i.selected,
-                                           readings_evaluated=i.readings(), status=i.status)
+                                           readings_evaluated=i.judged(), status=i.status,
+                                           sources=list(i.sources))
                          for i in rules.interpretations],
         unverified=unverified)
 

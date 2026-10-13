@@ -4,6 +4,44 @@ A characterization test (tests/manifest.py) pins what the engine produces today.
 only together with a normative replacement test and an entry here: what changed, why, the
 evidence, and the test that now holds the behaviour. Newest first.
 
+## 2026-10-13: a project's own inputs reach production (regulatory audit, phase 2)
+
+**What changed.**
+- **A project file carries any selected reading with its source.** The new `layout.readings`
+  holds the reading, who chose it and when, and whether the architect confirmed it
+  (USER_CONFIRMED) or it is a study assumption (ASSUMED_FOR_TEST).
+  - `legal/site.resolve_project` passes them to `resolve` for the service and `siteplan
+    envelope`. The source is appended beside the reading's legal ones, never in place of them.
+  - The validator still judges every reading. A reading stated two ways is refused.
+  - The service's `resolve_rules` lists the readings evaluated as the validator judges them
+    (every one, unless settled), with each reading's sources.
+  - The approval page shows each selection's source and says every reading is still judged.
+- **The application's status and date are site inputs** (`SiteIn.application_status`,
+  `application_date`, carried to `Jurisdiction`).
+  - G.O.Ms.No.95 of 2026 (dated 21-03-2026) names no commencement date and no transitional
+    clause. Where the application was received before that date, or nobody says when, the rules
+    carry the 2012 high-rise line (18 m, read on G.O.168 p.3).
+  - The validator then reports a block of 18 to 21 m CONDITIONAL ("High-rise line for this
+    application"). It names the order's missing commencement date as the gap, or the application's
+    unknown date as the missing fact.
+  - A scheme not yet filed, or received on or after the date, is judged on 21 m alone.
+  - Every report names the rule set it applied ("Rule set applied", INFO).
+- **Fixed, a regression from phase 1:**
+  - The open-space cross-check compared the generator's claimed open space with what counts
+    under every reading, but the generator plans for the readings the study selected.
+  - With the stilt reading selected (as Dhulapally's project selects it) every layout was refused
+    for a blocking discrepancy, and the service proposed nothing.
+  - The cross-check now compares under the selection (`open_space_study_counting_sqm`). The
+    open-space check itself still judges every reading.
+- **The search names a layout it refuses for a check failing under the selected readings.** It
+  used to say "a blocking discrepancy".
+
+**Tests.** `tests/test_project_inputs.py`: through `Service`, a project selecting `nbc_line`, the
+stilt not counted and roads in the setback reaches the rules (sources kept), the search (layouts
+proposed, built for the stilt left out), the validator and the stored reports. A client
+requirement never moves the rules. The application date makes an 18 to 21 m block CONDITIONAL.
+Also `tests/test_rules.py` (the 2012 line, quoted from its page).
+
 ## 2026-10-13: PASS, CONDITIONAL, FAIL and NOT_CHECKED (regulatory audit, phase 1; contracts 1.4)
 
 **What changed.**

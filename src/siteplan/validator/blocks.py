@@ -28,6 +28,7 @@ from siteplan.contracts.resolved_rules import (
     HeightLimit,
     HeightMeasure,
     LimitBound,
+    OrderRead,
     ResolvedRules,
 )
 from siteplan.contracts.site_model import CanonicalSiteModel
@@ -337,6 +338,64 @@ def prototype_height_check(ctx: Context) -> Check | None:
                  "says, but nothing here confirms heights below the firm's.",
                  rests_on=[measurement("prototype floor and stilt heights",
                                        "below the firm's standard")])
+
+
+APPLICATION_FACT = "the application's status and the date it was received"
+
+
+def _application(ctx: Context) -> str:
+    j = ctx.site.jurisdiction
+    status = j.application_status.value if j.application_status else None
+    received = j.application_date.value if j.application_date else None
+    if status is None and received is None:
+        return f"{APPLICATION_FACT} not known"
+    return "the application " + ", ".join(part for part in (
+        status.value.lower().replace("_", " ") if status else "",
+        f"received {received:%d-%m-%Y}" if received else "") if part)
+
+
+def rule_set_check(ctx: Context) -> Check:
+    """The orders the rules were read from, as the report names the rule set it applied
+    (2026-10-13): information beside the verdict, never in it."""
+    orders = ctx.rules.orders
+    read = [o.id for o in orders if o.read is not OrderRead.UNREAD]
+    unread = [o.id for o in orders if o.read is OrderRead.UNREAD]
+    return plain(Family.OTHER, "Rule set applied", Status.INFO,
+                 "; ".join(read) + (f" (not read: {', '.join(unread)})" if unread else ""),
+                 "the orders in force for this application", law.HIGH_RISE_ORDER_DATE_CLAUSE,
+                 f"G.O.168 of 2012 as amended to G.O.Ms.No.95 of 2026; {_application(ctx)}.")
+
+
+def earlier_line_check(ctx: Context) -> Check | None:
+    """A block from the high-rise line G.O.Ms.No.95 replaced (18 m) up to its 21 m, where the
+    rules carry that line as possibly binding this application: a high-rise on the one and not on
+    the other, so no check of either class settles it. CONDITIONAL, naming the application's date
+    (a site fact) when it is not known, or the order's missing commencement date when it is."""
+    line = ctx.rules.height.earlier_high_rise_m
+    if line is None:
+        return None
+    top = ctx.rules.height.high_rise_from_m.value
+    found = {}
+    for t in ctx.towers:
+        heights = [h for r in ctx.stilt_readings if (h := t.rule_height_m(r)) is not None]
+        inside = [h for h in heights if line.value - TOL_M <= h < top - TOL_M]
+        if inside:
+            found[t.name] = max(inside)
+    if not found:
+        return None
+    j = ctx.site.jurisdiction
+    known = j.application_date is not None and j.application_date.value is not None
+    rests = ([rule_gap("the high-rise line binding an application received before "
+                       "G.O.Ms.No.95 of 2026", line.note)] if known
+             else [fact(APPLICATION_FACT, line.note)])
+    return plain(
+        Family.HEIGHT, "High-rise line for this application", Status.CONDITIONAL,
+        "; ".join(f"{name}: {height:.2f} m" for name, height in found.items()),
+        f"a high-rise from {line.value:g} m on the 2012 line, from {top:g} m on G.O.Ms.No.95's",
+        f"{line.clause}; {ctx.rules.height.high_rise_from_m.clause}",
+        f"{line.note[0].upper()}{line.note[1:]}: a block of {line.value:g} to {top:g} m is a "
+        "high-rise on one line and not on the other, so neither class settles it.",
+        rests_on=rests)
 
 
 def tdr_check(ctx: Context) -> Check | None:

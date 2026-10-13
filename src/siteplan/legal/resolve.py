@@ -37,7 +37,7 @@ from siteplan.contracts.resolved_rules import (
     TableVColumn,
     WhenOpen,
 )
-from siteplan.contracts.site_model import CanonicalSiteModel, Road
+from siteplan.contracts.site_model import ApplicationStatus, CanonicalSiteModel, Road
 from siteplan.legal import non_high_rise
 from siteplan.legal.readings import OPEN_SPACE_READINGS, interpretations
 from siteplan.provenance import confirmed, weakest
@@ -98,10 +98,14 @@ def rules_digest() -> str:
 
 def resolve(site: CanonicalSiteModel, *, selections: dict[str, str] | None = None,
             when_open: WhenOpen = WhenOpen.STOP,
-            answered: dict[str, str] | None = None) -> ResolvedRules:
+            answered: dict[str, str] | None = None,
+            assumed: dict[str, str] | None = None) -> ResolvedRules:
     """The law for this site. `selections` maps an open reading's id to the reading a test profile
     takes; `when_open` says what to do when whose rules apply is not established (CONSERVATIVE
-    plans the stricter Table V column, labelled as a test mode; STOP leaves the share open)."""
+    plans the stricter Table V column, labelled as a test mode; STOP leaves the share open).
+    `answered` and `assumed` give a selection's source: the architect's answer (USER_CONFIRMED),
+    or where a study's assumption came from (ASSUMED_FOR_TEST); either is appended to the
+    reading's sources, never in place of a legal one, and neither settles the reading."""
     own, road = site.ownership, site.access_road()
     gross = own.gross_sqm
     column, column_status, jurisdiction_note = _table_v_column(site)
@@ -140,7 +144,7 @@ def resolve(site: CanonicalSiteModel, *, selections: dict[str, str] | None = Non
         water={"buffer_m_by_class": _rv(dict(rules.WATER_BUFFER_M), rules.WATER_BUFFER_CLAUSE,
                                         unit="m")},
         interpretations=interpretations(master_plan_road=master_plan, selections=selections,
-                                        answered=answered))
+                                        answered=answered, assumed=assumed))
 
 
 def _rv(value, clause: str, *, unit: str = "", note: str = "", **over) -> dict:
@@ -175,7 +179,29 @@ def _height(site: CanonicalSiteModel, road: Road | None, raise_reading: str,
         "limits": [*_road_limits(road), _dead_end_limit(site), _airport_limit(site)],
         "stilt_raise_m": _stilt_raise(raise_reading),
         "plinth_m": _rv(rules.PLINTH_MIN_M, rules.PLINTH_CLAUSE, unit="m"),
-        "raise_interpretation": STILT_RAISE}
+        "raise_interpretation": STILT_RAISE,
+        **_earlier_line(site)}
+
+
+def _earlier_line(site: CanonicalSiteModel) -> dict:
+    """The high-rise line G.O.Ms.No.95 replaced (18 m), where it may bind the application: one
+    received before the order's date (it names no commencement date and no transitional clause),
+    or one whose date is not known. Nothing for a scheme not yet filed, or one received on or
+    after that date (2026-10-13)."""
+    j = site.jurisdiction
+    status = j.application_status.value if j.application_status else None
+    received = j.application_date.value if j.application_date else None
+    if status == ApplicationStatus.NOT_FILED or (
+            received is not None and received >= rules.HIGH_RISE_ORDER_DATE):
+        return {}
+    why = (f"the application was received on {received:%d-%m-%Y}, before G.O.Ms.No.95 of 2026 "
+           "(21-03-2026), which names no commencement date and no transitional clause"
+           if received is not None else
+           "the application's status and the date it was received are not known")
+    clause = f"{rules.HIGH_RISE_2012_CLAUSE}; {rules.HIGH_RISE_ORDER_DATE_CLAUSE}"
+    # the figure is the 2012 order's as written; whether it binds this application is not known
+    return {"earlier_high_rise_m": _rv(rules.HIGH_RISE_2012_M, clause, unit="m", note=why,
+                                       status=Provenance.UNVERIFIED)}
 
 
 def _strip_from_m(selections: dict[str, str] | None) -> float:

@@ -22,7 +22,7 @@ from siteplan.contracts.design_brief import MIX_SUM_TOLERANCE, HeightMode
 from siteplan.contracts.resolved_rules import WhenOpen
 from siteplan.guards import sanitize_brief, ungrounded_values
 from siteplan.intake import WorkspaceDefaults
-from siteplan.legal.site import readings_of
+from siteplan.legal.site import readings_of, sources_of
 from siteplan.library import FlatLibrary
 from siteplan.project import Project
 from siteplan.service import summaries
@@ -126,6 +126,9 @@ def approval_lines(*, debug: bool, finished: tuple[str, ...], project_file: str,
     the readings and test mode the project states, the firm's standards (and any prototype the
     firm's longest block leaves out), and what the brief asks, saying where each came from."""
     selections, when_open = readings_of(project)
+    answered, assumed = sources_of(project)
+    said = {**{k: f"{v}, a study assumption" for k, v in assumed.items()},
+            **{k: f"{v}, confirmed" for k, v in answered.items()}}
     h, mix = brief.height_intent, brief.program.unit_mix.value
     run = ("Blind: the firm's finished plans are refused" if not debug else
            "DEBUG RUN: " + ("; ".join(finished) if finished else
@@ -133,9 +136,11 @@ def approval_lines(*, debug: bool, finished: tuple[str, ...], project_file: str,
     lines = [run,
              f"Project file {project_file}; survey {survey.name if survey else 'none'}",
              *(_said(f) for f in summaries.site_facts(site)),
-             "Readings the project file states: " + (", ".join(
-                 f"{k} = {v}" for k, v in selections.items()) or "none (every reading of every "
-                 "open question is evaluated)")]
+             "Readings the project file states: " + ((", ".join(
+                 f"{k} = {v}" + (f" ({said[k]})" if k in said else "")
+                 for k, v in selections.items()) + "; for the studies only: every reading of "
+                 "every open question is still judged") if selections else "none (every reading "
+                 "of every open question is evaluated)")]
     if when_open is WhenOpen.CONSERVATIVE:
         lines.append("The project's conservative test mode: the GHMC parking column while whose "
                      "rules apply is open")

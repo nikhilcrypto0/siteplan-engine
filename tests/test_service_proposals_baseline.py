@@ -122,6 +122,11 @@ their digests and the answer move (each report carries what it rests on, CONDITI
 said UNVERIFIED), and the note on what every layout leaves open says the 45 t loading is not
 checked.
 
+Re-pinned on 2026-10-13 a fourth time (phase 2): every report names the rule set it applied, and
+this project states no application date, so a block of 18 to 21 m would be CONDITIONAL; none of
+the proposals moves, nor the four shown, the answer or the approval page; the candidates'
+digests move (they carry their report's notes).
+
 The values pin exact output on the locked dependencies (uv.lock). They move only with a normative
 replacement and an entry in docs/behaviour-changes.md.
 """
@@ -221,15 +226,15 @@ PINNED = {
         "full-ALL-allowed-165",
         "full-ALL-ALL-136",
     ],
-    "proposed_sha256": "3d58151e9d22f7c46a215ac7efbd3d8fe48d7f49aef56ccdaa55ea7f270b998a",
+    "proposed_sha256": "24638dcc1096865d2d53e3d6318d16a1517282c44f39d8a24406c31e57345ba0",
     "shown": [
         ["full-not_counted-allowed-218", "BALANCED"],
         ["full-not_counted-allowed-86", "MAX_YIELD"],
         ["full-ALL-ALL-136", "CONVENTIONAL_OPEN_SPACE"],
         ["full-ALL-ALL-1", "ROBUST"],
     ],
-    "shown_digests": ["f768bf3ba2ec1231", "f3449b29c8019823",
-                      "58acbb13855fab0c", "6410cf79522973d2"],
+    "shown_digests": ["59bfd170cd309c59", "a3eeb3757662223f",
+                      "a6008c451aa694f9", "a1c718a42f55740a"],
     "answer_sha256": "e7db9a26024c560031fb170f011a5de4e6f6a9f11542657996950ce3ccd90d78",
     "approval_page_sha256": "2b9223fec60c0f2988b8ade6b34bb309ab94b2935c794437dad5a125cb6ce087",
 }

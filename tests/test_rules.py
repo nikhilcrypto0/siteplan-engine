@@ -291,6 +291,7 @@ def test_a_clause_names_the_order_the_rule_and_the_page(name):
 # What each clause quotes, on the page the clause names. The order has a text layer (the tables
 # come out scrambled, the sentences do not); the test skips where the order is not kept.
 QUOTED = [
+    (3, "means a building with 18m or more in height"),  # rule 2(f) of 2012: HIGH_RISE_2012_M
     (9, "PERMISSIBLE SETBACKS & HEIGHT STIPULATIONS FOR ALL TYPES"),
     (9, "(Buildings below 18m in height inclusive of Stilt / Parking Floor)"),
     (10, "Stilt Floor meant for parking is excluded from the permissible height in"),
@@ -386,6 +387,14 @@ def test_the_concessions_of_a_surrendering_owner_are_the_minimums_tdr_relaxation
     assert side == ((12.0, 2.0), (15.0, 2.5), (18.0, 3.0))
     assert "Amendment 16" in rules.ROAD_WIDENING_NON_HIGH_RISE_CLAUSE
     assert "17(d)(ix)" in rules.TDR_NON_HIGH_RISE_SETBACK_CLAUSE
+
+
+def test_the_high_rise_line_g_o_95_replaced_and_its_date_are_pinned():
+    """Rule 2(f) of 2012 made a high-rise 18 m; G.O.Ms.No.95, dated 21-03-2026, made it 21 m and
+    names no commencement date (its Gazette date is not held)."""
+    assert (rules.HIGH_RISE_2012_M, rules.HIGH_RISE_THRESHOLD_M) == (18.0, 21.0)
+    assert rules.HIGH_RISE_ORDER_DATE.isoformat() == "2026-03-21"
+    assert "2(f)" in rules.HIGH_RISE_2012_CLAUSE and "95" in rules.HIGH_RISE_ORDER_DATE_CLAUSE
 
 
 def test_what_the_clauses_quote_is_on_the_page_they_name():

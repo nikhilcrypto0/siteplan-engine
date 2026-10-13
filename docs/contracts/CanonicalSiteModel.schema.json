@@ -36,6 +36,16 @@
       "title": "Access",
       "type": "object"
     },
+    "ApplicationStatus": {
+      "description": "Where the building permission application stands (2026-10-13), which decides which\norders bind it where an order names no commencement date (G.O.Ms.No.95 of 2026).",
+      "enum": [
+        "NOT_FILED",
+        "FILED",
+        "SANCTIONED"
+      ],
+      "title": "ApplicationStatus",
+      "type": "string"
+    },
     "DeductionKind": {
       "description": "Only these reduce gross ownership to net ownership: each takes land out of the title.",
       "enum": [
@@ -159,6 +169,28 @@
     "Jurisdiction": {
       "additionalProperties": false,
       "properties": {
+        "application_date": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Sourced_Union_date__NoneType__"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "application_status": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Sourced_Union_ApplicationStatus__NoneType__"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "authority": {
           "$ref": "#/$defs/Sourced_Union_str__NoneType__"
         },
@@ -618,6 +650,39 @@
       "title": "Sourced[Shape]",
       "type": "object"
     },
+    "Sourced_Union_ApplicationStatus__NoneType__": {
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "default": "",
+          "title": "Source",
+          "type": "string"
+        },
+        "source_kind": {
+          "$ref": "#/$defs/SourceKind"
+        },
+        "status": {
+          "$ref": "#/$defs/Provenance"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ApplicationStatus"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "value",
+        "status",
+        "source_kind"
+      ],
+      "title": "Sourced[Union[ApplicationStatus, NoneType]]",
+      "type": "object"
+    },
     "Sourced_Union_Literal__N____NE____E____SE____S____SW____W____NW____NoneType__": {
       "additionalProperties": false,
       "properties": {
@@ -694,6 +759,41 @@
         "source_kind"
       ],
       "title": "Sourced[Union[bool, NoneType]]",
+      "type": "object"
+    },
+    "Sourced_Union_date__NoneType__": {
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "default": "",
+          "title": "Source",
+          "type": "string"
+        },
+        "source_kind": {
+          "$ref": "#/$defs/SourceKind"
+        },
+        "status": {
+          "$ref": "#/$defs/Provenance"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Value"
+        }
+      },
+      "required": [
+        "value",
+        "status",
+        "source_kind"
+      ],
+      "title": "Sourced[Union[date, NoneType]]",
       "type": "object"
     },
     "Sourced_Union_int__NoneType__": {

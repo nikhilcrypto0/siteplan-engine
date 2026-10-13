@@ -284,9 +284,10 @@ class LimitOut(Frozen):
 class InterpretationOut(Frozen):
     id: str
     question: str
-    selected: str  # one reading, or ALL: every reading is evaluated
-    readings_evaluated: list[str]
+    selected: str  # one reading for the studies, or ALL
+    readings_evaluated: list[str]  # every reading, unless the question is settled (2026-10-13)
     status: Provenance
+    sources: list[str] = []  # the clauses, and who selected the reading and when
 
 
 class RulesResult(Frozen):

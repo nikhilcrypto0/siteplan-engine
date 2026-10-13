@@ -57,6 +57,7 @@ from siteplan.validator.shapes import (
 from siteplan.validator.zones import gap_zones, setback_zone
 
 CRACK_M = 0.02  # pockets drawn this close to each other are one pocket
+STUDY_COUNTING = "open_space_study_counting_sqm"  # what counts under the study's selections
 AGREEMENT_SHARE = 0.005  # the rules' area asked and the site's this close (a share) are one figure
 
 
@@ -253,11 +254,22 @@ def open_space_checks(ctx: Context) -> tuple[list[Check], dict[str, float]]:
         note="The denominator of the 10% is not settled: it is evaluated under every reading.")
     agreement = _requirement_agreement(ctx)
     quantities = {"open_space_declared_sqm": sum(p.area for p in ctx.drawn.open_space)}
+    def counting(stilts, spacings) -> float:
+        return min(ground(reading, s, kinds, bool(kinds.unknown)).area_sqm
+                   for reading in stilts for s in spacings for kinds in uses.values())
+
+    spacings = ctx.rules.judged_readings(MIXED_HEIGHT_SPACING)
     for reading in ctx.stilt_readings:
-        counts = min(ground(reading, s, kinds, bool(kinds.unknown)).area_sqm
-                     for s in ctx.rules.judged_readings(MIXED_HEIGHT_SPACING)
-                     for kinds in uses.values())
-        quantities[f"open_space_counting_sqm[{STILT_IN_RULE_HEIGHT}={reading}]"] = counts
+        quantities[f"open_space_counting_sqm[{STILT_IN_RULE_HEIGHT}={reading}]"] = counting(
+            [reading], spacings)
+    chosen = ctx.rules.study_selections()
+    if {STILT_IN_RULE_HEIGHT, MIXED_HEIGHT_SPACING} & set(chosen):
+        # under the readings the study selected, which the generator planned for: what its own
+        # claim is compared with (2026-10-13); the figures above hold under every reading
+        quantities[STUDY_COUNTING] = counting(
+            [chosen[STILT_IN_RULE_HEIGHT]] if STILT_IN_RULE_HEIGHT in chosen
+            else ctx.stilt_readings,
+            [chosen[MIXED_HEIGHT_SPACING]] if MIXED_HEIGHT_SPACING in chosen else spacings)
     for basis, asked in requirements.items():
         quantities[f"open_space_required_sqm[{OPEN_SPACE_BASIS}={basis}]"] = asked
     return [main] + ([agreement] if agreement else []), quantities

@@ -23,6 +23,7 @@ from __future__ import annotations
 
 from collections import Counter
 from dataclasses import dataclass, field
+from typing import Literal
 
 from pydantic import BaseModel, Field, PositiveFloat, PositiveInt, model_validator
 from shapely.geometry import Polygon
@@ -82,6 +83,19 @@ SAME_IDEA_OVERLAP = 0.5  # two layouts sharing this much tower ground are one id
 ANGLE_FAMILY_DEG = 10.0  # towers running within this of each other run the same way
 
 
+class SelectedReading(BaseModel):
+    """One reading of an open question a project selects for its studies, with where the choice
+    came from (2026-10-13). A selection never settles the law: the validator still judges every
+    reading and reports the result that rests on this one as resting on it."""
+
+    reading: str = Field(description="The reading chosen, e.g. 'nbc_line'")
+    source: str = Field(min_length=1, description="Who chose it and when, e.g. 'the architect, "
+                        "2026-10-13'")
+    status: Literal["USER_CONFIRMED", "ASSUMED_FOR_TEST"] = Field(
+        "ASSUMED_FOR_TEST", description="USER_CONFIRMED when the architect said so; "
+        "ASSUMED_FOR_TEST when it is taken for a study only")
+
+
 class LayoutRequest(BaseModel):
     """What the architect (or, in Stage 2b, the LLM from a brief) asks the solver for."""
 
@@ -119,6 +133,11 @@ class LayoutRequest(BaseModel):
     conservative_parking: bool = Field(
         False, description="Test mode: when whose rules apply is not established, plan the "
         "stricter GHMC parking column instead of stopping to ask")
+    readings: dict[str, SelectedReading] = Field(
+        default_factory=dict, description="Readings of open questions the project selects for "
+        "its studies, by interpretation id (any the rules carry, e.g. nbc_fire_height), each "
+        "with its source; read by the contract pipeline (the service, `siteplan envelope`), not "
+        "by this legacy layout, which reads its own two switches above")
     cellar_floor_height_m: PositiveFloat = Field(
         3.0, description="Floor to floor of a cellar: the rise each 1 in 8 ramp climbs")
     cellar_utilities_pct: float = Field(

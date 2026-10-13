@@ -97,6 +97,23 @@ INVENTORY: tuple[Entry, ...] = (
         Reading.AS_WRITTEN, (*_BOTH, Where.FLOORS), ("HIGH_RISE_THRESHOLD_M", "HIGH_RISE_CLAUSE"),
     ),
     Entry(
+        "Height", "An application received before G.O.Ms.No.95 of 2026 may be judged on the "
+                  "high-rise line it replaced.",
+        f"{rules.HIGH_RISE_2012_M:g} m (2012) before {rules.HIGH_RISE_ORDER_DATE:%d-%m-%Y}",
+        f"{rules.HIGH_RISE_2012_CLAUSE}; {rules.HIGH_RISE_ORDER_DATE_CLAUSE}",
+        Reading.INTERPRETED, (Where.RESOLVER,),
+        ("HIGH_RISE_2012_M", "HIGH_RISE_2012_CLAUSE", "HIGH_RISE_ORDER_DATE",
+         "HIGH_RISE_ORDER_DATE_CLAUSE"),
+        choice="G.O.95 names no commencement date and no transitional clause, and its Gazette "
+               "date is not held. Where the project says the application was received before "
+               "the order's date, or does not say when it was, a block of 18 to 21 m is a "
+               "high-rise on one line and not on the other: the validator reports it "
+               "CONDITIONAL, never settled. A scheme not yet filed, or one received on or after "
+               "the date, is judged on 21 m alone.",
+        settles="The order's Gazette date and the authority's practice on applications pending "
+                "when it came in.",
+    ),
+    Entry(
         "Height", "Height is measured from the abutting road; whether the stilt floor counts in "
                   "the height that picks the Table IV row is an open reading.",
         "stilt + floors x floor-to-floor height (counted) or floors only (not counted)",

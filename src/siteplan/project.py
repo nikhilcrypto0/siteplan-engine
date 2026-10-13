@@ -7,6 +7,7 @@ asked to produce from a plain-English brief.
 
 from __future__ import annotations
 
+from datetime import date
 from typing import Literal
 
 from pydantic import BaseModel, Field, PositiveFloat, PositiveInt, model_validator
@@ -113,6 +114,13 @@ class SiteIn(BaseModel):
     inside_cure: bool | None = Field(
         None, description="Inside the Core Urban Region, where GHMC's building rules apply "
         "(G.O.Ms.No.45 of 2026). Leave out when not known.")
+    application_status: Literal["NOT_FILED", "FILED", "SANCTIONED"] | None = Field(
+        None, description="Where the building permission application stands: NOT_FILED for a "
+        "new scheme, FILED or SANCTIONED with the date it was received. It decides which orders "
+        "bind it where an order names no commencement date. Leave out when not known.")
+    application_date: date | None = Field(
+        None, description="The date the authority received the application (with FILED or "
+        "SANCTIONED).")
     abutting_road_status: RoadWidthStatus | None = Field(
         None, description="How the abutting road width is known: a certified right of way, "
         "declared on the site plan, or a value read off a drawing")
@@ -140,6 +148,12 @@ class SiteIn(BaseModel):
     site_coordinates: tuple[float, float] | None = Field(
         None, description="Latitude and longitude. Without them airport and Air Force height "
         "limits stay unverified.")
+
+    @model_validator(mode="after")
+    def _a_date_is_an_applications(self) -> SiteIn:
+        if self.application_date is not None and self.application_status == "NOT_FILED":
+            raise ValueError("application_date given for an application NOT_FILED")
+        return self
 
     @model_validator(mode="after")
     def _area_text_parses(self) -> SiteIn:

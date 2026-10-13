@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+from datetime import date
 
 from siteplan.units import M_PER_FT
 
@@ -98,6 +99,16 @@ def long_block_open_space_m(table_m: float, length_m: float) -> float:
 # Building means a building with 21m or more in height." Read from the order on 2026-09-20.
 HIGH_RISE_THRESHOLD_M = 21.0
 HIGH_RISE_CLAUSE = "G.O.168 rule 2(f) as substituted by G.O.Ms.No.95 of 2026 (21 m)"
+# The line G.O.95 replaced: rule 2(f) of 2012, "'High-Rise Building' means a building with 18m or
+# more in height" (G.O.168 p.3, read 2026-10-13). G.O.95 is dated 21-03-2026 and names no
+# commencement date and no transitional clause (read on its page images, 2026-10-13); its Gazette
+# date is not held. So an application received before it may be judged on the 2012 line: the
+# engine does not settle that.
+HIGH_RISE_2012_M = 18.0
+HIGH_RISE_2012_CLAUSE = "G.O.168 of 2012 rule 2(f) as first issued (18 m), before G.O.Ms.No.95"
+HIGH_RISE_ORDER_DATE = date(2026, 3, 21)
+HIGH_RISE_ORDER_DATE_CLAUSE = ("G.O.Ms.No.95 of 2026, dated 21-03-2026 (no commencement date, no "
+                               "transitional clause; its Gazette date is not held)")
 
 # A height starts at the ground: rule 2(e), "height measured from the abutting road and in case of
 # undulated terrain height can be considered as average of the corresponding ground level"; NBC

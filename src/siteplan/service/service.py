@@ -56,8 +56,7 @@ from siteplan.contracts.common import SourceKind
 from siteplan.contracts.resolved_rules import WhenOpen
 from siteplan.intake import WORKSPACE_FILE, WorkspaceDefaults, extract, load_defaults, questions
 from siteplan.legal.envelope import NetPlotUnknown, envelope
-from siteplan.legal.resolve import resolve
-from siteplan.legal.site import readings_of, site_from_project
+from siteplan.legal.site import readings_of, resolve_project, site_from_project
 from siteplan.library import FlatLibrary
 from siteplan.optimizer.core import OptimizerResult, optimize
 from siteplan.optimizer.guard import Validated, inputs_of, why_refused
@@ -497,8 +496,7 @@ class Service:
 
     @staticmethod
     def _rules(site: CanonicalSiteModel, project: Project) -> ResolvedRules:
-        selections, when_open = readings_of(project)
-        return resolve(site, selections=selections, when_open=when_open)
+        return resolve_project(site, project)
 
     def _decision(self, title: str, lines: list[str]) -> Decision:
         """The person's answer on the host's channel: what the channel says came back when it
