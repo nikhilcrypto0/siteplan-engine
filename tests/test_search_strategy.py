@@ -25,12 +25,19 @@ from search_support import (
 )
 from shapely.geometry import LineString, Polygon, box
 from shapely.ops import unary_union
+from validator_helpers import select
 
 from siteplan import validator as independent
 from siteplan.contracts import digest
 from siteplan.contracts.common import Finding, Status
 from siteplan.contracts.design_brief import ParetoPoint
-from siteplan.contracts.resolved_rules import CIRCULATION_IN_SETBACK, STILT_IN_RULE_HEIGHT
+from siteplan.contracts.resolved_rules import (
+    CIRCULATION_IN_SETBACK,
+    FIRE_TURNING_RADIUS,
+    MIXED_HEIGHT_SPACING,
+    STILT_IN_RULE_HEIGHT,
+    STILT_RAISE,
+)
 from siteplan.contracts.validation import Check, Family, LegalVerdict, legal_verdict
 from siteplan.optimizer import optimize
 from siteplan.optimizer.interfaces import Budget
@@ -139,10 +146,19 @@ def test_every_proposal_states_its_unverified_items_and_the_readings_they_rest_o
 
 def test_layouts_that_hold_under_every_reading_come_beside_those_that_rest_on_a_reading():
     made, proposal = rectangle(), proposal_on_the_rectangle()
+    # judged with the readings the generator builds its profiles on settled as it lays them
+    # (NBC's turning radius on the outer edge, the stilt's 0.15 m raise, the taller block's gap):
+    # this test is about the stilt's and circulation's readings. Judged on every reading, every
+    # layout rests on one of those three (2026-10-13, docs/behaviour-changes.md).
+    rules = made.rules.model_copy(deep=True)
+    for interpretation, reading in ((FIRE_TURNING_RADIUS, "outer_edge"),
+                                    (STILT_RAISE, "covered_parking"),
+                                    (MIXED_HEIGHT_SPACING, "taller_governs")):
+        select(rules, interpretation, reading)
     holds, rests = [], []
     for candidate in proposal.candidates:
-        (holds if rests_on(_judge(made, candidate)).holds_under_every_reading
-         else rests).append(candidate)
+        report = independent.validate(made.site, rules, made.brief, candidate, made.envelope)
+        (holds if rests_on(report).holds_under_every_reading else rests).append(candidate)
     assert holds and rests
     assert all(c.interpretation_basis == {STILT_IN_RULE_HEIGHT: ALL, CIRCULATION_IN_SETBACK: ALL}
                for c in holds)

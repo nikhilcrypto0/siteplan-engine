@@ -26,7 +26,7 @@ from siteplan.contracts.validation import Check, Family
 from siteplan.validator.context import Context
 from siteplan.validator.drawn import DrawnRoad
 from siteplan.validator.ground import Ground
-from siteplan.validator.readings import plain
+from siteplan.validator.readings import plain, rule_gap
 from siteplan.validator.shapes import healed, polygons_of, union_of_all
 
 TOUCH_M = 0.5  # a road or gate this close to a road opens onto it
@@ -34,6 +34,7 @@ JOIN_SQM = 1.0  # contact smaller than this is two roads touching at a corner, n
 THROUGH = (RoadKind.APPROACH, RoadKind.LOOP, RoadKind.INTERNAL)
 NETWORK = (*THROUGH, RoadKind.CUL_DE_SAC)
 LANE_NOTE = "The perimeter lane is not established as an 8(m) road."
+LANE_GAP = rule_gap("perimeter lane as a rule 8(m) road", LANE_NOTE)
 
 
 @dataclass(frozen=True)
@@ -118,7 +119,8 @@ def dead_end_check(ctx: Context, ground: Ground) -> Check:
     if not loop and not _end_problems(ctx, parts, reach, lane_land(ctx, ground)):
         return plain(Family.ROADS, rule, Status.UNVERIFIED,
                      "; ".join(problems) + ", but each meets the perimeter lane", required, clause,
-                     f"{LANE_NOTE} (ASSUMED_FOR_TEST circulation in the setback).")
+                     f"{LANE_NOTE} (ASSUMED_FOR_TEST circulation in the setback).",
+                     rests_on=[LANE_GAP])
     return plain(Family.ROADS, rule, Status.FAIL, "; ".join(problems), required, clause,
                  "A road that is not a cul-de-sac of the form rule 8(m) allows must meet another "
                  "road or a gate at both ends, and the loop must close.")
@@ -154,7 +156,7 @@ def entrance_connection_check(ctx: Context, ground: Ground) -> Check | None:
     if lane_reached and not lane_floating:
         return plain(Family.ROADS, rule, Status.UNVERIFIED,
                      "joined to the entrance only through the perimeter lane", required, clause,
-                     LANE_NOTE)
+                     LANE_NOTE, rests_on=[LANE_GAP])
     if not reached and not lane_reached:
         return plain(Family.ROADS, rule, Status.FAIL, "no rule 8(m) road meets the entrance",
                      required, clause,

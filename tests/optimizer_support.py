@@ -212,12 +212,20 @@ class Scripted:
             self.clock.advance(self.takes)
         said = self.verdicts.get(candidate.candidate_id, Status.PASS)
         status = said[min(times, len(said) - 1)] if isinstance(said, tuple) else said
-        legal = [Check(family=Family.OTHER, finding=Finding(
+        legal = [scripted_check(Finding(
             "Scripted check", status, "scripted", "scripted", "made-up test validator"))]
         return ValidationReport(
             candidate_ref=digest(candidate), site_ref=digest(site), rules_ref=digest(rules),
             brief_ref=digest(brief), validator_version="scripted test validator", legal=legal,
             verdict={"legal": legal_verdict(legal, []), "program": ProgramVerdict.MET})
+
+
+def scripted_check(finding: Finding) -> Check:
+    """A test validator's check; a CONDITIONAL one names what it rests on, as contracts 1.4
+    asks of every report."""
+    rests = ([{"kind": "MEASUREMENT", "id": "a scripted test result"}]
+             if finding.status is Status.CONDITIONAL else [])
+    return Check(family=Family.OTHER, finding=finding, rests_on=rests)
 
 
 class Claims:
@@ -227,7 +235,7 @@ class Claims:
     they are, so it cannot stand in for a verdict the test needs to set."""
 
     def validate(self, site, rules, brief, candidate, envelope=None) -> ValidationReport:
-        legal = [Check(family=Family.OTHER, finding=claim) for claim in candidate.generator_claims]
+        legal = [scripted_check(claim) for claim in candidate.generator_claims]
         legal = legal or [Check(family=Family.OTHER, finding=Finding(
             "No claim", Status.PASS, "none", "none", "made-up test validator"))]
         return ValidationReport(

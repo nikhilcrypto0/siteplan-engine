@@ -14,11 +14,22 @@ from __future__ import annotations
 
 import itertools
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from siteplan.contracts.common import Basis, Finding, Provenance, Status
-from siteplan.contracts.resolved_rules import ResolvedRules
-from siteplan.contracts.validation import Check, Family, combine_readings
+from siteplan.contracts.resolved_rules import (
+    Applicability,
+    HeightLimit,
+    LimitBound,
+    ResolvedRules,
+)
+from siteplan.contracts.validation import (
+    Check,
+    Dependency,
+    DependsOn,
+    Family,
+    combine_readings,
+)
 
 COUNTED, NOT_COUNTED = "counted", "not_counted"  # stilt_in_rule_height
 ALLOWED, NOT_ALLOWED = "allowed", "not_allowed"  # circulation_in_setback
@@ -39,18 +50,65 @@ Assignment = dict[str, str]  # interpretation id -> the reading this cell is eva
 
 @dataclass(frozen=True)
 class Cell:
-    """One check's result under one assignment of readings."""
+    """One check's result under one assignment of readings; a CONDITIONAL cell names what it
+    rests on beyond the readings (a site fact, a gap in the rules, a measurement)."""
 
     status: Status
     measured: str
     required: str = ""
     note: str = ""
+    rests_on: tuple[Dependency, ...] = ()
+
+
+def fact(name: str, detail: str = "") -> Dependency:
+    """A fact about the site that is not known or not verified."""
+    return Dependency(kind=DependsOn.SITE_FACT, id=name, detail=detail)
+
+
+def rule_gap(name: str, detail: str = "") -> Dependency:
+    """The law read gives no figure, or a rule value is unconfirmed."""
+    return Dependency(kind=DependsOn.RULE_GAP, id=name, detail=detail)
+
+
+def measurement(name: str, detail: str = "") -> Dependency:
+    """The drawing does not settle what the check measures."""
+    return Dependency(kind=DependsOn.MEASUREMENT, id=name, detail=detail)
+
+
+JURISDICTION_FACT = "whose rules apply (Table V column)"
+
+
+def unconfirmed_band(table: str) -> Dependency:
+    """A height band the rules mark UNVERIFIED (no order read gives its figures)."""
+    return rule_gap("height band unconfirmed", table)
+
+
+def limit_rests(limit: HeightLimit) -> tuple[Dependency, ...]:
+    """What a height limit's CONDITIONAL result rests on (HeightLimit.evaluate): whether it
+    applies, a bound nobody could work out, or inputs nobody confirmed."""
+    found = []
+    if limit.condition is not None and limit.applicability is Applicability.UNKNOWN:
+        found.append(fact(limit.condition.text, f"whether {limit.reason} applies"))
+    if limit.bound is LimitBound.NOT_EVALUATED:
+        found.append(fact(limit.reason, "the limit cannot be worked out from what is known"))
+    if limit.status is Provenance.UNVERIFIED:
+        found.append(fact(limit.reason, "the limit rests on inputs nobody has confirmed"))
+    return tuple(found) or (rule_gap(limit.reason),)
+
+
+def _unique(found: Sequence[Dependency]) -> list[Dependency]:
+    out: dict[tuple[str, str], Dependency] = {}
+    for d in found:
+        out.setdefault((d.kind.value, d.id), d)
+    return list(out.values())
 
 
 def unknown_reading(interpretation_id: str, reading: str) -> Cell:
     return Cell(Status.UNVERIFIED, f"reading '{reading}' of {interpretation_id}",
                 "a reading this validator can evaluate",
-                "The reading is not one the validator knows how to evaluate; it is not guessed.")
+                "The reading is not one the validator knows how to evaluate; it is not guessed.",
+                (Dependency(kind=DependsOn.READING, id=interpretation_id,
+                            detail=f"'{reading}' cannot be evaluated"),))
 
 
 def basis_note(rule_value) -> str:
@@ -82,6 +140,37 @@ class Evaluated:
     ids: tuple[str, ...]
     cells: tuple[tuple[Assignment, Cell], ...]
     varying: tuple[str, ...]  # the interpretations with more than one reading to evaluate
+    selection: Assignment = field(default_factory=dict)  # the study's selected readings
+
+    @property
+    def selected_status(self) -> Status | None:
+        """The result under the readings the study selected; None when it selected none of the
+        readings this check depends on."""
+        chosen = {i: r for i, r in self.selection.items() if i in self.ids}
+        if not chosen:
+            return None
+        return combine_statuses([c.status for a, c in self.cells
+                                 if all(a[i] == r for i, r in chosen.items())])
+
+    @property
+    def dependencies(self) -> list[Dependency]:
+        """What the result rests on: each reading under which it differs, with the result under
+        each and the study's selection; and what the CONDITIONAL cells name."""
+        marginals = self.by_reading
+        found = [self._dependency(i, m) for i, m in marginals.items() if len(set(m.values())) > 1]
+        found += [d for _, cell in self.cells if cell.status is Status.CONDITIONAL
+                  for d in cell.rests_on]
+        if not found and len({c.status for _, c in self.cells}) > 1:
+            # the result turns on the readings together, though on none of them alone: each
+            # question that varies is named, with the results under it
+            found = [self._dependency(i, marginals[i]) for i in self.varying]
+        return _unique(found)
+
+    def _dependency(self, interpretation: str, marginal: dict[str, Status]) -> Dependency:
+        if interpretation == TABLE_V_COLUMN:
+            return Dependency(kind=DependsOn.SITE_FACT, id=JURISDICTION_FACT, outcomes=marginal)
+        return Dependency(kind=DependsOn.READING, id=interpretation,
+                          selected=self.selection.get(interpretation), outcomes=marginal)
 
     @property
     def status(self) -> Status:
@@ -145,28 +234,37 @@ class Evaluated:
 def run(rules: ResolvedRules, interpretation_ids: Sequence[str],
         evaluate: Callable[[Assignment], Cell],
         extra: Mapping[str, Sequence[str]] | None = None) -> Evaluated:
-    """Evaluate a check under every combination of the readings of the given interpretations
-    (the one selected reading of each, or every reading when it is ALL). `extra` gives the
-    readings of an open question that is not an Interpretation (whose Table V column applies)."""
+    """Evaluate a check under every combination of the readings of the given interpretations:
+    every reading of a question the law leaves open, whatever a study selected (2026-10-13), and
+    only the selected one of a settled question (Interpretation.judged). The study's selections
+    are kept, so the result under them is known beside the result under every reading. `extra`
+    gives the readings of an open question that is not an Interpretation (whose Table V column
+    applies)."""
     ids = tuple(interpretation_ids)
-    options = [list(extra[i]) if extra and i in extra else rules.readings(i) for i in ids]
+    options = [list(extra[i]) if extra and i in extra else rules.judged_readings(i)
+               for i in ids]
     cells = []
     for combination in itertools.product(*options):
         assignment = dict(zip(ids, combination, strict=True))
         cells.append((assignment, evaluate(assignment)))
+    selection = {i: r for i, r in rules.study_selections().items() if i in ids}
     return Evaluated(ids, tuple(cells), tuple(i for i, o in zip(ids, options, strict=True)
-                                              if len(o) > 1))
+                                              if len(o) > 1), selection)
 
 
 def check_from(ev: Evaluated, *, family: Family, rule: str, clause: str,
                subject: str | None = None, note: str = "") -> Check:
     notes = " ".join(part for part in (note, ev.note, ev.readings_note) if part)
     finding = Finding(rule, ev.status, ev.measured, ev.required, clause, notes)
-    return Check(family=family, subject=subject, finding=finding, by_reading=ev.by_reading)
+    return Check(family=family, subject=subject, finding=finding, by_reading=ev.by_reading,
+                 rests_on=ev.dependencies if ev.status is Status.CONDITIONAL else [],
+                 selected_status=ev.selected_status)
 
 
 def plain(family: Family, rule: str, status: Status, measured: str, required: str, clause: str,
-          note: str = "", subject: str | None = None) -> Check:
-    """A check that depends on no open reading."""
+          note: str = "", subject: str | None = None,
+          rests_on: Sequence[Dependency] = ()) -> Check:
+    """A check that depends on no open reading; a CONDITIONAL one names what it rests on."""
     return Check(family=family, subject=subject,
-                 finding=Finding(rule, status, measured, required, clause, note))
+                 finding=Finding(rule, status, measured, required, clause, note),
+                 rests_on=list(rests_on) if status is Status.CONDITIONAL else [])

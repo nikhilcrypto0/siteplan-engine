@@ -49,14 +49,20 @@ from siteplan.validator.readings import (
     Assignment,
     Cell,
     check_from,
+    fact,
+    limit_rests,
+    measurement,
     plain,
+    rule_gap,
     run,
+    unconfirmed_band,
     unknown_reading,
     verdict,
 )
 from siteplan.validator.setbacks import plot_line_distances, setback_cell
 
 UNVERIFIED_DRAWING = "UNVERIFIED_DRAWING_VALUE"  # a road's width as drawn, never confirmed
+ROAD_WIDTH_FACT = "access road legal width"
 TABLE_III_NOTE = ("Below the high-rise threshold Table III (rule 5) applies and is not modelled "
                   "yet: the validator does not judge it.")
 
@@ -151,7 +157,9 @@ def plot_size_check(ctx: Context) -> Check | None:
                         f"{law.ROAD_WIDENING_SHORTFALL_ALLOWANCE:.0%} after land given up for "
                         "road widening", required,
                         f"{law.ROAD_WIDENING_SHORTFALL_CLAUSE} may count a shortfall left by road "
-                        "widening; whether it does here is not settled")
+                        "widening; whether it does here is not settled",
+                        (rule_gap("road-widening shortfall",
+                                  law.ROAD_WIDENING_SHORTFALL_CLAUSE),))
         return Cell(verdict(found), f"{area:,.0f} m² (the net plot)", required)
 
     return check_from(run(ctx.rules, [STILT_IN_RULE_HEIGHT], cell), family=Family.HEIGHT,
@@ -230,13 +238,16 @@ def road_width_check(ctx: Context) -> Check | None:
         need = max(c.min_road_m or 0.0 for c in held)
         required = f">= {need:g} m"
         if width is None:
-            return Cell(Status.UNVERIFIED, f"unknown ({how})", required, " ".join(extra))
+            return Cell(Status.UNVERIFIED, f"unknown ({how})", required, " ".join(extra),
+                        (fact(ROAD_WIDTH_FACT, how),))
         if not settled:
             return Cell(Status.UNVERIFIED, f"{width:.2f} m ({how}), not confirmed", required,
-                        " ".join([*basis, "The width is a drawing's, never confirmed.", *extra]))
+                        " ".join([*basis, "The width is a drawing's, never confirmed.", *extra]),
+                        (fact(ROAD_WIDTH_FACT, "a drawing's value, never confirmed"),))
         if not all(c.confirmed for c in held):
             return Cell(Status.UNVERIFIED, f"{width:.2f} m ({how})", required,
-                        " ".join([*basis, UNCONFIRMED_NOTE, *extra]))
+                        " ".join([*basis, UNCONFIRMED_NOTE, *extra]),
+                        tuple(unconfirmed_band(c.table) for c in held if not c.confirmed))
         return Cell(verdict(width + TOL_M >= need), f"{width:.2f} m ({how})", required,
                     " ".join([*basis, *extra]))
 
@@ -258,7 +269,8 @@ def height_limit_checks(ctx: Context) -> list[Check]:
             "not evaluated: " + "; ".join(lim.reason for lim in above_sea),
             "below the airport and Air Force limits", above_sea[0].clause,
             "A site with no coordinates, or a survey with no ground level, cannot be held to a "
-            "limit above sea level."))
+            "limit above sea level.",
+            rests_on=[fact("site coordinates and ground level above sea level")]))
     for limit in ctx.rules.height.limits:
         if limit.measure is HeightMeasure.RULE_HEIGHT and ctx.towers:
             out.append(_rule_height_limit(ctx, limit))
@@ -296,7 +308,8 @@ def _physical_height_limit(ctx: Context, limit: HeightLimit) -> Check:
     measured = f"{tallest.physical_height_m:.2f} m ({tallest.name})"
     return plain(Family.HEIGHT, f"Physical-height limit: {limit.reason}",
                  limit.evaluate(tallest.physical_height_m), measured, _limit_required(limit),
-                 limit.clause, _limit_note(limit), subject=tallest.name)
+                 limit.clause, _limit_note(limit), subject=tallest.name,
+                 rests_on=limit_rests(limit))
 
 
 def prototype_height_check(ctx: Context) -> Check | None:
@@ -321,7 +334,9 @@ def prototype_height_check(ctx: Context) -> Check | None:
                  "; ".join(f"{what} ({', '.join(names)})" for what, names in shorter.items()),
                  "the firm's standard floor and stilt heights, or a reason for the difference", "",
                  "The height rules are judged on the prototype's own heights, as the contract "
-                 "says, but nothing here confirms heights below the firm's.")
+                 "says, but nothing here confirms heights below the firm's.",
+                 rests_on=[measurement("prototype floor and stilt heights",
+                                       "below the firm's standard")])
 
 
 def tdr_check(ctx: Context) -> Check | None:
@@ -343,7 +358,8 @@ def tdr_check(ctx: Context) -> Check | None:
         if not names:
             return Cell(Status.PASS, "none in that band", required)
         return Cell(Status.UNVERIFIED, f"{', '.join(names)} in that band", required,
-                    "Whether TDR is used is not something a layout shows.")
+                    "Whether TDR is used is not something a layout shows.",
+                    (fact("TDR used", height.tdr_band_m.clause),))
 
     return check_from(run(ctx.rules, [STILT_IN_RULE_HEIGHT], cell), family=Family.HEIGHT,
                       rule="TDR for a building of 18 to 21 m", clause=height.tdr_band_m.clause)
@@ -362,7 +378,7 @@ def _rule_height_limit(ctx: Context, limit: HeightLimit) -> Check:
             return unknown_reading(STILT_IN_RULE_HEIGHT, reading)
         tallest = max(heights, key=heights.get)
         return Cell(limit.evaluate(heights[tallest]), f"{heights[tallest]:.2f} m ({tallest})",
-                    required, _limit_note(limit))
+                    required, _limit_note(limit), limit_rests(limit))
 
     return check_from(run(ctx.rules, [STILT_IN_RULE_HEIGHT], cell), family=Family.HEIGHT,
                       rule=f"Rule-height limit: {limit.reason}", clause=limit.clause)
@@ -383,6 +399,8 @@ def eligibility_check(ctx: Context) -> Check | None:
     named = ([g for g in high_rise.grounds if g.settled and g.met is False]
              or [g for g in high_rise.grounds if not g.settled])
     required = "; ".join(f"{g.id} {g.required}" for g in high_rise.grounds)
+    unsettled = (tuple(fact(g.id, g.measured) for g in high_rise.grounds if not g.settled)
+                 or (rule_gap("high-rise eligibility", high_rise.note),))
 
     def cell(a: Assignment) -> Cell:
         reading = a[STILT_IN_RULE_HEIGHT]
@@ -395,7 +413,7 @@ def eligibility_check(ctx: Context) -> Check | None:
         measured = (f"{high_rise.eligibility.value}: "
                     + "; ".join(f"{g.id} {g.measured}" for g in named or high_rise.grounds))
         return Cell(ELIGIBILITY_STATUS[high_rise.eligibility], measured, required,
-                    high_rise.note)
+                    high_rise.note, unsettled)
 
     clause = "; ".join(sorted({g.clause for g in named or high_rise.grounds}))
     return check_from(run(ctx.rules, [STILT_IN_RULE_HEIGHT], cell), family=Family.HEIGHT,
@@ -462,7 +480,8 @@ def gap_cell(ca: HeightClass, cb: HeightClass, spacing: str, gap: float) -> Cell
                     + ["This gap does not count towards the tot-lot."])
     required = f">= {need:.2f} m{suffix}"
     if not all(c.confirmed for c in sources):
-        return Cell(Status.UNVERIFIED, shown, required, f"{note} {UNCONFIRMED_NOTE}")
+        return Cell(Status.UNVERIFIED, shown, required, f"{note} {UNCONFIRMED_NOTE}",
+                    tuple(unconfirmed_band(c.table) for c in sources if not c.confirmed))
     return Cell(verdict(gap + TOL_M >= need), shown, required, note)
 
 
@@ -530,7 +549,7 @@ def pair_measures(ctx: Context) -> list[PairMeasure]:
             classes = _classes(ctx, reading)
             if classes is None:
                 continue
-            for spacing in ctx.rules.readings(MIXED_HEIGHT_SPACING):
+            for spacing in ctx.rules.judged_readings(MIXED_HEIGHT_SPACING):
                 need, _ = required_gap(classes[a.name], classes[b.name], spacing)
                 if need is not None:
                     needs.append(need)

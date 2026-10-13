@@ -14,7 +14,8 @@ from siteplan.contracts import ValidationReport
 from siteplan.contracts.common import Status
 from siteplan.contracts.validation import Check, Family
 
-# UNVERIFIED on every layout, whatever the plan: said once in the notes, not on each option.
+# CONDITIONAL or not checked on every layout, whatever the plan: said once in the notes, not on
+# each option.
 UNIVERSAL = ("Height above sea level", "Fire access: 45 t hard surface")
 
 
@@ -67,9 +68,9 @@ def caveats(report: ValidationReport) -> list[str]:
                 f"holds only if {interpretation} is read as "
                 + " or ".join(f"'{reading}'" for reading in _passing(check, interpretation))
                 for interpretation in varying)
-            out.append(f"UNVERIFIED {finding.rule}: {says}")
+            out.append(f"CONDITIONAL {finding.rule}: {says}")
         else:
-            out.append(f"UNVERIFIED {finding.rule}: {finding.measured}"[:240])
+            out.append(f"CONDITIONAL {finding.rule}: {finding.measured}"[:240])
     for target in report.design_targets:
         if target.margin > 0 and not target.meets_target:
             subject = f" {target.subject}" if target.subject else ""

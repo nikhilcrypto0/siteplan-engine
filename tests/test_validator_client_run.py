@@ -13,6 +13,7 @@ import pytest
 from client_baseline import ANSWERS, SURVEY, profile_path
 from contract_fixtures import with_raise
 from contract_fixtures.rules_and_envelope import resolved_rules
+from validator_helpers import settled_as_selected
 
 from siteplan.contracts import digest
 from siteplan.contracts.common import Status
@@ -34,6 +35,12 @@ STRICTER = {
         "the reading where the checker, which knows only the one it planned for, says INFO",
 }
 
+# What the validator classes differently from today's checker on purpose, and why.
+RECLASSIFIED = {
+    "Fire access: 45 t hard surface":
+        "a specification of the paving, not something a drawing shows: the validator lists it as "
+        "NOT_CHECKED beside the verdict (2026-10-13), where the checker says UNVERIFIED",
+}
 
 # Cross-checks the validator blocks on a run planned for one reading of the stilt, and why.
 STRICTER_CROSS_CHECKS = {
@@ -67,15 +74,15 @@ def _parting(reading, rule, check) -> tuple:
 # with the stilt counted are 21.15 m, and 18 m without it, a stretch no order gives a setback for
 # (NOT_CHECKED); the stilt + 8 options planned without it are 27.15 m with it and ask 10 m (FAIL).
 ON_THE_OTHER_READING = {
-    ("counted", "Abutting road width (for T1)", "UNVERIFIED", "NOT_CHECKED"),
-    ("counted", "All-round setback", "UNVERIFIED", "NOT_CHECKED"),
-    ("counted", "Cellar ramp", "UNVERIFIED", "UNVERIFIED"),
-    ("counted", "Gap between blocks", "UNVERIFIED", "NOT_CHECKED"),
-    ("counted", "Organized open space (tot-lot)", "UNVERIFIED", "UNVERIFIED"),
-    ("counted", "Plot size for high-rise", "UNVERIFIED", "NOT_CHECKED"),
-    ("not_counted", "All-round setback", "UNVERIFIED", "FAIL"),
-    ("not_counted", "Gap between blocks", "UNVERIFIED", "FAIL"),
-    ("not_counted", "Organized open space (tot-lot)", "UNVERIFIED", "FAIL"),
+    ("counted", "Abutting road width (for T1)", "CONDITIONAL", "NOT_CHECKED"),
+    ("counted", "All-round setback", "CONDITIONAL", "NOT_CHECKED"),
+    ("counted", "Cellar ramp", "CONDITIONAL", "CONDITIONAL"),
+    ("counted", "Gap between blocks", "CONDITIONAL", "NOT_CHECKED"),
+    ("counted", "Organized open space (tot-lot)", "CONDITIONAL", "CONDITIONAL"),
+    ("counted", "Plot size for high-rise", "CONDITIONAL", "NOT_CHECKED"),
+    ("not_counted", "All-round setback", "CONDITIONAL", "FAIL"),
+    ("not_counted", "Gap between blocks", "CONDITIONAL", "FAIL"),
+    ("not_counted", "Organized open space (tot-lot)", "CONDITIONAL", "FAIL"),
 }
 
 
@@ -104,7 +111,9 @@ def real_run(request, tmp_path_factory):
     project = project.model_copy(update={"layout": project.layout.model_copy(
         update={"amenities_wanted": [item.name for item in stated.items]})})
     design = brief(project, defaults, amenities=stated)
-    rules = with_raise(resolved_rules(site))  # today's rules: heights from the ground
+    # today's rules: heights from the ground; every reading they select settled, as the checker
+    # compared with here knows only the selected one (2026-10-13)
+    rules = settled_as_selected(with_raise(resolved_rules(site)))
     readings = Readings.of(project.layout)
     refs = {"site_ref": digest(site), "rules_ref": digest(rules), "brief_ref": digest(design)}
     candidates = [candidate_from_option(
@@ -128,7 +137,7 @@ def test_the_real_options_have_nothing_the_validator_fails(real_run):
         blocks = {d.item for d in report.cross_checks if d.blocks_pass}
         blocked |= blocks
         # a blocking cross-check fails the verdict; else the 45 t loading alone sees to that
-        assert report.verdict.legal.value == ("FAIL" if blocks else "UNVERIFIED")
+        assert report.verdict.legal.value == ("FAIL" if blocks else "CONDITIONAL")
     assert blocked == allowed  # each listed one is real, and nothing else blocks
 
 
@@ -140,7 +149,8 @@ def test_the_validator_agrees_with_todays_checker_on_the_real_options(real_run):
     for candidate in candidates:
         ours = {c.finding.rule: c for c in validate(site, rules, design, candidate).legal}
         for claim in candidate.generator_claims:
-            if (reading, claim.rule) in STRICTER or claim.status is Status.INFO:
+            if ((reading, claim.rule) in STRICTER or claim.rule in RECLASSIFIED
+                    or claim.status is Status.INFO):
                 continue
             check = ours.get(claim.rule)
             if check is not None and check.finding.status is claim.status:

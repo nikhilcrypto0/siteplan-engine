@@ -28,7 +28,12 @@ from siteplan.validator.context import Context
 from siteplan.validator.drawn import DrawnRoad
 from siteplan.validator.ground import Ground
 from siteplan.validator.measure import TOL_M, TowerGeometry
-from siteplan.validator.network import TOUCH_M, dead_end_check, entrance_connection_check
+from siteplan.validator.network import (
+    LANE_GAP,
+    TOUCH_M,
+    dead_end_check,
+    entrance_connection_check,
+)
 from siteplan.validator.readings import (
     ALLOWED,
     AUTHORITY_CHOICE,
@@ -41,7 +46,10 @@ from siteplan.validator.readings import (
     Cell,
     basis_note,
     check_from,
+    fact,
+    measurement,
     plain,
+    rule_gap,
     run,
     unknown_reading,
     verdict,
@@ -115,7 +123,8 @@ def _approach_checks(ctx: Context, ground: Ground, network: BaseGeometry) -> lis
             if reading == AUTHORITY_CHOICE:
                 status = Status.PASS if width >= high - TOL_M else Status.UNVERIFIED
                 return Cell(status, shown, required, f"The authority may ask for up to "
-                            f"{high:g} m; only that width settles it.")
+                            f"{high:g} m; only that width settles it.",
+                            (fact("the approach road width the authority asks"),))
             return unknown_reading(APPROACH_WIDTH, reading)
 
         suffix = f" ({road.id})" if len(roads) > 1 else ""
@@ -178,7 +187,7 @@ def _perimeter_checks(ctx: Context, ground: Ground) -> list[Check]:
             "one", f">= {ctx.rules.circulation.internal_road_m.value:g} m for looped roads",
             _clause(ctx), "Whether a perimeter driveway narrower than 9 m inside the setback may "
             "serve as the group development's loop is not settled; the architect or a sanctioned "
-            "plan says."))
+            "plan says.", rests_on=[LANE_GAP]))
     return out
 
 
@@ -244,7 +253,8 @@ def _cul_de_sac_checks(ctx: Context, ground: Ground) -> list[Check]:
         out.append(plain(
             Family.ROADS, f"Internal roads: cul-de-sac {road.id}", status, shown,
             f"{wide:g} m wide, {low:g}-{high:g} m long, a {radius:g} m radius head",
-            _clause(ctx), BEND_NOTE if doubts and not problems else "", subject=road.id))
+            _clause(ctx), BEND_NOTE if doubts and not problems else "", subject=road.id,
+            rests_on=[measurement("the length of a road that bends")]))
     return out
 
 
@@ -316,7 +326,8 @@ def _served_check(ctx: Context, ground: Ground) -> Check | None:
         if lane_only:
             return Cell(Status.UNVERIFIED,
                         f"on the perimeter lane only: {', '.join(t.name for t in lane_only)}",
-                        required, "The perimeter lane is not established as an 8(m) road.")
+                        required, "The perimeter lane is not established as an 8(m) road.",
+                        (LANE_GAP,))
         return Cell(Status.PASS, f"all {len(tall)} blocks", required)
 
     return check_from(run(ctx.rules, [OPENS_ONTO_ROAD], cell), family=Family.ROADS,
@@ -387,7 +398,9 @@ def _pathway_check(ctx: Context, ground: Ground) -> Check | None:
             shown = (f"all {len(short)} on an internal road" if not by_path else
                      f"all {len(short)} served, {by_path} by a pathway")
             return Cell(status, shown, required)
-        return Cell(status, "; ".join(found + unsure), required)
+        rests = (([rule_gap("pathway width", "the rules give none yet")] if doubts else [])
+                 + ([LANE_GAP] if len(unsure) > len(doubts) else []))
+        return Cell(status, "; ".join(found + unsure), required, rests_on=tuple(rests))
 
     clause = "; ".join(dict.fromkeys(
         [circ.pathway_max_block_height_m.clause, *([wide.clause] if wide else [])]))
@@ -442,7 +455,7 @@ def _pathway_length_check(ctx: Context, ground: Ground) -> Check | None:
                  circ.pathway_max_length_m.clause,
                  "A pathway that is not one straight run is measured between the straight line "
                  "and half its outline; its true length is for a person to check." if unsure
-                 else "")
+                 else "", rests_on=[measurement("the length of a pathway that bends")])
 
 
 # --- Driveways -------------------------------------------------------------------------------
@@ -558,7 +571,9 @@ def road_checks(ctx: Context, ground: Ground) -> list[Check]:
             f"site, {area:,.0f} m², {'is' if by_the_site else 'is not'} a Group Development Scheme",
             f"rule 8 applies from {law.GROUP_DEVELOPMENT_MIN_SITE_SQM:,.0f} m²",
             law.GROUP_DEVELOPMENT_CLAUSE,
-            "The rules and the site disagree; rule 8 is applied, the stricter."))
+            "The rules and the site disagree; rule 8 is applied, the stricter.",
+            rests_on=[fact("whether the site is a Group Development Scheme",
+                           "the rules and the site disagree")]))
     if not (circ.applies.value or by_the_site):
         out.append(plain(
             Family.ROADS, "Internal roads (rule 8)", Status.INFO,
@@ -569,7 +584,8 @@ def road_checks(ctx: Context, ground: Ground) -> list[Check]:
     elif not ctx.drawn.roads:
         out.append(plain(Family.ROADS, "Internal roads", Status.UNVERIFIED,
                          "no road layout drawn", "rule 8(m) widths", _clause(ctx),
-                         "Without roads drawn nothing here can be passed."))
+                         "Without roads drawn nothing here can be passed.",
+                         rests_on=[measurement("the road layout", "none drawn")]))
     elif not ctx.drawn.roads_of(*RULE_8M_KINDS, RoadKind.CUL_DE_SAC, RoadKind.PERIMETER_LANE):
         out.append(plain(Family.ROADS, "Internal roads", Status.FAIL,
                          "only driveways drawn, no main approach, loop or internal road",

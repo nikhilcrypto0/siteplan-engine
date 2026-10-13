@@ -19,7 +19,8 @@ from siteplan.contracts import (
     ValidationReport,
     digest,
 )
-from siteplan.contracts.common import Shape, Status, shapes_from
+from siteplan.contracts.common import Provenance, Shape, Status, shapes_from
+from siteplan.contracts.resolved_rules import ALL
 from siteplan.contracts.validation import Check
 from siteplan.validator import validate
 
@@ -74,9 +75,38 @@ def fixture(name: str) -> Inputs:
 
 
 def select(rules: ResolvedRules, interpretation_id: str, reading: str) -> None:
-    """Make the rules choose one reading of an open question (in place)."""
+    """Make the rules settle an open question on one reading (in place), as a document verifying
+    it would, so the validator evaluates that reading alone. A study's selection, which settles
+    nothing, is `study_select`."""
     interpretation = rules.interpretation(interpretation_id)
     assert reading in interpretation.alternatives, (interpretation_id, reading)
+    interpretation.selected = reading
+    interpretation.status = Provenance.VERIFIED
+
+
+def settled_as_selected(rules: ResolvedRules) -> ResolvedRules:
+    """A copy of the rules with every reading they select (not ALL) settled, as the validator
+    judged them before contracts 1.4: for a comparison with today's checker, which knows only the
+    reading selected (2026-10-13)."""
+    out = rules.model_copy(deep=True)
+    for interpretation in out.interpretations:
+        if interpretation.selected != ALL:
+            interpretation.status = Provenance.VERIFIED
+    return out
+
+
+def outer_edge(inputs: Inputs) -> Inputs:
+    """The inputs with NBC's turning radius settled on the lane's outer edge: for a test about
+    something else, since the made-up lanes fail on the centreline (test_verdict_model)."""
+    return inputs.with_rules(lambda r: select(r, "fire_turning_radius", "outer_edge"))
+
+
+def study_select(rules: ResolvedRules, interpretation_id: str, reading: str) -> None:
+    """Make a study select one reading of a question the law leaves open (in place): the
+    validator still evaluates every reading and reports the selected one beside them."""
+    interpretation = rules.interpretation(interpretation_id)
+    assert reading in interpretation.alternatives, (interpretation_id, reading)
+    assert not interpretation.settled, interpretation_id
     interpretation.selected = reading
 
 

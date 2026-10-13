@@ -7,12 +7,11 @@ that project; and what is compared is built by client_baseline.summarise, the fu
 pinned the baseline in the first place.
 """
 
-import json
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from client_baseline import BASELINE, PINNED, READINGS, WORKSPACE, summarise
+from client_baseline import BASELINE, PINNED, READINGS, WORKSPACE, pinned, summarise
 from contract_fixtures import with_raise
 from contract_fixtures.rules_and_envelope import resolved_rules
 
@@ -60,7 +59,7 @@ def test_the_wrapped_run_is_the_pinned_baseline(wrapped):
     options = [{**option_keys(c, i, mix), "strategy": c.pareto_tag}
                for i, c in enumerate(run.proposal.candidates, 1)]
     got = summarise(SimpleNamespace(found=run.found, options=options))
-    assert got == json.loads(PINNED.read_text())["readings"][reading]
+    assert got == pinned(reading)
 
 
 def test_the_starting_floors_come_from_the_law_and_agree_with_the_baselines_project(wrapped):

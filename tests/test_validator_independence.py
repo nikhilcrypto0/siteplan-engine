@@ -9,7 +9,7 @@ TEST_CLASS = "normative"
 SRC = Path(__file__).parent.parent / "src"
 VALIDATOR = SRC / "siteplan" / "validator"
 # What stream D may import from the package (docs/ARCHITECTURE.md, section 6).
-ALLOWED = {"contracts", "rules", "findings", "provenance", "basis", "geometry", "units",
+ALLOWED = {"contracts", "rules", "findings", "provenance", "basis", "geometry", "units", "scope",
            "validator"}
 BANNED = {"layout", "grounds", "towers", "access", "heights", "runner", "adapters", "optimizer",
           "legal", "prototypes", "max_floors", "intake", "acceptance"}

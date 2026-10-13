@@ -45,7 +45,11 @@ def test_the_club_house_meets_three_percent_of_the_built_up_area_it_helps_make()
 
 
 def test_a_club_house_under_the_planning_minimum_fails_where_that_reading_is_selected():
-    assert status(fixture("rectangle").edited(_club_scaled(0.8)).report(), CLUB) is Z.FAIL
+    """The made-up rules select the 3% minimum without settling it (2026-10-13): judged under
+    both readings of amenity_share, the selection's FAIL kept beside the open result."""
+    c = check(fixture("rectangle").edited(_club_scaled(0.8)).report(), CLUB)
+    assert c.finding.status is Z.CONDITIONAL and c.selected_status is Z.FAIL
+    assert c.by_reading["amenity_share"]["minimum_3_percent"] is Z.FAIL
 
 
 def test_a_club_house_of_exactly_3_percent_meets_both_wordings_of_the_clause():
@@ -99,7 +103,9 @@ def test_a_club_house_inside_a_residential_block_is_not_a_block_of_its_own():
 def test_a_scheme_of_100_units_or_more_with_no_club_house_fails():
     def none(candidate):
         candidate.program.club_house = None
-    assert status(fixture("rectangle").edited(none).report(), CLUB) is Z.FAIL
+    c = check(fixture("rectangle").edited(none).report(), CLUB)
+    assert c.finding.status is Z.CONDITIONAL and c.selected_status is Z.FAIL
+    assert c.by_reading["amenity_share"]["minimum_3_percent"] is Z.FAIL
 
 
 # --- water -----------------------------------------------------------------------------------

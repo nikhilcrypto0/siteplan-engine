@@ -26,7 +26,7 @@ from siteplan.contracts.resolved_rules import MIXED_HEIGHT_SPACING
 from siteplan.contracts.validation import Check, Family
 from siteplan.validator.context import Context
 from siteplan.validator.fire import clear_band
-from siteplan.validator.readings import plain
+from siteplan.validator.readings import measurement, plain
 from siteplan.validator.shapes import NOISE_SQM, clean_pieces, union_of_all
 from siteplan.validator.zones import gap_zones, green_strip_zone, setback_zone
 
@@ -165,7 +165,7 @@ def _reason(piece: Polygon, zones: list[tuple[str, BaseGeometry]]) -> str:
 
 
 def _zones(ctx: Context) -> list[tuple[str, BaseGeometry]]:
-    spacing = ctx.rules.readings(MIXED_HEIGHT_SPACING)[0]
+    spacings = ctx.rules.judged_readings(MIXED_HEIGHT_SPACING)
     zones: list[tuple[str, BaseGeometry]] = []
     for reading in ctx.stilt_readings:
         zone = setback_zone(ctx, reading)
@@ -174,8 +174,9 @@ def _zones(ctx: Context) -> list[tuple[str, BaseGeometry]]:
         lane = ctx.rules.fire.clear_width_m.value
         bands = union_of_all([clear_band(t.footprint, lane) for t in ctx.fire_held(reading)])
         zones.append(("a fire lane's clear ground", bands))
-        zones.append(("a gap between blocks",
-                      union_of_all([z for _, z in gap_zones(ctx, reading, spacing)])))
+        zones.append(("a gap between blocks",  # under every reading of which gap applies
+                      union_of_all([z for spacing in spacings
+                                    for _, z in gap_zones(ctx, reading, spacing)])))
         strip = green_strip_zone(ctx, reading)
         if strip is not None:
             zones.append(("the green strip's place", strip))
@@ -229,6 +230,7 @@ def ledger_check(ctx: Context, ledger: Ledger) -> Check:
     if ledger.invariants:
         return plain(Family.ACCOUNTING, "Every square metre once", Status.UNVERIFIED,
                      "; ".join(ledger.invariants), required, clause,
-                     "The recomputed ledger breaks one of its own invariants.")
+                     "The recomputed ledger breaks one of its own invariants.",
+                     rests_on=[measurement("the partition ledger's invariants")])
     return plain(Family.ACCOUNTING, "Every square metre once", Status.PASS, summary, required,
                  clause)

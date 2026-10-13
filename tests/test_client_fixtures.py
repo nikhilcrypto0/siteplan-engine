@@ -13,6 +13,7 @@ from client_baseline import ANSWERS, FIRM_CASE, PINNED, READINGS, SURVEY, profil
 from siteplan import rules
 from siteplan.area_statement import render
 from siteplan.checks import check_site
+from siteplan.findings import Status
 from siteplan.max_floors import max_floors
 from siteplan.pdf_survey import read_pdf_survey
 from siteplan.project import Project
@@ -64,8 +65,8 @@ def test_area_statement_reproduces_the_drawing(expect):
 def test_rule_check_statuses(expect):
     project = Project.model_validate_json((FIXTURES / expect["project"]).read_text())
     found = {f.rule: f.status.value for f in check_site(project.to_site())}
-    for rule, status in expect["statuses"].items():
-        assert found[rule] == status, rule
+    for rule, status in expect["statuses"].items():  # a pin stored before 1.4 says UNVERIFIED
+        assert found[rule] == Status(status).value, rule
 
 
 # The test values set on 30 Sept 2026: unsanctioned fixtures, never evidence for a rule.
@@ -187,12 +188,12 @@ def debug_run(request, tmp_path_factory):
 
 
 def test_the_debug_baseline_is_reproduced(debug_run):
-    from client_baseline import summarise
+    from client_baseline import pinned, summarise
 
     if not PINNED.exists():
         pytest.skip("the debug baseline is not pinned (run tests/client_baseline.py)")
     reading, generated = debug_run
-    assert summarise(generated) == json.loads(PINNED.read_text())["readings"][reading]
+    assert summarise(generated) == pinned(reading)
 
 
 def test_every_debug_option_passes_and_each_is_a_different_idea(debug_run):

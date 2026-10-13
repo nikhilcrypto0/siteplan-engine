@@ -20,7 +20,7 @@ from siteplan.cases import Case, CaseBuilding
 from siteplan.contracts import CandidateLayout, CanonicalSiteModel, TowerPrototype, digest
 from siteplan.contracts.accounting import DeductionKind, LocationHow
 from siteplan.contracts.common import Provenance, Shape, SourceKind
-from siteplan.contracts.resolved_rules import STILT_IN_RULE_HEIGHT
+from siteplan.contracts.resolved_rules import MIXED_HEIGHT_SPACING, STILT_IN_RULE_HEIGHT
 
 CASE_KIND = SourceKind.FIRM_FINISHED_PLAN  # never blind input
 
@@ -85,6 +85,9 @@ def inputs_of(case: Case, stilt_reading: str | None = "counted") -> Inputs:
     rules = resolved_rules(site)
     if stilt_reading is not None:
         select(rules, STILT_IN_RULE_HEIGHT, stilt_reading)
+    # today's checker holds the taller block's gap between blocks of different heights, and a
+    # case is compared with it: settled so (2026-10-13: a mere selection is judged both ways)
+    select(rules, MIXED_HEIGHT_SPACING, "taller_governs")
     brief = fixture("rectangle").brief.model_copy(update={"project_name": case.name})
     prototypes, towers = [], []
     for i, b in enumerate(case.buildings, 1):

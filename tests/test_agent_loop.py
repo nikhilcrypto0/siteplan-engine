@@ -236,7 +236,7 @@ def test_a_whole_session_runs_through_the_loop_and_the_nine_tools(journey):
     assert all(r["ok"] for r in done), done
     assert [r["result"]["status"] for r in (done[2], *done[5:])] == [
         "PROPOSED", "REFUSED", "NOT_APPROVED", "EXPORTED"]
-    assert done[3]["result"]["legal_verdict"] == "UNVERIFIED"
+    assert done[3]["result"]["legal_verdict"] == "CONDITIONAL"
     assert "model: I will read the survey first." in journey.view  # the architect's terminal
     assert "-> propose_layouts" in journey.view
     assert "<- export_candidate: ok, EXPORTED" in journey.view

@@ -44,7 +44,10 @@ from siteplan.validator.readings import (
     Assignment,
     Cell,
     check_from,
+    fact,
+    measurement,
     plain,
+    rule_gap,
     run,
     unknown_reading,
     verdict,
@@ -78,6 +81,8 @@ NOT_ASKED = "nothing: neither a high-rise nor a special building under this read
 MAYBE_SPECIAL_NOTE = ("A cellar is drawn without its outline, so which blocks stand over it, and "
                       "so which are special buildings held to 4.6, is not known: what fails only "
                       "on that is UNVERIFIED.")
+CELLAR_OUTLINE = measurement("the cellar's outline",
+                             "which blocks stand over it, and so are special buildings")
 
 
 def clear_band(footprint: Polygon, lane_m: float) -> BaseGeometry:
@@ -122,7 +127,7 @@ def held_by(ctx: Context, t: TowerGeometry, stilt: str, line: str) -> bool | Non
 
 def fire_subjects(ctx: Context) -> list[TowerGeometry]:
     """Every block NBC 4.6 holds, or may hold, under some reading."""
-    lines = ctx.rules.readings(NBC_FIRE_HEIGHT)
+    lines = ctx.rules.judged_readings(NBC_FIRE_HEIGHT)
     return [t for t in ctx.towers
             if any(held_by(ctx, t, stilt, line) is not False
                    for stilt in ctx.stilt_readings for line in lines)]
@@ -163,7 +168,7 @@ def _held_clause(ctx: Context, t: TowerGeometry) -> str:
 
 def _on_nbc_line(ctx: Context, t: TowerGeometry) -> bool:
     """Whether a block reaches NBC's own high-rise line and the rules evaluate that reading."""
-    return (NBC_LINE in ctx.rules.readings(NBC_FIRE_HEIGHT)
+    return (NBC_LINE in ctx.rules.judged_readings(NBC_FIRE_HEIGHT)
             and t.physical_height_m >= ctx.rules.fire.nbc_high_rise_m.value - TOL_M)
 
 
@@ -182,7 +187,8 @@ def _no_layout(ctx: Context) -> Check:
         "no road and lane layout drawn",
         f">= {ctx.rules.fire.clear_width_m.value:g} m clear and motorable on all sides",
         ctx.rules.fire.clear_width_m.clause,
-        "Without a drawn layout the lanes cannot be measured, so nothing here is passed.")
+        "Without a drawn layout the lanes cannot be measured, so nothing here is passed.",
+        rests_on=[measurement("the road and lane layout", "none drawn")])
 
 
 # --- Each tower -----------------------------------------------------------------------------
@@ -222,7 +228,7 @@ def _tower_cell(ctx: Context, ground: Ground, t: TowerGeometry, a: Assignment) -
         f"the {turning.reading} reading of the {turning.r_out:g} m radius.",
         _why_held(ctx, t, a[STILT_IN_RULE_HEIGHT], a[NBC_FIRE_HEIGHT])) if part)
     if problems and held is None:
-        return Cell(Status.UNVERIFIED, measured, required, note)
+        return Cell(Status.UNVERIFIED, measured, required, note, (CELLAR_OUTLINE,))
     return Cell(verdict(not problems), measured, required, note)
 
 
@@ -264,7 +270,7 @@ def loop_turns_check(ctx: Context, ground: Ground) -> Check:
                     else f"all {len(bends)} bends turn at {radius:g} m")
         if stuck and True not in held:
             return Cell(Status.UNVERIFIED, measured, f"a {radius:g} m turn at every bend",
-                        MAYBE_SPECIAL_NOTE)
+                        MAYBE_SPECIAL_NOTE, (CELLAR_OUTLINE,))
         return Cell(verdict(not stuck), measured, f"a {radius:g} m turn at every bend")
 
     return check_from(run(ctx.rules, [STILT_IN_RULE_HEIGHT, NBC_FIRE_HEIGHT, FIRE_TURNING_RADIUS],
@@ -309,7 +315,8 @@ def junction_turns_check(ctx: Context, ground: Ground) -> Check:
             measured = f"all {len(turns)} junction turns turn at {radius:g} m"
         required = f"a {radius:g} m turn at every junction"
         if stuck and True not in held:
-            return Cell(Status.UNVERIFIED, measured, required, MAYBE_SPECIAL_NOTE)
+            return Cell(Status.UNVERIFIED, measured, required, MAYBE_SPECIAL_NOTE,
+                        (CELLAR_OUTLINE,))
         return Cell(verdict(not stuck), measured, required)
 
     return check_from(run(ctx.rules, [STILT_IN_RULE_HEIGHT, NBC_FIRE_HEIGHT, FIRE_TURNING_RADIUS],
@@ -339,7 +346,7 @@ def reach_check(ctx: Context) -> Check:
                     else "every block, by a lane or road from a gate")
         if missing and all(h is None for _, h in missing):
             return Cell(Status.UNVERIFIED, measured, "a continuous way in for a fire tender",
-                        MAYBE_SPECIAL_NOTE)
+                        MAYBE_SPECIAL_NOTE, (CELLAR_OUTLINE,))
         return Cell(verdict(not missing), measured, "a continuous way in for a fire tender")
 
     return check_from(run(ctx.rules, [STILT_IN_RULE_HEIGHT, NBC_FIRE_HEIGHT], cell),
@@ -410,7 +417,8 @@ def entrance_check(ctx: Context, ground: Ground) -> Check:
         f"{max(widths):.2f} m wide; nothing built over it")
     return plain(Family.FIRE, "Fire access: entrance", status, shown, required,
                  fire.entrance_width_m.clause,
-                 "The gate folding back against the compound wall is a detail drawing.")
+                 "The gate folding back against the compound wall is a detail drawing.",
+                 rests_on=[rule_gap("the entrance", "; ".join(doubts))])
 
 
 def gate_discrepancies(ctx: Context) -> list[Discrepancy]:
@@ -449,7 +457,8 @@ def street_check(ctx: Context) -> Check:
     if not is_known(joins):
         return plain(Family.FIRE, "Fire access: the street joins a 12 m street",
                      Status.UNVERIFIED, "not known: a survey does not show where the road leads",
-                     required, fire.street_join_m.clause, "The architect's to say.")
+                     required, fire.street_join_m.clause, "The architect's to say.",
+                     rests_on=[fact("the access road joins a 12 m street")])
     return plain(Family.FIRE, "Fire access: the street joins a 12 m street",
                  verdict(bool(joins.value)),
                  f"{'yes' if joins.value else 'no'}, as the architect says ({joins.status.value})",
@@ -469,7 +478,8 @@ def dead_end_check(ctx: Context) -> Check:
     dead = ctx.site.access.dead_end
     if not is_known(dead):
         return plain(Family.DEAD_END, rule, Status.UNVERIFIED,
-                     f"tallest {tallest:g} m; the road's end is not known", required, clause)
+                     f"tallest {tallest:g} m; the road's end is not known", required, clause,
+                     rests_on=[fact("whether the access road ends at the plot")])
     return plain(Family.DEAD_END, rule, verdict(not dead.value),
                  f"tallest {tallest:g} m; the road "
                  + ("ends at the plot" if dead.value else "runs on"), required, clause)
@@ -477,11 +487,13 @@ def dead_end_check(ctx: Context) -> Check:
 
 def loading_check(ctx: Context) -> Check:
     return plain(
-        Family.FIRE, "Fire access: 45 t hard surface", Status.UNVERIFIED,
+        Family.FIRE, "Fire access: 45 t hard surface", Status.NOT_CHECKED,
         "a specification, not a drawing",
         f"roads and fire lanes carry a {ctx.rules.fire.load_t.value:g} t tender",
         ctx.rules.fire.load_t.clause,
-        "The paving, and any cellar roof under a road or fire lane, must be designed for it.")
+        "A specification, not something a drawing shows (2026-10-13: NOT_CHECKED, it was "
+        "UNVERIFIED): the paving, and any cellar roof under a road or fire lane, must be designed "
+        "for it.")
 
 
 def _held_text(ctx: Context, t: TowerGeometry) -> str:
@@ -541,10 +553,15 @@ def _as_held(ctx: Context, subjects: list[TowerGeometry], made: Check) -> Check:
         if known and all(held_by(ctx, t, stilt, line) is False for t in subjects):
             return Cell(Status.PASS, "no block held to NBC 4.6 under this reading", NOT_ASKED,
                         _below_note(ctx))
-        return Cell(f.status, f.measured, f.required, f.note)
+        return Cell(f.status, f.measured, f.required, f.note, tuple(made.rests_on))
 
-    return check_from(run(ctx.rules, [STILT_IN_RULE_HEIGHT, NBC_FIRE_HEIGHT], cell),
+    held = check_from(run(ctx.rules, [STILT_IN_RULE_HEIGHT, NBC_FIRE_HEIGHT], cell),
                       family=made.family, rule=f.rule, clause=f.clause, subject=made.subject)
+    if held.finding.status is Status.PASS:
+        return held  # no reading holds a block to 4.6: the made check's readings ask nothing
+    # the made check's results under its other readings (the turning radius) are kept beside
+    kept = {i: r for i, r in made.by_reading.items() if i not in held.by_reading}
+    return held.model_copy(update={"by_reading": {**held.by_reading, **kept}})
 
 
 def fire_checks(ctx: Context, ground: Ground) -> list[Check]:

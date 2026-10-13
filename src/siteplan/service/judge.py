@@ -104,8 +104,13 @@ def refusals(judged: Judged) -> list[str]:
     out += unmeasured(report, judged.candidate)
     out += [f"FAIL {c.finding.rule}: {c.finding.measured} (needs {c.finding.required})"
             for c in report.legal if c.finding.status is Status.FAIL]
+    out += [f"FAIL under the readings selected for this project {c.finding.rule}: "
+            f"{c.finding.measured} (needs {c.finding.required})" for c in report.legal
+            if c.finding.status is not Status.FAIL and c.selected_status is Status.FAIL]
     out += [f"cross-check {d.item}: the {d.source} says {d.theirs}, the validator found "
             f"{d.ours}" for d in report.cross_checks if d.blocks_pass]
     if report.verdict.legal is LegalVerdict.FAIL and not out:
         out.append("the legal verdict is FAIL")
+    if report.verdict.study is LegalVerdict.FAIL and not out:
+        out.append("the legal verdict under the readings selected for this project is FAIL")
     return list(dict.fromkeys(out))

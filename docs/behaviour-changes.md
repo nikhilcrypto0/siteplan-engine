@@ -4,6 +4,71 @@ A characterization test (tests/manifest.py) pins what the engine produces today.
 only together with a normative replacement test and an entry here: what changed, why, the
 evidence, and the test that now holds the behaviour. Newest first.
 
+## 2026-10-13: PASS, CONDITIONAL, FAIL and NOT_CHECKED (regulatory audit, phase 1; contracts 1.4)
+
+**What changed.**
+- **Every reading the law leaves open is evaluated.**
+  - The validator evaluates every reading of a question the law leaves open, whatever a study
+    selected. A selection by the architect or a profile no longer narrows validation.
+  - Only a settled question is evaluated on its selected reading alone (`Interpretation.settled`:
+    VERIFIED, or not a question of law, such as the engine's approach width).
+  - The five checks that read the selection directly (`context.stilt_readings`, fire, open
+    space, blocks, land checks) and the ledger's and layers' zones evaluate them too.
+- **The open reading `stilt_raise`** (0.15 m covered parking or a 0.45 m plinth) is judged
+  under the other raise wherever a block's height lies near a figure of the height or fire rules
+  (`validator/raise_readings.py`).
+- **UNVERIFIED is now CONDITIONAL** (`Status.UNVERIFIED` is kept as its alias). A CONDITIONAL
+  check:
+  - keeps each reading's result in `by_reading`;
+  - names what it rests on in `rests_on`: an open reading with the result under each and the
+    study's selection, a site fact, a gap in the rules, or a measurement;
+  - gives its result under the study's selections in `selected_status`.
+  The report adds `verdict.study`, and a 1.4 report refuses a CONDITIONAL that names nothing.
+- **A violation under every reading stays FAIL.** A FAIL under the selection alone is
+  CONDITIONAL with `selected_status` FAIL.
+- **Generation and export still keep to the selection.** The optimizer's guard (`held_to`) and
+  the service's export judge refuse on the study's verdict.
+- **The 45 t loading** is a specification, NOT_CHECKED beside the verdict.
+- **Reports list the scope register's requirements** under `not_checked`.
+- **A report stored as 1.3** reads its UNVERIFIED as CONDITIONAL and dumps exactly as stored
+  (only its results are respelt, never a layer's CONDITIONAL permit).
+- **The qualifying open-space layer** is one layer per spacing reading where the ground differs,
+  never their intersection.
+
+**Why.** The audit found that a study's selection, such as the stilt not counted or the outer-edge
+turning radius, made results PASS that fail under a reading the law has not ruled out (found on
+the client studies; the details stay in the local audit, out of the repository).
+
+**Characterization repinned** (`tests/test_validator_characterization.py`, the DIFFERENT list):
+- on the made-up fixtures, the fire access of each block is CONDITIONAL on `fire_turning_radius`.
+  The made-up 6.88 m lanes are short of the 7.76 m the centreline reading needs;
+- the main approach is CONDITIONAL, because the made-up rules leave `approach_width` open;
+- the 45 t loading is NOT_CHECKED;
+- a case is compared with the checker under the checker's own reading of mixed-height spacing,
+  now settled for that comparison (`tests/validator_cases.py`).
+
+**Beyond the validator:**
+- **The legacy checker shares the status.** Its UNVERIFIED reads CONDITIONAL too (`siteplan
+  check`, the client baselines).
+- **The pinned client baselines are read through that rename** (`client_baseline.pinned`). A
+  rerun on 2026-10-13 differs from the pin by the rename alone, under both stilt readings.
+- **The service's search picks differently in one place.** It breaks ties toward layouts that rest
+  on fewer readings and checks. A layout now rests on more of them, so on the made-up land one
+  proposal not shown moves (`-87` takes `-91`'s place). The four shown are the same.
+  - `tests/test_service_proposals_baseline.py` is re-pinned.
+  - The search's note no longer says the 45 t loading is UNVERIFIED.
+  - The model-facing text speaks of CONDITIONAL items; the request fields are unchanged.
+- **Judged under every reading, no layout on the made-up rectangle holds under them all.** Today's
+  generator builds its "every reading" profile on the stilt's and circulation's readings only.
+  Each layout still rests on the turning radius, the stilt's raise or the gap between blocks of
+  different heights. `test_search_strategy` now settles those three to test the two it is about.
+
+**Tests.**
+- Normative: `tests/test_verdict_model.py`, with expected outcomes written out by hand.
+- `tests/test_validator_readings.py`.
+- Tests of other matters settle the turning radius on the outer edge (`validator_helpers.
+  outer_edge`), or now assert CONDITIONAL with the selection's result.
+
 ## 2026-10-13: the register and its wording corrected (regulatory audit, phase 0; no verdict changes)
 
 From the regulatory audit of 2026-10-13. No check, figure or verdict changes.

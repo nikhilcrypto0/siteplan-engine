@@ -29,7 +29,11 @@ from validator_low_helpers import all_low, flat_block, with_low_bands
 
 from siteplan.contracts.candidate import Cellars, PlacedAmenity, RoadKind, RoadPiece
 from siteplan.contracts.common import Status
-from siteplan.contracts.resolved_rules import NBC_FIRE_HEIGHT, OPENS_ONTO_ROAD
+from siteplan.contracts.resolved_rules import (
+    FIRE_TURNING_RADIUS,
+    NBC_FIRE_HEIGHT,
+    OPENS_ONTO_ROAD,
+)
 from siteplan.contracts.validation import Family
 from siteplan.validator.context import build
 from siteplan.validator.fire import MAYBE_SPECIAL_NOTE
@@ -48,8 +52,11 @@ DOG_LEG = unary_union([box(100.0, 43.84, 106.0, 48.0), box(100.0, 45.0, 120.0, 5
 
 
 def _low():
-    """Every block 12 m, no stilt: below the state's 21 m and below NBC's own 15 m."""
-    return with_low_bands(all_low(fixture("rectangle"), 4))
+    """Every block 12 m, no stilt: below the state's 21 m and below NBC's own 15 m. The
+    turning radius is settled on the outer edge: these tests are about which blocks 4.6 holds
+    (the made-up lanes fail on the centreline, test_verdict_model)."""
+    return with_low_bands(all_low(fixture("rectangle"), 4)).with_rules(
+        lambda r: select(r, FIRE_TURNING_RADIUS, "outer_edge"))
 
 
 def _cellar(levels, *boxes):

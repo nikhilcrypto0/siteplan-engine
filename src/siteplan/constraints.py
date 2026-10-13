@@ -1452,7 +1452,7 @@ REGISTRY: tuple[Constraint, ...] = (
          "optimizer.search.network.APPROACH_OUTSIDE_SQM", "optimizer.search.network.EPS_M",
          "optimizer.search.parking_plan.EPS_M", "optimizer.search.parking_plan.EDGE_M",
          "prototypes.legacy.SNAP_M", "adapters.legacy_layout.SLIVER_SQM",
-         "optimizer.objective.AREA_DECIMALS"),
+         "optimizer.objective.AREA_DECIMALS", "validator.raise_readings.NEAR_M"),
         note="A height sums floor heights, so 21.000000000000004 m is 21 m. A legacy tower is "
              "snapped to a micrometre when it becomes a prototype, so shared edges are one. The "
              f"fringe ranks distances and places within {fringe.TIE_M:g} m as equal and counts a "

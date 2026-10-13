@@ -16,7 +16,15 @@ from siteplan.contracts.resolved_rules import STILT_IN_RULE_HEIGHT, BandKind, El
 from siteplan.contracts.validation import Check, Family
 from siteplan.validator.context import Context
 from siteplan.validator.measure import UNCONFIRMED_NOTE, HeightClass
-from siteplan.validator.readings import Assignment, Cell, check_from, run, unknown_reading
+from siteplan.validator.readings import (
+    Assignment,
+    Cell,
+    check_from,
+    rule_gap,
+    run,
+    unconfirmed_band,
+    unknown_reading,
+)
 
 STATUS = {Eligibility.ALLOWED: Status.PASS, Eligibility.PROHIBITED: Status.FAIL,
           Eligibility.UNVERIFIED: Status.UNVERIFIED}
@@ -49,8 +57,10 @@ def _cell(ctx: Context, cls: HeightClass) -> Cell:
     if reason:
         shown += f", {reason}"
     if not cls.confirmed:
-        return Cell(Status.UNVERIFIED, shown, REQUIRED, UNCONFIRMED_NOTE)
-    return Cell(STATUS[permission], shown, REQUIRED)
+        return Cell(Status.UNVERIFIED, shown, REQUIRED, UNCONFIRMED_NOTE,
+                    (unconfirmed_band(cls.table),))
+    rests = (rule_gap("band permission", reason or cls.label),)
+    return Cell(STATUS[permission], shown, REQUIRED, rests_on=rests)
 
 
 def permission_checks(ctx: Context) -> list[Check]:

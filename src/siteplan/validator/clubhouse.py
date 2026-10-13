@@ -30,8 +30,11 @@ from siteplan.validator.readings import (
     Assignment,
     Cell,
     check_from,
+    measurement,
     plain,
+    rule_gap,
     run,
+    unconfirmed_band,
     unknown_reading,
     verdict,
 )
@@ -43,6 +46,7 @@ TABLE_III_NOTE = ("Below the high-rise threshold Table III (rule 5) applies and 
                   "yet: the validator does not judge it.")
 TALL_CLUB_NOTE = ("A club house as tall as a high-rise is a block like the towers: its fire access "
                   "and spacing are not modelled for it, so it cannot pass.")
+TALL_CLUB = rule_gap("a club house as tall as a high-rise", "its fire access and spacing")
 
 
 def units_of(ctx: Context) -> int:
@@ -72,7 +76,8 @@ def club_house_check(ctx: Context) -> Check:
                         f"{a.from_units.value} units")
         if d.club.is_empty and d.buildings_only:
             return Cell(Status.UNVERIFIED, "no club house drawn",
-                        "a club house from 100 units", "Only the buildings are drawn.")
+                        "a club house from 100 units", "Only the buildings are drawn.",
+                        (measurement("the club house", "a study draws only the buildings"),))
         measured = (f"{provided:,.0f} m² ({provided / built_up:.2%} of built-up)"
                     if built_up else "no built-up area")
         if separate > NOISE_SQM:
@@ -95,7 +100,8 @@ def club_house_check(ctx: Context) -> Check:
         result = size_cell(x)
         if tall is not None and tall.high_rise and result.status is Status.PASS:
             return replace(result, status=Status.UNVERIFIED,
-                           note=" ".join((result.note, TALL_CLUB_NOTE)).strip())
+                           note=" ".join((result.note, TALL_CLUB_NOTE)).strip(),
+                           rests_on=(TALL_CLUB,))
         return result
 
     return check_from(run(ctx.rules, [AMENITY_SHARE], cell), family=Family.AMENITIES,
@@ -135,12 +141,12 @@ def club_setback_check(ctx: Context) -> Check | None:
     result = setback_cell(ctx, club, plot_line_distances(ctx, club), cls)
     if not cls.high_rise:
         return plain(Family.SETBACK, rule, result.status, result.measured, result.required,
-                     f"{cls.table}; {clause}", result.note)
+                     f"{cls.table}; {clause}", result.note, rests_on=result.rests_on)
     if result.status is Status.PASS:  # a club house as tall as a high-rise cannot pass
         return plain(Family.SETBACK, rule, Status.UNVERIFIED, result.measured, result.required,
-                     clause, TALL_CLUB_NOTE)
+                     clause, TALL_CLUB_NOTE, rests_on=[TALL_CLUB])
     return plain(Family.SETBACK, rule, result.status, result.measured, result.required, clause,
-                 "" if result.status is Status.FAIL else result.note)
+                 "" if result.status is Status.FAIL else result.note, rests_on=result.rests_on)
 
 
 def club_gap_checks(ctx: Context) -> list[Check]:
@@ -174,13 +180,16 @@ def club_gap_checks(ctx: Context) -> list[Check]:
             fail = Status.FAIL if tower_cls.settled else Status.UNVERIFIED
             if spacing == TALLER_GOVERNS:
                 status = Status.PASS if gap + TOL_M >= need else fail
-                return Cell(status, shown, f">= {need:.2f} m (the taller block's gap)")
+                return Cell(status, shown, f">= {need:.2f} m (the taller block's gap)",
+                            rests_on=(unconfirmed_band(tower_cls.table),))
             if gap + TOL_M >= need:
                 return Cell(Status.PASS, shown, f">= {need / 2:.2f} m, up to {need:.2f} m")
             status = fail if gap + TOL_M < need / 2 else Status.UNVERIFIED
             return Cell(status, shown, f">= {need / 2:.2f} m, up to {need:.2f} m",
                         "Each block keeps its own gap: the club house's is Table III's, not "
-                        "modelled, so only the tower's half is known.")
+                        "modelled, so only the tower's half is known.",
+                        (rule_gap("the club house's own gap", "Table III, not modelled"),
+                         *(() if tower_cls.settled else (unconfirmed_band(tower_cls.table),))))
 
         pairs = [(cls, classes[tower.name]) for classes in ctx.classes.values()] if below else []
         out.append(check_from(

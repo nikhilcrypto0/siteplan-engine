@@ -611,7 +611,8 @@
       "enum": [
         "PASS",
         "FAIL",
-        "UNVERIFIED",
+        "CONDITIONAL",
+        "CONDITIONAL",
         "NOT_CHECKED",
         "INFO"
       ],

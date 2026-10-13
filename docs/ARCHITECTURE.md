@@ -302,8 +302,9 @@ one per reading where the reading changes the answer.
 L-plot the 24 m arm is evaluated for a low block and the objective decides.
 
 **D Validator.** Inputs: site model, rules, brief, candidate; an envelope only to cross-check.
-Imports no generator module (an AST test); the measuring geometry it borrows from access.py is
-rebuilt inside `validator/`. Recomputes from the site model: the net plot, water buffers, each
+Imports no generator module (an AST test; beside the contracts and the rules it may read the
+scope register, `scope.py`, which imports nothing of the engine); the measuring geometry it
+borrows from access.py is rebuilt inside `validator/`. Recomputes from the site model: the net plot, water buffers, each
 tower's heights under every open reading, setbacks, gaps (taller governs), road widths, fire
 bands and turns, qualifying open space under each denominator, built-up, Table V and the cars
 laid out, units by type from the embedded prototypes, the club house rule, the PartitionLedger

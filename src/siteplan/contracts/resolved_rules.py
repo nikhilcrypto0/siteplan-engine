@@ -133,7 +133,28 @@ class Interpretation(Part):
         return self
 
     def readings(self) -> list[str]:
+        """The readings a generator works to: the one selected, or every one (ALL)."""
         return list(self.alternatives) if self.selected == ALL else [self.selected]
+
+    @property
+    def settled(self) -> bool:
+        """Whether the law's reading is settled for this site: verified against a document, or
+        not a question of law at all (an engine design choice). A selection by the architect or
+        a test does not settle it (2026-10-13)."""
+        return (self.status is Provenance.VERIFIED
+                or self.basis is not Basis.UNRESOLVED_INTERPRETATION)
+
+    def judged(self) -> list[str]:
+        """The readings a validator evaluates: every one while the question is unsettled,
+        whatever a study selected; only the selected one once settled."""
+        return [self.selected] if self.settled and self.selected != ALL else list(
+            self.alternatives)
+
+    @property
+    def study(self) -> str | None:
+        """The reading a study selected while the question is unsettled (shown beside the
+        verdict, never taken as settled law); None when it selected none, or it is settled."""
+        return None if self.settled or self.selected == ALL else self.selected
 
 
 class Category(Part):
@@ -699,3 +720,11 @@ class ResolvedRules(Contract):
 
     def readings(self, interpretation_id: str) -> list[str]:
         return self.interpretation(interpretation_id).readings()
+
+    def judged_readings(self, interpretation_id: str) -> list[str]:
+        """What a validator evaluates (Interpretation.judged)."""
+        return self.interpretation(interpretation_id).judged()
+
+    def study_selections(self) -> dict[str, str]:
+        """The readings a study selected while the law leaves them open, by interpretation id."""
+        return {i.id: i.study for i in self.interpretations if i.study is not None}

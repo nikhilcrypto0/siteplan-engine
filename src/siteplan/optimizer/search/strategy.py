@@ -544,8 +544,9 @@ def _notes(run: Run | None, tally: Tally, found: Sequence[Judged], chosen: Seque
     held = sum(1 for j in chosen if j.rests.holds_under_every_reading)
     notes.append(f"{held} of {len(chosen)} proposed hold under every reading of the open questions"
                  "; the others each name the readings they rest on")
-    notes.append("every layout leaves the height above sea level and the 45 t loading of the "
-                 "paving UNVERIFIED")
+    notes.append("every layout leaves the height above sea level CONDITIONAL (the site's "
+                 "location is not known), and the 45 t loading of the paving is not checked (a "
+                 "specification)")
     wished = run.brief.objectives.soft_preferences
     if wished:  # C4-16: what of the architect's soft preferences was weighed, and what was not
         weighed = [p.kind for p in wished if p.kind not in not_weighed([p])]

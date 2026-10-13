@@ -216,8 +216,8 @@ def report(candidate: CandidateLayout, net: Polygon, mix: dict[str, float],
         "Unit mix", Status.PASS if error <= 0.05 else Status.FAIL, f"mix error {error:.3f}",
         f"within 0.05 of {mix}", "the brief"))]
     problems = candidate.partition.problems(Shape.from_shapely(net))
-    return ValidationReport(
-        candidate_ref=digest(candidate), site_ref=candidate.site_ref,
+    return ValidationReport(  # made from the claims: a report as one stored before 1.4 reads
+        schema_version="1.3", candidate_ref=digest(candidate), site_ref=candidate.site_ref,
         rules_ref=candidate.rules_ref, brief_ref=candidate.brief_ref, envelope_ref=envelope_ref,
         validator_version=FIXTURE_VALIDATOR, legal=legal, program=program,
         accounting={"partition": candidate.partition, "partition_problems": problems,

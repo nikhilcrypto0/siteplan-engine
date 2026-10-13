@@ -58,7 +58,7 @@ class Context:
 
     @property
     def stilt_readings(self) -> list[str]:
-        return self.rules.readings(STILT_IN_RULE_HEIGHT)
+        return self.rules.judged_readings(STILT_IN_RULE_HEIGHT)
 
     def high_rise(self, reading: str) -> list[TowerGeometry]:
         """The towers that are high-rise under a reading of the stilt (a height exactly at the
@@ -129,7 +129,7 @@ def build(site: CanonicalSiteModel, rules: ResolvedRules, brief: DesignBrief,
         return None
     towers = tower_geometries(candidate, brief, rules)
     classes: dict[str, dict[str, HeightClass]] = {}
-    for reading in rules.readings(STILT_IN_RULE_HEIGHT):
+    for reading in rules.judged_readings(STILT_IN_RULE_HEIGHT):
         made = {t.name: classify_block(rules, t, reading) for t in towers}
         if None in made.values():
             continue  # a reading this validator cannot evaluate: its checks say so

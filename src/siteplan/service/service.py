@@ -111,7 +111,7 @@ JSON = frozenset({".json"})
 PDF_GAP = ("PDF: no runtime dependency of the project draws one (reportlab is a test "
            "dependency only, and PyMuPDF is AGPL); plot the A1 sheet DXF from ZWCAD")
 NEXT_PROPOSED = ("Call validate_candidate for a candidate to see every check; export_candidate "
-                 "then needs exactly the UNVERIFIED items that call lists, which the architect "
+                 "then needs exactly the CONDITIONAL items that call lists, which the architect "
                  "is asked to approve.")
 NOT_APPROVED = ("The architect did not approve, so nothing was run. Do not ask again unless the "
                 "architect asks.")
@@ -353,7 +353,7 @@ class Service:
             design_targets=summaries.targets(judged.report),
             program=[summaries.check_out(c) for c in judged.report.program],
             next="It cannot be exported." if refusals else (
-                "export_candidate needs exactly these UNVERIFIED items acknowledged, and the "
+                "export_candidate needs exactly these CONDITIONAL items acknowledged, and the "
                 "architect's approval." if items else "It can be exported as it stands."),
             approvals=record.approvals)
 
@@ -406,7 +406,7 @@ class Service:
             title = f"Export {candidate_id} with {len(items)} unresolved item(s)"
             lines = [f"Run {record.run_id}, candidate {candidate_id}: legal verdict "
                      f"{judged.report.verdict.legal.value}, judged again now",
-                     *(f"UNVERIFIED {item.item}: {item.measured}" for item in items),
+                     *(f"CONDITIONAL {item.item}: {item.measured}" for item in items),
                      "Every drawing and the report will list these items."]
             decision = self._decision(title, lines)
             record = self._append(record, self._audit(
@@ -685,6 +685,6 @@ def _findings(rows: list[CompareRow]) -> list[str]:
     lines += [f"{r.candidate_id}: {r.towers} tower{'' if r.towers == 1 else 's'}, stilt + "
               f"{'/'.join(map(str, r.floors))}, {r.flats} flats, {r.saleable_sqft:,.0f} sft, "
               f"open space {r.open_space_share_pct:g}%; legal {r.legal_verdict.value} with "
-              f"{r.unverified} UNVERIFIED item(s); program {r.program_verdict.value}."
+              f"{r.unverified} CONDITIONAL item(s); program {r.program_verdict.value}."
               for r in rows]
     return lines

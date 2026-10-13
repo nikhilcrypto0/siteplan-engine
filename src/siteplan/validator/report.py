@@ -7,6 +7,7 @@ the reasons a reader needs, and refuses nothing the contract would not.
 
 from __future__ import annotations
 
+from siteplan import scope
 from siteplan.contracts.accounting import PartitionLedger, RuleLayers
 from siteplan.contracts.candidate import CandidateLayout
 from siteplan.contracts.common import Status, digest
@@ -24,6 +25,7 @@ from siteplan.contracts.validation import (
     Verdict,
     legal_verdict,
     program_verdict,
+    study_verdict,
 )
 
 VALIDATOR_VERSION = "siteplan.validator 1.1: independent recomputation from the site model"
@@ -41,9 +43,11 @@ def reasons(legal: list[Check], program: list[Check], cross_checks: list[Discrep
 
 
 def not_checked(legal: list[Check]) -> list[str]:
-    """Every rule the validator met and does not judge, once each, beside the verdict."""
-    return list(dict.fromkeys(c.finding.rule for c in legal
-                              if c.finding.status is Status.NOT_CHECKED))
+    """Every rule the validator met and does not judge, once each, beside the verdict; then
+    the requirements outside what a layout shows (the scope register, `siteplan.scope`)."""
+    return list(dict.fromkeys([*(c.finding.rule for c in legal
+                                 if c.finding.status is Status.NOT_CHECKED),
+                               *(f"{r.name} ({r.kind.value})" for r in scope.NOT_CHECKED)]))
 
 
 def assemble(site: CanonicalSiteModel, rules: ResolvedRules, brief: DesignBrief,
@@ -62,4 +66,6 @@ def assemble(site: CanonicalSiteModel, rules: ResolvedRules, brief: DesignBrief,
         cross_checks=cross_checks, not_checked=not_checked(legal),
         verdict=Verdict(legal=legal_verdict(legal, cross_checks),
                         program=program_verdict(program),
-                        reasons=reasons(legal, program, cross_checks)))
+                        reasons=reasons(legal, program, cross_checks),
+                        study=(study_verdict(legal, cross_checks)
+                               if rules.study_selections() else None)))

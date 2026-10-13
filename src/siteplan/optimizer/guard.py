@@ -26,7 +26,7 @@ from siteplan.contracts import (
     digest,
 )
 from siteplan.contracts.common import Status
-from siteplan.contracts.validation import LegalVerdict, legal_verdict
+from siteplan.contracts.validation import LegalVerdict, legal_verdict, study_verdict
 from siteplan.optimizer.interfaces import Validator
 
 Inputs = tuple[str, str, str]  # digests of the site model, the rules and the brief judged
@@ -61,12 +61,20 @@ STUDY_NOT_LAID = "Organized open space (tot-lot)"
 
 
 def held_to(report: ValidationReport, study: bool) -> LegalVerdict:
-    """The legal verdict a layout is refused on: the report's own, or in a study the verdict of
-    every check but the tot-lot's (and every blocking cross-check)."""
+    """The legal verdict a layout is refused on: under the readings the study selected (the
+    architect's or a profile's; 2026-10-13, the report's own verdict judges every reading the law
+    leaves open, so generation keeps to the selection as it did), and in a study (Objectives)
+    that of every check but the tot-lot's (and every blocking cross-check)."""
     if not study:
-        return legal_verdict(report.legal, report.cross_checks)
-    return legal_verdict([c for c in report.legal if c.finding.rule != STUDY_NOT_LAID],
+        return study_verdict(report.legal, report.cross_checks)
+    return study_verdict([c for c in report.legal if c.finding.rule != STUDY_NOT_LAID],
                          report.cross_checks)
+
+
+def _selected(check) -> Status:
+    """A check's result under the readings the study selected (its own where none bears on
+    it)."""
+    return check.selected_status or check.finding.status
 
 
 def why_refused(candidate: CandidateLayout, report: ValidationReport, inputs: Inputs,
@@ -85,7 +93,7 @@ def why_refused(candidate: CandidateLayout, report: ValidationReport, inputs: In
                        f"checks ({expected})")
     if held_to(report, study) is LegalVerdict.FAIL:
         reasons += [f"{c.finding.rule}: {c.finding.measured} (needs {c.finding.required})"
-                    for c in report.legal if c.finding.status is Status.FAIL
+                    for c in report.legal if _selected(c) is Status.FAIL
                     and not (study and c.finding.rule == STUDY_NOT_LAID)]
         reasons += [f"{d.item}: the {d.source} says {d.theirs}, the validator found {d.ours}"
                     for d in report.cross_checks if d.blocks_pass]

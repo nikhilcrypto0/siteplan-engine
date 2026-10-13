@@ -354,7 +354,7 @@ def test_unverified_needs_exactly_its_items_and_the_persons_approval_through_the
         walked):
     items = [i["item"] for i in walked.calls["validate_candidate"].data["unverified"]]
     assert len(items) >= 2 and walked.calls["validate_candidate"].data[
-        "legal_verdict"] == "UNVERIFIED"
+        "legal_verdict"] == "CONDITIONAL"
     for label in ("none acknowledged", "one left out"):
         result = walked.calls[label].data
         assert result["status"] == "REFUSED" and not result["files"], label

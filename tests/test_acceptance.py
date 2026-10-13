@@ -134,7 +134,7 @@ def test_a_test_profile_sets_its_values_labels_them_and_leaves_the_rules_alone(t
     assert "kept UNVERIFIED: the 60 ft legal right of way" in text
     findings = {f.rule: f.status.value for f in best.findings}
     assert findings["Fire lane: perimeter lane inside the setback"] == "PASS"
-    assert findings["Internal roads: 9 m loop road (rule 8(m))"] == "UNVERIFIED"  # never PASS
+    assert findings["Internal roads: 9 m loop road (rule 8(m))"] == "CONDITIONAL"  # never PASS
     assert findings["INTERNAL_EGRESS"] == "NOT_CHECKED"
     assert "not counted as a rule 8(m) road" in text and "NOT_CHECKED INTERNAL_EGRESS" in text
     # nothing general moved: Table IV and the default readings are as they were

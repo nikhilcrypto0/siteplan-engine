@@ -35,7 +35,17 @@ from siteplan.contracts.validation import Check, Family
 from siteplan.validator.context import Context
 from siteplan.validator.fire import clear_band
 from siteplan.validator.measure import TOL_M
-from siteplan.validator.readings import Assignment, Cell, check_from, plain, run, verdict
+from siteplan.validator.readings import (
+    Assignment,
+    Cell,
+    check_from,
+    fact,
+    measurement,
+    plain,
+    rule_gap,
+    run,
+    verdict,
+)
 from siteplan.validator.shapes import (
     NOISE_SQM,
     healed,
@@ -143,8 +153,8 @@ def qualifying(ctx: Context, reading: str, spacing: str, take_out: frozenset[int
 def certain_ground(ctx: Context, reading: str, spacing: str) -> Qualifying:
     """The ground that counts under every reading of the rule's words, a facility whose use or
     surface nobody stated not counted: the qualifying open-space layer."""
-    every = [facility_kinds(ctx, t, o) for t in ctx.rules.readings(TOT_LOT_SURFACE)
-             for o in ctx.rules.readings(OPEN_SPACE_OTHER_USES)]
+    every = [facility_kinds(ctx, t, o) for t in ctx.rules.judged_readings(TOT_LOT_SURFACE)
+             for o in ctx.rules.judged_readings(OPEN_SPACE_OTHER_USES)]
     take_out = frozenset().union(*(k.out | k.unknown for k in every))
     add = frozenset.intersection(*(k.counts for k in every))
     return qualifying(ctx, reading, spacing, take_out, add)
@@ -174,7 +184,8 @@ def _requirement_agreement(ctx: Context) -> Check | None:
                  Status.UNVERIFIED, "; ".join(off), "the share of each area, from the ownership "
                  "figures", ctx.rules.open_space.share.clause,
                  "ResolvedRules and the site's ownership disagree on the area the open space is a "
-                 "share of; the larger requirement is the one used.")
+                 "share of; the larger requirement is the one used.",
+                 rests_on=[measurement("the area the open space is a share of")])
 
 
 def open_space_checks(ctx: Context) -> tuple[list[Check], dict[str, float]]:
@@ -182,8 +193,8 @@ def open_space_checks(ctx: Context) -> tuple[list[Check], dict[str, float]]:
     rules = ctx.rules.open_space
     share = rules.share.value
     requirements = rules.requirement_sqm_by_reading
-    uses = {(t, o): facility_kinds(ctx, t, o) for t in ctx.rules.readings(TOT_LOT_SURFACE)
-            for o in ctx.rules.readings(OPEN_SPACE_OTHER_USES)}
+    uses = {(t, o): facility_kinds(ctx, t, o) for t in ctx.rules.judged_readings(TOT_LOT_SURFACE)
+            for o in ctx.rules.judged_readings(OPEN_SPACE_OTHER_USES)}
     first = next(iter(uses))
     # The two readings of the rule's words are evaluated only where they change which ground
     # counts; with no facility on the ground they say nothing.
@@ -206,7 +217,8 @@ def open_space_checks(ctx: Context) -> tuple[list[Check], dict[str, float]]:
         if ctx.drawn.buildings_only and not ctx.drawn.open_space:
             return Cell(Status.UNVERIFIED, "no open space drawn",
                         f">= {share:.0%} of the {basis} area = {asked:,.1f} m²",
-                        "Only the buildings are drawn: the ground between them is not known.")
+                        "Only the buildings are drawn: the ground between them is not known.",
+                        (measurement("the open space", "a study draws only the buildings"),))
         reading, spacing = a[STILT_IN_RULE_HEIGHT], a[MIXED_HEIGHT_SPACING]
         kinds = uses[(a.get(TOT_LOT_SURFACE, first[0]), a.get(OPEN_SPACE_OTHER_USES, first[1]))]
         q = ground(reading, spacing, kinds, False)
@@ -220,13 +232,16 @@ def open_space_checks(ctx: Context) -> tuple[list[Check], dict[str, float]]:
         if not q.setback_known:
             return Cell(Status.UNVERIFIED, measured, required,
                         "The setback is not known under this reading, so which ground is over "
-                        "and above it cannot be told.")
+                        "and above it cannot be told.",
+                        (rule_gap("the setback under this reading"),))
         if q.area_sqm + TOL_M < asked and kinds.unknown and (
                 ground(reading, spacing, kinds, True).area_sqm + TOL_M >= asked):
             unsure = ", ".join(names[i] for i in sorted(kinds.unknown))
             return Cell(Status.UNVERIFIED, measured, required,
                         f"Counts only if {unsure} is open space of a kind the rule names: the "
-                        "brief does not state its use and surface.")
+                        "brief does not state its use and surface.",
+                        tuple(fact(f"use and surface of {names[i]}", "not stated in the brief")
+                              for i in sorted(kinds.unknown)))
         return Cell(verdict(q.area_sqm + TOL_M >= asked), measured, required,
                     f"Taken out: {note}." if note else "")
 
@@ -240,7 +255,8 @@ def open_space_checks(ctx: Context) -> tuple[list[Check], dict[str, float]]:
     quantities = {"open_space_declared_sqm": sum(p.area for p in ctx.drawn.open_space)}
     for reading in ctx.stilt_readings:
         counts = min(ground(reading, s, kinds, bool(kinds.unknown)).area_sqm
-                     for s in ctx.rules.readings(MIXED_HEIGHT_SPACING) for kinds in uses.values())
+                     for s in ctx.rules.judged_readings(MIXED_HEIGHT_SPACING)
+                     for kinds in uses.values())
         quantities[f"open_space_counting_sqm[{STILT_IN_RULE_HEIGHT}={reading}]"] = counts
     for basis, asked in requirements.items():
         quantities[f"open_space_required_sqm[{OPEN_SPACE_BASIS}={basis}]"] = asked

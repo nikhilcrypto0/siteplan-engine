@@ -11,7 +11,15 @@ from siteplan.contracts.resolved_rules import STILT_IN_RULE_HEIGHT
 from siteplan.contracts.site_model import NET_PLOT_TOLERANCE, CanonicalSiteModel
 from siteplan.contracts.validation import Check, Family
 from siteplan.validator.context import Context
-from siteplan.validator.readings import Assignment, Cell, check_from, plain, run
+from siteplan.validator.readings import (
+    Assignment,
+    Cell,
+    check_from,
+    fact,
+    measurement,
+    plain,
+    run,
+)
 from siteplan.validator.shapes import NOISE_SQM, narrower_than, sides_of, union_of_all
 from siteplan.validator.zones import (
     StripAsk,
@@ -37,7 +45,9 @@ def net_plot_check(ctx: Context) -> Check:
             "consistent, so nothing measured on it can be trusted.") + (
         "" if confirmed else " The outline is not confirmed by anyone.")
     return plain(Family.CONSISTENCY, rule, Status.PASS if ok and confirmed else Status.UNVERIFIED,
-                 f"outline {drawn:,.1f} m²", required, clause, note.strip())
+                 f"outline {drawn:,.1f} m²", required, clause, note.strip(),
+                 rests_on=([] if ok else [measurement("net plot outline against net ownership")])
+                 + ([] if confirmed else [fact("net plot outline", "not confirmed")]))
 
 
 def no_net_plot_check(site: CanonicalSiteModel) -> Check:
@@ -52,7 +62,8 @@ def no_net_plot_check(site: CanonicalSiteModel) -> Check:
         "The validator refuses to certify a layout it cannot measure on the land it stands on: "
         + ("the pipeline stops and asks for an outline that can be measured." if unusable else
            "the site model cannot place the net plot (a deduction's location is not known), so "
-           "the pipeline stops and asks where the deduction lies."))
+           "the pipeline stops and asks where the deduction lies."),
+        rests_on=[fact("net plot outline", "not usable" if unusable else "not known")])
 
 
 def water_check(ctx: Context) -> Check | None:
@@ -64,7 +75,8 @@ def water_check(ctx: Context) -> Check | None:
         names = ", ".join(z.id for z in ctx.land.undrawn_water)
         return plain(Family.WATER, "Water-body buffer", Status.UNVERIFIED,
                      f"no line or channel in the site model for {names}", required, clause,
-                     "A water body with no geometry has no buffer to keep clear.")
+                     "A water body with no geometry has no buffer to keep clear.",
+                     rests_on=[fact(f"where {names} runs", "no geometry in the site model")])
     d, keep_out = ctx.drawn, ctx.land.keep_out
     buildings = [(t.name, t.footprint) for t in ctx.towers]
     buildings += [("club house", d.club), ("cellar", d.cellar_outline)]
@@ -79,7 +91,8 @@ def water_check(ctx: Context) -> Check | None:
     return plain(
         Family.WATER, "Water-body buffer", status, shown, required, clause,
         "The buffer may count as tot-lot or organised open space, never as the setback. A paved "
-        "amenity is a building here; one whose surface the brief does not say is not judged.")
+        "amenity is a building here; one whose surface the brief does not say is not judged.",
+        rests_on=[fact(f"surface of {name}", "not stated in the brief") for name in unsure])
 
 
 def electricity_line_check(ctx: Context) -> Check | None:
@@ -98,7 +111,7 @@ def electricity_line_check(ctx: Context) -> Check | None:
         f"{lines.lt_clearance_m.value:g} m from a low-tension line, vertical and horizontal",
         lines.ht_clearance_m.clause,
         "The survey marks the line but not where it runs or how high: the distance cannot be "
-        "measured.")
+        "measured.", rests_on=[fact("where the electricity line runs and how high")])
 
 
 def _where(ask: StripAsk) -> str:
@@ -152,7 +165,7 @@ def green_strip_check(ctx: Context) -> Check:
             status = Status.UNVERIFIED if d.buildings_only else Status.FAIL
             return Cell(status, "not drawn", required,
                         "Needs the landscape layer: soft planting nothing drives, parks or is "
-                        "built on.")
+                        "built on.", (measurement("the landscape layer", "a study draws none"),))
         covered = union_of_all([strip, ctx.entrance_land])
         narrowest = min(ask.width_m for ask in asks[reading])
         problems, doubts = [], []
@@ -169,7 +182,8 @@ def green_strip_check(ctx: Context) -> Check:
         return Cell(status,
                     "; ".join(problems + doubts) if problems or doubts else
                     f"{strip.area:,.0f} m² along the boundary, broken only at the entrance",
-                    required, "Soft planting: nothing drives, parks or is built on it.")
+                    required, "Soft planting: nothing drives, parks or is built on it.",
+                    (fact("the access road's side"),))
 
     return check_from(run(ctx.rules, [STILT_IN_RULE_HEIGHT], cell), family=Family.GREEN_STRIP,
                       rule=rule, clause=clause)

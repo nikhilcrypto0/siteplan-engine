@@ -29,7 +29,7 @@ from siteplan.validator.measure import (
     HeightClass,
     setback_of,
 )
-from siteplan.validator.readings import Cell, verdict
+from siteplan.validator.readings import Cell, measurement, unconfirmed_band, verdict
 from siteplan.validator.zones import edge_groups
 
 
@@ -92,9 +92,11 @@ def setback_cell(ctx: Context, footprint: Polygon, d: Distances, cls: HeightClas
     if outside:  # no row of any table is met by a block that is not on the plot
         return Cell(Status.FAIL, f"{d.nearest_m:.2f} m: not wholly inside the net plot", required)
     if not cls.confirmed:
-        return Cell(Status.UNVERIFIED, shown, required, f"{note} {UNCONFIRMED_NOTE}")
+        return Cell(Status.UNVERIFIED, shown, required, f"{note} {UNCONFIRMED_NOTE}",
+                    (unconfirmed_band(cls.table),))
     if passes is None:
-        return Cell(Status.UNVERIFIED, shown, required, note)
+        return Cell(Status.UNVERIFIED, shown, required, note,
+                    (measurement("which side of the block faces the access road"),))
     return Cell(verdict(passes), shown, required, note)
 
 

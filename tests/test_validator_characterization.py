@@ -27,6 +27,20 @@ DIFFERENT = {
         "a hand-made claim, not the checker's: under 21 m Table III applies, which neither "
         "models, so the validator says NOT_CHECKED under 'All-round setback: T1'",
 }
+# 2026-10-13 (contracts 1.4, docs/behaviour-changes.md): the checker applied the one reading a
+# question was set to; the validator judges every reading the law leaves open, and the made-up
+# rules leave the turning radius and the approach width open, selecting one of each.
+TURNING = ("the checker judged the outer_edge reading only; the validator judges the centreline "
+           "too, where the made-up 6.88 m lanes are short of the 7.76 m it needs: CONDITIONAL")
+APPROACH = ("the checker took the 9 m minimum as settled; the made-up rules leave the approach "
+            "width open (the resolver carries it as the engine's design choice): CONDITIONAL")
+LOADING = ("the 45 t loading is a specification, not something a drawing shows: NOT_CHECKED "
+           "beside the verdict, where the checker said UNVERIFIED")
+for _site, _towers in (("rectangle", 3), ("l_plot_with_arm", 3), ("nala_plot", 1)):
+    DIFFERENT[(_site, "Internal roads: main approach")] = APPROACH
+    DIFFERENT[(_site, "Fire access: 45 t hard surface")] = LOADING
+    for _n in range(1, _towers + 1):
+        DIFFERENT[(_site, f"Fire access: T{_n}")] = TURNING
 
 
 @pytest.mark.parametrize("site", SITES)

@@ -100,7 +100,10 @@ def test_visitors_parking_at_ground_level_is_an_open_reading():
             t.has_stilt = False
         candidate.program.bays = []
     inputs = fixture("rectangle").edited(no_stilt_parking)
-    assert status(inputs.report(), "Visitors' parking") is Z.FAIL  # at_ground: nothing there
+    selected = check(inputs.report(), "Visitors' parking")  # at_ground selected, not settled
+    assert selected.finding.status is Z.CONDITIONAL
+    assert selected.selected_status is Z.FAIL  # at_ground: nothing there
+    assert selected.by_reading[VISITOR_PARKING]["at_ground"] is Z.FAIL
     open_reading = inputs.with_rules(
         lambda r: setattr(r.interpretation(VISITOR_PARKING), "selected", ALL))
     c = check(open_reading.report(), "Visitors' parking")

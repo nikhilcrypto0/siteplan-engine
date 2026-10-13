@@ -33,7 +33,7 @@ from siteplan.validator.context import Context
 from siteplan.validator.fire import clear_band, reached
 from siteplan.validator.open_space import certain_ground
 from siteplan.validator.parking import cellar_setback_m
-from siteplan.validator.shapes import union_of_all
+from siteplan.validator.shapes import NOISE_SQM, union_of_all
 from siteplan.validator.turning import round_block, turning_for
 from siteplan.validator.zones import (
     gap_zones,
@@ -109,7 +109,7 @@ def _setback_layers(ctx: Context) -> list[RuleLayer]:
 def _gap_layers(ctx: Context) -> list[RuleLayer]:
     zones: dict[str, list[BaseGeometry]] = {}
     for reading in ctx.stilt_readings:
-        for spacing in ctx.rules.readings(MIXED_HEIGHT_SPACING):
+        for spacing in ctx.rules.judged_readings(MIXED_HEIGHT_SPACING):
             for pair, zone in gap_zones(ctx, reading, spacing):
                 zones.setdefault(pair, []).append(zone)
     out = []
@@ -134,7 +134,7 @@ def _fire_layers(ctx: Context) -> list[RuleLayer]:
                           clear_band(t.footprint, lane), clause, applies_to=t.name,
                           permits=_forbid(*FORBID_BUILT, U.SURFACE_PARKING, U.HARD_AMENITY,
                                           U.SOFT_OPEN_SPACE)))
-        readings = ctx.rules.readings(FIRE_TURNING_RADIUS)
+        readings = ctx.rules.judged_readings(FIRE_TURNING_RADIUS)
         for reading in readings:
             turning = turning_for(ctx.rules, reading)
             if turning is None:
@@ -163,14 +163,31 @@ def _other_layers(ctx: Context) -> list[RuleLayer]:
         zone = green_strip_zone(ctx, reading)
         return None if zone is None else zone.difference(gates)
 
-    spacing = ctx.rules.readings(MIXED_HEIGHT_SPACING)[0]
     out += _per_stilt(ctx, "green strip", LayerKind.GREEN_STRIP_ZONE,
                       ctx.rules.green_strip.width_m.clause, strip)
-    out += _per_stilt(ctx, "qualifying open space", LayerKind.QUALIFYING_OPEN_SPACE,
-                      ctx.rules.open_space.share.clause,
-                      lambda r: union_of_all(list(certain_ground(ctx, r, spacing).pockets)),
-                      reading=OPEN_SPACE_BASIS)
+    out += _qualifying_layers(ctx)
     return out
+
+
+def _qualifying_layers(ctx: Context) -> list[RuleLayer]:
+    """The qualifying open space, one set of layers for each reading of which gap applies where
+    the ground differs between them (each named by its reading, so no reading's ground is lost),
+    one set where it does not."""
+    spacings = ctx.rules.judged_readings(MIXED_HEIGHT_SPACING)
+
+    def ground_of(spacing: str) -> Callable[[str], BaseGeometry]:
+        return lambda r: union_of_all(list(certain_ground(ctx, r, spacing).pockets))
+
+    first = ground_of(spacings[0])
+    same = all(first(r).symmetric_difference(ground_of(s)(r)).area <= NOISE_SQM
+               for s in spacings[1:] for r in ctx.stilt_readings)
+    clause = ctx.rules.open_space.share.clause
+    if same:
+        return _per_stilt(ctx, "qualifying open space", LayerKind.QUALIFYING_OPEN_SPACE, clause,
+                          first, reading=OPEN_SPACE_BASIS)
+    return [layer for s in spacings for layer in _per_stilt(
+        ctx, f"qualifying open space ({MIXED_HEIGHT_SPACING}: {s})",
+        LayerKind.QUALIFYING_OPEN_SPACE, clause, ground_of(s), reading=MIXED_HEIGHT_SPACING)]
 
 
 def _ramp_and_bay_layers(ctx: Context) -> list[RuleLayer]:

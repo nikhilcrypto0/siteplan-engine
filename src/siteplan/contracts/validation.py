@@ -21,7 +21,7 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Literal
 
-from pydantic import Field, model_validator
+from pydantic import Field, model_serializer, model_validator
 
 from siteplan.contracts.accounting import PartitionLedger, RuleLayers
 from siteplan.contracts.common import Basis, Contract, Finding, Part, Status
@@ -51,7 +51,32 @@ class Family(StrEnum):
 class LegalVerdict(StrEnum):
     PASS = "PASS"
     FAIL = "FAIL"
-    UNVERIFIED = "UNVERIFIED"
+    CONDITIONAL = "CONDITIONAL"  # stored before 2026-10-13 as "UNVERIFIED"
+    UNVERIFIED = "CONDITIONAL"
+
+    @classmethod
+    def _missing_(cls, value):
+        return cls.CONDITIONAL if value == "UNVERIFIED" else None
+
+
+class DependsOn(StrEnum):
+    """What a CONDITIONAL result waits on (2026-10-13)."""
+
+    READING = "READING"  # an unresolved reading of the law (an Interpretation, by its id)
+    SITE_FACT = "SITE_FACT"  # a fact about the site that is not known or not verified
+    RULE_GAP = "RULE_GAP"  # the law read gives no figure, or a rule value is unconfirmed
+    MEASUREMENT = "MEASUREMENT"  # the drawing does not settle what the check measures
+
+
+class Dependency(Part):
+    """One thing a result rests on: for a reading, the result under each of its readings and the
+    reading the study selected (the architect's or a test's, never settled law)."""
+
+    kind: DependsOn
+    id: str  # the interpretation id, or the fact, gap or measurement by name
+    detail: str = ""
+    selected: str | None = None  # the reading the study assumes, when it selected one
+    outcomes: dict[str, Status] = {}  # reading -> the result under it
 
 
 class ProgramVerdict(StrEnum):
@@ -76,6 +101,20 @@ class Check(Part):
     subject: str | None = None  # a tower, a pair of towers, a road
     finding: Finding
     by_reading: dict[str, dict[str, Status]] = {}  # interpretation id -> reading -> result
+    # Since contracts 1.4 (2026-10-13): what a CONDITIONAL result rests on, and the result under
+    # the readings the study selected (None when no selection bears on it). Absent from a report
+    # stored before, and left out of the dump when empty so a stored report keeps its digest.
+    rests_on: list[Dependency] = []
+    selected_status: Status | None = None
+
+    @model_serializer(mode="wrap")
+    def _as_stored_when_empty(self, handler):
+        dumped = handler(self)
+        if not dumped.get("rests_on"):
+            dumped.pop("rests_on", None)
+        if dumped.get("selected_status") is None:
+            dumped.pop("selected_status", None)
+        return dumped
 
     @model_validator(mode="after")
     def _status_follows_the_readings(self) -> Check:
@@ -178,15 +217,38 @@ class Verdict(Part):
     legal: LegalVerdict
     program: ProgramVerdict
     reasons: list[str] = []
+    # Since contracts 1.4: the legal verdict under the readings the study selected (the
+    # architect's or a test's assumptions), beside the verdict under every reading the law leaves
+    # open. None when the study selected no unsettled reading. Never the verdict itself.
+    study: LegalVerdict | None = None
+
+    @model_serializer(mode="wrap")
+    def _as_stored_when_absent(self, handler):
+        dumped = handler(self)
+        if dumped.get("study") is None:
+            dumped.pop("study", None)
+        return dumped
+
+
+def _verdict_of(statuses: set[Status], cross_checks: list[Discrepancy]) -> LegalVerdict:
+    if Status.FAIL in statuses or any(d.blocks_pass for d in cross_checks):
+        return LegalVerdict.FAIL
+    if Status.CONDITIONAL in statuses:
+        return LegalVerdict.CONDITIONAL
+    return LegalVerdict.PASS
 
 
 def legal_verdict(checks: list[Check], cross_checks: list[Discrepancy]) -> LegalVerdict:
-    statuses = {c.finding.status for c in checks}
-    if Status.FAIL in statuses or any(d.blocks_pass for d in cross_checks):
-        return LegalVerdict.FAIL
-    if Status.UNVERIFIED in statuses:
-        return LegalVerdict.UNVERIFIED
-    return LegalVerdict.PASS
+    """FAIL when a check fails under every reading the law leaves open (or a discrepancy blocks a
+    pass); CONDITIONAL when one rests on an open reading or an unverified fact; else PASS.
+    NOT_CHECKED is listed beside the verdict, never folded into it."""
+    return _verdict_of({c.finding.status for c in checks}, cross_checks)
+
+
+def study_verdict(checks: list[Check], cross_checks: list[Discrepancy]) -> LegalVerdict:
+    """The same rule under the readings the study selected: each check's result there (its
+    selected_status), or its own where no selection bears on it."""
+    return _verdict_of({c.selected_status or c.finding.status for c in checks}, cross_checks)
 
 
 def program_verdict(checks: list[Check]) -> ProgramVerdict:
@@ -198,7 +260,36 @@ def program_verdict(checks: list[Check]) -> ProgramVerdict:
     return ProgramVerdict.PARTLY_MET
 
 
+REPORT_VERSION = "1.4"  # CONDITIONAL, rests_on, selected_status and the study verdict
+
+
+def _stored(status):
+    return "UNVERIFIED" if status == "CONDITIONAL" else status
+
+
+def _check_as_stored_1_3(check: dict) -> dict:
+    out = {**check, "finding": {**check["finding"], "status": _stored(check["finding"]["status"])}}
+    if "by_reading" in check:
+        out["by_reading"] = {i: {r: _stored(s) for r, s in results.items()}
+                             for i, results in check["by_reading"].items()}
+    return out
+
+
+def _as_stored_1_3(dumped: dict) -> dict:
+    """A 1.3 report's dump as it was stored: a result that is CONDITIONAL now was written
+    UNVERIFIED then. Only the results are respelt (each check's status and its results under
+    each reading, and the legal verdict); any other CONDITIONAL, a layer's permit, is kept."""
+    return {**dumped,
+            "legal": [_check_as_stored_1_3(c) for c in dumped["legal"]],
+            "program": [_check_as_stored_1_3(c) for c in dumped["program"]],
+            "verdict": {**dumped["verdict"], "legal": _stored(dumped["verdict"]["legal"])}}
+
+
 class ValidationReport(Contract):
+    # 1.4 (2026-10-13): PASS, CONDITIONAL, FAIL and NOT_CHECKED, every CONDITIONAL naming what
+    # it rests on. A report stored as 1.3 reads as it was, its UNVERIFIED as CONDITIONAL, and
+    # keeps its digest: it is dumped as it was stored.
+    schema_version: Literal["1.3", "1.4"] = REPORT_VERSION
     candidate_ref: str
     site_ref: str
     rules_ref: str
@@ -222,4 +313,17 @@ class ValidationReport(Contract):
                              f"({expected})")
         if any(c.family is Family.PROGRAM for c in self.legal):
             raise ValueError("a program check sits among the legal checks")
+        if self.schema_version != "1.3":
+            bare = [c.finding.rule for c in [*self.legal, *self.program]
+                    if c.finding.status is Status.CONDITIONAL and not c.rests_on]
+            if bare:
+                raise ValueError(f"a CONDITIONAL result names nothing it rests on: {bare}")
+            if self.verdict.study is not None and self.verdict.study is not study_verdict(
+                    self.legal, self.cross_checks):
+                raise ValueError("the study verdict does not follow from the checks")
         return self
+
+    @model_serializer(mode="wrap")
+    def _as_stored(self, handler):
+        dumped = handler(self)
+        return _as_stored_1_3(dumped) if self.schema_version == "1.3" else dumped

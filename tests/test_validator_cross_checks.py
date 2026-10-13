@@ -81,7 +81,7 @@ def test_a_claim_the_validator_cannot_confirm_is_recorded_but_does_not_block():
     inputs = fixture("rectangle")
     report = inputs.report()
     d = _discrepancy(report, "Fire access: the street joins a 12 m street")
-    assert not d.blocks_pass and d.theirs.startswith("UNVERIFIED") and d.ours.startswith("PASS")
+    assert not d.blocks_pass and d.theirs.startswith("CONDITIONAL") and d.ours.startswith("PASS")
     assert report.verdict.legal is LegalVerdict.UNVERIFIED  # not made a FAIL by it
 
 

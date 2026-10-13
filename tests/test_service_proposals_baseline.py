@@ -113,6 +113,14 @@ sft; `ALL-ALL-1`); balanced is `-218` (384 flats, 522,960 sft) where it was `-10
 open space, where it was `-77` (306 flats). Six of the fifteen proposed use a plate, and none
 fails the law (each judged by the independent validator). With the plates switched off the
 proposals, the four shown and the answer are those of the pin before.
+Re-pinned on 2026-10-13 a third time, on contracts 1.4: the validator judges every reading the
+law leaves open, so a layout rests on more of them (the turning radius, the stilt's raise, the gap
+between blocks of different heights), and the search's tie-break on how few readings and checks a
+layout rests on moves one proposal not shown: `full-not_counted-allowed-87` (4 x S+10, 440 flats,
+603,600 sft) takes `-91`'s place. The four shown, their points and their numbers are the same;
+their digests and the answer move (each report carries what it rests on, CONDITIONAL where it
+said UNVERIFIED), and the note on what every layout leaves open says the 45 t loading is not
+checked.
 
 The values pin exact output on the locked dependencies (uv.lock). They move only with a normative
 replacement and an entry in docs/behaviour-changes.md.
@@ -193,12 +201,12 @@ PINNED = {
          "proposed"),
         ("FULL: 3 of 15 proposed hold under every reading of the open questions; the others each "
          "name the readings they rest on"),
-        ("FULL: every layout leaves the height above sea level and the 45 t loading of the paving "
-         "UNVERIFIED"),
+        ("FULL: every layout leaves the height above sea level CONDITIONAL (the site's location is "
+         "not known), and the 45 t loading of the paving is not checked (a specification)"),
     ],
     "proposed": [
         "full-not_counted-allowed-86",
-        "full-not_counted-allowed-91",
+        "full-not_counted-allowed-87",
         "full-ALL-allowed-30",
         "full-not_counted-allowed-218",
         "full-not_counted-ALL-215",
@@ -213,16 +221,16 @@ PINNED = {
         "full-ALL-allowed-165",
         "full-ALL-ALL-136",
     ],
-    "proposed_sha256": "7c6b6fbd3cdf19d5bce9bed99d50945e181db3c07bf7f1e37475fbccb4cea218",
+    "proposed_sha256": "3d58151e9d22f7c46a215ac7efbd3d8fe48d7f49aef56ccdaa55ea7f270b998a",
     "shown": [
         ["full-not_counted-allowed-218", "BALANCED"],
         ["full-not_counted-allowed-86", "MAX_YIELD"],
         ["full-ALL-ALL-136", "CONVENTIONAL_OPEN_SPACE"],
         ["full-ALL-ALL-1", "ROBUST"],
     ],
-    "shown_digests": ["24143760404fbc19", "3095876e00b9243e",
-                      "0557a3cff3687533", "659c49d445391096"],
-    "answer_sha256": "6926dbedc51fc2b2e9797d9a5d7b47d51fdf242516aee3da120723b5a60afa4a",
+    "shown_digests": ["f768bf3ba2ec1231", "f3449b29c8019823",
+                      "58acbb13855fab0c", "6410cf79522973d2"],
+    "answer_sha256": "e7db9a26024c560031fb170f011a5de4e6f6a9f11542657996950ce3ccd90d78",
     "approval_page_sha256": "2b9223fec60c0f2988b8ade6b34bb309ab94b2935c794437dad5a125cb6ce087",
 }
 PROPOSALS: list = []

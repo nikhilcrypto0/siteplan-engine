@@ -69,6 +69,16 @@ def run(reading: str, out: Path):
                     mode="debug")
 
 
+def pinned(reading: str) -> dict:
+    """The pinned summary of one reading, as today's statuses name it: the pin was written before
+    contracts 1.4 (2026-10-13), when the status now called CONDITIONAL was written UNVERIFIED."""
+    summary = json.loads(PINNED.read_text())["readings"][reading]
+    for option in summary["options"]:
+        option["statuses"] = dict(sorted(
+            ("CONDITIONAL" if k == "UNVERIFIED" else k, v) for k, v in option["statuses"].items()))
+    return summary
+
+
 def summarise(generated) -> dict:
     """What the baseline pins: every height tried with its verdict and reasons, and every
     option's headline numbers."""

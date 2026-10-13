@@ -127,7 +127,7 @@ def test_what_a_rule_value_rests_on_is_said_unless_it_is_a_verified_legal_rule()
 
 def test_what_stands_between_a_layout_and_a_pass_is_listed_in_the_verdict():
     report = fixture("rectangle").report()
-    assert "Height above sea level (airport and Air Force): UNVERIFIED" in report.verdict.reasons
+    assert "Height above sea level (airport and Air Force): CONDITIONAL" in report.verdict.reasons
 
 
 # --- shapes ------------------------------------------------------------------------------------
@@ -245,13 +245,12 @@ def test_a_partition_made_for_another_net_area_blocks_a_pass():
 
 
 def test_a_generator_claiming_pass_where_the_validator_cannot_tell_is_recorded_not_blocking():
-    def boast(candidate):
-        candidate.generator_claims = [
-            replace(c, status=Z.PASS) if c.rule == "Fire access: 45 t hard surface" else c
-            for c in candidate.generator_claims]
-    inputs = fixture("rectangle").edited(boast)
-    assert "Fire access: 45 t hard surface" in {c.rule for c in inputs.candidate.generator_claims}
-    d = _discrepancies(inputs.report()).get("Fire access: 45 t hard surface")
+    # the generator claims the main approach PASS; the validator cannot tell, the approach width
+    # being open in the made-up rules (it was the 45 t loading, NOT_CHECKED since 2026-10-13)
+    inputs = fixture("rectangle")
+    claimed = {c.rule: c.status for c in inputs.candidate.generator_claims}
+    assert claimed["Internal roads: main approach"] is Z.PASS
+    d = _discrepancies(inputs.report()).get("Internal roads: main approach")
     assert d is not None and not d.blocks_pass
 
 
@@ -346,7 +345,8 @@ def test_the_clause_applies_to_a_scheme_of_exactly_the_units_it_names():
         candidate.program.club_house = None
     missing = fixture("rectangle").edited(no_club)
     named = "Amenities (club house)"
-    assert status(missing.with_rules(from_units(units)).report(), named) is Z.FAIL
+    # the made-up rules select the 3% minimum without settling it: FAIL under that selection
+    assert check(missing.with_rules(from_units(units)).report(), named).selected_status is Z.FAIL
     assert status(missing.with_rules(from_units(units + 1)).report(), named) is Z.INFO
 
 

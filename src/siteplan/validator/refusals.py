@@ -20,7 +20,7 @@ from siteplan.contracts.validation import Check, Family, Recomputed, ValidationR
 from siteplan.validator import cross_checks, land_checks, program, report
 from siteplan.validator.context import Context
 from siteplan.validator.measure import tower_geometries
-from siteplan.validator.readings import plain
+from siteplan.validator.readings import measurement, plain, rule_gap
 from siteplan.validator.shapes import union_of_all
 
 SHOWN = 5  # how many offending numbers a report names before it says there are more
@@ -84,7 +84,7 @@ def rules_check(found: list[str]) -> Check:
     return plain(Family.CONSISTENCY, "Rules the validator can use", Status.UNVERIFIED,
                  "; ".join(found), "rule values that can be divided by and stepped through", "",
                  "The rules carry a value that cannot be used as it stands, so nothing is judged "
-                 "on them.")
+                 "on them.", rests_on=[rule_gap("rule values the validator can use")])
 
 
 def too_large(ctx: Context) -> Check | None:
@@ -120,7 +120,8 @@ def library_check(error: Exception, what: str = "") -> Check:
                  "Shapes the geometry library can measure", Status.UNVERIFIED,
                  f"{type(error).__name__}: {str(error)[:LIBRARY_MESSAGE_CHARS]}",
                  "shapes whose edges the geometry library can tell apart", "",
-                 "The validator could not finish measuring this, so it is not a pass.")
+                 "The validator could not finish measuring this, so it is not a pass.",
+                 rests_on=[measurement("shapes the geometry library can measure")])
 
 
 def unmeasurable(site: CanonicalSiteModel, rules: ResolvedRules, brief: DesignBrief,
@@ -131,7 +132,8 @@ def unmeasurable(site: CanonicalSiteModel, rules: ResolvedRules, brief: DesignBr
     return report.assemble(
         site, rules, brief, candidate, envelope, recomputed=Recomputed(), legal=[why],
         program=[plain(Family.PROGRAM, "Program", Status.UNVERIFIED, "not judged",
-                       "the brief's program", "", "The candidate could not be measured.")],
+                       "the brief's program", "", "The candidate could not be measured.",
+                       rests_on=[measurement("the candidate could not be measured")])],
         partition=None, partition_problems=[], rule_layers=None,
         cross_checks=cross_checks.references(site, rules, brief, candidate, envelope))
 

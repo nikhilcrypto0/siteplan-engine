@@ -221,7 +221,7 @@ def test_exporting_a_proposal_the_run_did_not_show_still_needs_the_architects_ap
     assert done.status is ExportStatus.EXPORTED and len(approving.asked) == 1
     title, lines = approving.asked[0]
     assert hidden.candidate_id in title
-    assert all(any(line.startswith(f"UNVERIFIED {item}:") for line in lines) for item in items)
+    assert all(any(line.startswith(f"CONDITIONAL {item}:") for line in lines) for item in items)
     assert sorted(Path(f).name for f in done.files) == sorted(
         f"{hidden.candidate_id}{suffix}" for suffix in EXPORTED)
     recorded = [(a.decision, a.candidate_id, list(a.acknowledged))
@@ -295,7 +295,9 @@ def _shift_first_tower(candidate: dict) -> None:
 def _into_a_pass(report: dict) -> None:
     report["legal"] = [c for c in report["legal"] if c["finding"]["status"] == "PASS"]
     report["cross_checks"] = []
-    report["verdict"] = {**report["verdict"], "legal": "PASS", "reasons": []}
+    report["verdict"] = {**report["verdict"], "legal": "PASS", "reasons": [],
+                         # a forger edits the study verdict too (contracts 1.4)
+                         **({"study": "PASS"} if "study" in report["verdict"] else {})}
 
 
 def _tamper(ran: Ran, run_id: str, how: str) -> None:

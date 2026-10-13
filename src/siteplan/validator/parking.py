@@ -36,11 +36,15 @@ from siteplan.validator.network import TOUCH_M
 from siteplan.validator.readings import (
     ANYWHERE,
     AT_GROUND,
+    JURISDICTION_FACT,
     TABLE_V_COLUMN,
     Assignment,
     Cell,
     check_from,
+    fact,
+    measurement,
     plain,
+    rule_gap,
     run,
     unknown_reading,
     verdict,
@@ -66,6 +70,7 @@ RAMP_SLACK_M = 0.05  # a ramp drawn this close to its size is that size
 NO_SETBACK_NOTE = ("The setback is not known under this reading (below the high-rise threshold "
                    "Table III applies and is not modelled), so which ground is outside it is "
                    "not known.")
+NO_SETBACK = rule_gap("the setback under this reading", "Table III below the high-rise height")
 
 
 def site_columns(ctx: Context) -> set[str]:
@@ -104,7 +109,8 @@ def table_v_agreement(ctx: Context) -> Check | None:
                  f"the rules carry {', '.join(sorted(carried))}; the site's jurisdiction also "
                  f"allows {', '.join(sorted(missing))}", "the column the site's jurisdiction gives",
                  law.PARKING_CLAUSE, "ResolvedRules and the site disagree on whose rules apply; "
-                 "both columns are evaluated and the stricter decides what can be passed.")
+                 "both columns are evaluated and the stricter decides what can be passed.",
+                 rests_on=[fact(JURISDICTION_FACT, "the rules and the site disagree")])
 
 
 def bay_standard(ctx: Context) -> tuple[tuple[float, float], float, float]:
@@ -247,7 +253,7 @@ def surface_check(ctx: Context, ground: Ground) -> Check | None:
         required = (f"each {bay[0]:g} x {bay[1]:g} m, outside the setback and the fire lanes, "
                     "off roads and buildings")
         if not s.problems and not s.setback_known:
-            return Cell(Status.UNVERIFIED, measured, required, NO_SETBACK_NOTE)
+            return Cell(Status.UNVERIFIED, measured, required, NO_SETBACK_NOTE, (NO_SETBACK,))
         return Cell(verdict(not s.problems), measured, required,
                     "Bays that are not bays do not count as parking.")
 
@@ -308,12 +314,14 @@ def table_v_check(ctx: Context, ground: Ground, f: Floors) -> Check:
             without = min(_provision(f, 0, bay_sqm)[:2])
             if not surface.setback_known and surface.valid and without + AREA_SLACK_SQM < need:
                 return Cell(Status.UNVERIFIED, measured, required,
-                            NO_SETBACK_NOTE + " It passes only by counting the surface bays.")
+                            NO_SETBACK_NOTE + " It passes only by counting the surface bays.",
+                            (NO_SETBACK,))
             return Cell(Status.PASS, measured, required)
         short = f"{measured}, short by {need - provided:,.0f} m²"
         note = ("No cellar plan is drawn, so the rest may be underground." if
                 _short_status(ctx) is Status.UNVERIFIED else "")
-        return Cell(_short_status(ctx), short, required, note)
+        return Cell(_short_status(ctx), short, required, note,
+                    (measurement("the cellar plan", "not drawn"),))
 
     return check_from(
         run(ctx.rules, [STILT_IN_RULE_HEIGHT, TABLE_V_COLUMN], cell,
@@ -342,7 +350,8 @@ def visitors_check(ctx: Context, ground: Ground, f: Floors) -> Check:
         status = Status.PASS if ok else _short_status(ctx)
         return Cell(status, f"{counted:,.0f} m² {where}",
                     f">= {fraction:.0%} of the Table V area = {need:,.0f} m², marked on the ground",
-                    "Which bays are marked for visitors is for the detailed drawing.")
+                    "Which bays are marked for visitors is for the detailed drawing.",
+                    (measurement("the cellar plan", "not drawn"),))
 
     return check_from(
         run(ctx.rules, [STILT_IN_RULE_HEIGHT, VISITOR_PARKING, TABLE_V_COLUMN], cell,
@@ -363,7 +372,8 @@ def cellar_setback_check(ctx: Context, f: Floors) -> Check:
                      f"the rules' table has no row for a site of {ctx.net.area:,.0f} m²",
                      "the setback rule 13(c)(x) gives for this site", clause,
                      "The table should end with a row for sites above its last size; which "
-                     "setback applies is not known, so none is held to.")
+                     "setback applies is not known, so none is held to.",
+                     rests_on=[rule_gap("cellar setback row for this site size", clause)])
     required = (f">= {need:g} m from the property line for {f.cellar_levels} cellar "
                 f"level{'s' if f.cellar_levels > 1 else ''}")
     if d.cellar_outline.is_empty:
@@ -425,13 +435,15 @@ def ramp_check(ctx: Context, f: Floors) -> Check:
         if not problems and doubts:
             return Cell(Status.UNVERIFIED, "; ".join(doubts), required,
                         "The box round a ramp that bends is shorter than the ramp; whether it is "
-                        f"{length_needed:g} m along its middle is for a person to check.")
+                        f"{length_needed:g} m along its middle is for a person to check.",
+                        (measurement("the length of a ramp that bends"),))
         if not problems and deepest_setback_m(ctx, reading) is None:
-            return Cell(Status.UNVERIFIED, measured, required, NO_SETBACK_NOTE)
+            return Cell(Status.UNVERIFIED, measured, required, NO_SETBACK_NOTE, (NO_SETBACK,))
         if not problems and into.intersection(front_only).area > NOISE_SQM:
             return Cell(Status.UNVERIFIED, "in a setback; which side is the front is not known",
                         required, "A ramp may use a side or rear setback leaving 7 m, never the "
-                        "front, and the access side is not known.")
+                        "front, and the access side is not known.",
+                        (fact("the access road's side"),))
         return Cell(verdict(not problems), measured, required,
                     "Each cellar level loses one ramp's footprint to the ramp down to it.")
 

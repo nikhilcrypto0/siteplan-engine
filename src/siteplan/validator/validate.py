@@ -37,6 +37,7 @@ from siteplan.validator import (
     parking,
     permission,
     program,
+    raise_readings,
     refusals,
     report,
     roads,
@@ -147,6 +148,7 @@ def _judge(site: CanonicalSiteModel, rules: ResolvedRules, brief: DesignBrief,
     ground = Ground(ctx)
     ledger = accounting.recompute(ctx)
     legal, found = _legal_checks(ctx, ground, ledger)
+    legal = _under_the_other_raise(ctx, legal)
     units = program.units_by_type(ctx.towers)
     counting = min((v for k, v in found.items() if k.startswith("open_space_counting_sqm")),
                    default=0.0)
@@ -172,6 +174,20 @@ def _judge(site: CanonicalSiteModel, rules: ResolvedRules, brief: DesignBrief,
             f"claimed partition: {d.theirs}" for d in discrepancies
             if d.item == "partition invariant"],
         rule_layers=rule_layers, cross_checks=discrepancies)
+
+
+def _under_the_other_raise(ctx: Context, legal: list[Check]) -> list[Check]:
+    """While the stilt_raise reading is open, the legal checks judged again under the other
+    raise wherever it could change a result, each held beside its own (raise_readings)."""
+    pair = raise_readings.other_reading(ctx.rules)
+    if pair is None or not raise_readings.may_differ(ctx, pair[1]):
+        return legal
+    rules = raise_readings.with_raise(ctx.rules, pair[1])
+    other = context.build(ctx.site, rules, ctx.brief, ctx.candidate)
+    if other is None:
+        return legal
+    alt, _ = _legal_checks(other, Ground(other), accounting.recompute(other))
+    return raise_readings.merge(*pair, legal, alt)
 
 
 def _discrepancies(ctx: Context, ground: Ground, ledger: accounting.Ledger,

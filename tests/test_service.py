@@ -317,7 +317,9 @@ def _report_into_a_pass(ran: Ran, run_id: str, candidate_id: str) -> None:
     report = json.loads(path.read_text())
     report["legal"] = [c for c in report["legal"] if c["finding"]["status"] == "PASS"]
     report["cross_checks"] = []
-    report["verdict"] = {**report["verdict"], "legal": "PASS", "reasons": []}
+    report["verdict"] = {**report["verdict"], "legal": "PASS", "reasons": [],
+                         # a forger edits the study verdict too (contracts 1.4)
+                         **({"study": "PASS"} if "study" in report["verdict"] else {})}
     path.write_text(json.dumps(report))
 
 
@@ -578,7 +580,7 @@ def test_from_a_raw_survey_through_intake_to_drawings_that_open(ran, exported):
     assert "AREA STATEMENT" in _texts(sheet)
     ElementTree.parse(next(f for f in result.files if f.endswith(".svg")))
     report = Path(next(f for f in result.files if f.endswith(".report.txt"))).read_text()
-    for heading in ("1. LEGAL VERDICT: UNVERIFIED", "2. CHECKS BY FAMILY", "SETBACK",
+    for heading in ("1. LEGAL VERDICT: CONDITIONAL", "2. CHECKS BY FAMILY", "SETBACK",
                     "5. DESIGN TARGETS", "6. PROGRAM", "8. AREA STATEMENT", "TOTAL SITE AREA"):
         assert heading in report, heading
 

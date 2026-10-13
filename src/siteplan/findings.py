@@ -9,9 +9,17 @@ from enum import StrEnum
 class Status(StrEnum):
     PASS = "PASS"
     FAIL = "FAIL"
-    UNVERIFIED = "UNVERIFIED"  # an input the answer depends on is not known or not confirmed
+    # The answer depends on an unresolved reading of the law or an unverified required site fact
+    # (named in the check's rests_on). Stored before 2026-10-13 as "UNVERIFIED", which still reads
+    # as this, and UNVERIFIED stays its name in code.
+    CONDITIONAL = "CONDITIONAL"
+    UNVERIFIED = "CONDITIONAL"
     NOT_CHECKED = "NOT_CHECKED"  # the engine does not model this rule
     INFO = "INFO"  # a classification that drives other checks, not a verdict
+
+    @classmethod
+    def _missing_(cls, value):
+        return cls.CONDITIONAL if value == "UNVERIFIED" else None
 
 
 @dataclass(frozen=True)

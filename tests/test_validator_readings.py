@@ -12,12 +12,13 @@ from siteplan.contracts.resolved_rules import (
     MIXED_HEIGHT_SPACING,
     STILT_IN_RULE_HEIGHT,
 )
-from siteplan.contracts.validation import Check, Family
+from siteplan.contracts.validation import Check, DependsOn, Family
 from siteplan.validator import context, drawn, site_geometry, zones
 from siteplan.validator.readings import (
     Cell,
     check_from,
     combine_statuses,
+    fact,
     plain,
     run,
     unknown_reading,
@@ -52,10 +53,46 @@ def test_a_check_runs_once_per_reading_and_the_status_combines_as_the_contract_s
 
 
 def test_a_settled_reading_is_evaluated_alone():
-    rules = fixture("rectangle").rules  # the fixtures settle the fire radius on 'outer_edge'
+    rules = fixture("rectangle").rules.model_copy(deep=True)
+    select(rules, "fire_turning_radius", "outer_edge")  # settled, as a document would settle it
     ev = run(rules, ["fire_turning_radius"], lambda a: Cell(Z.PASS, "ok"))
     assert [a["fire_turning_radius"] for a, _ in ev.cells] == ["outer_edge"]
-    assert ev.varying == ()
+    assert ev.varying == () and ev.selected_status is None
+
+
+def test_a_study_selection_is_evaluated_beside_every_reading_and_never_passes_alone():
+    """2026-10-13: the fixtures select 'outer_edge' without settling it, so the validator judges
+    both readings; the study's result is kept beside them, never in place of them."""
+    rules = fixture("rectangle").rules
+    assert rules.study_selections()["fire_turning_radius"] == "outer_edge"
+    ev = run(rules, ["fire_turning_radius"],
+             lambda a: Cell(verdict(a["fire_turning_radius"] == "outer_edge"), "x"))
+    assert [a["fire_turning_radius"] for a, _ in ev.cells] == ["outer_edge", "centreline"]
+    assert ev.status is Z.CONDITIONAL and ev.selected_status is Z.PASS
+    c = check_from(ev, family=Family.FIRE, rule="r", clause="c")
+    (dep,) = c.rests_on
+    assert (dep.kind, dep.id, dep.selected) == (DependsOn.READING, "fire_turning_radius",
+                                               "outer_edge")
+    assert dep.outcomes == {"outer_edge": Z.PASS, "centreline": Z.FAIL}
+
+
+def test_a_failure_under_every_reading_stays_a_failure_whatever_the_study_selected():
+    rules = fixture("rectangle").rules
+    ev = run(rules, ["fire_turning_radius"], lambda a: Cell(Z.FAIL, "x"))
+    c = check_from(ev, family=Family.FIRE, rule="r", clause="c")
+    assert c.finding.status is Z.FAIL and c.selected_status is Z.FAIL and c.rests_on == []
+
+
+def test_a_conditional_cell_carries_what_it_rests_on_into_the_check():
+    rules = fixture("rectangle").rules.model_copy(deep=True)
+    select(rules, STILT_IN_RULE_HEIGHT, "counted")
+    ev = run(rules, [STILT_IN_RULE_HEIGHT],
+             lambda a: Cell(Z.CONDITIONAL, "x", rests_on=(fact("the access road's side"),)))
+    (dep,) = check_from(ev, family=Family.SETBACK, rule="r", clause="c").rests_on
+    assert (dep.kind, dep.id) == (DependsOn.SITE_FACT, "the access road's side")
+    assert plain(Family.OTHER, "r", Z.CONDITIONAL, "m", "q", "c",
+                 rests_on=[fact("f")]).rests_on[0].id == "f"
+    assert plain(Family.OTHER, "r", Z.PASS, "m", "q", "c", rests_on=[fact("f")]).rests_on == []
 
 
 def test_every_combination_of_the_readings_is_evaluated():

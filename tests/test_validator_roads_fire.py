@@ -6,6 +6,7 @@ from shapely.ops import unary_union
 from validator_helpers import (
     check,
     fixture,
+    outer_edge,
     rectangle,
     select,
     set_floors,
@@ -91,7 +92,12 @@ def test_how_wide_the_authority_wants_the_approach_is_an_open_reading():
     c = check(inputs.report(), "Internal roads: main approach")
     assert c.finding.status is Z.UNVERIFIED  # 9 m is the least; the authority may ask 18 m
     assert c.by_reading[APPROACH_WIDTH] == {"minimum": Z.PASS, "authority_choice": Z.UNVERIFIED}
-    assert status(fixture("rectangle").report(), "Internal roads: main approach") is Z.PASS
+    # The made-up rules select 'minimum' without settling it (the resolver carries the width as
+    # the engine's design choice): judged both ways, the selection's result kept beside (2026-10-13)
+    made_up = check(fixture("rectangle").report(), "Internal roads: main approach")
+    assert made_up.finding.status is Z.CONDITIONAL and made_up.selected_status is Z.PASS
+    settled = fixture("rectangle").with_rules(lambda r: select(r, APPROACH_WIDTH, "minimum"))
+    assert status(settled.report(), "Internal roads: main approach") is Z.PASS
 
 
 def test_a_driveway_is_never_counted_as_an_internal_road():
@@ -288,8 +294,12 @@ def test_a_dead_end_road_bars_a_building_above_30_m_only():
     assert status(_facts(tall, dead_end=False).report(), rule) is Z.PASS
 
 
-def test_the_45_tonne_loading_is_always_unverified():
-    assert status(fixture("rectangle").report(), "Fire access: 45 t hard surface") is Z.UNVERIFIED
+def test_the_45_tonne_loading_is_a_specification_listed_as_not_checked():
+    """A specification of the paving and of any cellar roof under a road, not something a drawing
+    shows: NOT_CHECKED beside the verdict (2026-10-13; it was UNVERIFIED in the verdict)."""
+    report = fixture("rectangle").report()
+    assert status(report, "Fire access: 45 t hard surface") is Z.NOT_CHECKED
+    assert "Fire access: 45 t hard surface" in report.not_checked
 
 
 def test_a_block_that_is_high_rise_only_if_the_stilt_counts_is_judged_where_4_6_holds_it():
@@ -300,14 +310,14 @@ def test_a_block_that_is_high_rise_only_if_the_stilt_counts_is_judged_where_4_6_
     def lower(candidate):
         _no_cellar(candidate)
         set_floors(candidate, "T3", 6)  # exactly 21 m with the stilt, 18 m without
-    c = check(fixture("rectangle").edited(lower).report(), "Fire access: T3")
+    c = check(outer_edge(fixture("rectangle")).edited(lower).report(), "Fire access: T3")
     assert c.by_reading[STILT_IN_RULE_HEIGHT] == {"counted": Z.PASS, "not_counted": Z.PASS}
     assert c.finding.status is Z.PASS
 
     def crowded(candidate):
         lower(candidate)
         _cabin_beside_t3(candidate)
-    c = check(fixture("rectangle").edited(crowded).report(), "Fire access: T3")
+    c = check(outer_edge(fixture("rectangle")).edited(crowded).report(), "Fire access: T3")
     assert c.by_reading[STILT_IN_RULE_HEIGHT] == {"counted": Z.FAIL, "not_counted": Z.UNVERIFIED}
     assert c.by_reading[NBC_FIRE_HEIGHT] == {"state_line": Z.UNVERIFIED, "nbc_line": Z.FAIL}
     assert c.finding.status is Z.UNVERIFIED

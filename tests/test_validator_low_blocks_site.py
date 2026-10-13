@@ -11,6 +11,7 @@ from validator_helpers import (
     check,
     fixture,
     move_tower,
+    outer_edge,
     rectangle,
     select,
     set_floors,
@@ -204,7 +205,7 @@ def test_a_low_block_over_the_cellar_is_a_special_building_held_to_nbc_4_6():
     makes a special building of one with a basement of more than 500 m², at any height; rule
     15(a)(i) brings it to a block below 21 m (read as law). The fixture's one cellar level runs
     under every block, so each 12 m block is held to the lanes and the corner turns."""
-    low = with_low_bands(all_low(fixture("rectangle"), floors=4)).report()
+    low = outer_edge(with_low_bands(all_low(fixture("rectangle"), floors=4))).report()
     for name in ("T1", "T2", "T3"):
         c = check(low, f"Fire access: {name}")
         assert c.finding.status is Z.PASS  # the fixture gives every block its lanes
@@ -246,12 +247,13 @@ def test_a_low_blocks_fire_access_never_fails_a_block_for_a_lane_it_is_not_held_
 
 def test_in_a_mixed_layout_the_high_rise_fire_checks_are_unchanged_and_the_low_block_is_named():
     shut = flat(fixture("rectangle"), T3=5)
-    for inputs in (shut, with_low_bands(shut)):
+    for inputs in (outer_edge(shut), outer_edge(with_low_bands(shut))):
         report = inputs.report()
         assert "T3: a special building over the cellar" in check(report, BELOW).finding.measured
         assert check(report, "Fire access: T3").finding.status is Z.PASS
         for rule in ("Fire access: T1", "Fire access: T2"):
-            assert check(report, rule) == check(fixture("rectangle").report(), rule), rule
+            assert check(report, rule) == check(outer_edge(fixture("rectangle")).report(),
+                                                rule), rule
     report = with_low_bands(shut).edited(_no_cellar).report()  # 15 m: NBC's own line only
     assert "T3: 15 m, held to 4.6 under the nbc_line reading only" in (
         check(report, BELOW).finding.measured)
@@ -260,7 +262,7 @@ def test_in_a_mixed_layout_the_high_rise_fire_checks_are_unchanged_and_the_low_b
 def test_a_block_that_is_low_only_under_one_reading_of_the_stilt_says_which():
     """6 floors on a 3 m stilt: 21 m if the stilt counts (a high-rise), 18 m if not (below), over
     the cellar either way: held to the lanes under every reading."""
-    report = with_low_bands(floors_of(fixture("rectangle"), T3=6)).report()
+    report = outer_edge(with_low_bands(floors_of(fixture("rectangle"), T3=6))).report()
     c = check(report, BELOW)
     assert "T3 (only if the stilt is not_counted)" in c.finding.measured
     t3 = check(report, "Fire access: T3")
