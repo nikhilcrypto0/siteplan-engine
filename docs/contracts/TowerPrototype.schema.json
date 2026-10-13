@@ -138,6 +138,7 @@
         "SINGLE_CORE",
         "TWO_CORE_MEDIUM",
         "TWO_CORE_LARGE",
+        "SINGLE_ROW",
         "LEGACY_RECTANGLE"
       ],
       "title": "PrototypeFamily",

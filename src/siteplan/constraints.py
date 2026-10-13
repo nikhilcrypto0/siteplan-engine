@@ -1198,15 +1198,36 @@ REGISTRY: tuple[Constraint, ...] = (
         "; ".join(f"{family.value} {plan.cores} x {plan.flats_per_core_per_side}"
                   for family, plan in compose.FAMILY_PLANS.items())
         + f" (cores x flats a side); {compose.LIFTS_PER_CORE} lifts and "
-        f"{compose.STAIRS_PER_CORE} stair to a core", Basis.ENGINE_DESIGN_ASSUMPTION,
+        f"{compose.STAIRS_PER_CORE} stair to a core; single-row blocks of "
+        f"{' and '.join(map(str, compose.SINGLE_ROW_FLATS))} flats a floor, engine-composed and "
+        "PRELIMINARY", Basis.ENGINE_DESIGN_ASSUMPTION,
         "none (prototypes.compose)",
         ("prototypes.compose.FAMILY_PLANS", "prototypes.compose.LIFTS_PER_CORE",
-         "prototypes.compose.STAIRS_PER_CORE"),
+         "prototypes.compose.STAIRS_PER_CORE", "prototypes.compose.SINGLE_ROW_FLATS"),
         note="Design choices, not law: no order limits a block's cores or flats a floor, and a "
              "family the library's flats_per_core_per_side cannot serve is not composed. The "
              "lifts and stair are placeholders until egress is modelled (the validator reports "
              "egress NOT_CHECKED).",
         settles="The firm's own block types and core drawings.",
+    ),
+    Constraint(
+        "Towers", "How a library's flats make a typical floor: what a flat's width x depth stands "
+                  "for, and how deep a core is across the block.",
+        f"each flat {_fl['area_basis'].default.value} (its share of the floor, cores and corridor "
+        f"laid out of the flats' shares) unless the library says FLAT_ONLY; a core "
+        f"{_fl['core_depth_m'].default:g} m deep across the corridor unless the library sets "
+        "core_depth_m (null: the whole depth)", Basis.ENGINE_DESIGN_ASSUMPTION, _LIBRARY,
+        ("library.FlatLibrary.core_depth_m", "library.COMPACT_CORE_DEPTH_M"),
+        note="The architect, 2026-10-12: a flat's saleable is the flat and its share of the "
+             "corridors, lifts and stairs times the loading, as the firm's statement has it "
+             "(474,912 sft of floor x 1.22 = 579,392 saleable); before, the cores and corridor "
+             "were added to the flats and a core spanned the block's whole depth, so a flat used "
+             "131.8 m² of floor where it sells on 91.4. A 7.5 x 8 m core leaves 44 m² beside the "
+             "corridor, within the 36-56 m² built of the six cores measured on the firm's "
+             "Suchitra typical floor (2026-10-12), whose cores and corridors take about 21% of "
+             "the floor where a twelve-flat block here takes 16%.",
+        settles="The firm's own core drawings (a firm's library may set core_depth_m), and the "
+                "architect's word on what the saleable figure covers.",
     ),
     Constraint(
         "Towers", "How much the full search looks at: where the columns start, the floor counts "
@@ -1429,9 +1450,10 @@ REGISTRY: tuple[Constraint, ...] = (
          "contracts.prototype.AREA_TOLERANCE", "contracts.prototype.SALEABLE_TOLERANCE_SQFT",
          "prototypes.library.BALANCE_TOLERANCE", "prototypes.library.SLIVER_SQM",
          "prototypes.library.FRAME_TOLERANCE_M", "contracts.design_brief.MIX_SUM_TOLERANCE",
-         "prototypes.compose.MIX_SUM_TOLERANCE"),
+         "prototypes.compose.MIX_SUM_TOLERANCE", "prototypes.compose.EDGE_M"),
         note="The prototype composer checks a unit mix with its own copy of the brief's "
-             "tolerance.",
+             "tolerance, and takes a flat as beside a core when their ends meet within "
+             "prototypes.compose.EDGE_M.",
         settles="Nothing: tolerances on figures the engine itself states; the drawing decides.",
     ),
     # ----------------------------------------------------------------- site inputs
@@ -1624,6 +1646,16 @@ REGISTRY: tuple[Constraint, ...] = (
         note="The rules speak of the side abutting the road and do not say how much of it. "
              "Named in the step's report as the engine's own choice.",
         settles="The architect's word on which sides are fronts.",
+    ),
+    Constraint(
+        "Steps", "Setbacks (step 4): a side's setback band is drawn with this many segments a "
+                 "quarter circle at its corners, and each corner is also covered by a polygon "
+                 "drawn round the circle, so the land left never comes nearer than the setback.",
+        f"{step_setbacks.ARC_SEGMENTS} segments a quarter circle", Basis.ENGINE_DESIGN_ASSUMPTION,
+        "none (the engine's own)", ("steps.setbacks.ARC_SEGMENTS",),
+        note="2026-10-12: the round ends alone, as chords inside the circle, left land up to 12 mm "
+             "inside a 10 m setback at an inside corner.",
+        settles="Nothing: a drawing fineness; the setback itself is never undercut.",
     ),
     Constraint(
         "Steps", "The tot-lot (step 5): how finely the strip's length and depth are placed; "

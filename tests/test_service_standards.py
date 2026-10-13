@@ -47,7 +47,8 @@ from siteplan.validator.shapes import sides_of
 TEST_CLASS = "normative"
 
 PROJECT, SURVEY = "service-test.project.json", "survey.dxf"
-LONGEST_M = 45.0  # of the example library's blocks (31, 41, 58.5 and 82 m long) two fit
+LONGEST_M = 45.0  # of the example library's blocks (24.1, 30.5, 39.7 and 61.1 m long since
+# 2026-10-12, each flat its share of the floor round compact cores) three fit
 ARCHITECT = {"max_tower_length_m": LONGEST_M, "common_area_pct": 25.0}
 FIRM = {"max_tower_length_m": 60.0, "common_area_pct": 23.0, "cellar_floor_height_m": 3.2}
 IN_THE_PROJECT = "the project file service-test.project.json"
@@ -180,7 +181,7 @@ def test_the_search_and_the_validator_are_given_those_standards(run):
 
 def test_no_tower_is_longer_than_the_firms_longest_block(run):
     [(_, kit)] = run.optimized
-    assert {p.id for p in kit} == {"single-core-small-4", "single-core-6"}
+    assert {p.id for p in kit} == {"single-core-small-4", "single-core-6", "two-core-medium-8"}
     assert all(max(p.length_m, p.depth_m) <= LONGEST_M for p in kit)
     folder = run.ws / "out" / run.proposed.run_id
     assert run.proposed.candidates
@@ -197,7 +198,7 @@ def test_no_tower_is_longer_than_the_firms_longest_block(run):
                     if c.finding.rule == "Firm standards and parking preferences")
         assert "longest block" not in firm.finding.measured
     left_out = [n for n in run.proposed.notes if n.startswith("Prototype ")]
-    assert len(left_out) == 2 and all(IN_THE_PROJECT in n for n in left_out)
+    assert len(left_out) == 1 and all(IN_THE_PROJECT in n for n in left_out)
 
 
 def test_the_architect_is_shown_each_standard_and_where_it_came_from(run):
@@ -223,8 +224,9 @@ def test_open_project_and_list_prototypes_say_the_same(run):
         assert (fact.status, fact.source_kind, fact.basis) == (status, *_kind(origin)), key
         assert fact.source.startswith(origin), key
     kit = run.service.list_prototypes(ListPrototypes(project_file=PROJECT))
-    assert {p.id for p in kit.prototypes} == {"single-core-small-4", "single-core-6"}
-    assert [n.split()[1] for n in kit.left_out] == ["two-core-medium-8", "two-core-large-12"]
+    assert {p.id for p in kit.prototypes} == {"single-core-small-4", "single-core-6",
+                                             "two-core-medium-8"}
+    assert [n.split()[1] for n in kit.left_out] == ["two-core-large-12"]
 
 
 def test_the_legacy_path_and_the_service_agree_on_a_project_made_through_intake(tmp_path):

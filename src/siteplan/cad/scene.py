@@ -9,8 +9,10 @@ from __future__ import annotations
 
 import math
 
+from shapely import set_precision
 from shapely.geometry import LineString, Point, Polygon
 from shapely.geometry.base import BaseGeometry
+from shapely.validation import make_valid
 
 from siteplan.cad.bridge import to_cad
 from siteplan.steps import carried
@@ -43,6 +45,7 @@ LAYERS = (SURVEY, NET, GIVEN, SETBACK, BUILDABLE, DIMENSIONS, GREEN, FIRE, WATER
 DIMENSION_SIDE_M = 5.0  # rendering: sides shorter than this get no dimension (jogs)
 DIMENSION_SHIFT_M = 1.5  # rendering: a dimension line sits this far along its side
 TEXT_SIZE_M = 2.0  # rendering: a label's height in the drawing, readable at site scale
+SNAP_M = 1e-6  # a hole nearer its outer edge than this is snapped to a grid this fine
 
 
 def _rgb(hex_colour: str) -> list[float]:
@@ -81,10 +84,31 @@ def ring(coords) -> list[list[float]]:
 
 
 def parts(geometry: BaseGeometry | None) -> list[Polygon]:
+    """The polygons of a shape, each valid: a 'hole' that shares a stretch of its outer edge (a
+    fire lane broken at one place) is a C, not a hole, and FreeCAD would cut it into faces its
+    read-back does not see as one; it is made valid first, its area unchanged."""
     if geometry is None or geometry.is_empty:
         return []
-    return [g for g in getattr(geometry, "geoms", [geometry])
-            if isinstance(g, Polygon) and not g.is_empty]
+    if not geometry.is_valid:
+        geometry = make_valid(geometry)
+    out = []
+    for piece in _flat(geometry):
+        if not isinstance(piece, Polygon) or piece.is_empty:
+            continue
+        if any(piece.exterior.distance(hole) < SNAP_M for hole in piece.interiors):
+            # a hole a hair inside the outer edge, closer than CAD can tell apart: on a
+            # micrometre grid it is the C it is
+            out += [g for g in _flat(set_precision(piece, SNAP_M))
+                    if isinstance(g, Polygon) and not g.is_empty]
+        else:
+            out.append(piece)
+    return out
+
+
+def _flat(geometry: BaseGeometry) -> list[BaseGeometry]:
+    if hasattr(geometry, "geoms"):
+        return [part for g in geometry.geoms for part in _flat(g)]
+    return [geometry]
 
 
 def polygon_items(ident: str, label: str, layer: str, geometry: BaseGeometry | None,
@@ -100,6 +124,13 @@ def polygon_items(ident: str, label: str, layer: str, geometry: BaseGeometry | N
                     "label": label if n == 1 else f"{label} ({n})", "layer": layer,
                     "kind": kind, "rings": rings})
     return out
+
+
+def tower_label(tower, sep: str) -> str:
+    """A tower's name, its height and its flats a floor, e.g. 'T1 · Stilt + 9 · 12 flats a
+    floor': the flats alone read like a floor count (2026-10-12)."""
+    height = [f"Stilt + {tower.floors_above_stilt}"] if tower.floors_above_stilt else []
+    return sep.join([tower.name, *height, f"{tower.flats_per_floor} flats a floor"])
 
 
 def _inward(net: Polygon, line: LineString) -> tuple[Point, tuple[float, float]] | None:
@@ -264,7 +295,7 @@ def candidate_layers(plan, setback_zone: BaseGeometry | None, setback_words: str
         add(AMENITIES, "layout-club", f"Club house, {plan.club_floors} floors", [plan.club])
     for tower in plan.towers:
         key = f"layout-{tower.name.lower().replace(' ', '-')}"
-        items = polygon_items(key, f"{tower.name}: {tower.flats_per_floor} flats a floor",
+        items = polygon_items(key, tower_label(tower, " · "),
                               TOWERS, tower.footprint, "outline")
         items += [i for k, flat in enumerate(tower.flats, 1)
                   for i in polygon_items(f"{key}-flat-{k}", f"{tower.name} flat {k}",
@@ -275,7 +306,7 @@ def candidate_layers(plan, setback_zone: BaseGeometry | None, setback_words: str
         c = tower.footprint.centroid
         items.append({"id": f"{key}-text", "label": f"{tower.name} label", "layer": NOTES,
                       "kind": "text", "at": to_cad((c.x, c.y)), "size": TEXT_SIZE_M * 1500,
-                      "text": f"{tower.name}\n{tower.flats_per_floor}/floor"})
+                      "text": tower_label(tower, "\n")})
         groups.append((f"{TOWERS}: {tower.name}", items))
     return groups
 

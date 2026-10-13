@@ -365,3 +365,19 @@ def test_a_profile_with_counts_on_both_sides_of_21_m_is_searched_with_low_blocks
     only = profiles(low.rules, low.brief, list(low.kit))
     run_low = make_run(low.site, low.rules, low.brief, low.envelope, low.kit, only)
     assert all(_low_blocks(run_low, p) == (True,) for p in only)
+
+
+def test_a_narrow_part_wide_enough_but_too_short_says_so():
+    """2026-10-12, on the debug run of a client site: the note said a part 17.8 m wide was less
+    than a 13.96 m deep block. Wide enough but too short now says that."""
+    from shapely.geometry import box
+
+    from siteplan.optimizer.search.fringe import RegionTry
+    from siteplan.optimizer.search.strategy import why_none_fits
+
+    short = RegionTry(box(0, 0, 20, 30), 600.0, 20.0, None, 17.8, 13.96)
+    narrow = RegionTry(box(0, 0, 20, 30), 600.0, 20.0, None, 12.0, 13.96)
+    assert "wide enough for the narrowest prototype (13.96 m deep)" in why_none_fits(short)
+    assert "too short" in why_none_fits(short) and "less than" not in why_none_fits(short)
+    assert "at most 12.0 m, less than the narrowest prototype (13.96 m deep)" in \
+        why_none_fits(narrow)

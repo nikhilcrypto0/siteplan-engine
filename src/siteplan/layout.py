@@ -99,6 +99,10 @@ class LayoutRequest(BaseModel):
     club_house_floors: PositiveInt = Field(
         2, description="Storeys in the amenities block; it needs a footprint of a fraction"
     )
+    amenities_wanted: list[str] = Field(
+        default_factory=list, description="The facilities of the firm's amenity file this "
+        "project asks for, by name; one the file marks REQUIRED is laid anyway, and nothing "
+        "else is (2026-10-12: the file is a catalogue, not a program)")
     max_tower_length_m: PositiveFloat | None = Field(
         None, description="The firm's longest block, if it has one; left out, lengths are "
         "explored, since no rule limits them")

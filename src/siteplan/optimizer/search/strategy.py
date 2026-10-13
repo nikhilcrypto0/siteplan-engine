@@ -516,6 +516,19 @@ def _notes(run: Run | None, tally: Tally, found: Sequence[Judged], chosen: Seque
     return notes
 
 
+def why_none_fits(tried: fringe.RegionTry) -> str:
+    """Why no block below 21 m stands in a narrow part: too narrow for the narrowest block, or
+    wide enough but too short for any block in the directions tried (2026-10-12: the note once
+    called 17.8 m less than 13.96 m)."""
+    left = (f"a block that low keeps its Table III setbacks there and is left at most "
+            f"{tried.land_width_m:.1f} m")
+    if tried.land_width_m < tried.narrowest_m:
+        return f"{left}, less than the narrowest prototype ({tried.narrowest_m:.2f} m deep)"
+    return (f"{left}, wide enough for the narrowest prototype ({tried.narrowest_m:.2f} m deep), "
+            "but too short there for any block's length in the directions the search lays "
+            "blocks in")
+
+
 def _region_notes(run: Run, tally: Tally, chosen: Sequence[Judged]) -> list[str]:
     """Whether each narrow part of the plot (a region of the envelope's width profile beside its
     main body, no smaller than the smallest block) can take a block below 21 m, and whether the
@@ -534,9 +547,7 @@ def _region_notes(run: Run, tally: Tally, chosen: Sequence[Judged]) -> list[str]
                  f"{tried.area_sqm:,.0f} m² and {tried.width_m:.1f} m wide, was tried for a block "
                  f"below {below:g} m and ")
         if tried.fits is None:
-            notes.append(f"{where}none fits: a block that low keeps its Table III setbacks there "
-                         f"and is left at most {tried.land_width_m:.1f} m, less than the narrowest "
-                         f"prototype ({tried.narrowest_m:.2f} m deep)")
+            notes.append(f"{where}none fits: {why_none_fits(tried)}")
             continue
         used = sum(1 for j in chosen if any(
             _mostly_in(j.candidate.placed_footprint(t), tried.shape) for t in j.candidate.towers))

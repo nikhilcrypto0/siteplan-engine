@@ -36,14 +36,18 @@ from siteplan.contracts.validation import (
     ValidationReport,
     legal_verdict,
 )
-from siteplan.library import FlatLibrary
+from siteplan.library import AreaBasis, FlatLibrary
 from siteplan.optimizer import LegacyRun, LegacyStrategy, Proposal, SearchContext
 
-LIBRARY = FlatLibrary(  # the contract fixtures' own flats
+# The contract fixtures' own flats. These tests are about the search, not how a block is composed
+# from a library, so the blocks keep the shapes the search was pinned on (2026-10-12): each flat
+# its own rectangle, the cores added to them across the whole depth. test_prototypes.py holds the
+# composer's default, each flat its share of the floor round a compact core.
+LIBRARY = FlatLibrary(
     flats=[{"name": "2A", "bhk": "2BHK", "width_m": 10.0, "depth_m": 11.0, "saleable_sqft": 1190},
            {"name": "3A", "bhk": "3BHK", "width_m": 13.5, "depth_m": 11.0,
             "saleable_sqft": 1690}],
-    core_width_m=7.5)
+    core_width_m=7.5, area_basis=AreaBasis.FLAT_ONLY, core_depth_m=None)
 MODULE_LENGTH_M = 31.0  # one (2BHK | core | 3BHK) module along the block
 CORRIDOR_M = 2.13
 FLAT_DEPTH_M = 11.0

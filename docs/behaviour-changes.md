@@ -4,6 +4,90 @@ A characterization test (tests/manifest.py) pins what the engine produces today.
 only together with a normative replacement test and an entry here: what changed, why, the
 evidence, and the test that now holds the behaviour. Newest first.
 
+## 2026-10-12: step 4 keeps the whole setback at a corner; towers labelled with their height
+
+- **The firm's amenity file is a catalogue, not a program.** A project lays a facility only
+  when the file marks it REQUIRED or the project asks for it by name
+  (`LayoutRequest.amenities_wanted`, `adapters.legacy_site._wanted`); a name the file does not
+  have is refused. Before, every item went into the brief and, with no class stated, was read as
+  PREFERRED, so the search laid all it had room for: on Dhulapally the researched Hyderabad list
+  (pool, kids' pool, badminton, tennis, cricket net, play, yoga deck, seniors' seating, security
+  cabin) filled the north arm. No rule makes any of them mandatory; the club house (rule
+  15(a)(x)) and the tot-lot (7(a)(vii)) are laid as before. Tests (normative):
+  `test_adapters.py::test_the_firms_amenity_file_is_a_catalogue_a_project_lays_only_what_it_asks_for`,
+  and the library-as-stated test now asks for every item by name. The client validator tests
+  that compare with today's (legacy) layout, which lays every item it is given, now ask for each
+  by name too (`test_validator_client_run.py`, `test_validator_client_suchitra.py`), so the
+  brief and the layout name the same facilities as before.
+
+- **The land left never comes nearer a side than its setback** (the architect approved the fix,
+  2026-10-12). Step 4 drew each side's setback band as the side widened, whose round ends are
+  chords inside the circle, so at an inside corner the land left came up to 12 mm inside a 10 m
+  setback (found in CAD: 9.988 m). Each corner of a side is now also covered by a polygon drawn
+  round the circle, its edges touching it (`steps/setbacks._reach`); a straight side keeps
+  exactly its setback. Dhulapally's step 4 (debug): the land left 11,871.4036 m² where it was
+  11,871.7256 (0.32 m² less), every side's nearest approach now exactly 10.000000 m. The search's
+  own envelope (`legal/bands.py`) cuts with mitred offsets, which never come nearer, and is
+  unchanged. Test (normative): `test_steps.py::test_the_land_left_never_comes_nearer_a_side_than_its_setback_even_at_a_corner`.
+- **A tower in CAD says its height** ("T1 · Stilt + 9 · 12 flats a floor"; the text in the
+  drawing on three lines): the flats a floor alone read like a floor count.
+  `render.TowerShape.floors_above_stilt` carries it. Test (normative):
+  `test_cad.py::test_a_tower_is_labelled_with_its_height_and_its_flats_a_floor`.
+- **A hole a hair inside its outer edge reaches CAD as the C it is** (`cad/scene.parts`): a fire
+  lane broken at one place came as a polygon whose hole ran 1e-12 m inside its edge, closer than
+  FreeCAD tells apart, so FreeCAD cut it into faces and the read-back saw one. Test (normative):
+  `test_cad.py::test_a_hole_a_hair_inside_its_outer_edge_reaches_cad_as_the_c_it_is`.
+
+## 2026-10-12: a flat is its share of the floor, and cores are compact
+
+The architect (2026-10-12): treat a flat's saleable area as the flat and its share of the
+corridors, lifts and stairs times the loading. The firm's statement agrees: its 474,912 sft of
+tower floor times 1.22 is its 579,392 sft saleable to the foot. The composer had taken a flat's
+width x depth (the saleable less the loading) as the flat alone and added the cores and corridor
+to it, each core a 7.5 m slice across the block's whole depth, so on the firm's Dhulapally debug
+run a flat used 131.8 m² of floor where it sells on 91.4: the common area was counted twice.
+
+- `FlatLibrary.area_basis` (default PLATE_SHARE): a flat's width x depth is its share of the
+  floor; the block is as long as the shares over its depth and the cores and corridor are laid
+  out of it, each flat's own area its share of what they leave, so a flat of a type is the same
+  size whether or not it wraps a core. FLAT_ONLY is the old reading, kept for a library that
+  asks for it.
+- `FlatLibrary.core_depth_m` (default 8 m, `COMPACT_CORE_DEPTH_M`): a core 7.5 m along the
+  corridor and 8 m across it, the ground behind it going to the flats either side; null spans
+  the whole depth, as before. 7.5 x 8 m leaves 44 m² beside the corridor, within the 36-56 m²
+  built of the six cores measured on the firm's Suchitra typical floor. An
+  ENGINE_DESIGN_ASSUMPTION in `constraints.py`, for the firm's own core drawings to settle.
+- A block shorter than it is deep is drawn a quarter turned, its long side along x as every
+  prototype's frame asks (the firm's four-flat block from its Suchitra flats had been 23.2 x
+  25.8 m and failed the kit's own frame check).
+
+- Frontages are rounded to the micrometre and every block is an even number of micrometres long
+  (`compose._even_length`): a narrowed flat's frontage falls off the grid, and a block an odd
+  number of micrometres long could not be centred on it, so its footprint ran a micrometre
+  longer than its `length_m`; the search, spacing blocks end to end by `length_m`, left 7.9999995
+  m where 8 m was asked and the validator failed four made-up layouts (rightly: the guard kept
+  them out). None fails now.
+- A single-row family (`PrototypeFamily.SINGLE_ROW`, `compose.compose_single_rows`, 3 and 4 flats
+  a floor): one row of the library's flats beside its corridor, one core in line, each flat as
+  large as its type in the double-loaded blocks; ENGINE-COMPOSED and PRELIMINARY in its source.
+  It is composed only when a caller asks (the service's kit is unchanged). The contract gains the
+  family value; every stored contract reads as before, so the version stays 1.3.
+- The search's note on a narrow part where no block fits said "17.8 m, less than ... 13.96 m";
+  wide enough but too short now says so (`strategy.why_none_fits`).
+
+No rule, road width, separation or validator check changes; the legacy towers (towers.py) read
+neither switch. Characterization moved with it: `test_service_proposals_baseline.py` (the
+made-up land's maximum yield 4 x S+10, 480 flats and 651,200 sft, where it was 3 x S+10, 360 and
+488,400; no facility laid, the brief asking for none; with both this and the amenity change
+switched off the notes, proposals, four shown and answer are as before and only the digests
+move, a flat's outline written from another first corner). Normative tests whose numbers move
+with the shorter blocks: `test_service_standards.py` (of the example kit, three blocks are within
+the 45 m longest block where two were). Tests (normative): `tests/test_prototypes_plate.py`; in `test_prototypes.py` the
+full-depth and legacy-equivalence tests now compose the old way explicitly
+(`_old_way`), and `examples/prototypes.example.json` is regenerated. The search's own tests keep
+their made-up blocks as pinned (`optimizer_support.LIBRARY` declares FLAT_ONLY and a full-depth
+core): they test the search on given blocks, not the composer.
+
 ## 2026-10-12: the pinned entrance, the club house in two places, a wide street's own width
 
 Three changes to the full search, asked for by the architect after the Dhulapally debug layouts

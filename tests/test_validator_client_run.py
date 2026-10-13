@@ -99,6 +99,10 @@ def real_run(request, tmp_path_factory):
     # statements, assumed for the test, never read off a name).
     stated = AmenityLibrary.model_validate_json(
         (Path(__file__).parent.parent / "examples" / "amenities.hyderabad.json").read_text())
+    # today's layout lays every item it is given, so the project asks for each by name: the
+    # file is a catalogue a project lays only what it asks from (2026-10-12)
+    project = project.model_copy(update={"layout": project.layout.model_copy(
+        update={"amenities_wanted": [item.name for item in stated.items]})})
     design = brief(project, defaults, amenities=stated)
     rules = with_raise(resolved_rules(site))  # today's rules: heights from the ground
     readings = Readings.of(project.layout)

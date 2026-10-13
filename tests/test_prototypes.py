@@ -28,7 +28,7 @@ from siteplan.contracts import TowerPrototype
 from siteplan.contracts.common import Shape, SourceKind
 from siteplan.contracts.prototype import PrototypeFamily, PrototypeHeights, Stretch
 from siteplan.flat_import import BUILT_UP_FROM_CARPET, FlatPlan, Room, to_library
-from siteplan.library import FlatLibrary
+from siteplan.library import AreaBasis, FlatLibrary
 from siteplan.prototypes import (
     FAMILY_PLANS,
     compose_library,
@@ -102,9 +102,17 @@ def test_the_kit_has_four_families_of_about_4_6_8_and_12_flats(kit):
     assert len({p.id for p in kit}) == 4
 
 
-def test_a_prototype_is_a_double_loaded_slab_with_cores_across_the_full_depth(kit, library):
+def _old_way(library: FlatLibrary) -> FlatLibrary:
+    """The library as the composer read every one before 2026-10-12: each flat its own rectangle,
+    the cores added to them across the whole depth."""
+    return library.model_copy(update={"area_basis": AreaBasis.FLAT_ONLY, "core_depth_m": None})
+
+
+def test_a_prototype_is_a_double_loaded_slab_with_cores_across_the_full_depth(library):
+    """The old way, still composed when a library asks for it."""
+    library = _old_way(library)
     flat_types = {f.name: f for f in library.flats}
-    for p in kit:
+    for p in compose_library(library, MIX):
         footprint = p.footprint.to_shapely()
         minx, miny, maxx, maxy = footprint.bounds
         assert (maxx - minx, maxy - miny) == pytest.approx((p.length_m, p.depth_m))
@@ -136,9 +144,10 @@ def test_a_prototype_is_a_double_loaded_slab_with_cores_across_the_full_depth(ki
 
 def test_a_block_is_laid_out_the_way_todays_towers_are(library):
     """The generator's own towers (towers.build_tower) put the core after the first half of each
-    group of flats; a prototype of the same flats is the same drawing, turned to run along x."""
+    group of flats; a prototype of the same flats, composed the old way, is the same drawing,
+    turned to run along x."""
     for family, plan in FAMILY_PLANS.items():
-        served = library.model_copy(
+        served = _old_way(library).model_copy(
             update={"flats_per_core_per_side": plan.flats_per_core_per_side})
         prototype = compose_prototype(served, family, MIX)
         flats = compose_module.pick_flats(served, MIX, plan.flats_per_side)
@@ -258,7 +267,8 @@ def test_a_kit_from_the_firms_own_library_at_run_time_is_the_firms_standard():
     for p in kit:
         assert p.source_kind is SourceKind.FIRM_STANDARD
         assert problems(p) == []
-        assert p.depth_m == pytest.approx(firm.tower_depth_m)
+        # the block's depth across its corridor, or its length where a short one is turned
+        assert firm.tower_depth_m in (pytest.approx(p.depth_m), pytest.approx(p.length_m))
         for m in p.modules:
             flat = flat_types[m.type_id]
             assert (m.carpet_sqft, m.built_up_sqft, m.saleable_sqft) == (

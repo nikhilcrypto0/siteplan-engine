@@ -1146,3 +1146,21 @@ def test_a_road_that_only_touches_the_plot_still_gets_a_gate_the_approach_road_f
     assert corner.distance(Polygon([(119, 0), (120, 0), (120, 1)]).centroid) < 1
     long = gate_line(plot, SimpleNamespace(frontage=LineString([(10, 0), (50, 0)])))
     assert long.length == pytest.approx(18) and long.bounds == pytest.approx((21, 0, 39, 0))
+
+
+def test_the_land_left_never_comes_nearer_a_side_than_its_setback_even_at_a_corner():
+    """Found in CAD (2026-10-12): a buffer's round ends are chords inside the circle, which left
+    land up to 12 mm inside a 10 m setback at an inside corner. The band now covers every corner
+    from outside, so the land left keeps the whole setback; a straight side keeps exactly it."""
+    from shapely.geometry import LineString, box
+
+    from siteplan.steps import setbacks
+
+    corner = LineString([(0, 0), (60, 0), (60, 60)])  # two sides meeting at an inside corner
+    land = box(-40, -40, 100, 100)
+    old = land.difference(corner.buffer(10.0))
+    new = land.difference(setbacks._reach(corner, 10.0))
+    assert old.distance(corner) < 10.0 - 1e-3  # the old band undercut the corner
+    assert new.distance(corner) >= 10.0 - 1e-9
+    straight = land.difference(setbacks._reach(LineString([(0, 0), (60, 0)]), 10.0))
+    assert straight.distance(LineString([(30, 0), (30, 0.0)])) == pytest.approx(10.0, abs=1e-9)

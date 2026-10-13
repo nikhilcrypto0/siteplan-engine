@@ -18,7 +18,13 @@ from shapely.geometry import Polygon
 
 from siteplan.contracts.accounting import DeductionKind, LocationHow
 from siteplan.contracts.common import Provenance, Shape, SourceKind
-from siteplan.contracts.design_brief import AmenitySetting, ClubSize, DesignBrief, HeightMode
+from siteplan.contracts.design_brief import (
+    AmenityPriority,
+    AmenitySetting,
+    ClubSize,
+    DesignBrief,
+    HeightMode,
+)
 from siteplan.contracts.resolved_rules import (
     CIRCULATION_IN_SETBACK,
     STILT_IN_RULE_HEIGHT,
@@ -224,6 +230,21 @@ def design_margins(defaults: WorkspaceDefaults) -> dict:
             for name in sorted(margins.model_fields_set)}
 
 
+def _wanted(amenities: AmenityLibrary | None, request) -> list[AmenityItem]:
+    """The facilities a project lays: those the firm's file marks REQUIRED and those the
+    project asks for by name. The file is the firm's catalogue, a researched list, not a
+    program; laying all of it put a cricket net and a tennis court in a narrow arm
+    (2026-10-12)."""
+    if amenities is None:
+        return []
+    asked = set(request.amenities_wanted)
+    unknown = sorted(asked - {item.name for item in amenities.items})
+    if unknown:
+        raise ValueError(f"the project asks for {unknown}, not in the firm's amenity file")
+    return [item for item in amenities.items
+            if item.priority is AmenityPriority.REQUIRED or item.name in asked]
+
+
 def brief(project: Project, defaults: WorkspaceDefaults | None = None,
           notation: dict | None = None, amenities: AmenityLibrary | None = None) -> DesignBrief:
     r = project.layout
@@ -239,7 +260,7 @@ def brief(project: Project, defaults: WorkspaceDefaults | None = None,
             if defaults.flat_library else None,
             "amenity_library": sourced(project, "amenities", defaults.amenities)
             if defaults.amenities else None,
-            "amenities": [amenity_request(item) for item in amenities.items] if amenities else [],
+            "amenities": [amenity_request(item) for item in _wanted(amenities, r)],
             "club_house": {"wanted": sourced(project, "club_house", r.club_house),
                            "size": ClubSize.STATED if r.club_house_sqm else ClubSize.LEGAL_MINIMUM,
                            "sqm": r.club_house_sqm, "floors": r.club_house_floors},

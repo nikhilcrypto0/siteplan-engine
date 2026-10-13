@@ -115,6 +115,7 @@ NOT_DOMAIN = {
     "cad.scene.DIMENSION_SIDE_M": "rendering: sides shorter than this get no CAD dimension",
     "cad.scene.DIMENSION_SHIFT_M": "rendering: how far along its side a dimension line sits",
     "cad.scene.TEXT_SIZE_M": "rendering: a label's height in the CAD drawing",
+    "cad.scene.SNAP_M": "rendering: a hole a hair inside its outer edge is drawn as the C it is",
     "validator.refusals.LIBRARY_MESSAGE_CHARS": "how much of a library's error a report keeps",
     "assistant.MAX_UNCLEAR": "how many unclear points of a brief the reply lists",
     "assistant.EXPLAIN_MAX_TOKENS": "the model's token allowance for an explanation",

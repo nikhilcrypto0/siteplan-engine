@@ -22,6 +22,7 @@ from siteplan.adapters.legacy_layout import SURFACE_UNSTATED
 from siteplan.contracts import CandidateLayout
 from siteplan.contracts.accounting import LayerKind, Permit, PhysicalUse
 from siteplan.contracts.common import Basis, FacilityUse, Provenance, Shape, SourceKind, Surface
+from siteplan.contracts.design_brief import AmenityPriority
 from siteplan.contracts.resolved_rules import CIRCULATION_IN_SETBACK
 from siteplan.intake import WorkspaceDefaults
 from siteplan.layout import LayoutRequest, solve
@@ -196,9 +197,15 @@ def test_a_road_width_is_never_confirmed_merely_because_nobody_said_how_it_is_kn
                         {"abutting_road": "UNVERIFIED"}) is Provenance.UNVERIFIED
 
 
+def _asking(names: list[str]) -> Project:
+    project = _intake_style_project()
+    return project.model_copy(update={"layout": project.layout.model_copy(
+        update={"amenities_wanted": names})})
+
+
 def test_the_brief_asks_for_the_firms_facilities_as_its_library_states_them():
-    asked = {a.name: a for a in brief(_intake_style_project(), amenities=AMENITIES)
-             .program.amenities}
+    asked = {a.name: a for a in brief(_asking([i.name for i in AMENITIES.items]),
+                                      amenities=AMENITIES).program.amenities}
     assert list(asked) == [item.name for item in AMENITIES.items]
     assert (asked["PLAY"].use, asked["PLAY"].surface) == (FacilityUse.TOT_LOT, Surface.SOFT)
     assert asked["DECK"].footprint_m == (5.0, 4.0)
@@ -206,6 +213,22 @@ def test_the_brief_asks_for_the_firms_facilities_as_its_library_states_them():
     assert (asked["SEATING"].use, asked["SEATING"].surface) == (None, None)
     assert asked["SECURITY CABIN"].surface is None  # a cabin by name only
     assert brief(_intake_style_project()).program.amenities == []
+
+
+def test_the_firms_amenity_file_is_a_catalogue_a_project_lays_only_what_it_asks_for():
+    """2026-10-12, the architect: a researched list of facilities, none marked, put a cricket
+    net and a tennis court in a narrow arm. A project lays what the firm's file marks REQUIRED
+    and what it asks for by name, nothing else; a name not in the file is refused."""
+    assert brief(_intake_style_project(), amenities=AMENITIES).program.amenities == []
+    asked = brief(_asking(["DECK"]), amenities=AMENITIES).program.amenities
+    assert [a.name for a in asked] == ["DECK"]
+    required = AMENITIES.model_copy(update={"items": [
+        AMENITIES.items[0].model_copy(update={"priority": AmenityPriority.REQUIRED}),
+        *AMENITIES.items[1:]]})
+    laid = brief(_intake_style_project(), amenities=required).program.amenities
+    assert [a.name for a in laid] == [AMENITIES.items[0].name]
+    with pytest.raises(ValueError, match="CRICKET NET"):
+        brief(_asking(["CRICKET NET"]), amenities=AMENITIES)
 
 
 @pytest.fixture(scope="module")

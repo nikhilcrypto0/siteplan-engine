@@ -217,3 +217,38 @@ def test_two_roads_or_amenities_with_one_name_stay_two_objects():
                 ramps=(), cellars=(), bays=())
     ids = [i["id"] for _, items in scene.candidate_layers(plan, None, "") for i in items]
     assert len(ids) == len(set(ids)) == 5  # the plot, two roads, two amenities
+
+
+def test_a_hole_a_hair_inside_its_outer_edge_reaches_cad_as_the_c_it_is():
+    """Found on Dhulapally (2026-10-12): a fire lane round a block, broken at one place, came as
+    a polygon whose hole ran 1e-12 m inside its outer edge: valid in metres, but closer than
+    FreeCAD tells apart, so FreeCAD cut it into faces and the read-back saw only one. It is now
+    sent as the C it is, its area kept."""
+    from shapely.geometry import box
+
+    lane = box(0, 0, 20, 20).difference(box(1e-12, 5, 10, 15))
+    assert lane.is_valid and len(lane.interiors) == 1
+    pieces = scene.parts(lane)
+    assert all(not p.interiors for p in pieces)
+    assert sum(p.area for p in pieces) == pytest.approx(lane.area, abs=1e-6)
+    whole = box(0, 0, 20, 20).difference(box(5, 5, 15, 15))  # a real hole is kept
+    assert [len(p.interiors) for p in scene.parts(whole)] == [1]
+
+
+def test_a_tower_is_labelled_with_its_height_and_its_flats_a_floor():
+    """The architect (2026-10-12): '12' alone read like twelve floors. A tower's label in CAD
+    says its height too."""
+    from shapely.geometry import box
+
+    from siteplan.service.render import Plan, TowerShape
+
+    tower = TowerShape(name="T1", footprint=box(0, 0, 40, 24), flats=(), cores=(),
+                       flats_per_floor=12, floors_above_stilt=9)
+    plan = Plan(plot=box(-50, -50, 100, 100), towers=(tower,), roads=(), fire=(), gates=(),
+                green_strip=(), open_space=(), club=None, club_floors=0, amenities=(),
+                ramps=(), cellars=(), bays=())
+    items = [i for _, layer in scene.candidate_layers(plan, None, "") for i in layer]
+    text = next(i for i in items if i["kind"] == "text")["text"]
+    outline = next(i for i in items if i["id"] == "layout-t1")["label"]
+    assert text == "T1\nStilt + 9\n12 flats a floor"
+    assert outline == "T1 · Stilt + 9 · 12 flats a floor"

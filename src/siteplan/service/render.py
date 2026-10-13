@@ -65,6 +65,7 @@ class TowerShape:
     flats: tuple[Polygon, ...]
     cores: tuple[Polygon, ...]
     flats_per_floor: int
+    floors_above_stilt: int = 0  # 0 where a caller does not say
 
 
 @dataclass(frozen=True)
@@ -104,7 +105,8 @@ def plan_of(site: CanonicalSiteModel, candidate: CandidateLayout) -> Plan:
             name=tower.name, footprint=candidate.placed_footprint(tower),
             flats=tuple(tower.world(m.shape.to_shapely()) for m in prototype.modules),
             cores=tuple(tower.world(z.shape.to_shapely()) for z in prototype.core_zones),
-            flats_per_floor=prototype.per_floor.flats))
+            flats_per_floor=prototype.per_floor.flats,
+            floors_above_stilt=tower.floors_above_stilt))
     c, p = candidate.circulation, candidate.program
     return Plan(
         plot=site.net_plot.value.to_shapely(), towers=tuple(towers),

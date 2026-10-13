@@ -8,9 +8,10 @@ building: what changes with one (its length, a side without windows) is shown, n
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 
-from shapely.geometry import LineString, Polygon
+from shapely.geometry import LineString, Point, Polygon
 from shapely.geometry.base import BaseGeometry
 from shapely.ops import unary_union
 
@@ -23,6 +24,7 @@ from siteplan.steps.survey_copy import ROAD_TOUCH_M, RoadSeen, SurveyCopy
 
 FACES_ALONG_M = 2.0  # a side meets a road when this much of it lies along the road's frontage
 LONG_BLOCKS_M = (40.0, 50.0, 60.0, 80.0, 100.0, 120.0)  # block lengths the note is shown for
+ARC_SEGMENTS = 16  # a quarter circle's segments, the geometry library's own default
 LANE_CROSSES_SQM = 0.5  # less of the fire lane than this in a water's buffer is drawing noise
 
 
@@ -239,9 +241,19 @@ def _open_space(s: Setbacks, floors: int) -> float:
 def _band_and_left(net: Polygon, sides) -> tuple[BaseGeometry, BaseGeometry]:
     """Every point within its side's setback of that side; what is left is at least each
     side's setback from that side."""
-    band = unary_union([side.line.buffer(side.metres) for side in sides if side.metres > 0])
+    band = unary_union([_reach(side.line, side.metres) for side in sides if side.metres > 0])
     band = band.intersection(net)
     return band, net.difference(band)
+
+
+def _reach(line: LineString, metres: float) -> BaseGeometry:
+    """Every point within `metres` of the line, never less: a buffer draws its round ends as
+    chords inside the circle, which left land up to 12 mm inside a 10 m setback at an inside
+    corner (found in CAD, 2026-10-12); each corner of the line is also covered by a polygon
+    drawn round the circle, its edges touching it, so the land left is never nearer."""
+    around = metres / math.cos(math.pi / (4 * ARC_SEGMENTS))
+    corners = [Point(xy).buffer(around, quad_segs=ARC_SEGMENTS) for xy in line.coords]
+    return unary_union([line.buffer(metres, quad_segs=ARC_SEGMENTS), *corners])
 
 
 def _fire_lane(net: Polygon, green: BaseGeometry) -> BaseGeometry:

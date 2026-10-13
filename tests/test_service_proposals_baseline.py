@@ -88,6 +88,14 @@ renumbered `-91`; the open-space and robust ones the same); four lower proposals
 several stand their club house at the far end. With the second place switched off the proposals,
 the four shown and the answer are as before and only the digests move, the wide streets' declared
 widths.
+Re-pinned on 2026-10-12 again, where a library flat is its share of the floor round compact cores
+(FlatLibrary.area_basis, core_depth_m) and the firm's amenity file is a catalogue a project lays
+only what it asks from: the made-up land's blocks are shorter and hold more flats on the same
+ground (maximum yield 4 x S+10, 480 flats and 651,200 sft, where it was 3 x S+10, 360 and
+488,400), and no facility is laid (the brief asks for none). With both switched off the notes,
+the proposals, the four shown and the answer are as before; only the digests move, a flat's
+outline now written from its first corner as the geometry library orders it (the same rectangles,
+the same per-floor numbers).
 
 The values pin exact output on the locked dependencies (uv.lock). They move only with a normative
 replacement and an entry in docs/behaviour-changes.md.
@@ -110,39 +118,40 @@ TEST_CLASS = "characterization"
 
 PINNED = {
     "notes": [
-        "FULL: 768 configurations evaluated, 119 laid out, 24 judged by the validator, 15 proposed",
+        "FULL: 1536 configurations evaluated, 151 laid out, 24 judged by the validator, "
+        "15 proposed",
         "FULL: 3 of 15 proposed hold under every reading of the open questions; the others each "
         "name the readings they rest on",
         "FULL: every layout leaves the height above sea level and the 45 t loading of the paving "
         "UNVERIFIED",
     ],
     "proposed": [
-        "full-not_counted-allowed-85",
-        "full-not_counted-allowed-90",
-        "full-not_counted-allowed-91",
-        "full-ALL-allowed-29",
+        "full-not_counted-allowed-86",
+        "full-not_counted-allowed-89",
+        "full-not_counted-allowed-92",
+        "full-not_counted-ALL-145",
         "full-ALL-allowed-30",
-        "full-not_counted-ALL-57",
+        "full-not_counted-ALL-144",
+        "full-not_counted-allowed-109",
         "full-not_counted-ALL-58",
-        "full-not_counted-allowed-102",
-        "full-not_counted-ALL-63",
-        "full-ALL-allowed-35",
-        "full-not_counted-ALL-65",
-        "full-ALL-ALL-113",
-        "full-ALL-allowed-52",
-        "full-ALL-ALL-114",
+        "full-ALL-allowed-36",
+        "full-ALL-allowed-31",
+        "full-not_counted-ALL-67",
+        "full-ALL-allowed-51",
+        "full-ALL-ALL-1",
+        "full-ALL-ALL-3",
         "full-ALL-ALL-12",
     ],
-    "proposed_sha256": "cdb7834db3174c3a1110f8fad5d91e5d633ee5eca3102eb6146e60c34282c7b3",
+    "proposed_sha256": "4ca5c871d1490c874717be255203e3c398238e46d77e0821faa50f849a869d38",
     "shown": [
-        ["full-not_counted-allowed-91", "BALANCED"],
-        ["full-not_counted-allowed-85", "MAX_YIELD"],
-        ["full-not_counted-ALL-65", "CONVENTIONAL_OPEN_SPACE"],
-        ["full-ALL-ALL-113", "ROBUST"],
+        ["full-not_counted-allowed-109", "BALANCED"],
+        ["full-not_counted-allowed-86", "MAX_YIELD"],
+        ["full-not_counted-ALL-67", "CONVENTIONAL_OPEN_SPACE"],
+        ["full-ALL-ALL-1", "ROBUST"],
     ],
-    "shown_digests": ["1ad4bbef1a3c3a4d", "52d131672c8dd453",
-                      "ba97e9f1e364eb42", "6375e97300cd425a"],
-    "answer_sha256": "8b51820394a0da28c237a89a862130a5607917d12fcf58ad53964fc46601e67e",
+    "shown_digests": ["28f3992360f0e54f", "3095876e00b9243e",
+                      "0b97e931a9f26ef3", "6568befe46a1b0a7"],
+    "answer_sha256": "64a767154b0c514b37a912696bdbfbf12c5822748305f4bc028a3cdfaf82bd26",
     "approval_page_sha256": "cd3ebee2af46849756df643999df9b16d2cbc91d92c45101983782cff1eb0181",
 }
 PROPOSALS: list = []
