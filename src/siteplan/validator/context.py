@@ -16,6 +16,7 @@ from siteplan.contracts.candidate import CandidateLayout
 from siteplan.contracts.design_brief import DesignBrief
 from siteplan.contracts.resolved_rules import STILT_IN_RULE_HEIGHT, ResolvedRules
 from siteplan.contracts.site_model import CanonicalSiteModel
+from siteplan.geometry import elbow_regions
 from siteplan.provenance import Provenance
 from siteplan.validator import drawn as drawing
 from siteplan.validator import site_geometry
@@ -55,6 +56,12 @@ class Context:
     @property
     def net(self) -> Polygon:
         return self.land.net
+
+    @cached_property
+    def parts(self) -> list[Polygon]:
+        """The net plot cut at its elbows (`geometry.elbow_regions`): the plot itself when it has
+        none."""
+        return elbow_regions(self.net)
 
     @property
     def stilt_readings(self) -> list[str]:

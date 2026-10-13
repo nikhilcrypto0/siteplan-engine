@@ -411,6 +411,18 @@ def try_regions(plot: Plot, regions: Sequence[Polygon], choices: Sequence[Choice
     return out
 
 
+def stands_in(plot: Plot, part: BaseGeometry, choice: Choice, angles: Sequence[float],
+              q: Quantities) -> bool:
+    """Whether a block can stand in a part of the plot at all: on the land its own band leaves
+    there (land.setback_land), out of the water buffer, in any direction the search lays blocks
+    in."""
+    ground = setback_land(plot, choice.cls.front + q.setback_margin_m,
+                          choice.cls.setback_m + q.setback_margin_m).intersection(part)
+    if not plot.excluded.is_empty:
+        ground = ground.difference(plot.excluded)
+    return fit_rectangle(ground, choice.length_m, choice.depth_m, angles) is not None
+
+
 def _widest(ground: BaseGeometry) -> float:
     """The diameter of the widest circle that fits in the ground."""
     return max((2 * p.boundary.distance(polylabel(p, tolerance=EPS_M)) for p in polygons(ground)),

@@ -485,6 +485,29 @@ REGISTRY: tuple[Constraint, ...] = (
              "a tower's depth.",
         settles="Nothing: how the report groups the land; the optimizer decides what fits where.",
     ),
+    Constraint(
+        "Plot", "Where the plot bends at an elbow into two parts and the setback zone is as deep "
+                "as the blocks in each part ask, not as deep round the whole plot as the "
+                "deepest block asks.",
+        f"a reflex corner turning the plot line {geometry.ELBOW_MIN_TURN_DEG:g} degrees or more, "
+        f"cut along the shorter of the lines its edges run on, when both parts keep "
+        f"{geometry.ELBOW_MIN_PART_SQM:g} m² and are {geometry.ELBOW_MIN_PART_WIDTH_M:g} m wide "
+        f"somewhere and the plot line runs on past the corner at least "
+        f"{geometry.ELBOW_EDGE_TO_NECK:g} of the neck's width, at most {geometry.ELBOW_MAX_CUTS} "
+        f"cuts; two depths within {search_layout.ZONE_TOL_M:g} m are one",
+        Basis.ENGINE_DESIGN_ASSUMPTION, "none (geometry.elbow_regions)",
+        ("geometry.ELBOW_MIN_TURN_DEG", "geometry.ELBOW_MIN_PART_SQM",
+         "geometry.ELBOW_MIN_PART_WIDTH_M", "geometry.ELBOW_EDGE_TO_NECK",
+         "geometry.ELBOW_MAX_CUTS", "optimizer.search.layout.ZONE_TOL_M"),
+        note="Table IV gives a setback for a building by its height, so what the law asks round "
+             "the plot is asked of the buildings; one depth round the plot for the tallest of "
+             "them was the engine's simplification, and the search and the validator now take "
+             "the setback zone part by part. A part with no block keeps the deepest depth of "
+             "all, and a block keeps its own setback along the plot line near it. Whether the "
+             "authority reads the setback ground this way is the architect's to confirm.",
+        settles="The authority's reading of the setback ground along a plot of two parts; "
+                "sanctioned plans on bent plots.",
+    ),
     # ----------------------------------------------------------------- open space
     Constraint(
         "Open space", "Organised open space (tot-lot) over and above the setbacks, with the "

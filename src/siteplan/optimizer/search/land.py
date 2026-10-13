@@ -2,9 +2,10 @@
 
 Three kinds of ground are told apart, each from the rules and nothing else:
 
-- the setback zone, as deep as the deepest block a configuration allows (Table IV: the deepest
-  setback decides it for the whole plot, because the validator measures the zone from the deepest
-  block);
+- the setback zone, as deep as the deepest block a configuration allows where that block can
+  stand and no deeper than the blocks that can stand in a part of the plot beyond an elbow
+  (`zone_ground`: what the law asks round the plot is asked of the buildings, so the zone is soft
+  along it, and the validator measures it the same way, `validator.zones.zone_pieces`);
 - the planted strip along the boundary, where that setback reaches the width the rule names;
 - the roadable ground, which is the plot without the statutory exclusions (a water buffer), the
   strip and, when roads may not use the setback, the setback zone.
@@ -22,6 +23,7 @@ measured as the validator measures a block, by its distance from each stretch of
 from __future__ import annotations
 
 import math
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 from shapely.geometry import LineString, MultiLineString, Polygon
@@ -95,14 +97,28 @@ class Land:
     interior: BaseGeometry  # the plot beyond the setback zone: where open space and buildings stand
 
 
+def zone_ground(net: Polygon, zone_depth_m: float,
+                zone_parts: Sequence[tuple[BaseGeometry, float]] | None = None
+                ) -> tuple[BaseGeometry, BaseGeometry]:
+    """The setback zone and the plot beyond it. One depth all round, or, where the plot is cut at
+    its elbows, each part's own: the plot line within that depth, in that part."""
+    if not zone_parts:
+        interior = erode(net, zone_depth_m)
+        return net.difference(interior), interior
+    zone = unary_union([net.difference(erode(net, depth)).intersection(part)
+                        for part, depth in zone_parts])
+    return zone, net.difference(zone)
+
+
 def make_land(plot: Plot, *, zone_depth_m: float, strip_width_m: float, ring_width_m: float,
-              roads_may_use_setback: bool, kept_clear: BaseGeometry | None = None) -> Land:
+              roads_may_use_setback: bool, kept_clear: BaseGeometry | None = None,
+              zone_parts: Sequence[tuple[BaseGeometry, float]] | None = None) -> Land:
     """The ground of one configuration. `kept_clear` is ground a configuration keeps for something
     else (the open space reserved at one end of the plot): no road runs on it, so the blocks stand
-    a ring road's width away from it."""
+    a ring road's width away from it. `zone_parts` are the parts of the plot with the zone depth
+    each keeps (`zone_ground`)."""
     net = plot.net
-    interior = erode(net, zone_depth_m)
-    zone = net.difference(interior)
+    zone, interior = zone_ground(net, zone_depth_m, zone_parts)
     strip = net.difference(erode(net, strip_width_m)) if strip_width_m > 0 else EMPTY
     taken = [plot.excluded, strip, kept_clear if kept_clear is not None else EMPTY]
     if not roads_may_use_setback:

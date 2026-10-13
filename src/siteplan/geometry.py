@@ -9,7 +9,8 @@ from dataclasses import dataclass
 
 from shapely.geometry import LineString, Point, Polygon
 from shapely.geometry.base import BaseGeometry
-from shapely.ops import linemerge, unary_union
+from shapely.geometry.polygon import orient
+from shapely.ops import linemerge, polygonize, polylabel, unary_union
 
 COMPASS_DEG = {"N": 0, "NE": 45, "E": 90, "SE": 135, "S": 180, "SW": 225, "W": 270, "NW": 315}
 # A stretch of boundary faces a compass side when its outward normal is within FACING_DEG of the
@@ -85,6 +86,123 @@ def opening(shape, width_m: float):
     """Remove every part of a shape narrower than width_m (shrink by half, grow back)."""
     half = width_m / 2 - 1e-6
     return shape.buffer(-half, join_style="mitre").buffer(half, join_style="mitre")
+
+
+ELBOW_MIN_TURN_DEG = 45.0  # a reflex corner turning the plot line at least this far is an elbow:
+# the plot there is two parts, each running its own way, meeting near a right angle or wider open.
+# A shallower corner is a kink in one part, not two parts (a few degrees is the surveyor's hand,
+# and a curve is many such corners); Dhulapally's own elbow turns 81.3 degrees.
+ELBOW_MIN_PART_SQM = 200.0  # a part of the plot smaller than this is a notch, not a part
+ELBOW_MIN_PART_WIDTH_M = 10.0  # nor is a part no wider than this (a jog in the plot line cuts a
+# sliver the whole length of the plot)
+ELBOW_EDGE_TO_NECK = 0.5  # past an elbow the plot line runs on at least this share of the neck's
+# width: a part that runs its own way is as long as the neck is wide, where a notch or a jog cuts
+# across the whole plot on edges a few metres long
+ELBOW_MAX_CUTS = 8  # the most cuts made across one plot, the sharpest corners first
+
+
+def elbow_regions(net: Polygon) -> list[Polygon]:
+    """The net plot cut into the parts that meet at its elbows: at each reflex corner that turns
+    the plot line by ELBOW_MIN_TURN_DEG or more, the plot is cut along the shorter of the two
+    lines that carry the corner's own edges on into the plot (the cut across the neck), the
+    sharpest corner first, as long as both sides keep ELBOW_MIN_PART_SQM. The parts overlap in
+    nothing and make up the plot; a plot with no such corner is one part, itself.
+
+    What the law asks of a building depends on the building, so how deep a setback is asked round
+    a plot belongs to the part the buildings stand in (`validator.zones.setback_zone`, the
+    search's `land.zone_depths`)."""
+    parts = [Polygon(orient(net, 1.0).exterior)]
+    for _ in range(ELBOW_MAX_CUTS):
+        cut = _sharpest_cut(parts)
+        if cut is None:
+            break
+        parts.remove(cut[0])
+        parts.extend(cut[1])
+    if len(parts) == 1:
+        return [net]
+    holes = [Polygon(ring) for ring in net.interiors]
+    return [p.difference(h) if (h := _hole_in(p, holes)) is not None else p for p in parts]
+
+
+def _hole_in(part: Polygon, holes: list[Polygon]):
+    inside = [h for h in holes if part.intersects(h)]
+    return unary_union(inside) if inside else None
+
+
+def _sharpest_cut(parts: list[Polygon]) -> tuple[Polygon, list[Polygon]] | None:
+    """The part whose sharpest elbow can be cut, and the two pieces it makes; None when no part
+    has an elbow that can be cut."""
+    options = []
+    for part in parts:
+        for turn, vertex, directions, longest in _elbows(part):
+            for chord in sorted(_chords(part, vertex, directions), key=lambda c: c.length):
+                if longest < ELBOW_EDGE_TO_NECK * chord.length:
+                    continue
+                pieces = _split(part, chord)
+                if pieces is not None:
+                    options.append((turn, -chord.length, part, pieces))
+                    break
+    if not options:
+        return None
+    _, _, part, pieces = max(options, key=lambda o: o[:2])
+    return part, pieces
+
+
+def _elbows(part: Polygon
+            ) -> list[tuple[float, tuple[float, float], list[tuple[float, float]], float]]:
+    """The reflex corners of a part that turn its outline by ELBOW_MIN_TURN_DEG or more, each with
+    how far it turns, where it lies, the two directions its edges run on in and the length of the
+    longer edge: the plot line running on in its new direction."""
+    ring = list(orient(part, 1.0).exterior.coords)[:-1]
+    found = []
+    for i, vertex in enumerate(ring):
+        before, after = ring[i - 1], ring[(i + 1) % len(ring)]
+        ax, ay = vertex[0] - before[0], vertex[1] - before[1]
+        bx, by = after[0] - vertex[0], after[1] - vertex[1]
+        if not (math.hypot(ax, ay) and math.hypot(bx, by)):
+            continue
+        turn = math.degrees(math.atan2(ax * by - ay * bx, ax * bx + ay * by))
+        if -turn >= ELBOW_MIN_TURN_DEG:  # counter-clockwise: a right turn is a reflex corner
+            found.append((-turn, vertex, [(ax, ay), (-bx, -by)],
+                          max(math.hypot(ax, ay), math.hypot(bx, by))))
+    return found
+
+
+def _chords(part: Polygon, vertex: tuple[float, float], directions: list[tuple[float, float]]
+            ) -> list[LineString]:
+    """The lines from a reflex corner along each of its edges' own directions, on into the part
+    as far as its outline."""
+    minx, miny, maxx, maxy = part.bounds
+    reach = 2 * math.hypot(maxx - minx, maxy - miny) + 1.0
+    chords = []
+    for dx, dy in directions:
+        length = math.hypot(dx, dy)
+        ray = LineString([vertex, (vertex[0] + dx / length * reach,
+                                   vertex[1] + dy / length * reach)])
+        inside = ray.intersection(part)
+        pieces = [g for g in getattr(inside, "geoms", [inside])
+                  if isinstance(g, LineString) and g.length > 0
+                  and g.distance(Point(vertex)) < 1e-6]
+        if pieces:
+            chords.append(max(pieces, key=lambda g: g.length))
+    return chords
+
+
+def _split(part: Polygon, chord: LineString) -> list[Polygon] | None:
+    """The two pieces a chord cuts a part into, when each keeps ELBOW_MIN_PART_SQM and is
+    ELBOW_MIN_PART_WIDTH_M wide somewhere."""
+    pieces = [p for p in polygonize(unary_union([part.boundary, chord]))
+              if part.contains(p.representative_point())]
+    if len(pieces) != 2 or min(p.area for p in pieces) < ELBOW_MIN_PART_SQM:
+        return None
+    if min(_widest_m(p) for p in pieces) < ELBOW_MIN_PART_WIDTH_M:
+        return None
+    return pieces
+
+
+def _widest_m(piece: Polygon) -> float:
+    """The diameter of the widest circle that fits in a piece."""
+    return 2 * piece.boundary.distance(polylabel(piece, tolerance=0.1))
 
 
 def facing_deg(boundary: Polygon, run: Run) -> float:

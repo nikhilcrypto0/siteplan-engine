@@ -56,20 +56,68 @@ def edge_groups(ctx: Context) -> tuple[BaseGeometry, BaseGeometry] | None:
             union_of_all([e for e, bearing in edges if not faces(bearing, side)]))
 
 
-def setback_zone(ctx: Context, reading: str) -> BaseGeometry | None:
-    """The mandatory setback as ground: the plot's own edge as deep as the deepest setback needs.
-    Where the bands give a front figure of their own, the front stretches are as deep as it and
-    the rest as deep as the setback; where the front cannot be told, all round as deep as the
-    larger, never more lenient."""
-    depths = setback_depths(ctx, reading)
-    if depths is None:
-        return None
-    front, side = depths
+def _zone_of(ctx: Context, front: float, side: float) -> BaseGeometry:
+    """The plot's own edge as deep as the setbacks: the front stretches as deep as the front
+    figure and the rest as deep as the setback where the bands give a front figure of their own;
+    where the front cannot be told, all round as deep as the larger, never more lenient."""
     groups = edge_groups(ctx) if abs(front - side) > DEPTH_EPS_M else None
     if groups is not None:
         return union_of_all([groups[0].buffer(front), groups[1].buffer(side)]
                             ).intersection(ctx.net)
     return ctx.net.difference(ctx.net.buffer(-max(front, side)))
+
+
+def _part_of(ctx: Context, footprint: BaseGeometry) -> int:
+    """The part of the plot (`Context.parts`) a block stands in: the one holding most of it, the
+    nearest where none does."""
+    parts = ctx.parts
+    held = [part.intersection(footprint).area for part in parts]
+    if max(held) > 0:
+        return held.index(max(held))
+    return min(range(len(parts)), key=lambda i: parts[i].distance(footprint))
+
+
+def zone_pieces(ctx: Context, reading: str) -> list[tuple[BaseGeometry, float, float]]:
+    """The setback ground as pieces, each with the (front, other sides) depths it is as deep as.
+
+    A plot with no elbow is one piece, as deep as the deepest setback any block needs. At an
+    elbow (`geometry.elbow_regions`) the plot is two parts, each running its own way, and what
+    the law asks round it is asked of the buildings: each part is as deep as the deepest setback
+    of the blocks that stand in it (as deep as the deepest of all where none does, never more
+    lenient than the whole), and the plot line within a block's own setback of it is as deep as
+    that block asks wherever it lies, so a tall block's setback is not shortened by the next
+    part's being shallow. The setback is soft along a run of blocks, not one depth round the plot
+    for the tallest of them."""
+    depths = setback_depths(ctx, reading)
+    if depths is None:
+        return []
+    if len(ctx.parts) == 1:
+        return [(_zone_of(ctx, *depths), *depths)]
+    by_name = {n: c for n, c in ctx.classes.get(reading, {}).items() if c.setback_m is not None}
+    standing: list[list] = [[] for _ in ctx.parts]
+    for tower in ctx.towers:
+        if tower.name in by_name:
+            standing[_part_of(ctx, tower.footprint)].append(tower)
+    pieces = []
+    for part, towers in zip(ctx.parts, standing, strict=True):
+        front, side = ((max(by_name[t.name].front_m for t in towers),
+                        max(by_name[t.name].setback_m for t in towers)) if towers else depths)
+        pieces.append((_zone_of(ctx, front, side).intersection(part), front, side))
+        for t in towers:
+            own = by_name[t.name]
+            near = t.footprint.buffer(max(own.front_m, own.setback_m))
+            pieces.append((_zone_of(ctx, own.front_m, own.setback_m).intersection(near),
+                           own.front_m, own.setback_m))
+    return pieces
+
+
+def setback_zone(ctx: Context, reading: str) -> BaseGeometry | None:
+    """The mandatory setback as ground (`zone_pieces`): the plot's own edge as deep as the
+    setbacks need."""
+    pieces = zone_pieces(ctx, reading)
+    if not pieces:
+        return None
+    return union_of_all([zone for zone, _, _ in pieces])
 
 
 def gap_zones(ctx: Context, reading: str, spacing: str) -> list[tuple[str, BaseGeometry]]:
@@ -211,14 +259,23 @@ def ramp_zones(ctx: Context, reading: str) -> tuple[BaseGeometry, BaseGeometry]:
     is the front). Forbidden: the front setback when the access side is known, and the part of
     any setback that would leave less than 7 m clear. When the access side is not known, the
     rest of the setback is the second shape: a ramp there is allowed in a side or rear setback
-    and not in the front."""
-    depths = setback_depths(ctx, reading)
-    if depths is None:
+    and not in the front. Asked piece by piece of the setback ground (`zone_pieces`), each as
+    deep as its own setback."""
+    forbidden, conditional = [], []
+    for zone, front_depth, side_depth in zone_pieces(ctx, reading):
+        sure, maybe = _ramp_zones_in(ctx, zone, front_depth, side_depth)
+        forbidden.append(sure)
+        conditional.append(maybe)
+    if not forbidden:
         return Polygon(), Polygon()
-    front_depth, side_depth = depths
+    sure = union_of_all(forbidden)
+    return sure, union_of_all(conditional).difference(sure)
+
+
+def _ramp_zones_in(ctx: Context, zone: BaseGeometry, front_depth: float, side_depth: float
+                   ) -> tuple[BaseGeometry, BaseGeometry]:
     split = abs(front_depth - side_depth) > DEPTH_EPS_M and edge_groups(ctx) is not None
     depth = side_depth if split else max(front_depth, side_depth)
-    zone = setback_zone(ctx, reading)
     # Rule 13(c)(vii): a ramp in a side or rear setback leaves this much for fire vehicles.
     leave = ctx.rules.parking.ramp_fire_clearance_m.value
     keep_clear = zone if depth <= leave else zone.intersection(

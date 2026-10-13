@@ -24,7 +24,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field, replace
 
 from shapely import affinity
-from shapely.geometry import Point, Polygon
+from shapely.geometry import Point, Polygon, box
 from shapely.geometry.base import BaseGeometry
 from shapely.ops import unary_union
 
@@ -37,7 +37,7 @@ from siteplan.contracts import (
 )
 from siteplan.contracts.candidate import RoadKind
 from siteplan.contracts.design_brief import ClubSize
-from siteplan.geometry import frontage
+from siteplan.geometry import elbow_regions, frontage
 from siteplan.optimizer.search import fringe, ground, network
 from siteplan.optimizer.search.build import FIRE_ROADS, Laid, Placement, named_placements
 from siteplan.optimizer.search.columns import (
@@ -60,6 +60,7 @@ from siteplan.optimizer.search.land import (
     polygons,
     reserve_end,
     setback_land,
+    zone_ground,
 )
 from siteplan.optimizer.search.parking_plan import plan_parking, ramp_length_m
 from siteplan.optimizer.search.quantities import Quantities, quantities
@@ -78,6 +79,7 @@ CLUB_ASSUMED_SHARE_OF_NET = 0.0375  # built-up area over the plot, times the clu
 CLUB_FLOORS = 2  # the club house's storeys when the brief gives none
 SIDES = ("N", "S", "E", "W")
 MAX_CLUSTERS = 3  # the first cluster of blocks and at most two more, each round its own ring road
+ZONE_TOL_M = 1e-6  # two setback depths this close are one
 ZONE_ANGLES = 4  # a further cluster is tried in its configuration's direction and three of its own
 
 
@@ -120,6 +122,8 @@ class Run:
     profiles: tuple[Profile, ...] = ()
     fringe_kit: tuple[TowerPrototype, ...] = ()
     own_lands: dict[tuple[float, float], BaseGeometry] = field(default_factory=dict)
+    parts: tuple[Polygon, ...] = ()  # the net plot cut at its elbows (geometry.elbow_regions)
+    stands: dict[tuple, bool] = field(default_factory=dict)  # block kind, part -> it can stand
 
     @property
     def other_depths(self) -> tuple[TowerPrototype, ...]:
@@ -154,7 +158,8 @@ def make_run(site: CanonicalSiteModel, rules: ResolvedRules, brief: DesignBrief,
     plot = plot_of(site, envelope)
     every = [c for found in classes.values() for counts in found.values() for c in counts]
     return Run(site, rules, brief, envelope, plot, q, tuple(used), depth, classes,
-               tuple(profiles), tuple(kit), fringe.own_lands(plot, q, every))
+               tuple(profiles), tuple(kit), fringe.own_lands(plot, q, every),
+               tuple(elbow_regions(plot.net)))
 
 
 # --- The cheap half: blocks in columns -----------------------------------------------------------
@@ -202,7 +207,58 @@ def _gap(q: Quantities):
     return between
 
 
-def evaluate(run: Run, config: Config) -> Evaluation | Failure:
+def _zone_parts(run: Run, blocks: Sequence[Choice], deepest_m: float
+                ) -> list[tuple[BaseGeometry, float]] | None:
+    """The parts of the plot beyond its elbows and the setback each keeps: the deepest of the
+    blocks that can stand in the part, the deepest of all where none can (so nothing is asked
+    less of the part than the whole asks, where no building is there to ask it). None where the
+    plot has no elbow or every part keeps the deepest."""
+    if len(run.parts) < 2:
+        return None
+    angles = orientations(run.plot.net)
+    depths = []
+    for index, part in enumerate(run.parts):
+        fits = []
+        for choice in blocks:
+            key = (index, choice.prototype.id, choice.cls.front, choice.cls.setback_m)
+            if key not in run.stands:
+                run.stands[key] = fringe.stands_in(run.plot, part, choice, angles, run.q)
+            if run.stands[key]:
+                fits.append(choice.cls.zone_m)
+        depths.append(max(fits, default=deepest_m))
+    if all(depth >= deepest_m - ZONE_TOL_M for depth in depths):
+        return None
+    return list(zip(run.parts, depths, strict=True))
+
+
+def _unrelieved(run: Run, evaluation: Evaluation, parts: Sequence[tuple[BaseGeometry, float]],
+                deepest_m: float) -> bool:
+    """Whether a part kept shallower than the whole stands empty: the validator holds a part no
+    block stands in to the deepest setback of all, so what was laid on its relieved ground would
+    not stand."""
+    footprints = []
+    for s in evaluation.standing:
+        footprints.append((s.frame or evaluation.frame).to_survey(box(s.x0, s.y0, s.x1, s.y1)))
+    for f in evaluation.fringe:
+        s = f.standing
+        footprints.append((s.frame or evaluation.frame).to_survey(box(s.x0, s.y0, s.x1, s.y1)))
+    held = {i for i in (_part_index(run, f) for f in footprints) if i is not None}
+    return any(depth < deepest_m - ZONE_TOL_M and i not in held
+               for i, (_, depth) in enumerate(parts))
+
+
+def _part_index(run: Run, footprint: Polygon) -> int | None:
+    """The part of the plot a block stands in: the one holding most of it, as the validator
+    assigns it."""
+    held = [part.intersection(footprint).area for part in run.parts]
+    return held.index(max(held)) if max(held) > 0 else None
+
+
+def evaluate(run: Run, config: Config, regional: bool = True) -> Evaluation | Failure:
+    """One configuration laid out. With `regional` (the default) the setback zone is as deep in a
+    part of the plot beyond an elbow as the blocks that can stand there ask; a layout that leaves
+    such a part without a block is laid again with the zone as deep everywhere as the deepest
+    block asks (`_unrelieved`)."""
     q, plot = run.q, run.plot
     classes = {pid: [c for c in found if c.floors <= config.max_floors
                      and (c.high_rise or config.low_blocks)]
@@ -219,9 +275,10 @@ def evaluate(run: Run, config: Config) -> Evaluation | Failure:
     strip_width = max(cls.strip_m for cls in asked)
     street = max(q.road_m, max(c.cls.gap_m for c in [*choices, *others]) + q.gap_margin_m)
     frame = Frame(config.angle_deg)
+    parts = _zone_parts(run, [*choices, *others, *beyond], zone_depth) if regional else None
     kept_clear = None
     if config.reserve:
-        interior_turned = frame.to_turned(erode(plot.net, zone_depth))
+        interior_turned = frame.to_turned(zone_ground(plot.net, zone_depth, parts)[1])
         region = reserve_end(interior_turned, config.reserve,
                              run.reserve_target_sqm * config.reserve_scale, q.pocket_width_m)
         if region is None:
@@ -230,7 +287,7 @@ def evaluate(run: Run, config: Config) -> Evaluation | Failure:
     land = make_land(plot, zone_depth_m=zone_depth, strip_width_m=strip_width,
                      ring_width_m=q.road_m,
                      roads_may_use_setback=config.profile.roads_may_use_setback,
-                     kept_clear=kept_clear)
+                     kept_clear=kept_clear, zone_parts=parts)
     if land.cluster_land.is_empty:
         return Failure("the ring road leaves no ground for a block")
     standing, _ = _columns(run, config, frame, land, choices, street, others)
@@ -265,11 +322,14 @@ def evaluate(run: Run, config: Config) -> Evaluation | Failure:
         if beyond else []
     if config.low_blocks and not extra and all(s.choice.cls.high_rise for s in fitted):
         return Failure("no block below 21 m stands in this configuration")
-    return Evaluation(
+    evaluation = Evaluation(
         config=config, frame=frame, land=land, street_m=street, standing=tuple(fitted),
         streets=tuple(streets), clusters=tuple(clusters),
         value=sum(s.choice.value for s in fitted) + sum(f.standing.choice.value for f in extra),
         kept_clear=kept_clear, fringe=tuple(extra), links=tuple(links))
+    if parts is not None and _unrelieved(run, evaluation, parts, zone_depth):
+        return evaluate(run, config, regional=False)
+    return evaluation
 
 
 def _more_clusters(run: Run, config: Config, frame: Frame, land: Land, choices: list[Choice],
