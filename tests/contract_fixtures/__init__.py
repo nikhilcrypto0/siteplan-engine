@@ -17,9 +17,12 @@ SITES = ("rectangle", "l_plot_with_arm", "nala_plot", "small_plot")
 
 
 def load(site: str, contract: str) -> BaseModel:
-    """One fixture, validated against its contract."""
-    return ALL_CONTRACTS[contract].model_validate_json((HERE / site / f"{contract}.json")
-                                                        .read_text())
+    """One fixture, validated against its contract. Read as UTF-8, not in the platform's own
+    encoding: a clause says 'm²', and on a machine whose default is not UTF-8 (Windows reads
+    cp1252) it decodes to another string, which digests differently and fails every cross-check
+    against a stored reference."""
+    return ALL_CONTRACTS[contract].model_validate_json(
+        (HERE / site / f"{contract}.json").read_text(encoding="utf-8"))
 
 
 def with_raise(rules: ResolvedRules) -> ResolvedRules:

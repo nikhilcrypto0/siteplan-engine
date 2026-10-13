@@ -233,7 +233,11 @@ def main() -> None:
         folder = HERE / name
         folder.mkdir(exist_ok=True)
         for contract, instance in build(name, spec).items():
-            (folder / f"{contract}.json").write_text(instance.model_dump_json(indent=1) + "\n")
+            # UTF-8, not the platform's own encoding: a clause says 'm²', and writing it in
+            # cp1252 (Windows' default) would commit a mangled fixture that digests differently
+            # on every other machine.
+            (folder / f"{contract}.json").write_text(
+                instance.model_dump_json(indent=1) + "\n", encoding="utf-8")
         print(f"{name}: written to {folder}")
 
 
