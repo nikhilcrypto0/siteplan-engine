@@ -48,6 +48,8 @@ APPROACH_WIDTH = "approach_width"
 MIXED_HEIGHT_SPACING = "mixed_height_spacing"
 VISITOR_PARKING = "visitor_parking"
 AMENITY_SHARE = "amenity_share"
+TABLE_V_ROW_4 = "table_v_row_4"  # which edition of Table V row 4 is in force (2026-10-13)
+EDITION_2012, EDITION_2024 = "edition_2012", "edition_2024"
 TOT_LOT_SURFACE = "tot_lot_surface"
 OPEN_SPACE_OTHER_USES = "open_space_other_uses"
 NBC_FIRE_HEIGHT = "nbc_fire_height"
@@ -655,6 +657,19 @@ class ParkingRules(Part):
     ramp_fire_clearance_m: RuleValue[float]  # what a ramp in a side or rear setback leaves clear
     utilities_max_fraction: RuleValue[float]
     measurement: ParkingMeasurement
+    # Since 2026-10-13: row 4 as G.O.Ms.No.143 and No.144 of 2024 print it, outside GHMC and CURE
+    # (share_pct_by_column keeps the 2012 figures), and the reading of which edition is in force.
+    # Absent from rules stored before, and left out of the dump then, so they keep their digest.
+    share_pct_elsewhere_2024: RuleValue[float] | None = None
+    row_4_interpretation: str | None = None
+
+    @model_serializer(mode="wrap")
+    def _as_stored_when_absent(self, handler):
+        dumped = handler(self)
+        for key in ("share_pct_elsewhere_2024", "row_4_interpretation"):
+            if dumped.get(key) is None:
+                dumped.pop(key, None)
+        return dumped
 
     @model_validator(mode="after")
     def _usable(self) -> ParkingRules:

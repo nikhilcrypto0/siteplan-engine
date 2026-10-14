@@ -4,6 +4,51 @@ A characterization test (tests/manifest.py) pins what the engine produces today.
 only together with a normative replacement test and an entry here: what changed, why, the
 evidence, and the test that now holds the behaviour. Newest first.
 
+## 2026-10-13: the club house's ceiling and the client's 3%; Table V row 4 open (audit, phase 3)
+
+**The club house (D13).**
+- **What the 2016 text says.** G.O.Ms.No.7 of 2016, Amendment 15, read from its text (pp.4-5):
+  "upto 3% of the total built up area (or) 50,000 Sft. whichever is lower shall be planned and
+  developed for common amenities ... Amenities block shall not be part of the residential
+  blocks". It substituted the 2012 "minimum 3%".
+- **The legal check is that text as written.** The validator's "Amenities (club house)" is:
+  - required from 100 units (none drawn is a FAIL; under the old "up to" reading it passed);
+  - no larger than the ceiling (FAIL above it, under every reading);
+  - apart from the residential blocks.
+  - It is no longer judged under `amenity_share`. The resolver carries that reading settled by
+    the text (VERIFIED, LEGAL_RULE) and applies the cap.
+- **The 3% the architect approved is the firm's program.** The brief's club house gains size
+  `SHARE` with a `share` (`layout.APPROVED_CLUB_SHARE`, 0.03, the project's
+  `club_house_share`). The program check holds the layout to it: NOT MET when short, never a legal
+  FAIL.
+- **The generator lays the brief's share, never above the ceiling** (`ground.club_ceiling_sqm`).
+  - The 0.2 m² slack it kept above 3% is gone, since 3% is now also the ceiling.
+  - A stated size larger than the ceiling is held to it.
+- **Tests:** `tests/test_club_house_law.py`; the club tests of `test_validator_site_checks.py`,
+  `test_validator_edges.py` and `test_validator_club_spacing.py` restated on the new check;
+  `test_resolve.py` and `test_constraints.py`, which pinned the share as an open reading.
+
+**Table V row 4 (D3).**
+- **What the 2024 orders print.** G.O.Ms.No.143 and No.144 of 24.09.2024, Amendment 4 (read on
+  G.O.144's page image, p.2), print row 4 as 30 | 30 | 30 | 25 | 25 | 25 where the 2012 text has
+  30 | 20 | 20 | 20 | 20 | 20. Their operative words only add row 5.
+- **Which edition is in force is the open reading `table_v_row_4`** (carried ALL).
+  - Outside GHMC and CURE the resolver plans the stricter 30% (`ParkingRules.share_pct`,
+    UNRESOLVED_INTERPRETATION); the 2024 figure is carried as `share_pct_elsewhere_2024`.
+  - The validator judges Table V and visitors' parking under both editions there; a layout between
+    them is CONDITIONAL on the reading.
+  - The search plans the stricter. A project may select an edition.
+  - No constant changed. GHMC and CURE sites, both client sites among them, are unaffected (30%
+    either way).
+- **Tests:** `tests/test_table_v_row_4.py`; `test_resolve.py` (an HMDA site outside CURE planned
+  at 30%).
+- **The service proposals baseline is re-pinned.** Its made-up HMDA site now plans parking at 30%,
+  and the club house keeps no slack.
+  - Maximum yield, balanced and robust are the same layouts.
+  - The open-space option is the same 5 x S+3 under a new number.
+  - One unshown proposal is a different 5 x S+8 (272 flats for 256).
+  - The approval page is the same.
+
 ## 2026-10-13: a project's own inputs reach production (regulatory audit, phase 2)
 
 **What changed.**

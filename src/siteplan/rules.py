@@ -438,10 +438,10 @@ ELECTRICAL_CLAUSE = (
 # Rule 15(a)(x) is the group-housing one: 3% of built-up area, in a block of its own. (Rule 9(o)
 # asks 5% of site area but sits in the row-housing section, so it is not used as the check here.)
 # G.O.Ms.No.7 of 2016, Amendment 15, rewrote it as "upto 3% of the total built up area (or)
-# 50,000 Sft. whichever is lower". UNRESOLVED_INTERPRETATION (constraints.py): the 3% minimum is
-# the 2012 wording, kept as the planning target and ASSUMED_FOR_TEST; the 2016 wording may make
-# 3% a ceiling and adds a cap. It is not settled law. The cap is recorded here as read, and only
-# reported, never applied, until a sanctioned plan or the architect shows how the clause is read.
+# 50,000 Sft. whichever is lower shall be planned and developed for common amenities" (read from
+# its text, pp.4-5, 2026-10-13): a ceiling with the cap, and a block required from 100 units. The
+# resolver and the validator apply it as written; the 3% the firm plans is its program (the brief,
+# layout.APPROVED_CLUB_SHARE), never the law. The legacy checker and layout keep the 2012 minimum.
 AMENITY_MIN_BUILT_UP_FRACTION = 0.03
 AMENITY_MIN_UNITS = 100
 AMENITY_CAP_SQFT_2016 = 50_000.0
@@ -485,6 +485,16 @@ LARGE_PROJECT_AMENITY_CLAUSE = (
 PARKING_PERCENT_GHMC = 30.0
 PARKING_PERCENT_ELSEWHERE = 20.0
 PARKING_CLAUSE = "G.O.168 rule 13, Table V row 4 (Residential Apartment Complexes)"
+# G.O.Ms.No.143 and No.144 of 24.09.2024, Amendment 4 (G.O.144 p.2, read on its page image on
+# 2026-10-13), print row 4 as 30 | 30 | 30 | 25 | 25 | 25 (GHMC; HMDA municipalities, N.Ps and
+# G.Ps; municipal corporations; UDA municipalities; selection and special grade; others), where
+# the 2012 text has 30 | 20 | 20 | 20 | 20 | 20. Their operative words only add row 5 (industrial
+# buildings and godowns) and take those out of row 4, and no order held changes row 4 in between:
+# which edition is in force is an open reading (table_v_row_4). The engine has one column outside
+# GHMC and CURE, so the 2024 edition is held there at the stricter of its figures, 30%.
+PARKING_PERCENT_ELSEWHERE_2024 = 30.0
+PARKING_2024_CLAUSE = ("G.O.Ms.No.144 (and No.143) of 24.09.2024, Amendment 4, p.2: Table V row 4 "
+                       "printed 30 | 30 | 30 | 25 | 25 | 25")
 
 # Rule 13(c), read from the 2012 text on 2026-09-30 (G.O.Ms.No.7 of 2016 does not amend rule 13).
 # (vii): "at least two ramps of minimum 3.6m width or one ramp of minimum 5.4m width and adequate

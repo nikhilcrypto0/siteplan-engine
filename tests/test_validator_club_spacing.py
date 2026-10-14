@@ -98,10 +98,12 @@ def test_a_club_house_as_tall_as_a_high_rise_keeps_the_setback_its_height_asks()
 
 
 def test_a_club_house_of_a_tiny_footprint_and_dozens_of_floors_cannot_pass_the_3_percent():
-    """30 m² over 38 floors is 1,140 m² of club house, 3% of what is built, and a 114 m block."""
+    """30 m² over 36 floors is 1,080 m² of club house, under the 2016 ceiling of 3% of what is
+    built, and a 108 m block: as tall as a high-rise, so it cannot pass (38 floors, 1,140 m²,
+    are over the ceiling and FAIL)."""
     def tower(candidate):
         club = candidate.program.club_house
-        club.floors = 38
+        club.floors = 36
         club.shape = rectangle(40.0, 5.0, 46.0, 10.0)
     c = check(fixture("rectangle").edited(tower).report(), "Amenities (club house)")
     assert c.finding.status is Z.UNVERIFIED and "cannot pass" in c.finding.note

@@ -101,6 +101,20 @@
           "default": null,
           "title": "Floors"
         },
+        "share": {
+          "anyOf": [
+            {
+              "exclusiveMaximum": 1,
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Share"
+        },
         "size": {
           "$ref": "#/$defs/ClubSize",
           "default": "LEGAL_MINIMUM"
@@ -132,7 +146,8 @@
       "enum": [
         "LEGAL_MINIMUM",
         "FIRM_STANDARD",
-        "STATED"
+        "STATED",
+        "SHARE"
       ],
       "title": "ClubSize",
       "type": "string"

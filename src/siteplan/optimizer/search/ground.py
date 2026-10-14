@@ -35,7 +35,6 @@ from siteplan.parking import place_ramp
 CLEARANCE_M = 1.5  # walking room between the club house, the ramp, the open space and a facility
 PRIORITY_ORDER = (AmenityPriority.REQUIRED, AmenityPriority.PREFERRED, AmenityPriority.OPTIONAL)
 CLUB_ASPECT = 1.6
-CLUB_SIZE_SLACK_SQM = 0.2  # over the size the share asks, so rounding never leaves it under
 MIN_PIECE_SQM = 0.05
 
 
@@ -93,17 +92,28 @@ def buildable_ground(plot: Plot, open_land: BaseGeometry) -> BaseGeometry:
     return open_land.difference(plot.excluded) if not plot.excluded.is_empty else open_land
 
 
-def club_size_sqm(q: Quantities, tower_sqm: float, units: int) -> float:
-    """The built-up area of the club house rule 15(a)(x) asks, the block itself counted: a share
-    of all the built-up area, which is a share of the towers' over one less the share. Where the
-    rules also read the share as a ceiling (the 2016 wording) the size stays within it. Zero below
-    the number of units the clause names."""
+def _of_all(share: float, tower_sqm: float) -> float:
+    """A share of all the built-up area, the club house itself counted: a share of the towers'
+    over one less the share."""
+    return share * tower_sqm / (1 - share)
+
+
+def club_ceiling_sqm(q: Quantities, tower_sqm: float) -> float:
+    """The most rule 15(a)(x) lets the amenities block take (G.O.Ms.No.7 of 2016: 'upto' its share
+    of the built-up area or the cap, whichever is lower)."""
+    share = _of_all(q.club_share, tower_sqm)
+    return min(share, q.club_cap_sqm) if q.club_cap_sqm is not None else share
+
+
+def club_size_sqm(q: Quantities, tower_sqm: float, units: int,
+                  wanted_share: float | None = None) -> float:
+    """The club house's built-up area: the share of the built-up area the brief asks (the firm's
+    approved 3%, a program requirement), or with none the most the rule allows; never above the
+    rule's ceiling (2026-10-13). Zero below the number of units the clause names."""
     if units < q.club_from_units:
         return 0.0
-    size = q.club_share * tower_sqm / (1 - q.club_share) + CLUB_SIZE_SLACK_SQM
-    if q.club_cap_sqm is not None and "up_to_3_percent_or_cap" in q.club_shares_read:
-        size = min(size, q.club_cap_sqm)
-    return size
+    ceiling = club_ceiling_sqm(q, tower_sqm)
+    return ceiling if wanted_share is None else min(_of_all(wanted_share, tower_sqm), ceiling)
 
 
 def place_club(room: BaseGeometry, footprint_sqm: float, turns: Sequence[float],

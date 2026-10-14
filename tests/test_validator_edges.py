@@ -24,6 +24,7 @@ from siteplan import rules as law
 from siteplan.contracts.accounting import DeductionKind, LayerKind, PhysicalUse
 from siteplan.contracts.candidate import Cellars, SiteProgram
 from siteplan.contracts.common import Basis, Provenance, Status
+from siteplan.contracts.design_brief import ClubSize
 from siteplan.contracts.resolved_rules import (
     ALL,
     MIXED_HEIGHT_SPACING,
@@ -345,32 +346,46 @@ def test_the_clause_applies_to_a_scheme_of_exactly_the_units_it_names():
         candidate.program.club_house = None
     missing = fixture("rectangle").edited(no_club)
     named = "Amenities (club house)"
-    # the made-up rules select the 3% minimum without settling it: FAIL under that selection
-    assert check(missing.with_rules(from_units(units)).report(), named).selected_status is Z.FAIL
+    # 'shall be planned' (2016): from the units the clause names an amenities block is required
+    assert status(missing.with_rules(from_units(units)).report(), named) is Z.FAIL
     assert status(missing.with_rules(from_units(units + 1)).report(), named) is Z.INFO
 
 
-def test_the_club_house_is_3_percent_of_the_built_up_area_it_is_part_of():
-    """The built-up area the 3% is of includes the club house: a club house of 3.05% of the towers
-    alone is 2.96% of the whole and short."""
-    inputs = fixture("rectangle").with_rules(lambda r: select(r, "amenity_share",
-                                                              "minimum_3_percent"))
+def _asks_3_percent(brief):
+    """The firm's 3% club house, its storeys left to the drawing (_club_of draws one)."""
+    brief.program.club_house = brief.program.club_house.model_copy(
+        update={"size": ClubSize.SHARE, "share": 0.03, "floors": None})
+
+
+def _club_statuses(report) -> tuple[Status, Status]:
+    """(the law's check, the program's) for the club house."""
+    law = status(report, "Amenities (club house)")
+    program = next(c for c in report.program if c.finding.rule == "Club house").finding.status
+    return law, program
+
+
+def test_the_3_percent_is_of_the_built_up_area_the_club_house_is_part_of():
+    """The built-up area the share is of includes the club house: 3.05% of the towers alone is
+    2.96% of the whole, lawful and short of the firm's 3%; 3.12% of the towers is 3.03% of the
+    whole, which meets the program and is over the law's ceiling (G.O.Ms.No.7 of 2016)."""
+    inputs = fixture("rectangle").with_brief(_asks_3_percent)
     towers = _tower_built_up(inputs)
     short = inputs.edited(lambda c: _club_of(c, 0.0305 * towers))
-    assert status(short.report(), "Amenities (club house)") is Z.FAIL
-    enough = inputs.edited(lambda c: _club_of(c, 0.0312 * towers))
-    assert status(enough.report(), "Amenities (club house)") is Z.PASS
+    assert _club_statuses(short.report()) == (Z.PASS, Z.FAIL)
+    over = inputs.edited(lambda c: _club_of(c, 0.0312 * towers))
+    assert _club_statuses(over.report()) == (Z.FAIL, Z.PASS)
 
 
-def test_a_club_house_20_m2_under_the_minimum_fails():
-    inputs = fixture("rectangle").with_rules(lambda r: select(r, "amenity_share",
-                                                              "minimum_3_percent"))
+def test_20_m2_under_the_firms_share_misses_the_program_and_20_m2_over_fails_the_law():
+    inputs = fixture("rectangle").with_brief(_asks_3_percent)
     towers = _tower_built_up(inputs)
-    need = 0.03 * towers / 0.97  # the club house is 3% of towers plus itself
-    assert status(inputs.edited(lambda c: _club_of(c, need - 20.0)).report(),
-                  "Amenities (club house)") is Z.FAIL
-    assert status(inputs.edited(lambda c: _club_of(c, need + 0.1)).report(),
-                  "Amenities (club house)") is Z.PASS
+    share = 0.03 * towers / 0.97  # 3% of the towers and the club house together
+    assert _club_statuses(inputs.edited(lambda c: _club_of(c, share - 20.0)).report()) == (
+        Z.PASS, Z.FAIL)
+    assert _club_statuses(inputs.edited(lambda c: _club_of(c, share + 0.1)).report()) == (
+        Z.PASS, Z.PASS)
+    assert _club_statuses(inputs.edited(lambda c: _club_of(c, share + 20.0)).report()) == (
+        Z.FAIL, Z.PASS)
 
 
 def test_the_deduction_kinds_are_what_the_master_plan_rule_reads():

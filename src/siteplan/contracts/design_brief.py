@@ -47,9 +47,10 @@ class HeightMode(StrEnum):
 
 
 class ClubSize(StrEnum):
-    LEGAL_MINIMUM = "LEGAL_MINIMUM"
+    LEGAL_MINIMUM = "LEGAL_MINIMUM"  # what the law asks: since 2016 a block, up to its ceiling
     FIRM_STANDARD = "FIRM_STANDARD"
     STATED = "STATED"
+    SHARE = "SHARE"  # a share of the built-up area the client requires (the firm's 3%)
 
 
 class AmenityPriority(StrEnum):
@@ -104,11 +105,24 @@ class ClubHouseRequest(Part):
     size: ClubSize = ClubSize.LEGAL_MINIMUM
     sqm: float | None = Field(None, gt=0)  # built-up area, when size is STATED
     floors: PositiveInt | None = None
+    # Since 2026-10-13: the share of all the built-up area (the club house counted) the client
+    # requires, when size is SHARE; a program requirement, never law. Absent from briefs stored
+    # before, and left out of the dump when absent, so they keep their digest.
+    share: float | None = Field(None, gt=0, lt=1)
+
+    @model_serializer(mode="wrap")
+    def _as_stored_when_absent(self, handler):
+        dumped = handler(self)
+        if dumped.get("share") is None:
+            dumped.pop("share", None)
+        return dumped
 
     @model_validator(mode="after")
     def _stated_size(self) -> ClubHouseRequest:
         if self.size is ClubSize.STATED and self.sqm is None:
             raise ValueError("a STATED club house size needs sqm")
+        if self.size is ClubSize.SHARE and self.share is None:
+            raise ValueError("a SHARE club house size needs share")
         return self
 
 

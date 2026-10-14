@@ -768,12 +768,15 @@ def _lanes_misplaced(lanes: BaseGeometry, land: Land) -> str:
 
 
 def _club_size(run: Run, tower_sqm: float, units: int) -> float:
-    """The club house's built-up area: rule 15(a)(x)'s share, or the size the brief states where
-    that is larger."""
+    """The club house's built-up area: the share the brief asks, or the size it states where
+    that is larger, never above rule 15(a)(x)'s ceiling from the units it names (2026-10-13)."""
     asked = run.brief.program.club_house
-    size = ground.club_size_sqm(run.q, tower_sqm, units)
+    share = asked.share if asked.wanted.value and asked.size is ClubSize.SHARE else None
+    size = ground.club_size_sqm(run.q, tower_sqm, units, share)
     if asked.wanted.value and asked.size is ClubSize.STATED and asked.sqm:
         size = max(size, asked.sqm)
+        if units >= run.q.club_from_units:
+            size = min(size, ground.club_ceiling_sqm(run.q, tower_sqm))
     return size
 
 

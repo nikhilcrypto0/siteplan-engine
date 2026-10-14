@@ -13,7 +13,6 @@ from dataclasses import replace
 
 from siteplan.contracts.common import Status
 from siteplan.contracts.resolved_rules import (
-    AMENITY_SHARE,
     MIXED_HEIGHT_SPACING,
     STILT_IN_RULE_HEIGHT,
 )
@@ -24,8 +23,6 @@ from siteplan.validator.context import Context
 from siteplan.validator.measure import TOL_M, HeightClass, classify
 from siteplan.validator.readings import (
     EACH_OWN,
-    MINIMUM_SHARE,
-    SHARE_OR_CAP,
     TALLER_GOVERNS,
     Assignment,
     Cell,
@@ -70,7 +67,9 @@ def club_house_check(ctx: Context) -> Check:
              f"{a.share_of_built_up.basis.value}, {a.share_of_built_up.status.value}")
 
     def size_cell(x: Assignment) -> Cell:
-        reading = x[AMENITY_SHARE]
+        """Rule 15(a)(x) as G.O.Ms.No.7 of 2016 substituted it: from 100 units an amenities block
+        'shall be planned', 'upto' the share of the built-up area or the cap, whichever is lower,
+        not part of the residential blocks (2026-10-13). The 3% the firm plans is its program."""
         if units < a.from_units.value:
             return Cell(Status.INFO, f"{units} units", f"the clause applies from "
                         f"{a.from_units.value} units")
@@ -83,16 +82,12 @@ def club_house_check(ctx: Context) -> Check:
         if separate > NOISE_SQM:
             return Cell(Status.FAIL, f"{measured}, {separate:,.0f} m² of it inside a residential "
                         "block", "a block that is not part of the residential blocks", basis)
-        if reading == MINIMUM_SHARE:
-            need = share * built_up
-            return Cell(verdict(provided + SIZE_SLACK_SQM >= need), measured,
-                        f">= {share:.0%} of built-up area = {need:,.0f} m²", basis)
-        if reading == SHARE_OR_CAP:
-            ceiling = min(share * built_up, cap_sqm)
-            return Cell(verdict(provided <= ceiling + SIZE_SLACK_SQM), measured,
-                        f"up to {share:.0%} of built-up or {a.cap_sqft_2016.value:,.0f} sft, "
-                        f"whichever is lower = {ceiling:,.0f} m²", basis)
-        return unknown_reading(AMENITY_SHARE, reading)
+        ceiling = min(share * built_up, cap_sqm)
+        required = (f"an amenities block, up to {share:.0%} of built-up or "
+                    f"{a.cap_sqft_2016.value:,.0f} sft, whichever is lower = {ceiling:,.0f} m²")
+        if d.club.is_empty:
+            return Cell(Status.FAIL, "no amenities block drawn", required, basis)
+        return Cell(verdict(provided <= ceiling + SIZE_SLACK_SQM), measured, required, basis)
 
     tall = _club_class(ctx)
 
@@ -104,7 +99,7 @@ def club_house_check(ctx: Context) -> Check:
                            rests_on=(TALL_CLUB,))
         return result
 
-    return check_from(run(ctx.rules, [AMENITY_SHARE], cell), family=Family.AMENITIES,
+    return check_from(run(ctx.rules, [], cell), family=Family.AMENITIES,
                       rule="Amenities (club house)", clause=a.share_of_built_up.clause)
 
 

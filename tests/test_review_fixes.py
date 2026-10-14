@@ -63,11 +63,13 @@ def test_a_checked_project_with_no_jurisdiction_passes_parking_only_at_the_stric
 
 def test_what_the_review_said_is_settled_is_no_longer_called_an_interpretation():
     unresolved = {c.what for c in by_basis(Basis.UNRESOLVED_INTERPRETATION)}
+    # the amenities share is settled by G.O.Ms.No.7 of 2016's text, read in full on 2026-10-13
     for settled in ("front included", "net plot line", "4,000", "least of the 9 to 18 m",
-                    "takes its access from an internal road", "What counts as parking"):
+                    "takes its access from an internal road", "What counts as parking",
+                    "amenities (club house) area"):
         assert not any(settled in what for what in unresolved), settled
     for still_open in ("counts the stilt", "The site area the 10% is taken of",
-                       "different heights", "amenities (club house) area",
+                       "different heights",
                        "9 m turning radius", "extra cellar setback",
                        "road or a fire lane may run inside a water buffer"):
         assert any(still_open in what for what in unresolved), still_open

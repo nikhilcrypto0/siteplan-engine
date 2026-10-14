@@ -56,7 +56,8 @@ from siteplan.legal.resolve import AIRPORT_CLAUSE, resolve, rules_digest
 TEST_CLASS = "normative"
 PLOT = box(0, 0, 150, 120)  # 18,000 m²: a group development scheme, a high-rise plot
 OPEN_EVERY_WAY = {STILT_IN_RULE_HEIGHT, OPEN_SPACE_BASIS, CIRCULATION_IN_SETBACK, TOT_LOT_SURFACE,
-                  OPEN_SPACE_OTHER_USES, NBC_FIRE_HEIGHT, OPENS_ONTO_ROAD}
+                  OPEN_SPACE_OTHER_USES, NBC_FIRE_HEIGHT, OPENS_ONTO_ROAD,
+                  "table_v_row_4"}  # 2026-10-13: which edition of Table V row 4 is in force
 
 
 def _keys(node) -> set[str]:
@@ -126,8 +127,9 @@ def test_the_required_readings_are_carried_and_the_seven_open_ones_are_all(name)
         assert rules.readings(open_reading) == list(reading.alternatives)
     for reading in rules.interpretations:
         assert len(reading.alternatives) >= 2 and reading.sources and reading.settles
-        if reading.selected != ALL:
-            assert reading.status is Provenance.ASSUMED_FOR_TEST, reading.id
+        if reading.selected != ALL:  # a selection is a test's, unless an order's text settles it
+            assert reading.status is (Provenance.VERIFIED if reading.basis is Basis.LEGAL_RULE
+                                      else Provenance.ASSUMED_FOR_TEST), reading.id
     # the rest carry a reading
     assert {i.id for i in rules.interpretations if i.selected == ALL} == OPEN_EVERY_WAY
 
@@ -151,6 +153,7 @@ AUDITED_READINGS = {
     "Which wording of rule 7(a)(viii)'s 2 m planting strip applies": GREEN_STRIP_ORDER,
     "Which width of the access road Table IV reads": TABLE_IV_ROAD_WIDTH,
     "Whether visitors' parking may use a side or rear setback": VISITOR_PARKING_IN_SETBACK,
+    "Table V row 4 outside GHMC and CURE as G.O.Ms.No.143": "table_v_row_4",
 }
 
 
@@ -172,12 +175,16 @@ def test_a_rule_value_resting_on_an_open_reading_points_at_one():
     rules = resolve(load("rectangle", "CanonicalSiteModel"))
     resting = {path for path, value in _values(rules)
                if value.basis is Basis.UNRESOLVED_INTERPRETATION}
-    explained_by = {"amenities.share_of_built_up": AMENITY_SHARE,
-                    "height.stilt_raise_m": STILT_RAISE}
+    # the amenities share is the 2016 text as written since 2026-10-13: a ceiling, not a reading
+    explained_by = {"height.stilt_raise_m": STILT_RAISE,
+                    # the made-up sites are outside GHMC and CURE: the stricter edition of row 4
+                    "parking.share_pct": "table_v_row_4",
+                    "parking.share_pct_elsewhere_2024": "table_v_row_4"}
     assert resting == set(explained_by)
     assert set(explained_by.values()) <= {i.id for i in rules.interpretations}
     assert rules.amenities.share_interpretation == AMENITY_SHARE
     assert rules.height.raise_interpretation == STILT_RAISE
+    assert rules.parking.row_4_interpretation == "table_v_row_4"
 
 
 # --- Criterion 4, as unit tests: the road sets the height by Table IV -------------------------
@@ -383,7 +390,9 @@ def test_a_deduction_that_is_not_a_surrender_does_not_move_the_after_surrender_a
 
 
 @pytest.mark.parametrize(("authority", "cure", "status", "column", "share"), [
-    ("HMDA", False, "USER_CONFIRMED", TableVColumn.ELSEWHERE, 20.0),
+    # outside GHMC and CURE the stricter edition of row 4 is planned while it is open (G.O.144 of
+    # 2024 prints 30% or 25% there, the 2012 text 20%: 2026-10-13)
+    ("HMDA", False, "USER_CONFIRMED", TableVColumn.ELSEWHERE, 30.0),
     ("CMC", True, "USER_CONFIRMED", TableVColumn.GHMC_OR_CURE, 30.0),
     ("GHMC", None, "USER_CONFIRMED", TableVColumn.GHMC_OR_CURE, 30.0)])
 def test_a_settled_jurisdiction_takes_its_table_v_column(authority, cure, status, column, share):
@@ -393,6 +402,19 @@ def test_a_settled_jurisdiction_takes_its_table_v_column(authority, cure, status
     assert rules.parking.share_pct.value == share
     assert rules.parking.share_pct_by_column == {TableVColumn.GHMC_OR_CURE: 30.0,
                                                  TableVColumn.ELSEWHERE: 20.0}
+
+
+def test_outside_ghmc_and_cure_the_row_4_edition_is_open_and_the_stricter_is_planned():
+    site = make_site(PLOT, authority="HMDA", inside_cure=False,
+                     jurisdiction_status="USER_CONFIRMED")
+    rules = resolve(site)
+    row = rules.interpretation("table_v_row_4")
+    assert row.selected == ALL and set(row.alternatives) == {"edition_2012", "edition_2024"}
+    assert rules.parking.share_pct.value == 30.0
+    assert rules.parking.share_pct.basis is Basis.UNRESOLVED_INTERPRETATION
+    assert rules.parking.share_pct_elsewhere_2024.value == 30.0
+    chosen = resolve(site, selections={"table_v_row_4": "edition_2012"})
+    assert chosen.parking.share_pct.value == 20.0  # a project that selects the 2012 edition
 
 
 @pytest.mark.parametrize("site", [
@@ -521,6 +543,8 @@ def test_the_real_producer_agrees_with_the_p0_fixtures_on_what_consumers_read(na
     site = load(name, "CanonicalSiteModel")
     ours, theirs = resolve(site), load(name, "ResolvedRules")
     for reading in REQUIRED_INTERPRETATIONS:
+        if reading == AMENITY_SHARE:  # settled by the 2016 text since 2026-10-13; the stand-in
+            continue  # fixtures still select the 2012 minimum, which no consumer reads any more
         mine, fixture = ours.interpretation(reading), theirs.interpretation(reading)
         assert (mine.selected, set(mine.alternatives)) == (fixture.selected,
                                                            set(fixture.alternatives)), reading
@@ -537,6 +561,11 @@ def test_the_real_producer_agrees_with_the_p0_fixtures_on_what_consumers_read(na
     assert ours.height.high_rise.eligibility is theirs.height.high_rise.eligibility
     assert ours.open_space.qualifying_uses.value == theirs.open_space.qualifying_uses.value
     assert ours.jurisdiction.table_v_column == theirs.jurisdiction.table_v_column
-    assert ours.parking.share_pct.value == theirs.parking.share_pct.value
+    if ours.jurisdiction.table_v_column is TableVColumn.ELSEWHERE:  # 2026-10-13: row 4 open
+        assert ours.parking.share_pct.value == 30.0  # the stricter edition, planned
+        assert ours.parking.share_pct_by_column[TableVColumn.ELSEWHERE] == (
+            theirs.parking.share_pct.value)  # the 2012 figure, as the stand-in carries it
+    else:
+        assert ours.parking.share_pct.value == theirs.parking.share_pct.value
     assert ours.category.group_development.value == theirs.category.group_development.value
     assert ours.fire.dead_end_max_physical_m.value == theirs.fire.dead_end_max_physical_m.value

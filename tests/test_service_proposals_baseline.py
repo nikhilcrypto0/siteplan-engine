@@ -127,6 +127,13 @@ this project states no application date, so a block of 18 to 21 m would be CONDI
 the proposals moves, nor the four shown, the answer or the approval page; the candidates'
 digests move (they carry their report's notes).
 
+Re-pinned on 2026-10-13 a fifth time (phase 3): this HMDA site outside CURE now plans parking at
+the stricter edition of Table V row 4 (30%, where the 2012 text has 20%: the reading
+table_v_row_4), and the club house keeps no slack above its 3% (the 2016 ceiling). Maximum yield,
+balanced and robust are the same layouts; the open-space option is the same idea, 5 x S+3, 120
+flats, 163,800 sft, numbered `ALL-ALL-134` where it was `-136`; among those not shown `-115`, 5 x
+S+8 and 272 flats, takes `-116`'s place (256 flats). The approval page is the same.
+
 The values pin exact output on the locked dependencies (uv.lock). They move only with a normative
 replacement and an entry in docs/behaviour-changes.md.
 """
@@ -222,20 +229,20 @@ PINNED = {
         "full-ALL-allowed-213",
         "full-not_counted-ALL-79",
         "full-ALL-ALL-1",
-        "full-ALL-ALL-116",
+        "full-ALL-ALL-115",
         "full-ALL-allowed-165",
-        "full-ALL-ALL-136",
+        "full-ALL-ALL-134",
     ],
-    "proposed_sha256": "24638dcc1096865d2d53e3d6318d16a1517282c44f39d8a24406c31e57345ba0",
+    "proposed_sha256": "f5c1a5d878c6e9b2d1a0abf350f9e45c67586a84de78f6da857029b54bbd434e",
     "shown": [
         ["full-not_counted-allowed-218", "BALANCED"],
         ["full-not_counted-allowed-86", "MAX_YIELD"],
-        ["full-ALL-ALL-136", "CONVENTIONAL_OPEN_SPACE"],
+        ["full-ALL-ALL-134", "CONVENTIONAL_OPEN_SPACE"],
         ["full-ALL-ALL-1", "ROBUST"],
     ],
-    "shown_digests": ["59bfd170cd309c59", "a3eeb3757662223f",
-                      "a6008c451aa694f9", "a1c718a42f55740a"],
-    "answer_sha256": "e7db9a26024c560031fb170f011a5de4e6f6a9f11542657996950ce3ccd90d78",
+    "shown_digests": ["7553b768453c3625", "275fab1c4b11249a",
+                      "b514b685b7cc331d", "44abf7de5fada1c3"],
+    "answer_sha256": "ffcb56649dce3483a86669f8a63f285ada1b8a013a303d004dda378980e2e1ec",
     "approval_page_sha256": "2b9223fec60c0f2988b8ade6b34bb309ab94b2935c794437dad5a125cb6ce087",
 }
 PROPOSALS: list = []

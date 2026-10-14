@@ -21,10 +21,13 @@ from siteplan.contracts.common import Basis, FacilityUse, Provenance, digest
 from siteplan.contracts.resolved_rules import (
     ALL,
     COVERED_PARKING,
+    EDITION_2012,
+    EDITION_2024,
     GO7_2016,
     GO168_2012,
     GREEN_STRIP_ORDER,
     STILT_RAISE,
+    TABLE_V_ROW_4,
     Applicability,
     BandKind,
     Eligibility,
@@ -139,7 +142,8 @@ def resolve(site: CanonicalSiteModel, *, selections: dict[str, str] | None = Non
                                   unit="m"),
             "lt_clearance_m": _rv(rules.ELECTRICAL_LT_CLEARANCE_M, rules.ELECTRICAL_CLAUSE,
                                   unit="m")},
-        parking=_parking(column, column_status, when_open),
+        parking=_parking(column, column_status, when_open,
+                         (selections or {}).get(TABLE_V_ROW_4, ALL)),
         amenities=_amenities(),
         water={"buffer_m_by_class": _rv(dict(rules.WATER_BUFFER_M), rules.WATER_BUFFER_CLAUSE,
                                         unit="m")},
@@ -549,11 +553,22 @@ def _table_v_column(site: CanonicalSiteModel) -> tuple[TableVColumn, Provenance,
             f"{told}: the column for every other area")
 
 
-def _parking(column: TableVColumn, column_status: Provenance, when_open: WhenOpen) -> dict:
+def _parking(column: TableVColumn, column_status: Provenance, when_open: WhenOpen,
+             row_4: str) -> dict:
+    """Table V and the cellars. Outside GHMC and CURE the share planned is the stricter edition
+    of row 4 while which one is in force is open (table_v_row_4, 2026-10-13); the validator
+    judges both."""
     share_by_column = {TableVColumn.GHMC_OR_CURE: rules.PARKING_PERCENT_GHMC,
                        TableVColumn.ELSEWHERE: rules.PARKING_PERCENT_ELSEWHERE}
     clause = f"{rules.PARKING_CLAUSE}; {rules.CURE_RULES_CLAUSE}"
-    if column is not TableVColumn.OPEN:
+    if column is TableVColumn.ELSEWHERE and row_4 != EDITION_2012:
+        share = _rv(rules.PARKING_PERCENT_ELSEWHERE_2024,
+                    f"{rules.PARKING_2024_CLAUSE}; {rules.PARKING_CLAUSE}", unit="%",
+                    basis=Basis.UNRESOLVED_INTERPRETATION,
+                    status=weakest(Provenance.ASSUMED_FOR_TEST, column_status),
+                    note="the stricter edition of row 4, planned while which one is in force is "
+                         "open" if row_4 == ALL else f"the {row_4} reading of {TABLE_V_ROW_4}")
+    elif column is not TableVColumn.OPEN:
         share = _rv(share_by_column[column], clause, unit="%", status=column_status)
     elif when_open is WhenOpen.CONSERVATIVE:
         share = _rv(rules.PARKING_PERCENT_GHMC, clause, unit="%",
@@ -566,6 +581,12 @@ def _parking(column: TableVColumn, column_status: Provenance, when_open: WhenOpe
              for up_to, m in rules.CELLAR_SETBACK_BY_SITE_SQM]
     return {
         "share_pct_by_column": share_by_column, "share_pct": share,
+        "share_pct_elsewhere_2024": _rv(rules.PARKING_PERCENT_ELSEWHERE_2024,
+                                        rules.PARKING_2024_CLAUSE, unit="%",
+                                        basis=Basis.UNRESOLVED_INTERPRETATION,
+                                        status=Provenance.UNVERIFIED,
+                                        note=f"the {EDITION_2024} reading of {TABLE_V_ROW_4}"),
+        "row_4_interpretation": TABLE_V_ROW_4,
         "visitors_fraction": _rv(rules.VISITOR_PARKING_FRACTION, rules.VISITOR_PARKING_CLAUSE),
         "cellar_setback_by_site_sqm": _rv(table, rules.CELLAR_SETBACK_CLAUSE, unit="m"),
         "cellar_extra_setback_per_level_m": _rv(rules.CELLAR_EXTRA_SETBACK_PER_LEVEL_M,
@@ -587,11 +608,11 @@ def _parking(column: TableVColumn, column_status: Provenance, when_open: WhenOpe
 def _amenities() -> dict:
     return {
         "share_of_built_up": _rv(rules.AMENITY_MIN_BUILT_UP_FRACTION, rules.AMENITY_CLAUSE,
-                                 basis=Basis.UNRESOLVED_INTERPRETATION,
-                                 status=Provenance.ASSUMED_FOR_TEST,
-                                 note="the 2012 minimum, kept as the planning share"),
+                                 note="a ceiling: 'upto' the share, or the cap where lower (the "
+                                      "2016 wording, which substituted the 2012 minimum); the "
+                                      "firm's 3% club house is its program, in the brief"),
         "cap_sqft_2016": _rv(rules.AMENITY_CAP_SQFT_2016, rules.AMENITY_CLAUSE, unit="sft",
-                             note="the 2016 wording's cap: reported, never applied"),
+                             note="the cap where it is lower than the share: applied"),
         "from_units": _rv(rules.AMENITY_MIN_UNITS, rules.AMENITY_CLAUSE),
         "separate_block": _rv("not part of the residential blocks, unless there is a single "
                               "apartment block", rules.AMENITY_CLAUSE)}

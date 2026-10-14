@@ -373,9 +373,13 @@ def test_what_is_not_law_says_what_would_settle_it():
 
 def test_the_three_findings_the_review_named_are_not_presented_as_law():
     by_what = {c.what: c for c in REGISTRY}
+    # The amenities share was open until 2026-10-13, when the 2016 text was read in full: a
+    # ceiling with the cap, the law's; the 3% the firm plans its program, never the law.
     amenity = next(c for c in REGISTRY if "amenities (club house) area" in c.what)
-    assert amenity.basis is Basis.UNRESOLVED_INTERPRETATION
+    assert amenity.basis is Basis.LEGAL_RULE and "a ceiling" in amenity.value
     assert f"{rules.AMENITY_CAP_SQFT_2016:,.0f}" in amenity.value
+    program = next(c for c in REGISTRY if "the client requires" in c.what)
+    assert program.basis is Basis.FIRM_STANDARD and "3%" in program.value
     turn = next(c for c in REGISTRY if "Where the 9 m turning radius is measured" in c.what)
     assert turn.basis is Basis.UNRESOLVED_INTERPRETATION and "6.88" in turn.value
     bays = next(c for c in REGISTRY if "size of a parking bay" in c.what)
@@ -398,7 +402,7 @@ def test_open_items_are_the_readings_and_the_engines_own_assumptions():
     items = open_items()
     assert items and all(c.basis in (Basis.UNRESOLVED_INTERPRETATION,
                                      Basis.ENGINE_DESIGN_ASSUMPTION) for c in items)
-    assert any("3%" in c.value for c in items)  # the amenities share is open
+    assert not any("amenities" in c.what for c in items)  # settled by the 2016 text
 
 
 def test_the_command_prints_the_audit(capsys):

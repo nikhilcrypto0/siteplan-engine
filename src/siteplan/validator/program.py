@@ -71,10 +71,11 @@ def _units_check(brief: DesignBrief, counts: dict[str, int]) -> Check:
 
 
 def _club_check(brief: DesignBrief, candidate: CandidateLayout, units: int,
-                rules: ResolvedRules) -> Check:
+                rules: ResolvedRules, towers: tuple[TowerGeometry, ...]) -> Check:
     asked, club = brief.program.club_house, candidate.program.club_house
     wanted = asked.wanted.value
     provided = polygon_of(club.shape)[0].area * club.floors if club else 0.0
+    built_up = sum(t.built_up_sqm for t in towers) + provided  # the club house counted
     below = units < rules.amenities.from_units.value
     if wanted and club is None and asked.size is ClubSize.LEGAL_MINIMUM and below:
         return plain(Family.PROGRAM, "Club house", Status.PASS,
@@ -90,6 +91,9 @@ def _club_check(brief: DesignBrief, candidate: CandidateLayout, units: int,
         problems.append("none drawn")
     elif asked.size is ClubSize.STATED and provided + SIZE_SLACK_SQM < asked.sqm:
         problems.append(f"{provided:,.0f} m² of the {asked.sqm:,.0f} m² asked")
+    elif asked.size is ClubSize.SHARE and provided + SIZE_SLACK_SQM < asked.share * built_up:
+        problems.append(f"{provided:,.0f} m² ({provided / built_up:.2%} of built-up) of the "
+                        f"{asked.share:.0%} asked = {asked.share * built_up:,.0f} m²")
     elif asked.floors and club.floors != asked.floors:
         problems.append(f"{club.floors} floors, not {asked.floors}")
     return plain(Family.PROGRAM, "Club house", verdict(not problems),
@@ -192,7 +196,7 @@ def program_checks(brief: DesignBrief, candidate: CandidateLayout,
                    towers: tuple[TowerGeometry, ...], rules: ResolvedRules) -> list[Check]:
     counts = units_by_type(towers)
     out = [_mix_check(brief, counts), _units_check(brief, counts),
-           _club_check(brief, candidate, sum(counts.values()), rules)]
+           _club_check(brief, candidate, sum(counts.values()), rules, towers)]
     out += _amenity_checks(brief, candidate)
     height = _height_check(brief, towers)
     out += [height] if height else []

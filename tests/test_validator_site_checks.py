@@ -16,6 +16,7 @@ from validator_helpers import (
 from validator_low_helpers import unmodelled_below
 
 from siteplan.contracts.common import Status
+from siteplan.contracts.design_brief import ClubSize
 from siteplan.contracts.resolved_rules import ALL, AMENITY_SHARE, STILT_IN_RULE_HEIGHT
 
 TEST_CLASS = "normative"
@@ -32,11 +33,23 @@ def _club_scaled(factor):
     return edit
 
 
-def _share_open(inputs):
-    return inputs.with_rules(lambda r: setattr(r.interpretation(AMENITY_SHARE), "selected", ALL))
+def _firm_asks(share):
+    """The brief asking the club house the firm approves: a share of all the built-up area."""
+    def edit(brief):
+        brief.program.club_house = brief.program.club_house.model_copy(
+            update={"size": ClubSize.SHARE, "share": share})
+    return edit
+
+
+def _program_club(report):
+    return next(c for c in report.program if c.finding.rule == "Club house")
 
 
 # --- club house ------------------------------------------------------------------------------
+# Rule 15(a)(x) as G.O.Ms.No.7 of 2016 substituted it (read 2026-10-13): from 100 units an
+# amenities block 'shall be planned', 'upto 3% of the total built up area (or) 50,000 Sft.
+# whichever is lower', not part of the residential blocks. The made-up club house is exactly 3%
+# (the first test); scaled by f its area is f squared of that.
 
 
 def test_the_club_house_meets_three_percent_of_the_built_up_area_it_helps_make():
@@ -44,43 +57,37 @@ def test_the_club_house_meets_three_percent_of_the_built_up_area_it_helps_make()
     assert c.finding.status is Z.PASS and "3.00% of built-up" in c.finding.measured
 
 
-def test_a_club_house_under_the_planning_minimum_fails_where_that_reading_is_selected():
-    """The made-up rules select the 3% minimum without settling it (2026-10-13): judged under
-    both readings of amenity_share, the selection's FAIL kept beside the open result."""
-    c = check(fixture("rectangle").edited(_club_scaled(0.8)).report(), CLUB)
-    assert c.finding.status is Z.CONDITIONAL and c.selected_status is Z.FAIL
-    assert c.by_reading["amenity_share"]["minimum_3_percent"] is Z.FAIL
+def test_a_club_house_under_3_percent_is_lawful_and_short_of_the_firms_program():
+    smaller = fixture("rectangle").edited(_club_scaled(0.8))  # 0.64 x 3% = 1.92%
+    assert check(smaller.report(), CLUB).finding.status is Z.PASS  # under the ceiling
+    asked = smaller.with_brief(_firm_asks(0.03)).report()
+    assert check(asked, CLUB).finding.status is Z.PASS  # the law is unchanged by the brief
+    assert _program_club(asked).finding.status is Z.FAIL  # the program is not met
+    assert _program_club(fixture("rectangle").with_brief(_firm_asks(0.03)).report()
+                         ).finding.status is Z.PASS  # exactly 3%: met
 
 
-def test_a_club_house_of_exactly_3_percent_meets_both_wordings_of_the_clause():
-    c = check(_share_open(fixture("rectangle")).report(), CLUB)
-    assert c.finding.status is Z.PASS
-    assert c.by_reading[AMENITY_SHARE] == {"minimum_3_percent": Z.PASS,
-                                           "up_to_3_percent_or_cap": Z.PASS}
+def test_a_club_house_above_the_ceiling_fails_the_law_whatever_the_program():
+    larger = fixture("rectangle").edited(_club_scaled(1.3)).with_brief(_firm_asks(0.03))
+    report = larger.report()  # 1.69 x 3% of the towers': above 3% of all the built-up area
+    assert check(report, CLUB).finding.status is Z.FAIL
+    assert _program_club(report).finding.status is Z.PASS  # more than the firm asks
 
 
-def test_a_larger_club_house_meets_the_minimum_but_may_break_the_2016_ceiling():
-    inputs = _share_open(fixture("rectangle")).edited(_club_scaled(1.3))
-    c = check(inputs.report(), CLUB)
-    assert c.finding.status is Z.UNVERIFIED
-    assert c.by_reading[AMENITY_SHARE] == {"minimum_3_percent": Z.PASS,
-                                           "up_to_3_percent_or_cap": Z.FAIL}
-
-
-def test_a_smaller_club_house_meets_the_ceiling_but_not_the_minimum():
-    inputs = _share_open(fixture("rectangle")).edited(_club_scaled(0.8))
-    c = check(inputs.report(), CLUB)
-    assert c.finding.status is Z.UNVERIFIED
-    assert c.by_reading[AMENITY_SHARE] == {"minimum_3_percent": Z.FAIL,
-                                           "up_to_3_percent_or_cap": Z.PASS}
-
-
-def test_the_2016_cap_of_50000_sft_lowers_the_ceiling_where_it_is_the_lower():
+def test_the_50000_sft_cap_lowers_the_ceiling_where_it_is_the_lower():
     def small_cap(rules):
         rules.amenities.cap_sqft_2016.value = 5_000.0  # 465 m²: under 3% of this scheme
-    inputs = _share_open(fixture("rectangle")).with_rules(small_cap)
-    c = check(inputs.report(), CLUB)
-    assert c.by_reading[AMENITY_SHARE]["up_to_3_percent_or_cap"] is Z.FAIL
+    c = check(fixture("rectangle").with_rules(small_cap).report(), CLUB)
+    assert c.finding.status is Z.FAIL and "465 m²" in c.finding.required
+
+
+def test_the_2016_text_is_read_whatever_the_old_reading_selects():
+    smaller = fixture("rectangle").edited(_club_scaled(0.8))
+    for reading in ("minimum_3_percent", "up_to_3_percent_or_cap", ALL):
+        report = smaller.with_rules(
+            lambda r, x=reading: setattr(r.interpretation(AMENITY_SHARE), "selected", x)).report()
+        c = check(report, CLUB)
+        assert c.finding.status is Z.PASS and AMENITY_SHARE not in c.by_reading
 
 
 def test_the_clause_applies_only_from_100_units_and_the_units_are_counted_from_the_towers():
@@ -104,8 +111,8 @@ def test_a_scheme_of_100_units_or_more_with_no_club_house_fails():
     def none(candidate):
         candidate.program.club_house = None
     c = check(fixture("rectangle").edited(none).report(), CLUB)
-    assert c.finding.status is Z.CONDITIONAL and c.selected_status is Z.FAIL
-    assert c.by_reading["amenity_share"]["minimum_3_percent"] is Z.FAIL
+    assert c.finding.status is Z.FAIL  # 'shall be planned': a block is required from 100 units
+    assert c.finding.measured == "no amenities block drawn"
 
 
 # --- water -----------------------------------------------------------------------------------

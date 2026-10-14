@@ -67,7 +67,6 @@ from siteplan.optimizer.search import (
     strategy,
 )
 from siteplan.optimizer.search import fit as search_fit
-from siteplan.optimizer.search import ground as search_ground
 from siteplan.optimizer.search import land as search_land
 from siteplan.optimizer.search import layout as search_layout
 from siteplan.optimizer.search import raising as search_raising
@@ -859,20 +858,34 @@ REGISTRY: tuple[Constraint, ...] = (
     Constraint(
         "Amenities", "The amenities (club house) area as a share of the built-up area, the "
                      "block itself counted.",
-        f"{_pct(rules.AMENITY_MIN_BUILT_UP_FRACTION)} planned as a minimum, no cap applied; "
-        f"the 2016 wording's cap of {rules.AMENITY_CAP_SQFT_2016:,.0f} sft is reported only",
-        Basis.UNRESOLVED_INTERPRETATION, rules.AMENITY_CLAUSE,
+        f"an amenities block from {rules.AMENITY_MIN_UNITS} units, up to "
+        f"{_pct(rules.AMENITY_MIN_BUILT_UP_FRACTION)} of the built-up area or "
+        f"{rules.AMENITY_CAP_SQFT_2016:,.0f} sft, whichever is lower (a ceiling)",
+        Basis.LEGAL_RULE, rules.AMENITY_CLAUSE,
         ("rules.AMENITY_MIN_BUILT_UP_FRACTION", "rules.AMENITY_CAP_SQFT_2016",
          "grounds.AMENITY_SHARE"),
-        note="The 3% minimum is the 2012 wording, kept as the planning target and "
-             "ASSUMED_FOR_TEST. G.O.Ms.No.7 of 2016 rewrote the clause as 'upto 3% of the total "
-             "built up area (or) 50,000 Sft. whichever is lower', which may make 3% a ceiling "
-             "and adds a cap (it binds above about 1.67 million sft built-up). Not settled "
-             "law (the reading amenity_share, selected minimum_3_percent by default): under "
-             "the default the cap is never tested; only with the reading left open does the "
-             "checker report a block above the cap UNVERIFIED.",
-        settles="The amenities area on a sanctioned plan of 100 units or more against its "
-                "built-up area, or the architect's reading of the 2016 wording.",
+        note="G.O.Ms.No.7 of 2016, Amendment 15, read from its text on 2026-10-13, substituted "
+             "the 2012 minimum: 'upto 3% of the total built up area (or) 50,000 Sft. whichever "
+             "is lower shall be planned and developed for common amenities'. The validator and "
+             "the full search hold the block to that ceiling, and require one from 100 units "
+             "(the reading amenity_share is carried settled on the 2016 text). The 3% club "
+             "house the firm plans is its program, a client requirement in the brief "
+             "(layout.APPROVED_CLUB_SHARE), never the law. The legacy layout (grounds) still "
+             "plans 3% as a minimum.",
+        settles="Settled by the order's text; a sanctioned plan of 100 units or more shows how "
+                "the authority applies the cap.",
+    ),
+    Constraint(
+        "Amenities", "The club house's share of all the built-up area the client requires (the "
+                     "club house counted), a program requirement.",
+        f"{_pct(_lr['club_house_share'].default)}", Basis.FIRM_STANDARD,
+        "the firm's program, approved by the architect (layout.LayoutRequest.club_house_share; "
+        "the brief's club house, size SHARE)",
+        ("layout.APPROVED_CLUB_SHARE", "layout.LayoutRequest.club_house_share"),
+        note="The architect approved 3% for the firm's schemes (2026-10-13). The program check "
+             "holds a layout to it (NOT MET when short, never a legal FAIL); the full search "
+             "lays it and never above the law's ceiling.",
+        settles="The firm's own program for each scheme.",
     ),
     Constraint(
         "Amenities", "The club house footprint's proportion, and its storeys, when the firm "
@@ -917,6 +930,24 @@ REGISTRY: tuple[Constraint, ...] = (
         f"{rules.PARKING_PERCENT_ELSEWHERE:g}% elsewhere", Basis.LEGAL_RULE,
         f"{rules.PARKING_CLAUSE}; {rules.CURE_RULES_CLAUSE}",
         ("rules.PARKING_PERCENT_GHMC", "rules.PARKING_PERCENT_ELSEWHERE"),
+        note="The 2012 figures; outside GHMC and CURE which edition of row 4 is in force is the "
+             "reading table_v_row_4 (the next row).",
+    ),
+    Constraint(
+        "Parking", "Table V row 4 outside GHMC and CURE as G.O.Ms.No.143 and No.144 of 2024 "
+                   "print it (the reading table_v_row_4, the 2024 edition).",
+        f"{rules.PARKING_PERCENT_ELSEWHERE_2024:g}%, the stricter of the printed 30% and 25%",
+        Basis.UNRESOLVED_INTERPRETATION, rules.PARKING_2024_CLAUSE,
+        ("rules.PARKING_PERCENT_ELSEWHERE_2024",),
+        note="Read on the page image of G.O.144 p.2 (2026-10-13): 30 | 30 | 30 | 25 | 25 | 25 "
+             "where the 2012 text has 30 | 20 | 20 | 20 | 20 | 20. The orders' operative words "
+             "only add row 5, and no order held amends row 4 in between, so which edition is in "
+             "force is open: the validator judges both (CONDITIONAL between them) and the search "
+             "plans the stricter. The engine has one column outside GHMC and CURE, so the 2024 "
+             "edition is held at its stricter figure. Neither client site is affected (both "
+             "inside CURE, 30% either way).",
+        settles="DTCP's or the authority's word on the edition in force, or the amendment that "
+                "changed the row.",
     ),
     Constraint(
         "Parking", "Conservative test mode: when whose rules apply is not established and it "
@@ -1543,12 +1574,12 @@ REGISTRY: tuple[Constraint, ...] = (
     Constraint(
         "Tolerances", "What the full search keeps in hand above what it is asked, so rounding "
                       "never leaves a layout short.",
-        f"claims {_share(build.OPEN_SPACE_CLAIM)} of the open space drawn; the club house "
-        f"{search_ground.CLUB_SIZE_SLACK_SQM:g} m² over its share; parking "
+        f"claims {_share(build.OPEN_SPACE_CLAIM)} of the open space drawn; parking "
         f"{parking_plan.SAFETY_SQM:g} m² over the need", Basis.ENGINE_DESIGN_ASSUMPTION,
-        "none (optimizer.search.build, optimizer.search.ground, optimizer.search.parking_plan)",
-        ("optimizer.search.build.OPEN_SPACE_CLAIM", "optimizer.search.ground.CLUB_SIZE_SLACK_SQM",
-         "optimizer.search.parking_plan.SAFETY_SQM"),
+        "none (optimizer.search.build, optimizer.search.parking_plan)",
+        ("optimizer.search.build.OPEN_SPACE_CLAIM", "optimizer.search.parking_plan.SAFETY_SQM"),
+        note="The club house keeps no slack (2026-10-13): its size is the share the brief asks "
+             "and never above rule 15(a)(x)'s ceiling, so nothing is kept in hand over it.",
         settles="Nothing that passes a layout: the validator measures each one again.",
     ),
     Constraint(

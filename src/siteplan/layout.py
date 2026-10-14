@@ -80,6 +80,7 @@ def fits_strategy(towers, cores: int | None, length_m: float | None) -> bool:
     floor = CONVENTIONAL_MAX_CORES + 1 if cores > CONVENTIONAL_MAX_CORES else cores
     return floor <= most <= cores
 SAME_IDEA_OVERLAP = 0.5  # two layouts sharing this much tower ground are one idea
+APPROVED_CLUB_SHARE = 0.03  # the club house the architect approved for the firm's schemes
 ANGLE_FAMILY_DEG = 10.0  # towers running within this of each other run the same way
 
 
@@ -113,6 +114,12 @@ class LayoutRequest(BaseModel):
     club_house_floors: PositiveInt = Field(
         2, description="Storeys in the amenities block; it needs a footprint of a fraction"
     )
+    club_house_share: float | None = Field(
+        APPROVED_CLUB_SHARE, gt=0, lt=1, description="The share of all the built-up area the "
+        "club house is to take, the club house counted: the architect-approved 3% (2026-10-13), "
+        "a program requirement of the client's, never law (the law sets only a ceiling, rule "
+        "15(a)(x) as G.O.Ms.No.7 of 2016 substituted it). Read by the contract pipeline; "
+        "club_house_sqm, when given, is asked instead")
     amenities_wanted: list[str] = Field(
         default_factory=list, description="The facilities of the firm's amenity file this "
         "project asks for, by name; one the file marks REQUIRED is laid anyway, and nothing "

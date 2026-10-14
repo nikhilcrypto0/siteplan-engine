@@ -16,9 +16,10 @@ from siteplan import rules as law
 from siteplan.contracts import CanonicalSiteModel, DesignBrief, ResolvedRules
 from siteplan.contracts.design_brief import DesignMargins
 from siteplan.contracts.resolved_rules import (
-    AMENITY_SHARE,
+    EDITION_2024,
     FIRE_TURNING_RADIUS,
     OPEN_SPACE_BASIS,
+    TABLE_V_ROW_4,
     TableVColumn,
 )
 from siteplan.units import sqft_to_sqm
@@ -43,7 +44,6 @@ class Quantities:
     club_share: float
     club_cap_sqm: float | None
     club_from_units: int
-    club_shares_read: tuple[str, ...]
     gap_margin_m: float
     setback_margin_m: float
     parking_margin: float
@@ -102,7 +102,6 @@ def quantities(site: CanonicalSiteModel, rules: ResolvedRules, brief: DesignBrie
         club_share=rules.amenities.share_of_built_up.value,
         club_cap_sqm=sqft_to_sqm(cap) if cap else None,
         club_from_units=rules.amenities.from_units.value,
-        club_shares_read=tuple(rules.readings(AMENITY_SHARE)),
         gap_margin_m=margins.tower_gap_extra_m.value,
         setback_margin_m=margins.setback_extra_m.value,
         parking_margin=margins.parking_extra_fraction.value,
@@ -172,4 +171,10 @@ def table_v_shares(site: CanonicalSiteModel, rules: ResolvedRules) -> list[float
     carried = {p.share_pct.value} if p.share_pct is not None else set(by_column.values())
     j = site.jurisdiction
     allowed = law.parking_columns(j.authority.value, j.inside_cure.value)
-    return sorted(carried | {pct for pct in by_column.values() if pct in allowed})
+    shares = carried | {pct for pct in by_column.values() if pct in allowed}
+    # outside GHMC and CURE the 2024 edition of row 4 too, while the rules leave it possible
+    elsewhere = by_column.get(TableVColumn.ELSEWHERE)
+    if (p.share_pct_elsewhere_2024 is not None and elsewhere in shares
+            and EDITION_2024 in rules.readings(p.row_4_interpretation or TABLE_V_ROW_4)):
+        shares.add(p.share_pct_elsewhere_2024.value)
+    return sorted(shares)

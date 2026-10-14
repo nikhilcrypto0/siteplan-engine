@@ -24,6 +24,8 @@ from siteplan.contracts.resolved_rules import (
     APPROACH_WIDTH,
     CIRCULATION_IN_SETBACK,
     COVERED_PARKING,
+    EDITION_2012,
+    EDITION_2024,
     FIRE_BAND,
     FIRE_TURNING_RADIUS,
     GO7_2016,
@@ -38,6 +40,7 @@ from siteplan.contracts.resolved_rules import (
     PLINTH,
     STILT_IN_RULE_HEIGHT,
     STILT_RAISE,
+    TABLE_V_ROW_4,
     TOT_LOT_SURFACE,
     VISITOR_PARKING,
 )
@@ -49,6 +52,10 @@ CELLAR_EXTRA_SETBACK = "cellar_extra_setback"
 TABLE_IV_ROAD_WIDTH = "table_iv_road_width"  # carried only when a master-plan width is known
 NAMED_USES = "'greenery, tot lot or soft landscaping, etc.'"
 SELECTED_BY_PROFILE = "selected by a test profile"  # the marker an answer later replaces
+AMENITY_2016_READ = (
+    "G.O.Ms.No.7 of 2016, Amendment 15 (pp.4-5), read from its text on 2026-10-13: 'upto 3% of "
+    "the total built up area (or) 50,000 Sft. whichever is lower shall be planned and developed "
+    "for common amenities'")
 
 # The three denominators of the organised open space: ResolvedRules gives the area under each.
 OPEN_SPACE_READINGS = ("gross_before_surrender", "gross_after_surrender", "net_after_surrender")
@@ -57,7 +64,8 @@ OPEN_SPACE_READINGS = ("gross_before_surrender", "gross_after_surrender", "net_a
 def _reading(reading_id: str, question: str, alternatives: dict[str, str], selected: str, *,
              sources: list[str], settles: str,
              basis: Basis = Basis.UNRESOLVED_INTERPRETATION) -> dict:
-    status = Provenance.UNVERIFIED if selected == ALL else Provenance.ASSUMED_FOR_TEST
+    status = (Provenance.VERIFIED if basis is Basis.LEGAL_RULE  # settled by the order's text
+              else Provenance.UNVERIFIED if selected == ALL else Provenance.ASSUMED_FOR_TEST)
     return {"id": reading_id, "question": question, "alternatives": alternatives,
             "selected": selected, "basis": basis, "status": status, "sources": sources,
             "settles": settles}
@@ -188,14 +196,27 @@ def _defaults(master_plan_road: bool) -> list[dict]:
             AMENITY_SHARE,
             "Is the amenities share of the built-up area a minimum, or an upper figure with a "
             "cap?",
-            {"minimum_3_percent": "at least the share, the 2012 wording kept as the planning "
-                                  "minimum",
+            {"minimum_3_percent": "at least the share: the 2012 wording, substituted in "
+                                  "2016",
              "up_to_3_percent_or_cap": "up to the share or the capped area, whichever is "
                                        "lower (the 2016 wording)"},
-            "minimum_3_percent",
-            sources=[rules.AMENITY_CLAUSE],
-            settles="the amenities area on a sanctioned plan of 100 units or more, against its "
-                    "built-up area, or the architect's reading of the 2016 wording"),
+            "up_to_3_percent_or_cap",
+            sources=[rules.AMENITY_CLAUSE, AMENITY_2016_READ],
+            settles="settled by the 2016 text as written (2026-10-13); the 3% club house the "
+                    "firm plans is its program, carried in the brief, never the law",
+            basis=Basis.LEGAL_RULE),
+        _reading(
+            TABLE_V_ROW_4,
+            "Which edition of Table V row 4 (residential parking) is in force outside GHMC and "
+            "CURE?",
+            {EDITION_2012: f"the 2012 text: {rules.PARKING_PERCENT_ELSEWHERE:g}% outside GHMC",
+             EDITION_2024: "as G.O.Ms.No.143 and No.144 of 2024 print it: 30% or 25% by the "
+                           "body, held at the stricter "
+                           f"{rules.PARKING_PERCENT_ELSEWHERE_2024:g}% (one column here)"},
+            ALL,
+            sources=[rules.PARKING_CLAUSE, rules.PARKING_2024_CLAUSE],
+            settles="DTCP's or the authority's word on which edition is in force, or the "
+                    "amendment between 2012 and 2024 that changed the row"),
         _reading(
             VISITOR_PARKING_IN_SETBACK,
             "May visitors' parking use a side or rear setback?",

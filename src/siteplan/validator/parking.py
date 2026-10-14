@@ -21,7 +21,9 @@ import shapely
 from siteplan import rules as law
 from siteplan.contracts.common import Status
 from siteplan.contracts.resolved_rules import (
+    EDITION_2024,
     STILT_IN_RULE_HEIGHT,
+    TABLE_V_ROW_4,
     VISITOR_PARKING,
     ResolvedRules,
     TableVColumn,
@@ -86,14 +88,36 @@ def table_v_columns(ctx: Context) -> dict[str, float]:
     """Each Table V share the site could take: the one the rules settled on, or both, and any
     column the site's own jurisdiction allows that the rules left out."""
     p = ctx.rules.parking
+    by_name = {c.value: pct for c, pct in p.share_pct_by_column.items()}
     if p.share_pct is not None:
-        carried = {ctx.rules.jurisdiction.table_v_column.value: p.share_pct.value}
+        column = ctx.rules.jurisdiction.table_v_column.value
+        # outside GHMC and CURE, where the rules carry the 2024 edition as a reading, the share
+        # planned is the stricter edition: the column's own 2012 figure is the other reading
+        both = p.share_pct_elsewhere_2024 is not None and column == TableVColumn.ELSEWHERE.value
+        carried = {column: by_name[column] if both else p.share_pct.value}
     else:
         carried = {c.value: pct for c, pct in p.share_pct_by_column.items()
                    if c is not TableVColumn.OPEN}
-    by_name = {c.value: pct for c, pct in p.share_pct_by_column.items()}
     return {**carried, **{name: by_name[name] for name in site_columns(ctx)
                           if name in by_name and name not in carried}}
+
+
+def row_4_ids(ctx: Context, columns: dict[str, float]) -> list[str]:
+    """The reading of which edition of Table V row 4 is in force, where it can matter: the rules
+    carry the 2024 figure and the column outside GHMC and CURE is evaluated (2026-10-13)."""
+    p = ctx.rules.parking
+    if p.share_pct_elsewhere_2024 is None or TableVColumn.ELSEWHERE.value not in columns:
+        return []
+    return [p.row_4_interpretation or TABLE_V_ROW_4]
+
+
+def share_under(ctx: Context, columns: dict[str, float], a: Assignment) -> float:
+    """The Table V share under one assignment: the column's 2012 figure, or outside GHMC and CURE
+    the 2024 edition's where that is the reading."""
+    column = a[TABLE_V_COLUMN]
+    if column == TableVColumn.ELSEWHERE.value and a.get(TABLE_V_ROW_4) == EDITION_2024:
+        return ctx.rules.parking.share_pct_elsewhere_2024.value
+    return columns[column]
 
 
 def table_v_agreement(ctx: Context) -> Check | None:
@@ -291,7 +315,7 @@ def table_v_check(ctx: Context, ground: Ground, f: Floors) -> Check:
     surfaces = {r: surface_bays(ctx, ground, r) for r in ctx.stilt_readings}
 
     def cell(a: Assignment) -> Cell:
-        pct = columns[a[TABLE_V_COLUMN]]
+        pct = share_under(ctx, columns, a)
         need = pct / 100 * f.built_up_sqm
         floor, laid_out, cars = _provision(f, surfaces[a[STILT_IN_RULE_HEIGHT]].valid, bay_sqm)
         parts = [f"stilt {f.stilt_sqm:,.0f} m²",
@@ -324,7 +348,7 @@ def table_v_check(ctx: Context, ground: Ground, f: Floors) -> Check:
                     (measurement("the cellar plan", "not drawn"),))
 
     return check_from(
-        run(ctx.rules, [STILT_IN_RULE_HEIGHT, TABLE_V_COLUMN], cell,
+        run(ctx.rules, [STILT_IN_RULE_HEIGHT, TABLE_V_COLUMN, *row_4_ids(ctx, columns)], cell,
             extra={TABLE_V_COLUMN: list(columns)}),
         family=Family.PARKING, rule="Parking (Table V)", clause=_clause(ctx),
         note="" if len(columns) == 1 else "Whose rules apply is not established: both Table V "
@@ -341,7 +365,7 @@ def visitors_check(ctx: Context, ground: Ground, f: Floors) -> Check:
         reading = a[VISITOR_PARKING]
         if reading not in (AT_GROUND, ANYWHERE):
             return unknown_reading(VISITOR_PARKING, reading)
-        need = fraction * columns[a[TABLE_V_COLUMN]] / 100 * f.built_up_sqm
+        need = fraction * share_under(ctx, columns, a) / 100 * f.built_up_sqm
         surface_sqm = surfaces[a[STILT_IN_RULE_HEIGHT]] * bay[0] * bay[1]
         ground_sqm = f.stilt_sqm + surface_sqm
         counted = ground_sqm if reading == AT_GROUND else ground_sqm + f.cellar_sqm
@@ -354,7 +378,8 @@ def visitors_check(ctx: Context, ground: Ground, f: Floors) -> Check:
                     (measurement("the cellar plan", "not drawn"),))
 
     return check_from(
-        run(ctx.rules, [STILT_IN_RULE_HEIGHT, VISITOR_PARKING, TABLE_V_COLUMN], cell,
+        run(ctx.rules, [STILT_IN_RULE_HEIGHT, VISITOR_PARKING, TABLE_V_COLUMN,
+                        *row_4_ids(ctx, columns)], cell,
             extra={TABLE_V_COLUMN: list(columns)}),
         family=Family.PARKING, rule="Visitors' parking",
         clause=ctx.rules.parking.visitors_fraction.clause)
@@ -480,6 +505,10 @@ def parking_checks(ctx: Context, ground: Ground) -> tuple[list[Check], dict[str,
                   "parking_cellar_levels": float(f.cellar_levels),
                   "parking_cellar_sqm_per_level": f.cellar_sqm_per_level,
                   "parking_cellar_cars": float(f.cellar_cars)}
-    for column, pct in table_v_columns(ctx).items():
+    columns = table_v_columns(ctx)
+    for column, pct in columns.items():
         quantities[f"parking_required_sqm[{column}]"] = pct / 100 * f.built_up_sqm
+    if row_4_ids(ctx, columns):
+        quantities[f"parking_required_sqm[{TableVColumn.ELSEWHERE.value}, {EDITION_2024}]"] = (
+            ctx.rules.parking.share_pct_elsewhere_2024.value / 100 * f.built_up_sqm)
     return out, quantities

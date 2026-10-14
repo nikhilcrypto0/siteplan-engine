@@ -970,6 +970,19 @@ INVENTORY: tuple[Entry, ...] = (
                "Qutbullapur zone).",
     ),
     Entry(
+        "Parking", "Table V row 4 outside GHMC and CURE, as the 2024 orders print it.",
+        f"{rules.PARKING_PERCENT_ELSEWHERE_2024:g}% (the stricter of their 30% and 25%)",
+        rules.PARKING_2024_CLAUSE, Reading.INTERPRETED, (Where.RESOLVER,),
+        ("PARKING_PERCENT_ELSEWHERE_2024", "PARKING_2024_CLAUSE"),
+        choice="G.O.Ms.No.143 and No.144 of 24.09.2024 print row 4 as 30 | 30 | 30 | 25 | 25 | "
+               "25 while their operative words only add row 5; the 2012 text has 30 | 20. Which "
+               "edition is in force is the open reading table_v_row_4: the resolver plans the "
+               "stricter, the validator judges both. The legacy checker and layout keep the 2012 "
+               "figures.",
+        settles="DTCP's or the authority's word on the edition in force, or the amendment that "
+                "changed the row.",
+    ),
+    Entry(
         "Parking", "Visitors' parking, marked on the ground.",
         f"at least {rules.VISITOR_PARKING_FRACTION:.0%} of the Table V area",
         rules.VISITOR_PARKING_CLAUSE, Reading.INTERPRETED, (Where.CHECKER,),
@@ -1070,21 +1083,21 @@ INVENTORY: tuple[Entry, ...] = (
     # Amenities
     Entry(
         "Amenities", "From 100 units, common amenities in a block of their own.",
-        f"{rules.AMENITY_MIN_BUILT_UP_FRACTION:.0%} of the built-up area planned as a minimum "
-        f"(ASSUMED_FOR_TEST), from {rules.AMENITY_MIN_UNITS} units; the 2016 cap of "
-        f"{rules.AMENITY_CAP_SQFT_2016:,.0f} sft reported, not applied",
-        rules.AMENITY_CLAUSE, Reading.INTERPRETED, _BOTH,
+        f"an amenities block from {rules.AMENITY_MIN_UNITS} units, up to "
+        f"{rules.AMENITY_MIN_BUILT_UP_FRACTION:.0%} of the built-up area or "
+        f"{rules.AMENITY_CAP_SQFT_2016:,.0f} sft, whichever is lower",
+        rules.AMENITY_CLAUSE, Reading.AS_WRITTEN, (*_BOTH, Where.RESOLVER),
         ("AMENITY_MIN_BUILT_UP_FRACTION", "AMENITY_MIN_UNITS", "AMENITY_CAP_SQFT_2016",
          "AMENITY_CLAUSE"),
-        choice="UNRESOLVED_INTERPRETATION, not settled law. Planned and checked as a minimum of "
-               "3% with no cap, which is the 2012 wording, so the test is conservative. Since "
-               "2016 the rule reads 'upto 3% ... (or) 50,000 Sft. whichever is lower': that "
-               "adds a cap (it binds above about 1.67 million sft built-up) and may make 3% a "
-               "ceiling rather than a floor. Under the default reading (amenity_share = "
-               "minimum_3_percent) the cap is never tested; only when the reading is left open "
-               "(ALL) does the checker test it, reporting a block above the cap UNVERIFIED.",
-        settles="The amenities area on a sanctioned plan of 100 units or more, against its "
-                "built-up area.",
+        choice="G.O.Ms.No.7 of 2016, Amendment 15, read from its text on 2026-10-13: 'upto 3% "
+               "of the total built up area (or) 50,000 Sft. whichever is lower shall be planned "
+               "and developed for common amenities'. The resolver and the validator apply it as "
+               "written: a block is required from 100 units, no larger than the ceiling, apart "
+               "from the residential blocks. The 3% the firm plans is its program (the brief), "
+               "never the law. The legacy checker and layout still plan and check 3% as a "
+               "minimum (the 2012 wording).",
+        settles="Settled by the order's text; a sanctioned plan of 100 units or more shows how "
+                "the authority applies the cap.",
     ),
     Entry(
         "Amenities", "In a very large project, common amenities take a share of the site area.",

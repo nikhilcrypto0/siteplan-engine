@@ -973,6 +973,18 @@
         "ramp_single_min_m": {
           "$ref": "#/$defs/RuleValue_float_"
         },
+        "row_4_interpretation": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Row 4 Interpretation"
+        },
         "share_pct": {
           "anyOf": [
             {
@@ -992,6 +1004,17 @@
           },
           "title": "Share Pct By Column",
           "type": "object"
+        },
+        "share_pct_elsewhere_2024": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RuleValue_float_"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "utilities_max_fraction": {
           "$ref": "#/$defs/RuleValue_float_"
