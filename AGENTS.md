@@ -2,94 +2,823 @@
 
 > Last verified: 2026-10-12
 
-An offline "survey to site plan" assistant for a Hyderabad architecture firm (agency client). It reads a surveyor's drawing, checks a proposal against Telangana building rules, prints the firm's area statement, and writes DXF using BuildNow plugin layer names. It is client-facing software: tests, lint and review apply.
+An offline "survey to site plan" assistant for a Hyderabad architecture firm (agency client). It
+reads a surveyor's drawing, checks a proposal against Telangana building rules, prints the firm's
+area statement, and writes DXF using BuildNow plugin layer names. It is client-facing software:
+tests, lint and review apply.
 
 ## Architecture
 
-The permanent pipeline and its plan are in `docs/ARCHITECTURE.md`: raw survey → CanonicalSiteModel → ResolvedRules → BuildableEnvelope → TowerPrototype → optimizer → CandidateLayout → independent ValidationReport → (later) LLM strategy → CAD/report, with DesignBrief carrying the architect's program and PartitionLedger / RuleLayers the two kinds of area accounting. The contracts are code in `src/siteplan/contracts/` (authoritative); `docs/contracts/*.schema.json` is generated from them. `src/siteplan/adapters/` converts the prototype's Project, LayoutRequest and LayoutOption to the contracts and back without changing a number, so the prototype keeps working while stages move over. Prototype version tagged `v0.9-prototype` (1af547a). Wave 1 stages, on contracts 1.1: `legal/` (ResolvedRules and the BuildableEnvelope), `prototypes/` (the tower prototype kit), `optimizer/` (floors from metres, the guard, Pareto alternatives, today's generator as the LEGACY strategy) and `validator/` (the independent ValidationReport, the optimizer's guard; it imports no generator module). Wave 2, on contracts 1.2: Table III below 21 m in `legal/` (A2), the validator's checks for blocks below 21 m (D2), and the full search in `optimizer/search/` (C2: strategy FULL beside LEGACY, the blocks placed first and the circulation drawn from them). C3: a floor count below 21 m is offered on its own band's permission (`optimizer/floors.py`: ALLOWED, or UNVERIFIED and labelled so; never PROHIBITED, never a band with no setback), and the full search places such blocks wherever their band's land allows, in the columns and on the ground the ring road leaves (`optimizer/search/fringe.py`), each served by a road or, up to 12 m, a rule 8(l) pathway; it searches every profile with them and without, and says for each narrow part of the plot whether one fits there and whether the layouts proposed use it. LEGACY still lays out high-rise counts only. C4-01: the full search draws every road from a centre-line graph (`optimizer/search/road_graph.py`: entrances, junctions and the blocks pathways serve as nodes, each road's centre line as edges, the pavement the line widened), and refuses a layout whose roads are not one network or stop with nowhere to go; the validator measures the pavement as before. C4-02: every configuration is also tried with further clusters on the ground the first leaves, each round its own ring road and joined by a link road (or where the rings meet), up to three (`Config.more_clusters`). C4-03: a further cluster is also tried in its own ground's directions (`layout.zone_angles`), its blocks carrying their own frame (`Standing.frame`). C4-04: where the kit has blocks of more than one depth, every configuration is also tried with columns of each depth (`Config.mixed_depths`), laid out after all of the others with quotas of their own. C4-05: the fringe tries every kind of block in turn (a smaller or lower one where a larger has no room) and is laid in the plot's own directions as well as the configuration's (`fringe.FRINGE_DIRECTIONS`), the most valuable kept. C4-06: a floor count is dropped only behind a taller one alike in everything it asks and rests on (`readings.resources`), and the profile built for every reading takes no block below 21 m that NBC's own 15 m line holds to 4.6's fire access, so its layouts hold under both lines. C4-07: the club house stands where its own band allows and turns to the plot's directions, the program is laid again with the ramp first or the club house off the open space when the first order finds no room, the fringe draws no pathway over NBC's 30 m, the parking plan counts only the stilts a car can drive into (as the validator does), and the search repairs the layouts it laid (`FullSearchStrategy._improve`: the fringe keeping no room for the program, a block given up at a time until the exact half lays it out). C4-08: constraints come in three classes, the law's (never traded), the program's (what the brief requires: a facility REQUIRED and not placed fails the program) and preferences (a facility PREFERRED, which a library that says nothing gives, or OPTIONAL: said, never a failure); the generator lays required facilities first. C4-09: each profile's judged layouts are its front and different ideas before copies (`strategy._to_judge`), and a fourth alternative, ROBUST (`ParetoPoint.ROBUST`), shows the layout that rests on the fewest open readings, the most saleable between equals. C4-10: the facilities are laid in the order (the firm's, its rotations, the largest first, within the classes) that places the most. C4-11: the objective also scores site use (1 less the share of the plot no use takes and no rule keeps open) and the quality of a scheme (little road, blocks repeated and running one way, each facing a road or pathway along 6 m, few leftover pieces), reads its areas to 0.01 m², breaks a point's ties by site use, and each profile judges the best of its front for each point first (`pareto.leaders`). C4-12: the open space is taken where it is usable, at least 12 m across and within 30 m of a block (`objective.usable_open_sqm`), the most usable pockets first, and the open-space axis scores that part. C4-13: a cellar is dug only as far as the need takes it: once the fewest levels are known, a rectangle square to the turn grown round its ramp, the piece of the plot under the setback that the ramp reaches and that holds the need by floor area and by cars laid out, the same on every level (`parking_plan._sized`); the cellar setback a candidate reports is the rule's band. C4-14: the approach keeps off the end a configuration keeps for the open space when it can, and crosses it, a road through the park, when that end lies across every way in, so no configuration is lost to it. C4-15: the validator sweeps the tender's turn at every road junction too (the approach, a street or a link meeting the loop; not the gate, a slit's tip or a jog shorter than a lane), and the generator keeps its program and its approach clear of those turns. C4-16: the objective scores the brief's soft preferences (orientation, max_towers, keep_away_from_road, club_near_entrance; `optimizer/preferences.py`) as an eighth axis, 1 for every layout when none is given; a preference is never a rule, and one not understood is named in the search's notes. 2026-10-12: a project may pin the entrance (`Access.gate`, `SiteIn.gate_m`; `legal/frontage.access_zones` then gives that stretch alone, so no layout moves the gate); the club house is tried nearest the gate and nearest the far corner of the open ground, the furnishing with the more usable open space kept (`layout._furnish_where_best`); a street paved wider than the rule's declares its own width (`build._declared_m`). The production surface is `siteplan.service` (`Service(workspace, out, approver, mode)`): nine operations, one frozen request model and one response model each, over the contract pipeline with the full search; it judges every alternative with the independent validator itself, and again from the stored contracts before an export, never trusting a stored report. `siteplan.agent` is the model-facing side: the transport (`siteplan-agent-tools`, MCP over stdio around the `ToolHost`), the model process's sandbox (`launch.py`, `sandbox.py`, proven with the scripted stand-in `standin.py`) and the agent loop (`loop.py`: an OpenAI-compatible model calling the nine tools from inside the sandbox, its run recorded by the launcher outside it; tested against a scripted fake model server, so no real model is contacted in the tests).
+The permanent pipeline and its plan are in `docs/ARCHITECTURE.md`: raw survey → CanonicalSiteModel →
+ResolvedRules → BuildableEnvelope → TowerPrototype → optimizer → CandidateLayout → independent
+ValidationReport → (later) LLM strategy → CAD/report, with DesignBrief carrying the architect's
+program and PartitionLedger / RuleLayers the two kinds of area accounting. The contracts are code in
+`src/siteplan/contracts/` (authoritative); `docs/contracts/*.schema.json` is generated from them.
+`src/siteplan/adapters/` converts the prototype's Project, LayoutRequest and LayoutOption to the
+contracts and back without changing a number, so the prototype keeps working while stages move over.
+Prototype version tagged `v0.9-prototype` (1af547a). Wave 1 stages, on contracts 1.1: `legal/`
+(ResolvedRules and the BuildableEnvelope), `prototypes/` (the tower prototype kit), `optimizer/`
+(floors from metres, the guard, Pareto alternatives, today's generator as the LEGACY strategy) and
+`validator/` (the independent ValidationReport, the optimizer's guard; it imports no generator
+module). Wave 2, on contracts 1.2: Table III below 21 m in `legal/` (A2), the validator's checks for
+blocks below 21 m (D2), and the full search in `optimizer/search/` (C2: strategy FULL beside LEGACY,
+the blocks placed first and the circulation drawn from them). C3: a floor count below 21 m is
+offered on its own band's permission (`optimizer/floors.py`: ALLOWED, or UNVERIFIED and labelled so;
+never PROHIBITED, never a band with no setback), and the full search places such blocks wherever
+their band's land allows, in the columns and on the ground the ring road leaves
+(`optimizer/search/fringe.py`), each served by a road or, up to 12 m, a rule 8(l) pathway; it
+searches every profile with them and without, and says for each narrow part of the plot whether one
+fits there and whether the layouts proposed use it. LEGACY still lays out high-rise counts only.
+C4-01: the full search draws every road from a centre-line graph (`optimizer/search/road_graph.py`:
+entrances, junctions and the blocks pathways serve as nodes, each road's centre line as edges, the
+pavement the line widened), and refuses a layout whose roads are not one network or stop with
+nowhere to go; the validator measures the pavement as before. C4-02: every configuration is also
+tried with further clusters on the ground the first leaves, each round its own ring road and joined
+by a link road (or where the rings meet), up to three (`Config.more_clusters`). C4-03: a further
+cluster is also tried in its own ground's directions (`layout.zone_angles`), its blocks carrying
+their own frame (`Standing.frame`). C4-04: where the kit has blocks of more than one depth, every
+configuration is also tried with columns of each depth (`Config.mixed_depths`), laid out after all
+of the others with quotas of their own. C4-05: the fringe tries every kind of block in turn (a
+smaller or lower one where a larger has no room) and is laid in the plot's own directions as well as
+the configuration's (`fringe.FRINGE_DIRECTIONS`), the most valuable kept. C4-06: a floor count is
+dropped only behind a taller one alike in everything it asks and rests on (`readings.resources`),
+and the profile built for every reading takes no block below 21 m that NBC's own 15 m line holds to
+4.6's fire access, so its layouts hold under both lines. C4-07: the club house stands where its own
+band allows and turns to the plot's directions, the program is laid again with the ramp first or the
+club house off the open space when the first order finds no room, the fringe draws no pathway over
+NBC's 30 m, the parking plan counts only the stilts a car can drive into (as the validator does),
+and the search repairs the layouts it laid (`FullSearchStrategy._improve`: the fringe keeping no
+room for the program, a block given up at a time until the exact half lays it out). C4-08:
+constraints come in three classes, the law's (never traded), the program's (what the brief requires:
+a facility REQUIRED and not placed fails the program) and preferences (a facility PREFERRED, which a
+library that says nothing gives, or OPTIONAL: said, never a failure); the generator lays required
+facilities first. C4-09: each profile's judged layouts are its front and different ideas before
+copies (`strategy._to_judge`), and a fourth alternative, ROBUST (`ParetoPoint.ROBUST`), shows the
+layout that rests on the fewest open readings, the most saleable between equals. C4-10: the
+facilities are laid in the order (the firm's, its rotations, the largest first, within the classes)
+that places the most. C4-11: the objective also scores site use (1 less the share of the plot no use
+takes and no rule keeps open) and the quality of a scheme (little road, blocks repeated and running
+one way, each facing a road or pathway along 6 m, few leftover pieces), reads its areas to 0.01 m²,
+breaks a point's ties by site use, and each profile judges the best of its front for each point
+first (`pareto.leaders`). C4-12: the open space is taken where it is usable, at least 12 m across
+and within 30 m of a block (`objective.usable_open_sqm`), the most usable pockets first, and the
+open-space axis scores that part. C4-13: a cellar is dug only as far as the need takes it: once the
+fewest levels are known, a rectangle square to the turn grown round its ramp, the piece of the plot
+under the setback that the ramp reaches and that holds the need by floor area and by cars laid out,
+the same on every level (`parking_plan._sized`); the cellar setback a candidate reports is the
+rule's band. C4-14: the approach keeps off the end a configuration keeps for the open space when it
+can, and crosses it, a road through the park, when that end lies across every way in, so no
+configuration is lost to it. C4-15: the validator sweeps the tender's turn at every road junction
+too (the approach, a street or a link meeting the loop; not the gate, a slit's tip or a jog shorter
+than a lane), and the generator keeps its program and its approach clear of those turns. C4-16: the
+objective scores the brief's soft preferences (orientation, max_towers, keep_away_from_road,
+club_near_entrance; `optimizer/preferences.py`) as an eighth axis, 1 for every layout when none is
+given; a preference is never a rule, and one not understood is named in the search's notes.
+2026-10-12: a project may pin the entrance (`Access.gate`, `SiteIn.gate_m`;
+`legal/frontage.access_zones` then gives that stretch alone, so no layout moves the gate); the club
+house is tried nearest the gate and nearest the far corner of the open ground, the furnishing with
+the more usable open space kept (`layout._furnish_where_best`); a street paved wider than the rule's
+declares its own width (`build._declared_m`). The production surface is `siteplan.service`
+(`Service(workspace, out, approver, mode)`): nine operations, one frozen request model and one
+response model each, over the contract pipeline with the full search; it judges every alternative
+with the independent validator itself, and again from the stored contracts before an export, never
+trusting a stored report. `siteplan.agent` is the model-facing side: the transport
+(`siteplan-agent-tools`, MCP over stdio around the `ToolHost`), the model process's sandbox
+(`launch.py`, `sandbox.py`, proven with the scripted stand-in `standin.py`) and the agent loop
+(`loop.py`: an OpenAI-compatible model calling the nine tools from inside the sandbox, its run
+recorded by the launcher outside it; tested against a scripted fake model server, so no real model
+is contacted in the tests).
 
 ## Commands
 
 - Install: `uv sync`
-- Tests: `uv run pytest -q` (client-drawing tests skip when `fixtures/` is empty); one class with `-m normative` or `-m characterization` (`tests/manifest.py`)
+- Tests: `uv run pytest -q` (client-drawing tests skip when `fixtures/` is empty); one class with
+  `-m normative` or `-m characterization` (`tests/manifest.py`)
 - Lint: `uv run ruff check src tests`
-- Contract schemas: `uv run siteplan schema` (writes `docs/contracts/`; a test fails when they drift from the code). Contract fixtures on made-up land: `uv run python tests/contract_fixtures/build.py`
-- Legal envelope: `uv run siteplan envelope <project.json> [--survey <file>] --out <dir>` (the resolved rules, the envelope and a debug drawing; it stops and asks where the net plot is when a strip cannot be placed). Prototype kit: `uv run python -m siteplan.prototypes <flat_library.json> [--dxf <file>]`. The full search beside LEGACY on the two real sites, by hand (client data, printed only): `uv run python tests/search_compare.py [dhulapally|suchitra]`.
-- Start a project from the raw survey: `uv run siteplan start <survey.pdf|survey.dxf>` (reads what the survey settles, asks only what it cannot, writes `<name>.project.json`; `--answers <json>` for a scripted run). `uv run siteplan extract <survey>` shows what a survey settles and what would be asked. The older `uv run siteplan new` asks every question with no survey.
-- Acceptance, with the firm's plan kept out until the end: `uv run siteplan acceptance <survey> --answers <json> --firm-case fixtures/cases/<site>.case.json --firm-project <project with the firm's area statement> --workspace <folder> --out <dir>` (the report: what the survey settled, every input with its status, what is unresolved, the legal and the feasible height with the reason each height above fails, the passing options in full, the rejected candidates, then the firm's plan). A run is blind by default and refuses the firm's finished plan (`blind.py`); `--debug` allows it and the report says DEBUG RUN. `--profile <json>` sets one site's temporary test assumptions (see Rules). Dhulapally: the blind run stops and asks until the architect says where the 1,160 m² road strip lies (an even 40 ft strip along every east-facing run takes 2,132 m², so "E, 40 ft" is refused); the regression load is a debug run on the firm's net outline fitted onto the survey (`registration.py`), under both stilt readings, pinned in `fixtures/baseline/` and rebuilt with `uv run python tests/client_baseline.py`. Both run with `--conservative-parking` (the jurisdiction answers are marked UNVERIFIED).
+- Contract schemas: `uv run siteplan schema` (writes `docs/contracts/`; a test fails when they drift
+  from the code). Contract fixtures on made-up land: `uv run python
+  tests/contract_fixtures/build.py`
+- Legal envelope: `uv run siteplan envelope <project.json> [--survey <file>] --out <dir>` (the
+  resolved rules, the envelope and a debug drawing; it stops and asks where the net plot is when a
+  strip cannot be placed). Prototype kit: `uv run python -m siteplan.prototypes <flat_library.json>
+  [--dxf <file>]`. The full search beside LEGACY on the two real sites, by hand (client data,
+  printed only): `uv run python tests/search_compare.py [dhulapally|suchitra]`.
+- Start a project from the raw survey: `uv run siteplan start <survey.pdf|survey.dxf>` (reads what
+  the survey settles, asks only what it cannot, writes `<name>.project.json`; `--answers <json>` for
+  a scripted run). `uv run siteplan extract <survey>` shows what a survey settles and what would be
+  asked. The older `uv run siteplan new` asks every question with no survey.
+- Acceptance, with the firm's plan kept out until the end: `uv run siteplan acceptance <survey>
+  --answers <json> --firm-case fixtures/cases/<site>.case.json --firm-project <project with the
+  firm's area statement> --workspace <folder> --out <dir>` (the report: what the survey settled,
+  every input with its status, what is unresolved, the legal and the feasible height with the reason
+  each height above fails, the passing options in full, the rejected candidates, then the firm's
+  plan). A run is blind by default and refuses the firm's finished plan (`blind.py`); `--debug`
+  allows it and the report says DEBUG RUN. `--profile <json>` sets one site's temporary test
+  assumptions (see Rules). Dhulapally: the blind run stops and asks until the architect says where
+  the 1,160 m² road strip lies (an even 40 ft strip along every east-facing run takes 2,132 m², so
+  "E, 40 ft" is refused); the regression load is a debug run on the firm's net outline fitted onto
+  the survey (`registration.py`), under both stilt readings, pinned in `fixtures/baseline/` and
+  rebuilt with `uv run python tests/client_baseline.py`. Both run with `--conservative-parking` (the
+  jurisdiction answers are marked UNVERIFIED).
 - Read a survey: `uv run siteplan survey <survey.pdf|survey.dxf> --out out/`
 - Rule check: `uv run siteplan check examples/example.project.json` (exit 1 if any rule FAILs)
 - Area statement: `uv run siteplan area-statement examples/example.project.json`
-- Layout options (Stage 2a): `uv run siteplan layout examples/example.project.json --library examples/flat_library.example.json` (add `--survey <file>` when the project has no `net_plot_m`; `--library` and `--amenities` default to the firm's in `siteplan.workspace.json` beside the project or survey; `--conservative-parking` is the named test mode for a project whose jurisdiction is not established)
+- Layout options (Stage 2a): `uv run siteplan layout examples/example.project.json --library
+  examples/flat_library.example.json` (add `--survey <file>` when the project has no `net_plot_m`;
+  `--library` and `--amenities` default to the firm's in `siteplan.workspace.json` beside the
+  project or survey; `--conservative-parking` is the named test mode for a project whose
+  jurisdiction is not established)
 
-- Assistant (Stage 2b): `uv run siteplan assist examples/example.project.json --library examples/flat_library.example.json --config examples/assistant.config.json --brief "Stilt + 8 floors, 70% 2BHK, rest 3BHK"` (needs a local OpenAI-compatible model: Ollama `qwen3.5:9b` on the Mac, vLLM + Qwen3.6-27B on the office server)
-- Rule question: `uv run siteplan rules "is a ramp allowed in the setback"` (searches the order, prints the passage and page) or `uv run siteplan rules --height 35` (the Table IV row, no search). The document lives in gitignored `fixtures/rules/`.
-- The architect's steps, one plain report each, for any project: `uv run siteplan steps <survey> --answers <json> [--profile <json> --debug] --out <dir>` (or `--project <file>` instead of answers). Writes `README.md` (each step done, stopped with its question, or in a later stage) and a folder per step: `REPORT.md`, an SVG and a DXF picture, and the facts as JSON. Built so far: step 1 (copy the survey), step 2 (the main road and the height it allows, with a side view), step 3 (road widening), step 4 (setbacks from every side) and step 5 (the buildings and the tot-lot in what they leave, whole options for the architect to choose from; it reads the firm's flat library from the workspace); exit 1 when a step stopped to ask.
-- Most floors a plot can take: `uv run siteplan floors --plot-sqyd 22686 --road-ft 60` (high-rise or not, maximum height and the rule that stops it, floors both ways the stilt may be counted, TDR floors), or `--survey <file>` to list the measured roads first, or `--project <file>` to take the plot, declared road and site facts from a project (and hold its proposed floors against the road); add `--dead-end yes|no` once the architect says whether the access road ends at the plot (above 30 m it must not), which also overrides a project's unknown
-- Rules against real schemes: `uv run siteplan cases` (runs the checker over every `fixtures/cases/*.case.json`, a sanctioned plan or the firm's own drawing; exit 1 while any FAIL is not yet understood)
-- Rule inventory: `uv run siteplan inventory` (every rule the engine applies or leaves out, how each was read, and what would settle it; `--markdown` prints a table to share with the firm)
-- Constraint audit: `uv run siteplan constraints` (every number generation uses, classified LEGAL_RULE, FIRM_STANDARD, ENGINE_DESIGN_ASSUMPTION, UNRESOLVED_INTERPRETATION or SITE_INPUT, with its source and what would settle it; `--basis UNRESOLVED_INTERPRETATION` for one class, `--markdown` for the firm)
-- Production service (a Python API; a model reaches it only through the `ToolHost`, below): `Service(workspace, out, approver, mode=Mode.BLIND)` from `siteplan.service`, operations `start_project`, `open_project`, `resolve_rules`, `inspect_envelope`, `list_prototypes`, `propose_layouts`, `validate_candidate`, `compare_candidates`, `export_candidate` (runs and exports under `out/<run_id>/`, every approval asked in `out/approvals.jsonl`). `ToolHost(workspace, out, PageApprover())` from `siteplan.service.host` offers the same nine as tools (`tools()`, `call(name, arguments)`, JSON in and out), which the model transport serves. Its tests: `uv run pytest -q tests/test_service.py` (made-up land, about 20 s), `tests/test_service_standards.py`, `tests/test_service_host.py`, `tests/test_service_approvers.py` and `tests/test_service_client.py` (the two real sites; skipped without fixtures).
-- Model transport: `uv run siteplan-agent-tools --workspace <dir> --out <dir> [--debug]` (MCP over stdio: the `ToolHost`'s nine tools exactly as `tools()` lists them, each call to `ToolHost.call`; logs to `<out>/logs/agent-tools.log`; an approval opens the page in the architect's browser). A model process reaches it only through the launcher, sandboxed: `uv run siteplan-agent --workspace <dir> --out <dir> --agent siteplan.agent.standin --scratch <dir>` (the same as `python -m siteplan.agent.launch`; the scripted stand-in reads its `plan.json` from the scratch folder and writes `report.json` there). Tests: `tests/test_agent_transport.py` and `tests/test_agent_sandbox.py` (made-up land, about 45 s; the live sandbox runs skip, saying why, where the sandbox cannot be applied).
-- Agent loop (a model drives the nine tools): the sandbox opens one port on this machine and never names another host, so forward the model server first, `ssh -N -L 8000:127.0.0.1:8888 <model-host>`; then `uv run siteplan-agent --workspace <dir> --out <dir> --model-endpoint http://127.0.0.1:8000/v1 --model-id qwen3.8-27b-sglang --brief "<the brief, naming the survey and project files>"` (or `--brief-file <file>`, read on the trusted side; the model never reads the workspace). `--config <json>` may hold `model_endpoint`, `model_id`, `request_options` (sent to the server as given: sampling, `max_tokens`, a chat template's switches; never `model`, `messages`, `tools`, `stream` or `n`) and `limits`; an argument wins over the file and a misspelt key is refused. Another model (an A/B run) is `--model-id` alone. Limits, each a stop with its reason (default): `--max-turns` (30), `--max-tool-calls` (40), `--max-failed-tool-calls` in a row (4), `--max-identical-calls` (3: the third identical call is not run), `--request-timeout-s` (600), `--run-timeout-s` (3600, approvals included), `--max-response-bytes` (1,048,576), `--max-tool-result-chars` (64,000, cut with a visible marker), `--model-retries` (0; a tool call is never retried). The terminal shows the model's messages and each tool call; the record is `<out>/agent/<run>/transcript.jsonl` (every model request and response, tool call and result, refusal, the stop and its reason, timings) beside `mcp.jsonl` (the MCP stream as the launcher relayed it). Ctrl-C or SIGTERM stops the run in order (exit 130 or 143); otherwise exit 0 when the model answered, 1 when a limit or a failure stopped it, 2 when it did not start. Tests: `tests/test_agent_loop.py` (a scripted OpenAI-compatible server on 127.0.0.1, made-up land, about 50 s).
-- Live CAD in FreeCAD (open source, 1.1.3 tested on macOS): `sh cad/start-freecad.sh` starts FreeCAD with `cad/siteplan_live.FCMacro` running (a drawing server on 127.0.0.1:9877 behind a token in `out/cad/.bridge-token`, with a clean environment so no key reaches FreeCAD's log); copy `cad/sites.example.json` to `out/cad/sites.json`; Claude Code then has the `siteplan-cad` tools from `.mcp.json` (`uv run siteplan-cad-mcp --sites out/cad/sites.json`): show_site, site_summary, place_tower, move_tower, delete_tower, read_tower_from_cad, validate_towers, compare_cad_with_engine, measure_setbacks_in_cad, save_drawing, reopen_drawing. The Step 4 acceptance against a live FreeCAD: `uv run python -m siteplan.cad.acceptance --sites out/cad/sites.json --site dhulapally-debug --blind dhulapally-blind` (writes `out/cad/acceptance-<site>.json` and `.md`). Tests: `tests/test_cad.py` (made-up land, FreeCAD stood in for in memory).
-- MCP server for an agent harness: `uv run siteplan-mcp --workspace examples --out out/mcp --approval page --rules fixtures/rules/go168-2012.pdf` (stdio). Tools: `list_files`, `read_survey_drawing`, `start_project`, `finish_project`, `check_rules`, `area_statement`, `rules_for_height`, `max_floors`, `search_rules`, `propose_layouts`. The Hermes Agent profile that runs it lives outside the repo: `hermes -p siteplan chat` (config in `~/.hermes/profiles/siteplan/config.yaml`).
+- Assistant (Stage 2b): `uv run siteplan assist examples/example.project.json --library
+  examples/flat_library.example.json --config examples/assistant.config.json --brief "Stilt + 8
+  floors, 70% 2BHK, rest 3BHK"` (needs a local OpenAI-compatible model: Ollama `qwen3.5:9b` on the
+  Mac, vLLM + Qwen3.6-27B on the office server)
+- Rule question: `uv run siteplan rules "is a ramp allowed in the setback"` (searches the order,
+  prints the passage and page) or `uv run siteplan rules --height 35` (the Table IV row, no search).
+  The document lives in gitignored `fixtures/rules/`.
+- The architect's steps, one plain report each, for any project: `uv run siteplan steps <survey>
+  --answers <json> [--profile <json> --debug] --out <dir>` (or `--project <file>` instead of
+  answers). Writes `README.md` (each step done, stopped with its question, or in a later stage) and
+  a folder per step: `REPORT.md`, an SVG and a DXF picture, and the facts as JSON. Built so far:
+  step 1 (copy the survey), step 2 (the main road and the height it allows, with a side view), step
+  3 (road widening), step 4 (setbacks from every side) and step 5 (the buildings and the tot-lot in
+  what they leave, whole options for the architect to choose from; it reads the firm's flat library
+  from the workspace); exit 1 when a step stopped to ask.
+- Most floors a plot can take: `uv run siteplan floors --plot-sqyd 22686 --road-ft 60` (high-rise or
+  not, maximum height and the rule that stops it, floors both ways the stilt may be counted, TDR
+  floors), or `--survey <file>` to list the measured roads first, or `--project <file>` to take the
+  plot, declared road and site facts from a project (and hold its proposed floors against the road);
+  add `--dead-end yes|no` once the architect says whether the access road ends at the plot (above 30
+  m it must not), which also overrides a project's unknown
+- Rules against real schemes: `uv run siteplan cases` (runs the checker over every
+  `fixtures/cases/*.case.json`, a sanctioned plan or the firm's own drawing; exit 1 while any FAIL
+  is not yet understood)
+- Rule inventory: `uv run siteplan inventory` (every rule the engine applies or leaves out, how each
+  was read, and what would settle it; `--markdown` prints a table to share with the firm)
+- Constraint audit: `uv run siteplan constraints` (every number generation uses, classified
+  LEGAL_RULE, FIRM_STANDARD, ENGINE_DESIGN_ASSUMPTION, UNRESOLVED_INTERPRETATION or SITE_INPUT, with
+  its source and what would settle it; `--basis UNRESOLVED_INTERPRETATION` for one class,
+  `--markdown` for the firm)
+- Production service (a Python API; a model reaches it only through the `ToolHost`, below):
+  `Service(workspace, out, approver, mode=Mode.BLIND)` from `siteplan.service`, operations
+  `start_project`, `open_project`, `resolve_rules`, `inspect_envelope`, `list_prototypes`,
+  `propose_layouts`, `validate_candidate`, `compare_candidates`, `export_candidate` (runs and
+  exports under `out/<run_id>/`, every approval asked in `out/approvals.jsonl`).
+  `ToolHost(workspace, out, PageApprover())` from `siteplan.service.host` offers the same nine as
+  tools (`tools()`, `call(name, arguments)`, JSON in and out), which the model transport serves. Its
+  tests: `uv run pytest -q tests/test_service.py` (made-up land, about 20 s),
+  `tests/test_service_standards.py`, `tests/test_service_host.py`, `tests/test_service_approvers.py`
+  and `tests/test_service_client.py` (the two real sites; skipped without fixtures).
+- Model transport: `uv run siteplan-agent-tools --workspace <dir> --out <dir> [--debug]` (MCP over
+  stdio: the `ToolHost`'s nine tools exactly as `tools()` lists them, each call to `ToolHost.call`;
+  logs to `<out>/logs/agent-tools.log`; an approval opens the page in the architect's browser). A
+  model process reaches it only through the launcher, sandboxed: `uv run siteplan-agent --workspace
+  <dir> --out <dir> --agent siteplan.agent.standin --scratch <dir>` (the same as `python -m
+  siteplan.agent.launch`; the scripted stand-in reads its `plan.json` from the scratch folder and
+  writes `report.json` there). Tests: `tests/test_agent_transport.py` and
+  `tests/test_agent_sandbox.py` (made-up land, about 45 s; the live sandbox runs skip, saying why,
+  where the sandbox cannot be applied).
+- Agent loop (a model drives the nine tools): the sandbox opens one port on this machine and never
+  names another host, so forward the model server first, `ssh -N -L 8000:127.0.0.1:8888
+  <model-host>`; then `uv run siteplan-agent --workspace <dir> --out <dir> --model-endpoint
+  http://127.0.0.1:8000/v1 --model-id qwen3.8-27b-sglang --brief "<the brief, naming the survey and
+  project files>"` (or `--brief-file <file>`, read on the trusted side; the model never reads the
+  workspace). `--config <json>` may hold `model_endpoint`, `model_id`, `request_options` (sent to
+  the server as given: sampling, `max_tokens`, a chat template's switches; never `model`,
+  `messages`, `tools`, `stream` or `n`) and `limits`; an argument wins over the file and a misspelt
+  key is refused. Another model (an A/B run) is `--model-id` alone. Limits, each a stop with its
+  reason (default): `--max-turns` (30), `--max-tool-calls` (40), `--max-failed-tool-calls` in a row
+  (4), `--max-identical-calls` (3: the third identical call is not run), `--request-timeout-s`
+  (600), `--run-timeout-s` (3600, approvals included), `--max-response-bytes` (1,048,576),
+  `--max-tool-result-chars` (64,000, cut with a visible marker), `--model-retries` (0; a tool call
+  is never retried). The terminal shows the model's messages and each tool call; the record is
+  `<out>/agent/<run>/transcript.jsonl` (every model request and response, tool call and result,
+  refusal, the stop and its reason, timings) beside `mcp.jsonl` (the MCP stream as the launcher
+  relayed it). Ctrl-C or SIGTERM stops the run in order (exit 130 or 143); otherwise exit 0 when the
+  model answered, 1 when a limit or a failure stopped it, 2 when it did not start. Tests:
+  `tests/test_agent_loop.py` (a scripted OpenAI-compatible server on 127.0.0.1, made-up land, about
+  50 s).
+- Live CAD in FreeCAD (open source, 1.1.3 tested on macOS): `sh cad/start-freecad.sh` starts FreeCAD
+  with `cad/siteplan_live.FCMacro` running (a drawing server on 127.0.0.1:9877 behind a token in
+  `out/cad/.bridge-token`, with a clean environment so no key reaches FreeCAD's log); copy
+  `cad/sites.example.json` to `out/cad/sites.json`; Claude Code then has the `siteplan-cad` tools
+  from `.mcp.json` (`uv run siteplan-cad-mcp --sites out/cad/sites.json`): show_site, site_summary,
+  place_tower, move_tower, delete_tower, read_tower_from_cad, validate_towers,
+  compare_cad_with_engine, measure_setbacks_in_cad, save_drawing, reopen_drawing. The Step 4
+  acceptance against a live FreeCAD: `uv run python -m siteplan.cad.acceptance --sites
+  out/cad/sites.json --site dhulapally-debug --blind dhulapally-blind` (writes
+  `out/cad/acceptance-<site>.json` and `.md`). Tests: `tests/test_cad.py` (made-up land, FreeCAD
+  stood in for in memory).
+- MCP server for an agent harness: `uv run siteplan-mcp --workspace examples --out out/mcp
+  --approval page --rules fixtures/rules/go168-2012.pdf` (stdio). Tools: `list_files`,
+  `read_survey_drawing`, `start_project`, `finish_project`, `check_rules`, `area_statement`,
+  `rules_for_height`, `max_floors`, `search_rules`, `propose_layouts`. The Hermes Agent profile that
+  runs it lives outside the repo: `hermes -p siteplan chat` (config in
+  `~/.hermes/profiles/siteplan/config.yaml`).
 
 ## Rules
 
-- **Client data never enters git.** Drawings and anything derived from them live in `fixtures/` and `out/`, both gitignored. Examples and tests use made-up geometry.
-- **No attribution trailers.** Commits and PRs carry no `Co-Authored-By`, `Claude-Session` or "Generated with" lines, whatever a session's defaults say.
-- **Site facts, law and design intent are kept apart** (`src/siteplan/contracts/`): CanonicalSiteModel holds what the land is and how each fact is known; ResolvedRules what the law asks, heights in metres and never a floor count, every open reading an Interpretation (selected ALL means every consumer evaluates every reading, and a result that holds under only some is UNVERIFIED); DesignBrief what the architect and the firm want. `tests/test_contracts.py` enforces it. Net ownership is gross ownership less only land leaving the title (surrender, acquisition, transfer): a setback, buffer, fire band or green strip never reduces it. The PartitionLedger counts every square metre of the net site once by its physical use; RuleLayers carry the regulatory geometry, overlap, and are never summed.
-- **Blind acceptance never sees the firm's finished plan** (`blind.py`): not a debug profile, not a value tagged `FIRM_FINISHED_PLAN` (in a profile, or an answers `_source_kind` map), not a file listed in the workspace's `finished_plans` given as the survey. The finished plan may serve a debug or regression run, which says so.
-- **Tests are normative or characterization** (`tests/manifest.py` for the files that predate P0; a new file declares `TEST_CLASS = "normative"` or `"characterization"` at its top; `tests/conftest.py` marks them and refuses an unclassified file). A characterization test pins what the prototype produces; it changes only with a normative replacement test and an entry in `docs/behaviour-changes.md`.
-- **Dhulapally facts the architect confirmed (2026-10-02) are site inputs, not rules:** the access road's legal and used width is 60 ft (USER_CONFIRMED in the answers); "Stilt + N" means one parking stilt plus N floors. The notation does not settle whether the stilt counts toward the Table IV height: `stilt_in_rule_height` stays open and both readings are tested.
-- **The language model never produces a number.** Areas, scales, setbacks and rule verdicts come from this code. A later LLM layer may fill a `Project` file from a brief and explain findings; it does not compute.
-- **The production surface is `siteplan.service`; the legacy path is kept only for regression comparison** (layout, `heights.search_heights`, towers' placement, grounds, access's road generators, `runner.run_search`/`run_layout`, checks, access_checks, parking_checks, LEGACY and the MCP server's `propose_layouts`/`check_rules`, each marked LEGACY in its docstring; the service imports none of them). A request carries identifiers, the architect's words and an `Intent` whose every number the brief writes; the person approves before the search runs; export judges again and never ships a FAIL, a blocking discrepancy, an unmeasured candidate or a broken digest, and ships UNVERIFIED only with exactly its items acknowledged and approved. A run keeps every layout its search proposed (`proposed/` and the record's `proposed_candidates`: each with the report the optimizer's guard made, its readings, whether it holds under every reading and whether it was shown); the model is still shown and answered with the alternatives only (one for each of the brief's points: maximum yield, balanced, conventional with open space and, since C4-09, ROBUST, the layout that rests on the fewest open readings), and validate_candidate and export_candidate reach a proposal the run did not show only through that run's record, in a run whose record holds the approved proposal, with both digests intact (`store.proposal_problems`).
-- **The service's firm standards are the approved project file's, else the workspace's, else the engine's default labelled ASSUMED_FOR_TEST** (`service/standards.py`: the stilt and floor heights, the common-area loading, the cellar standards, the longest block, the flat and amenity libraries; a value the project records as the engine's default yields to the workspace's). Each reaches the DesignBrief with its status and its source, labelled by where its value came from: the project file's or the workspace's as the firm's (FIRM_STANDARD), a fallback the engine filled in as the engine's own (ENGINE_DEFAULT, basis ENGINE_DESIGN_ASSUMPTION), never as the firm's; no request carries one; the search is given only prototypes within the firm's longest block, so Suchitra's 56 m is kept.
-- **Every approval the service asks is written down before anything it allows runs, and a request on exactly the inputs (site, rules, brief, envelope) of an approved run says so on its page and in its notes** (`store.approved_runs_of`) (`service/audit.py`): what was shown and its sha256, APPROVED, REJECTED, UNANSWERED or CHANNEL_FAILURE, the channel's class, the UTC time, and for an export the fresh report's items and digest; in `out/approvals.jsonl` (refused ones included) and the run's `run.json`, returned read-only by `validate_candidate` and `export_candidate`. Nothing in an entry comes from the caller.
-- **A model process connects only to the `ToolHost`, through `siteplan-agent-tools`, from inside the sandbox** (`service/host.py`: the nine operations, the approval page as its only channel, `out` outside the workspace; `agent/server.py`: the SDK's low-level server, its input check off so every refusal is in the host's words and the reason stays in the log; nothing but tools, and nothing ever asked of the client). The launcher (`agent/launch.py`) runs the host as the architect and the model's process in the sandbox (`agent/sandbox.py`), joined only by the MCP stream: it writes no file but in a private scratch folder; reads neither the workspace nor `out` nor the engine (so not the `siteplan` CLI or the legacy MCP server, even in-process); executes nothing but its own interpreter (on macOS no child process at all); has no network but one port of a model server on this machine; and its environment holds nothing of the person's. The harness offers the model the host's tools and no shell or file tool. macOS applies it with sandbox-exec (a Seatbelt profile over Apple's `system.sb`); Linux with bubblewrap, which mounts only what may be read and refuses a model endpoint because it cannot open one port alone (written, not yet run on Linux). The sandbox is tried before the host starts; any other platform, a missing tool, or a sandbox that does not hold refuses to start (`SandboxUnavailable`, `SandboxLeak`): there is no unsandboxed run. Seatbelt reads a rule on a named operation before one on a wildcard, and a filtered rule before an unfiltered one, whatever their order: the closing deny of the workspace and `out` names the operations, and nothing the model may read may overlap them. A path is looked up (stat) only on the way to what the process may read or write (`sandbox.lookups`, Seatbelt's `path-ancestors`) and the links to its interpreter, so it cannot tell what exists anywhere else; inside, the engine's modules read as missing.
-- **The agent loop gives the model the nine tools and nothing else, and every limit is a stop** (`agent/loop.py` in the sandbox; `agent/model.py`, `agent/settings.py`, `agent/transcript.py`). The model gets a short factual system message (`loop.SYSTEM`), the brief, the host's nine tools as OpenAI function tools (name, description and input schema as the host lists them) and their results. A name the host does not list, arguments that are not a JSON object, or a run_id or candidate_id that no tool result and not the brief has given (told the ones that were: a model once copied 303161fb656e as 303161656e and searched again for a new id) is refused in the loop and never sent; every result reaches the model beside the count of each list in it (`counts`), because the model miscounts lists, and the system message names the only two approval pages (a search, an export) and says choosing happens in the conversation (KNOWN_QWEN_DEFECTS D1-D3); every other call goes to the host through the harness once and is never retried (only a model request may be, and not by default). Nothing the model writes is read as a decision: an approval is the architect's click on the page. The launcher owns every channel out of the sandbox (the MCP stream, relayed and recorded; an events pipe; stderr), so the transcript lives in `out`, which the sandbox can neither read nor write; the endpoint and model id are configuration, never code. The HTTP client (httpx, which the MCP SDK brings) takes nothing from the environment (`trust_env=False`). The limits bound the agent's run and are exempt from the number audit with that reason.
-- **The rule set now spans five orders**, each read from its own text: G.O.168 of 2012 (base), G.O.Ms.No.7 of 2016 (green strip only where the setback is 9 m+; parking floors above ground left out of the height for Table IV; rule 16 rewritten so a high-rise that surrenders land for road widening may take setback concessions down to 7 m clear on all sides; amenities rewritten as "upto 3% of the total built up area (or) 50,000 Sft. whichever is lower"; the EWS land rule replaced by a shelter fee), G.O.Ms.No.50 of 2019 (Table IV substituted), G.O.Ms.No.65 of 31.05.2019 (deleted the note G.O.50 had added under Table IV for buildings over 40 m long, five weeks after it came in: a building's length does not change its setback; the engine applied the deleted note until 2026-09-29, asking up to 3.3 m too much of long blocks), G.O.Ms.No.95 of 2026 (a high-rise is 21 m; 18-21 m on 750-2000 m² needs TDR). The 2016 order has a text layer; the 2019 and 2026 orders are scanned: their pages were rendered with pypdfium2 and read, which is how any scanned order has to be checked. G.O.119 is Andhra Pradesh law and does not apply. Read for rule 5 and found not to change it: G.O.264/2019, G.O.14/2022, G.O.49/2023 and G.O.103/2021 (rule 7(b) podium parking only). Still unread: G.O.245/2012 and G.O.16/2026; TS-bPASS G.O.201 skimmed only (`ORDERS` in `legal/resolve.py` lists each order with how it was read).
-- **Blocks below 21 m are Table III's** (G.O.168 rule 5, pp.9-10; `rules.TABLE_III`, `legal/non_high_rise.py`): the row is the plot size and the height is read above the stilt (rule 5(c)) whatever the stilt reading; a height above the row's last line is PROHIBITED; 18-21 m is UNVERIFIED with no setback, because no order read gives one; the front is the Building Line for the road (3 to 7.5 m), with a road given in feet reckoned in the order's round metres (5(f)(xvii)); the gap between two blocks is the taller one's side setback (5(f)(xiii)); and a high-rise's front is the higher of Table IV and the Building Line (7(a)(xi)). `HeightRules.band_for_block` is the one lookup the optimizer and the validator make.
-- **A height starts at the ground, and the storeys start above it** (read 2026-10-10 on the page image of NBC 2016 Part 3 p.43; `rules.COVERED_PARKING_RAISE_M`, `rules.PLINTH_MIN_M`): rule 2(e) and NBC Part 2 2.6 measure from the ground, and NBC Part 3 12.1, which rule 15(a)(vi) brings to all buildings, raises the lowest floor above it: 150 mm for covered parking (12.1.2), 450 mm for a plinth (12.1.1). A parking stilt is taken as covered parking, the open reading `stilt_raise` (the stricter reading, a plinth, is taken through `resolve`'s selections and reaches the optimizer and the validator only: the floors calculator and the legacy request read the default from rules.py, and a project file does not carry it yet; under ALL the larger raise is taken, so a count that holds only at 0.15 m is held back, not UNVERIFIED); a block with no stilt and the club house stand on the plinth. The floors calculator, the optimizer and the validator add the raise to every height with the stilt in it (physical; the counted reading) and to a block with no stilt (`HeightRules.lowest_floor_raise_m`), so storeys that exactly reach a limit are over it: 3 m storeys give stilt + 8 at 30 m with the stilt counted, not stilt + 9 (30.15 m). Where the stilt is left out (rule 5(c), the not_counted reading) the whole stilt floor is, its raise with it (our reading). A contract stored before it carries no raise, is judged as it was proposed, and keeps its digest (the absent fields are left out of the dump). Levels are not modelled: on a slope or over a raised cellar deck the stilt floor can stand higher above the average ground. The legacy layout's request takes the raise too (`LayoutRequest.height_m`), so the legacy search and the calculator agree; the legacy checker (`siteplan check`, the cases) measures a building as its file gives it (a sanctioned plan's, or a project's stilt + floors), without the raise, still to be done.
-- **Fire access comes from NBC 2016 Volume 1, through the state's own rule** (the 2012 text of 15(b)(iv) names NBC-2005 and the Fire Services Act 1999; G.O.Ms.No.50 of 2019 moved only 15(a)(i), non-high-rise, to NBC 2016, and no order read moves 15(b)(iv): the engine reads NBC 2016, for the firm to confirm). G.O.168 rule 15(b)(iv) holds every high-rise to NBC's fire protection requirements with none of rule 15(a)(i)'s "other than heights and setbacks" carve-out, and NBC Part 4 3.4.4.1's note leaves fire-vehicle clearances to Part 3 4.6: the approach and the open space on all sides 6 m wide, motorable, 45 t, never parked in, with a 9 m turning radius; the entrance 6 m; the street joining a 12 m street; no dead-end street for a residential building above 30 m. Read from the page images. All of it is laid out and checked (`access.py`, `access_checks.py`) except the 45 t loading, a specification the report gives as UNVERIFIED: every high-rise keeps 6.88 m of clear, motorable ground on every side (a road or a fire lane), which is what a 6 m lane needs to turn round a square corner on the 9 m radius as we read it (the 6.88 m is derived from that reading, UNRESOLVED_INTERPRETATION in `constraints.py`, and is not a figure the rule gives); the turns at every tower corner and every bend of the loop road are checked as the swept annular sectors themselves; the lanes must reach every block from the entrance; no bay, facility, ramp, tot-lot or building stands in them. **The 9 m is read as the tender's turning circle, the outer edge of the lane** (inner edge 3 m): the order does not say where it is measured, and this reading is the one that fits the state's own 7 m minimum high-rise setback and the 7 m rule 13(c)(vii) keeps for fire vehicles (a 9 m centreline would need 7.76 m). **Below 21 m (contracts 1.3, read 2026-10-06 on the page images):** 4.6 is "for high rise buildings and special buildings", and NBC Part 4 1.2(b)(6) makes a special building of one with two basements or more, or one of more than 500 m²; rule 15(a)(i) brings 4.6 to a block below 21 m (a provision of means of access, neither a height nor a setback), so a block over such a cellar is held to every check a high-rise is, as law. The generator lays no fire band round a block below 21 m, so it keeps its cellar out from under every such block (`optimizer/search/parking_plan.py`). NBC's own high-rise line, 15 m with the stilt (Part 4 2.38, 2.6), is the open reading `nbc_fire_height`, carried ALL; a fire check that fails only where a reading holds a block is UNVERIFIED, and where no reading holds one nothing is asked (PASS under that reading). Part 3 4.3.2.2's 30 m pathway from a road to a building is checked too (`roads._pathway_length_check`). The street join (4.6(a)) is the architect's answer and UNVERIFIED until given; the dead end (4.6(b)) caps the floors calculator and the `max_floors` tool at 30 m when told the road ends at the plot, and is UNVERIFIED above 30 m when not told. NBC's one-third or half of the perimeter (4.6.1.4) is for buildings on a podium, not a relaxation of "all sides".
-- **Internal roads are rule 8(m)'s, laid before the towers** (`access.py`, `towers.py`). Rule 2(c) makes residential development on a site of 4,000 m² and above a Group Development Scheme, and rule 8 governs it: below 4,000 m² (the area as per documents) the checker applies neither 8(m) nor 8(l), and the layout stops, because layouts without 8(m) roads are not supported yet. From 4,000 m² the layout draws a 9 m loop road just inside the 2 m green strip, the 9 m main approach road from an entrance on the side the access road runs (where the shortest approach joins the loop, clear of any water), and a 9 m road in every corridor between tower columns from the loop to the loop, so none is a dead end; towers then stand where that leaves room, at least the setback, or the green strip plus the loop, from the plot line. The towers' land keeps no part narrower than two 9 m turning radii and rounds its corners to one, so the loop running round it can always turn; a narrow arm of a plot is left to open space. The law gives 9 to 18 m for a main approach road; the optimiser draws 9 m (an ENGINE_DESIGN_ASSUMPTION, not a reading) and the report says the authority may ask for more. A 4.5 m driveway (13(c)(viii)) is never counted as an internal road; the checker fails a road narrower than its width and a dead end without 8(m)'s cul-de-sac form (8 m, 50-100 m, a 9 m radius head), and rule 8(l) ("In case of blocks up to 12m height, access through pathways of 6m width ... would be allowed") is applied as written: a taller block opens onto an internal road. How much of it must face the road is the open reading `opens_onto_road` (contracts 1.3), carried ALL: any part within half a metre (`touch`), or an unbroken stretch as long as the pathway is wide (`frontage`); a block that only touches a road at a corner is UNVERIFIED.
-- **Every rule value carries its clause** (`src/siteplan/rules.py`). Change a value only with the primary source in hand, and update the test in `tests/test_rules.py`. A value known only from news is never a default; read the order first.
-- **Every number generation uses is classified** (`constraints.py`, `siteplan constraints`): LEGAL_RULE (read from an order, with its clause; the value lives in `rules.py`, and a module that needs it reads it from there), FIRM_STANDARD (the workspace or library files; the engine's default stands in, reported ASSUMED_FOR_TEST), ENGINE_DESIGN_ASSUMPTION (the engine's own: tolerances, search grids and bounds, quotas, weights, reserve estimates), UNRESOLVED_INTERPRETATION (an order leaves the application open; the engine took one reading, carried as an Interpretation) or SITE_INPUT (per site, in the project; never a code constant). `tests/test_constraints.py` holds every module under `src/siteplan` to the audit or to an exemption with a one-line reason (rendering, survey reading, the model's transport, the command line, the audit and the inventory themselves). Each module of an audited package (`legal/`, `optimizer/`, `validator/`, `prototypes/`, `adapters/`, `contracts/`, and `service/` before it exists) is audited without being named; a new module anywhere else fails until it is audited or exempted. In an audited module each named number (module or class level, containers of numbers included) and each numeric default of a request, standards or config model needs an entry, as does any other model's default but 0, 1 or -1; an ordering, a unit or a message length is set aside by name, with why. A number kept in several modules (the validator keeps its own copies) is one entry, and the test holds the copies to one value. In the new stages an inline literal that can change a result is a named constant; the prototype's own are listed by hand. The acceptance report's section 3 prints the UNRESOLVED_INTERPRETATION and ENGINE_DESIGN_ASSUMPTION entries.
-- **The architect's steps are built into the engine one at a time, for every project** (`steps/`, `siteplan steps`; the stage-wise build from 2026-10-10). **Their rules come from the architect's seven files only** (`gov docs/`: G.O.168 of 2012, G.O.Ms.No.50 of 2019, G.O.Ms.No.95 of 2026, AP G.O.119, NBC 2016 volumes 1 and 2 and its booklet): a rule from anywhere else is put to him first and used only once he says so (he said it on 2026-10-10); `tests/test_steps.py` fails when a steps report cites any other government order. The engine's older parts still read G.O.Ms.No.7 of 2016, G.O.Ms.No.65 of 2019 and G.O.Ms.No.45 of 2026; a step that reaches one of their topics raises it with him first. Each step's report answers five questions in plain words: what was done, what is happening, what it looks at, the rules used and where each comes from (clause and page), and the result; beside the rules it lists everything the engine decided by itself (its tolerances, how it read the drawing), so no assumption is hidden. A step never guesses to keep going: step 3 stops and asks when nobody has said where land given up lies. A step is proved on Dhulapally and on Suchitra before it is called done. **Every step after step 1 carries everything step 1 found that a rule may need** (every road, every water body the project names, every note written near the plot, every line the engine cannot name: `steps/carried.py`): its report gives each a row (how the step used it, or carried unchanged), its facts file carries each with its shape, and its picture draws each that has one (`carried.draw`). The list is built from step 1's own findings, so a step cannot drop an item by forgetting it; `tests/test_steps.py` holds report, facts and picture (added after step 3 first left Suchitra's nala out). A new step builds its table and picture the same way. Step 1 (`survey_copy.py`) checks the drawing against what is written on it, takes the main road (the one the answers name; when they name none, the biggest road that meets the plot, the architect's rule of 2026-10-11, never asked), lists every road within 40 m with where it meets the plot (a road whose straight edges stop short is taken on in its own direction only when one of its own lines touches the plot, and the report says so) and its level there, lists what lies inside the plot (ignored) and within NBC Part 2 12.2.3's 12 m outside it (reported), and names the line work it cannot identify. Step 3 (`road_widening.py`) takes off the land given up (`runner.load_plot`), keeps land thinner than 0.5 m between two outlines apart as a drawing difference, judges each wider piece by its own side (road land when it lies on the side the answers name or beside a road; every piece beyond the largest is put to the architect), shows the splay at a corner where two roads meet (G.O.168 5(f)(xiv): a 12 m road is in neither row; for a high-rise NBC Part 3 4.8 leaves it to the authority), never taken off, and shows rule 16's rewards as G.O.168 of 2012 words them (one of the seven files) beside G.O.Ms.No.7 of 2016's rewrite, which the engine's other readings follow, none taken. `roads.Road` keeps the edge lines a road was measured on and the ground between them. Step 2 (`main_road_height.py`) reads the main road's legal width (its drawn width stands in, and is asked, when none is given; a width nobody checked is asked), reckons it as rule 5(f)(xvii) does, takes the tallest Table IV row it serves (Table III's top line for the plot, the stilt left out, when the road is under 12 m or the plot under 2,000 m²) and counts floors in the shortest storey the seven files allow: NBC Part 3 12.2.1's 2.75 m room and a 0.15 m slab (`SLAB_M`, the engine's own), 2.9 m, the stilt 2.5 m and the slab, **the stilt separate and not counted in the height** (the architect's rule of 2026-10-11: "Stilt + 8" is eight floors and a stilt; with a range in the files he takes the middle, and none gives one). NBC's 30 m dead-end limit takes the real height (the 0.15 m raise, the stilt and the floors), and **a road is a dead end only when the answers name it one** (his rule, same day): nothing is asked. TDR's extra floors (G.O.Ms.No.95 17(d)(xii)) are shown, never taken. Step 4 (`setbacks.py`) keeps, round the net plot, Table IV's column 4 for step 2's height on every side and, on a side that meets a road (2 m of it along the road's frontage or land given up to widen it), the higher of that and Table III's Building Line (7(a)(xi)); below high-rise, Table III's front towards the bigger road that meets the net plot (the main road wins a tie) and column 10 elsewhere (5(f)(iii)); a side that meets a road keeps its front setback along its whole length, and the step stops and asks when the net plot's Table III row does not allow step 2's floors (step 2 reads the row from the written area). A high-rise's 2 m green strip (the 2012 wording of 7(a)(viii)) lies inside, the 6 m fire lane is drawn (dark red) just inside it, 2 to 8 m in, and checked to fit, a water body's buffer is laid over the setbacks and never added, and the lane may run in it (the architect's rule of 2026-10-11, though rule 3(a)(iii)(3) reckons the buffer 'not for setback requirements'), and the land left for buildings is measured. Lower heights, G.O.50's long-block note (applied in the steps as the architect's file prints it) and rule 16(e)'s concession (every side on a road kept as a front, the stricter reading) are shown, none taken; a named dead end caps the floors at NBC's 30 m even where the road sets no limit, and TDR floors are shown only within it; the no-opening note's "minimum 3 m, maximum 8 m" is asked where it bites. Step 5 (`tot_lot.py`, `buildings.py`) is **the buildings first and the tot-lot last, shown together** (the architect, 2026-10-12: he picks one whole option and never chooses buildings blind). A height map from the tallest building step 2 allows down one floor at a time to Stilt + 7 (his word), each height keeping its own setbacks (`setbacks.land_left_at`). The firm's blocks (the kit and a slim block of one row of its flats, half the flats) stand in straight rows along each arm's own longest straight edge (a bent plot is cut at its narrowest neck: Dhulapally's main body and north arm), the tallest first and lower ones into the narrow parts, two blocks keeping the taller one's setback between them (7(a)(xii), 5(f)(xiii)), round one road idea per option: a 9 m loop inside the 2 m green strip round the main part (8(m), 7(a)(viii)), a spine the gate's own width straight in with rows facing it, or both; nothing within the front setback and a fire engine's 9 m turn of **the gate** (`steps/gate.py`, where the main road meets the plot, 9 to 18 m wide, marked on every step's picture). **The tot-lot**, 10% of the whole plot (his rule) for a high-rise site (7(a)(vii)) or a Group Development Scheme (8(g)), one 10%, else 5% above 750 m² (5(f)(vi)), in pockets at least 3 m wide and 50 m², goes into what the blocks leave (the wedges where a slanted edge meets the rows, tapering tips, thin strips, water edges), inside the land left, never in a block, the gap between two, a setback, a high-rise's 6 m fire lane, a road or in front of the gate (its way straight in across the plot), several medium pieces before one big one, a right-angled triangle at the corners beside the gate; when the leftovers hold less, blocks are shortened or dropped along the path that loses the fewest flats, and the flats lost are counted. Only layouts that reach the share are offered, side by side (`step5-option-NN.svg`, one table: flats, tot-lot, the flats it cost, flats an acre against the approved Narsingi scheme's 93); options are different ideas (row direction, road idea), and he is asked which. Table IV's 14 m for 45 to 50 m is checked against the approved Kondapur tower. The club house comes in the next stage, on odd land beside the biggest tot-lot piece, never at the gate. With no flat library named it says the size and asks.
-- **Every rule is in the inventory** (`inventory.py`, `siteplan inventory`): the value (read from `rules.py`), the clause, and how it was read, as written, interpreted, assumed or not modelled, with the choice we made and the evidence that would settle it. `tests/test_inventory.py` fails when a clause in `rules.py` has no entry, or an entry claims a module applies a rule the module never uses. When first counted, on 2026-09-29, only 6 of its 39 rules were applied exactly as written, which is why rules are now proven against the firm's sanctioned plans rather than our reading.
-- **Sanctioned plans are the test of the rules** (`cases.py`, `siteplan cases`). A case is a real scheme described from the firm's drawing and, once there is one, its approval letter: net plot, building outlines and heights, roads, the evidence (`sanctioned` or `firm_drawing`) and every assumption. It runs through the same checker our layouts face; a FAIL on a sanctioned plan means our rule is wrong. Each case lists the FAILs already understood and why; `test_cases.py` fails on a new one, and on a listed one that stops failing, which is a rule fixed and must be recorded. Cases are client data, in gitignored `fixtures/cases/`. Outlines traced from a drawing must be concave hulls of the walls: a convex hull put a ring-shaped Dhulapally block 4.35 m from the boundary when its nearest wall is 7.82 m. The first case, the firm's own Dhulapally drawing, keeps 8 m round and between its stilt + 8 blocks and 7 m round the stilt + 6 one, which is Table IV for 21-24 m: as if the stilt is not counted, the opposite of our reading (the stilt + 6 block's 7 m meets the rule either way). **Until sanctioned plans arrive, Dhulapally and Suchitra are unsanctioned test fixtures, never evidence that settles a rule**; sanctioned plans, when they come, become the evidence and regression tests.
-- **A project starts from the raw survey: take what the drawing shows, ask only what it cannot** (`intake.py`; `siteplan extract`, `siteplan start`; chat tools `start_project` and `finish_project`). The survey readers keep the sheet's text with its position, the three colours or layers drawn nearest each label, and the line work near the plot by colour or layer. `extract` gives the plot and both areas, the levels, the roads measured across themselves, marks written on the sheet (road widening, nala/lake/FTL, HT line) and the village, mandal and district; `questions` asks only what stays open (which road, when there are several; its legal right of way and where that width comes from; the dead end; whether it joins a 12 m street; land given up and its side; a water body's colour and class; whose rules; CURE; then the brief), and offers what the drawing suggests without choosing it: on Suchitra's sheet the line nearest the word "Nala" is grey and a "Road" label sits on the cyan line, so a nearest-line guess would pick wrong. `build_project` records every value's source, the side the chosen road runs (where the entrance goes), and works out "max" floors itself. The firm's flat and amenity libraries, floor heights, common-area loading and parking standards (cellar storey, utilities share, deepest cellar) are workspace defaults (`siteplan.workspace.json`), never asked per site. "Max" means the height search (`heights.py`) tests every height from one above the legal limit down: the law first (Table IV's road for that height, the plot size, the dead end above 30 m, the airport height UNVERIFIED without coordinates), then the ground, each height with the exact reason it fails; the options are the best distinct layouts that pass, at any height. On Dhulapally's survey extraction found the place is BHADURPALLE (V), QUTHBULLAPUR (M), not Doolapally, which matters to the ward and jurisdiction.
-- **Every input says how far it can be trusted** (`provenance.py`; the project's `status` beside its `sources`): VERIFIED (checked against a document, e.g. a certified right of way), USER_CONFIRMED (the architect said so), EXTRACTED (read off the survey), ASSUMED_FOR_TEST (taken as given so a test can run; never evidence) or UNVERIFIED (not known). An answer of "unknown" is UNVERIFIED; an answers file relabels any value with a `_status` map (the Dhulapally one keeps the Bhadurpalle/Doolapally jurisdiction UNVERIFIED); a workspace standard is USER_CONFIRMED when the firm's file sets it and ASSUMED_FOR_TEST when the engine's default is used. Rule results are PASS, FAIL or UNVERIFIED (NOT_CHECKED where the engine does not model a rule). When whose rules apply is not established and it decides Table V's share (20% or 30%), a normal run stops and asks for it (every height NOT TRIED, the reason naming what to confirm), and the checker passes a project's parking only at 30% (UNVERIFIED when enough at 20% only). Only the named test mode (`conservative_parking`, `--conservative-parking`) plans the GHMC column then, labelled CONSERVATIVE_ASSUMPTION. GHMC, or a site inside CURE, is 30% either way and asks nothing.
-- **A site's temporary assumptions live in a test profile, never in the rules** (`profiles.py`, `siteplan acceptance --profile`). While an architect's answers are pending, a profile sets chosen project values for that one site (any `SiteIn` or `LayoutRequest` field), each with its source and status (ASSUMED_FOR_TEST by default), and lists facts it keeps UNVERIFIED; `debug_fixture: true` marks a run whose plot outline comes from a finished plan, so the report says DEBUG RUN, not acceptance. Every value lands in the run's project `sources` and `status` and in the report's section 0; nothing reaches `rules.py`, `constraints.py` or a workspace default. Profiles name real sites, so they live in gitignored `fixtures/` (Dhulapally's: `fixtures/acceptance/dhulapally.test-profile.json`, 2026-10-01: the west entry measured at 14.04 m off the DXF, the stilt left out of the rule height, circulation inside the setback, 60 ft ROW kept UNVERIFIED). Two general switches exist for profiles to set, both off by default: `stilt_in_rule_height` (false leaves the stilt out of the height that picks the Table IV row and the high-rise class; NBC's 30 m dead-end limit always takes the physical height, stilt included; reports show both) and `circulation_in_setback` (towers stand at the setback and the ring inside it is a perimeter lane, held to the 6 m fire lane and reported UNVERIFIED against 8(m)'s 9 m loop; the approach is carried in at least 9 m and towers keep off it).
-- **Three massing strategies, design categories and never law** (`layout.STRATEGIES`, `fits_strategy`, `pick_strategies`; ENGINE_DESIGN_ASSUMPTION in `constraints.py`). Option A, maximum yield, takes the best score with no limit; Option B, balanced development, medium blocks of up to 2 cores and 75 m, the largest of more than one core; Option C, conventional smaller towers, one core each. Each is a different idea from the others; a strategy nothing passes for is named as missing, never filled in. The search explores those shapes directly (a cap on cores per tower, `compose_tower`), and a firm's `max_tower_length_m` always wins over a strategy's length. Every option reports each tower's length, width, flats per floor, cores and flats per core, both heights, required against actual setback and spacing, and the acceptance report adds a side-by-side comparison (section 5a).
-- **Law and the firm's preferences are kept apart.** A number from an order lives in `rules.py` with its clause; a firm's choice (its flats, floor heights, cellar standards, a longest block if it has one) lives once in its workspace file; where neither sets something the search explores it rather than asking. No rule limits a block's length since G.O.Ms.No.65 of 2019, so lengths are explored (whole stretches, 60 and 45 m) unless the firm sets `max_tower_length_m`.
-- **Acceptance keeps the firm's plan out of the generator** (`acceptance.py`, `siteplan acceptance`). `generate` is given the raw survey, the architect's answers and the firm's standard libraries; `compare` reads the firm's plan (the case traced from their drawing, and their area statement) only after the layouts exist, and measures both sides the same way (setbacks and gaps off the delivered DXF, towers told from the club house by their names). A library sized from the site's own plan leaks the answer: `flat_library.calibrated.json` was sized from Dhulapally's area statement, so a Dhulapally acceptance run uses flats measured from another project (`flat_library.suchitra.json`). The first run (2026-09-30, before roads, fire lanes and cellars were modelled) gave 4 towers and 534,260 sft of tower floor, an upper bound. With them (2026-09-30, same inputs): stilt + 10 fails on the 60 ft road, stilt + 9 is the most the ground holds, and the best of three different passing layouts is 3 towers, 360 flats, 492,687 sft of tower floor (the firm: 5 towers, 474,912 sft), 425,736 sft saleable from the flats, one cellar, 730 cars, 11 m setbacks and 10 m gaps against the firm's 7-8 m, which also runs 7 m driveways where rule 8(m) asks 9 m roads.
-- **A project keeps what is declared apart from what is measured, and says what it does not know** (`site` in the project file). The abutting road's declared width carries `abutting_road_status` (`CERTIFIED_ROW`, `DECLARED_ON_SITE_PLAN` or `UNVERIFIED_DRAWING_VALUE`), and `measured_carriageway_m` holds the survey's measure apart: reported beside it, never used by the rules. `road_dead_end`, `inside_cure`, `proposed_floors`, `sanctioned_floors` (from an approval only, never a drawing) and `site_coordinates` stay null for UNKNOWN; without coordinates, airport and Air Force height are reported UNVERIFIED and nothing else is blocked. Inside CURE the parking check takes Table V's GHMC column (G.O.Ms.No.45 of 2026), whichever corporation the site now falls in. The test values set on 2026-09-30: Dhulapally 60 ft declared on the site plan with 14.08 m of carriageway measured, dead end unknown (run both ways in `test_client_fixtures.py`), CMC inside CURE (Doolapally is ward 289, Kompally circle, Qutbullapur zone of the Cyberabad Municipal Corporation on the 2026 ward list), no coordinates; Suchitra 12.4 m as an unverified drawing value, stilt + 10 proposed ("TYPICAL FLOOR PLAN(4-10)"), sanctioned unknown.
-- **The model does two jobs only:** read the brief into the `BriefExtraction` schema, and (if `model_commentary` is on) add commentary. Comparisons between options are computed in `compare_options`; a live run showed the 9B model mislabel which option sells the most while quoting only real numbers. Numbers it reads are checked against the brief; commentary that ranks options or quotes an unsourced number is dropped.
-- **The architect approves the interpreted request before anything is solved** (LangGraph `interrupt`). There is no flag to skip it, and nothing with side effects runs before the interrupt.
-- **Token budgets live in the config** (per step, per run, per day, with a daily ledger in `out/usage/`). Crossing one halts the run. Rejections go to `out/logs/assistant.log`, never back to the user.
+- **Client data never enters git.** Drawings and anything derived from them live in `fixtures/` and
+  `out/`, both gitignored. Examples and tests use made-up geometry.
+- **No attribution trailers.** Commits and PRs carry no `Co-Authored-By`, `Claude-Session` or
+  "Generated with" lines, whatever a session's defaults say.
+- **Site facts, law and design intent are kept apart** (`src/siteplan/contracts/`):
+  CanonicalSiteModel holds what the land is and how each fact is known; ResolvedRules what the law
+  asks, heights in metres and never a floor count, every open reading an Interpretation (selected
+  ALL means every consumer evaluates every reading, and a result that holds under only some is
+  UNVERIFIED); DesignBrief what the architect and the firm want. `tests/test_contracts.py` enforces
+  it. Net ownership is gross ownership less only land leaving the title (surrender, acquisition,
+  transfer): a setback, buffer, fire band or green strip never reduces it. The PartitionLedger
+  counts every square metre of the net site once by its physical use; RuleLayers carry the
+  regulatory geometry, overlap, and are never summed.
+- **Blind acceptance never sees the firm's finished plan** (`blind.py`): not a debug profile, not a
+  value tagged `FIRM_FINISHED_PLAN` (in a profile, or an answers `_source_kind` map), not a file
+  listed in the workspace's `finished_plans` given as the survey. The finished plan may serve a
+  debug or regression run, which says so.
+- **Tests are normative or characterization** (`tests/manifest.py` for the files that predate P0; a
+  new file declares `TEST_CLASS = "normative"` or `"characterization"` at its top;
+  `tests/conftest.py` marks them and refuses an unclassified file). A characterization test pins
+  what the prototype produces; it changes only with a normative replacement test and an entry in
+  `docs/behaviour-changes.md`.
+- **Dhulapally facts the architect confirmed (2026-10-02) are site inputs, not rules:** the access
+  road's legal and used width is 60 ft (USER_CONFIRMED in the answers); "Stilt + N" means one
+  parking stilt plus N floors. The notation does not settle whether the stilt counts toward the
+  Table IV height: `stilt_in_rule_height` stays open and both readings are tested.
+- **The language model never produces a number.** Areas, scales, setbacks and rule verdicts come
+  from this code. A later LLM layer may fill a `Project` file from a brief and explain findings; it
+  does not compute.
+- **The production surface is `siteplan.service`; the legacy path is kept only for regression
+  comparison** (layout, `heights.search_heights`, towers' placement, grounds, access's road
+  generators, `runner.run_search`/`run_layout`, checks, access_checks, parking_checks, LEGACY and
+  the MCP server's `propose_layouts`/`check_rules`, each marked LEGACY in its docstring; the service
+  imports none of them). A request carries identifiers, the architect's words and an `Intent` whose
+  every number the brief writes; the person approves before the search runs; export judges again and
+  never ships a FAIL, a blocking discrepancy, an unmeasured candidate or a broken digest, and ships
+  UNVERIFIED only with exactly its items acknowledged and approved. A run keeps every layout its
+  search proposed (`proposed/` and the record's `proposed_candidates`: each with the report the
+  optimizer's guard made, its readings, whether it holds under every reading and whether it was
+  shown); the model is still shown and answered with the alternatives only (one for each of the
+  brief's points: maximum yield, balanced, conventional with open space and, since C4-09, ROBUST,
+  the layout that rests on the fewest open readings), and validate_candidate and export_candidate
+  reach a proposal the run did not show only through that run's record, in a run whose record holds
+  the approved proposal, with both digests intact (`store.proposal_problems`).
+- **The service's firm standards are the approved project file's, else the workspace's, else the
+  engine's default labelled ASSUMED_FOR_TEST** (`service/standards.py`: the stilt and floor heights,
+  the common-area loading, the cellar standards, the longest block, the flat and amenity libraries;
+  a value the project records as the engine's default yields to the workspace's). Each reaches the
+  DesignBrief with its status and its source, labelled by where its value came from: the project
+  file's or the workspace's as the firm's (FIRM_STANDARD), a fallback the engine filled in as the
+  engine's own (ENGINE_DEFAULT, basis ENGINE_DESIGN_ASSUMPTION), never as the firm's; no request
+  carries one; the search is given only prototypes within the firm's longest block, so Suchitra's 56
+  m is kept.
+- **Every approval the service asks is written down before anything it allows runs, and a request on
+  exactly the inputs (site, rules, brief, envelope) of an approved run says so on its page and in
+  its notes** (`store.approved_runs_of`) (`service/audit.py`): what was shown and its sha256,
+  APPROVED, REJECTED, UNANSWERED or CHANNEL_FAILURE, the channel's class, the UTC time, and for an
+  export the fresh report's items and digest; in `out/approvals.jsonl` (refused ones included) and
+  the run's `run.json`, returned read-only by `validate_candidate` and `export_candidate`. Nothing
+  in an entry comes from the caller.
+- **A model process connects only to the `ToolHost`, through `siteplan-agent-tools`, from inside the
+  sandbox** (`service/host.py`: the nine operations, the approval page as its only channel, `out`
+  outside the workspace; `agent/server.py`: the SDK's low-level server, its input check off so every
+  refusal is in the host's words and the reason stays in the log; nothing but tools, and nothing
+  ever asked of the client). The launcher (`agent/launch.py`) runs the host as the architect and the
+  model's process in the sandbox (`agent/sandbox.py`), joined only by the MCP stream: it writes no
+  file but in a private scratch folder; reads neither the workspace nor `out` nor the engine (so not
+  the `siteplan` CLI or the legacy MCP server, even in-process); executes nothing but its own
+  interpreter (on macOS no child process at all); has no network but one port of a model server on
+  this machine; and its environment holds nothing of the person's. The harness offers the model the
+  host's tools and no shell or file tool. macOS applies it with sandbox-exec (a Seatbelt profile
+  over Apple's `system.sb`); Linux with bubblewrap, which mounts only what may be read and refuses a
+  model endpoint because it cannot open one port alone (written, not yet run on Linux). The sandbox
+  is tried before the host starts; any other platform, a missing tool, or a sandbox that does not
+  hold refuses to start (`SandboxUnavailable`, `SandboxLeak`): there is no unsandboxed run. Seatbelt
+  reads a rule on a named operation before one on a wildcard, and a filtered rule before an
+  unfiltered one, whatever their order: the closing deny of the workspace and `out` names the
+  operations, and nothing the model may read may overlap them. A path is looked up (stat) only on
+  the way to what the process may read or write (`sandbox.lookups`, Seatbelt's `path-ancestors`) and
+  the links to its interpreter, so it cannot tell what exists anywhere else; inside, the engine's
+  modules read as missing.
+- **The agent loop gives the model the nine tools and nothing else, and every limit is a stop**
+  (`agent/loop.py` in the sandbox; `agent/model.py`, `agent/settings.py`, `agent/transcript.py`).
+  The model gets a short factual system message (`loop.SYSTEM`), the brief, the host's nine tools as
+  OpenAI function tools (name, description and input schema as the host lists them) and their
+  results. A name the host does not list, arguments that are not a JSON object, or a run_id or
+  candidate_id that no tool result and not the brief has given (told the ones that were: a model
+  once copied 303161fb656e as 303161656e and searched again for a new id) is refused in the loop and
+  never sent; every result reaches the model beside the count of each list in it (`counts`), because
+  the model miscounts lists, and the system message names the only two approval pages (a search, an
+  export) and says choosing happens in the conversation (KNOWN_QWEN_DEFECTS D1-D3); every other call
+  goes to the host through the harness once and is never retried (only a model request may be, and
+  not by default). Nothing the model writes is read as a decision: an approval is the architect's
+  click on the page. The launcher owns every channel out of the sandbox (the MCP stream, relayed and
+  recorded; an events pipe; stderr), so the transcript lives in `out`, which the sandbox can neither
+  read nor write; the endpoint and model id are configuration, never code. The HTTP client (httpx,
+  which the MCP SDK brings) takes nothing from the environment (`trust_env=False`). The limits bound
+  the agent's run and are exempt from the number audit with that reason.
+- **The rule set now spans five orders**, each read from its own text: G.O.168 of 2012 (base),
+  G.O.Ms.No.7 of 2016 (green strip only where the setback is 9 m+; parking floors above ground left
+  out of the height for Table IV; rule 16 rewritten so a high-rise that surrenders land for road
+  widening may take setback concessions down to 7 m clear on all sides; amenities rewritten as "upto
+  3% of the total built up area (or) 50,000 Sft. whichever is lower"; the EWS land rule replaced by
+  a shelter fee), G.O.Ms.No.50 of 2019 (Table IV substituted), G.O.Ms.No.65 of 31.05.2019 (deleted
+  the note G.O.50 had added under Table IV for buildings over 40 m long, five weeks after it came
+  in: a building's length does not change its setback; the engine applied the deleted note until
+  2026-09-29, asking up to 3.3 m too much of long blocks), G.O.Ms.No.95 of 2026 (a high-rise is 21
+  m; 18-21 m on 750-2000 m² needs TDR). The 2016 order has a text layer; the 2019 and 2026 orders
+  are scanned: their pages were rendered with pypdfium2 and read, which is how any scanned order has
+  to be checked. G.O.119 is Andhra Pradesh law and does not apply. Read for rule 5 and found not to
+  change it: G.O.264/2019, G.O.14/2022, G.O.49/2023 and G.O.103/2021 (rule 7(b) podium parking
+  only). Still unread: G.O.245/2012 and G.O.16/2026; TS-bPASS G.O.201 skimmed only (`ORDERS` in
+  `legal/resolve.py` lists each order with how it was read).
+- **Blocks below 21 m are Table III's** (G.O.168 rule 5, pp.9-10; `rules.TABLE_III`,
+  `legal/non_high_rise.py`): the row is the plot size and the height is read above the stilt (rule
+  5(c)) whatever the stilt reading; a height above the row's last line is PROHIBITED; 18-21 m is
+  UNVERIFIED with no setback, because no order read gives one; the front is the Building Line for
+  the road (3 to 7.5 m), with a road given in feet reckoned in the order's round metres
+  (5(f)(xvii)); the gap between two blocks is the taller one's side setback (5(f)(xiii)); and a
+  high-rise's front is the higher of Table IV and the Building Line (7(a)(xi)).
+  `HeightRules.band_for_block` is the one lookup the optimizer and the validator make.
+- **A height starts at the ground, and the storeys start above it** (read 2026-10-10 on the page
+  image of NBC 2016 Part 3 p.43; `rules.COVERED_PARKING_RAISE_M`, `rules.PLINTH_MIN_M`): rule 2(e)
+  and NBC Part 2 2.6 measure from the ground, and NBC Part 3 12.1, which rule 15(a)(vi) brings to
+  all buildings, raises the lowest floor above it: 150 mm for covered parking (12.1.2), 450 mm for a
+  plinth (12.1.1). A parking stilt is taken as covered parking, the open reading `stilt_raise` (the
+  stricter reading, a plinth, is taken through `resolve`'s selections and reaches the optimizer and
+  the validator only: the floors calculator and the legacy request read the default from rules.py,
+  and a project file does not carry it yet; under ALL the larger raise is taken, so a count that
+  holds only at 0.15 m is held back, not UNVERIFIED); a block with no stilt and the club house stand
+  on the plinth. The floors calculator, the optimizer and the validator add the raise to every
+  height with the stilt in it (physical; the counted reading) and to a block with no stilt
+  (`HeightRules.lowest_floor_raise_m`), so storeys that exactly reach a limit are over it: 3 m
+  storeys give stilt + 8 at 30 m with the stilt counted, not stilt + 9 (30.15 m). Where the stilt is
+  left out (rule 5(c), the not_counted reading) the whole stilt floor is, its raise with it (our
+  reading). A contract stored before it carries no raise, is judged as it was proposed, and keeps
+  its digest (the absent fields are left out of the dump). Levels are not modelled: on a slope or
+  over a raised cellar deck the stilt floor can stand higher above the average ground. The legacy
+  layout's request takes the raise too (`LayoutRequest.height_m`), so the legacy search and the
+  calculator agree; the legacy checker (`siteplan check`, the cases) measures a building as its file
+  gives it (a sanctioned plan's, or a project's stilt + floors), without the raise, still to be
+  done.
+- **Fire access comes from NBC 2016 Volume 1, through the state's own rule** (the 2012 text of
+  15(b)(iv) names NBC-2005 and the Fire Services Act 1999; G.O.Ms.No.50 of 2019 moved only 15(a)(i),
+  non-high-rise, to NBC 2016, and no order read moves 15(b)(iv): the engine reads NBC 2016, for the
+  firm to confirm). G.O.168 rule 15(b)(iv) holds every high-rise to NBC's fire protection
+  requirements with none of rule 15(a)(i)'s "other than heights and setbacks" carve-out, and NBC
+  Part 4 3.4.4.1's note leaves fire-vehicle clearances to Part 3 4.6: the approach and the open
+  space on all sides 6 m wide, motorable, 45 t, never parked in, with a 9 m turning radius; the
+  entrance 6 m; the street joining a 12 m street; no dead-end street for a residential building
+  above 30 m. Read from the page images. All of it is laid out and checked (`access.py`,
+  `access_checks.py`) except the 45 t loading, a specification the report gives as UNVERIFIED: every
+  high-rise keeps 6.88 m of clear, motorable ground on every side (a road or a fire lane), which is
+  what a 6 m lane needs to turn round a square corner on the 9 m radius as we read it (the 6.88 m is
+  derived from that reading, UNRESOLVED_INTERPRETATION in `constraints.py`, and is not a figure the
+  rule gives); the turns at every tower corner and every bend of the loop road are checked as the
+  swept annular sectors themselves; the lanes must reach every block from the entrance; no bay,
+  facility, ramp, tot-lot or building stands in them. **The 9 m is read as the tender's turning
+  circle, the outer edge of the lane** (inner edge 3 m): the order does not say where it is
+  measured, and this reading is the one that fits the state's own 7 m minimum high-rise setback and
+  the 7 m rule 13(c)(vii) keeps for fire vehicles (a 9 m centreline would need 7.76 m). **Below 21 m
+  (contracts 1.3, read 2026-10-06 on the page images):** 4.6 is "for high rise buildings and special
+  buildings", and NBC Part 4 1.2(b)(6) makes a special building of one with two basements or more,
+  or one of more than 500 m²; rule 15(a)(i) brings 4.6 to a block below 21 m (a provision of means
+  of access, neither a height nor a setback), so a block over such a cellar is held to every check a
+  high-rise is, as law. The generator lays no fire band round a block below 21 m, so it keeps its
+  cellar out from under every such block (`optimizer/search/parking_plan.py`). NBC's own high-rise
+  line, 15 m with the stilt (Part 4 2.38, 2.6), is the open reading `nbc_fire_height`, carried ALL;
+  a fire check that fails only where a reading holds a block is UNVERIFIED, and where no reading
+  holds one nothing is asked (PASS under that reading). Part 3 4.3.2.2's 30 m pathway from a road to
+  a building is checked too (`roads._pathway_length_check`). The street join (4.6(a)) is the
+  architect's answer and UNVERIFIED until given; the dead end (4.6(b)) caps the floors calculator
+  and the `max_floors` tool at 30 m when told the road ends at the plot, and is UNVERIFIED above 30
+  m when not told. NBC's one-third or half of the perimeter (4.6.1.4) is for buildings on a podium,
+  not a relaxation of "all sides".
+- **Internal roads are rule 8(m)'s, laid before the towers** (`access.py`, `towers.py`). Rule 2(c)
+  makes residential development on a site of 4,000 m² and above a Group Development Scheme, and rule
+  8 governs it: below 4,000 m² (the area as per documents) the checker applies neither 8(m) nor
+  8(l), and the layout stops, because layouts without 8(m) roads are not supported yet. From 4,000
+  m² the layout draws a 9 m loop road just inside the 2 m green strip, the 9 m main approach road
+  from an entrance on the side the access road runs (where the shortest approach joins the loop,
+  clear of any water), and a 9 m road in every corridor between tower columns from the loop to the
+  loop, so none is a dead end; towers then stand where that leaves room, at least the setback, or
+  the green strip plus the loop, from the plot line. The towers' land keeps no part narrower than
+  two 9 m turning radii and rounds its corners to one, so the loop running round it can always turn;
+  a narrow arm of a plot is left to open space. The law gives 9 to 18 m for a main approach road;
+  the optimiser draws 9 m (an ENGINE_DESIGN_ASSUMPTION, not a reading) and the report says the
+  authority may ask for more. A 4.5 m driveway (13(c)(viii)) is never counted as an internal road;
+  the checker fails a road narrower than its width and a dead end without 8(m)'s cul-de-sac form (8
+  m, 50-100 m, a 9 m radius head), and rule 8(l) ("In case of blocks up to 12m height, access
+  through pathways of 6m width ... would be allowed") is applied as written: a taller block opens
+  onto an internal road. How much of it must face the road is the open reading `opens_onto_road`
+  (contracts 1.3), carried ALL: any part within half a metre (`touch`), or an unbroken stretch as
+  long as the pathway is wide (`frontage`); a block that only touches a road at a corner is
+  UNVERIFIED.
+- **Every rule value carries its clause** (`src/siteplan/rules.py`). Change a value only with the
+  primary source in hand, and update the test in `tests/test_rules.py`. A value known only from news
+  is never a default; read the order first.
+- **Every number generation uses is classified** (`constraints.py`, `siteplan constraints`):
+  LEGAL_RULE (read from an order, with its clause; the value lives in `rules.py`, and a module that
+  needs it reads it from there), FIRM_STANDARD (the workspace or library files; the engine's default
+  stands in, reported ASSUMED_FOR_TEST), ENGINE_DESIGN_ASSUMPTION (the engine's own: tolerances,
+  search grids and bounds, quotas, weights, reserve estimates), UNRESOLVED_INTERPRETATION (an order
+  leaves the application open; the engine took one reading, carried as an Interpretation) or
+  SITE_INPUT (per site, in the project; never a code constant). `tests/test_constraints.py` holds
+  every module under `src/siteplan` to the audit or to an exemption with a one-line reason
+  (rendering, survey reading, the model's transport, the command line, the audit and the inventory
+  themselves). Each module of an audited package (`legal/`, `optimizer/`, `validator/`,
+  `prototypes/`, `adapters/`, `contracts/`, and `service/` before it exists) is audited without
+  being named; a new module anywhere else fails until it is audited or exempted. In an audited
+  module each named number (module or class level, containers of numbers included) and each numeric
+  default of a request, standards or config model needs an entry, as does any other model's default
+  but 0, 1 or -1; an ordering, a unit or a message length is set aside by name, with why. A number
+  kept in several modules (the validator keeps its own copies) is one entry, and the test holds the
+  copies to one value. In the new stages an inline literal that can change a result is a named
+  constant; the prototype's own are listed by hand. The acceptance report's section 3 prints the
+  UNRESOLVED_INTERPRETATION and ENGINE_DESIGN_ASSUMPTION entries.
+- **The architect's steps are built into the engine one at a time, for every project** (`steps/`,
+  `siteplan steps`; the stage-wise build from 2026-10-10). **Their rules come from the architect's
+  seven files only** (`gov docs/`: G.O.168 of 2012, G.O.Ms.No.50 of 2019, G.O.Ms.No.95 of 2026, AP
+  G.O.119, NBC 2016 volumes 1 and 2 and its booklet): a rule from anywhere else is put to him first
+  and used only once he says so (he said it on 2026-10-10); `tests/test_steps.py` fails when a steps
+  report cites any other government order. The engine's older parts still read G.O.Ms.No.7 of 2016,
+  G.O.Ms.No.65 of 2019 and G.O.Ms.No.45 of 2026; a step that reaches one of their topics raises it
+  with him first. Each step's report answers five questions in plain words: what was done, what is
+  happening, what it looks at, the rules used and where each comes from (clause and page), and the
+  result; beside the rules it lists everything the engine decided by itself (its tolerances, how it
+  read the drawing), so no assumption is hidden. A step never guesses to keep going: step 3 stops
+  and asks when nobody has said where land given up lies. A step is proved on Dhulapally and on
+  Suchitra before it is called done. **Every step after step 1 carries everything step 1 found that
+  a rule may need** (every road, every water body the project names, every note written near the
+  plot, every line the engine cannot name: `steps/carried.py`): its report gives each a row (how the
+  step used it, or carried unchanged), its facts file carries each with its shape, and its picture
+  draws each that has one (`carried.draw`). The list is built from step 1's own findings, so a step
+  cannot drop an item by forgetting it; `tests/test_steps.py` holds report, facts and picture (added
+  after step 3 first left Suchitra's nala out). A new step builds its table and picture the same
+  way. Step 1 (`survey_copy.py`) checks the drawing against what is written on it, takes the main
+  road (the one the answers name; when they name none, the biggest road that meets the plot, the
+  architect's rule of 2026-10-11, never asked), lists every road within 40 m with where it meets the
+  plot (a road whose straight edges stop short is taken on in its own direction only when one of its
+  own lines touches the plot, and the report says so) and its level there, lists what lies inside
+  the plot (ignored) and within NBC Part 2 12.2.3's 12 m outside it (reported), and names the line
+  work it cannot identify. Step 3 (`road_widening.py`) takes off the land given up
+  (`runner.load_plot`), keeps land thinner than 0.5 m between two outlines apart as a drawing
+  difference, judges each wider piece by its own side (road land when it lies on the side the
+  answers name or beside a road; every piece beyond the largest is put to the architect), shows the
+  splay at a corner where two roads meet (G.O.168 5(f)(xiv): a 12 m road is in neither row; for a
+  high-rise NBC Part 3 4.8 leaves it to the authority), never taken off, and shows rule 16's rewards
+  as G.O.168 of 2012 words them (one of the seven files) beside G.O.Ms.No.7 of 2016's rewrite, which
+  the engine's other readings follow, none taken. `roads.Road` keeps the edge lines a road was
+  measured on and the ground between them. Step 2 (`main_road_height.py`) reads the main road's
+  legal width (its drawn width stands in, and is asked, when none is given; a width nobody checked
+  is asked), reckons it as rule 5(f)(xvii) does, takes the tallest Table IV row it serves (Table
+  III's top line for the plot, the stilt left out, when the road is under 12 m or the plot under
+  2,000 m²) and counts floors in the shortest storey the seven files allow: NBC Part 3 12.2.1's 2.75
+  m room and a 0.15 m slab (`SLAB_M`, the engine's own), 2.9 m, the stilt 2.5 m and the slab, **the
+  stilt separate and not counted in the height** (the architect's rule of 2026-10-11: "Stilt + 8" is
+  eight floors and a stilt; with a range in the files he takes the middle, and none gives one).
+  NBC's 30 m dead-end limit takes the real height (the 0.15 m raise, the stilt and the floors), and
+  **a road is a dead end only when the answers name it one** (his rule, same day): nothing is asked.
+  TDR's extra floors (G.O.Ms.No.95 17(d)(xii)) are shown, never taken. Step 4 (`setbacks.py`) keeps,
+  round the net plot, Table IV's column 4 for step 2's height on every side and, on a side that
+  meets a road (2 m of it along the road's frontage or land given up to widen it), the higher of
+  that and Table III's Building Line (7(a)(xi)); below high-rise, Table III's front towards the
+  bigger road that meets the net plot (the main road wins a tie) and column 10 elsewhere
+  (5(f)(iii)); a side that meets a road keeps its front setback along its whole length, and the step
+  stops and asks when the net plot's Table III row does not allow step 2's floors (step 2 reads the
+  row from the written area). A high-rise's 2 m green strip (the 2012 wording of 7(a)(viii)) lies
+  inside, the 6 m fire lane is drawn (dark red) just inside it, 2 to 8 m in, and checked to fit, a
+  water body's buffer is laid over the setbacks and never added, and the lane may run in it (the
+  architect's rule of 2026-10-11, though rule 3(a)(iii)(3) reckons the buffer 'not for setback
+  requirements'), and the land left for buildings is measured. Lower heights, G.O.50's long-block
+  note (applied in the steps as the architect's file prints it) and rule 16(e)'s concession (every
+  side on a road kept as a front, the stricter reading) are shown, none taken; a named dead end caps
+  the floors at NBC's 30 m even where the road sets no limit, and TDR floors are shown only within
+  it; the no-opening note's "minimum 3 m, maximum 8 m" is asked where it bites. Step 5
+  (`tot_lot.py`, `buildings.py`) is **the buildings first and the tot-lot last, shown together**
+  (the architect, 2026-10-12: he picks one whole option and never chooses buildings blind). A height
+  map from the tallest building step 2 allows down one floor at a time to Stilt + 7 (his word), each
+  height keeping its own setbacks (`setbacks.land_left_at`). The firm's blocks (the kit and a slim
+  block of one row of its flats, half the flats) stand in straight rows along each arm's own longest
+  straight edge (a bent plot is cut at its narrowest neck: Dhulapally's main body and north arm),
+  the tallest first and lower ones into the narrow parts, two blocks keeping the taller one's
+  setback between them (7(a)(xii), 5(f)(xiii)), round one road idea per option: a 9 m loop inside
+  the 2 m green strip round the main part (8(m), 7(a)(viii)), a spine the gate's own width straight
+  in with rows facing it, or both; nothing within the front setback and a fire engine's 9 m turn of
+  **the gate** (`steps/gate.py`, where the main road meets the plot, 9 to 18 m wide, marked on every
+  step's picture). **The tot-lot**, 10% of the whole plot (his rule) for a high-rise site
+  (7(a)(vii)) or a Group Development Scheme (8(g)), one 10%, else 5% above 750 m² (5(f)(vi)), in
+  pockets at least 3 m wide and 50 m², goes into what the blocks leave (the wedges where a slanted
+  edge meets the rows, tapering tips, thin strips, water edges), inside the land left, never in a
+  block, the gap between two, a setback, a high-rise's 6 m fire lane, a road or in front of the gate
+  (its way straight in across the plot), several medium pieces before one big one, a right-angled
+  triangle at the corners beside the gate; when the leftovers hold less, blocks are shortened or
+  dropped along the path that loses the fewest flats, and the flats lost are counted. Only layouts
+  that reach the share are offered, side by side (`step5-option-NN.svg`, one table: flats, tot-lot,
+  the flats it cost, flats an acre against the approved Narsingi scheme's 93); options are different
+  ideas (row direction, road idea), and he is asked which. Table IV's 14 m for 45 to 50 m is checked
+  against the approved Kondapur tower. The club house comes in the next stage, on odd land beside
+  the biggest tot-lot piece, never at the gate. With no flat library named it says the size and
+  asks.
+- **Every rule is in the inventory** (`inventory.py`, `siteplan inventory`): the value (read from
+  `rules.py`), the clause, and how it was read, as written, interpreted, assumed or not modelled,
+  with the choice we made and the evidence that would settle it. `tests/test_inventory.py` fails
+  when a clause in `rules.py` has no entry, or an entry claims a module applies a rule the module
+  never uses. When first counted, on 2026-09-29, only 6 of its 39 rules were applied exactly as
+  written, which is why rules are now proven against the firm's sanctioned plans rather than our
+  reading.
+- **Sanctioned plans are the test of the rules** (`cases.py`, `siteplan cases`). A case is a real
+  scheme described from the firm's drawing and, once there is one, its approval letter: net plot,
+  building outlines and heights, roads, the evidence (`sanctioned` or `firm_drawing`) and every
+  assumption. It runs through the same checker our layouts face; a FAIL on a sanctioned plan means
+  our rule is wrong. Each case lists the FAILs already understood and why; `test_cases.py` fails on
+  a new one, and on a listed one that stops failing, which is a rule fixed and must be recorded.
+  Cases are client data, in gitignored `fixtures/cases/`. Outlines traced from a drawing must be
+  concave hulls of the walls: a convex hull put a ring-shaped Dhulapally block 4.35 m from the
+  boundary when its nearest wall is 7.82 m. The first case, the firm's own Dhulapally drawing, keeps
+  8 m round and between its stilt + 8 blocks and 7 m round the stilt + 6 one, which is Table IV for
+  21-24 m: as if the stilt is not counted, the opposite of our reading (the stilt + 6 block's 7 m
+  meets the rule either way). **Until sanctioned plans arrive, Dhulapally and Suchitra are
+  unsanctioned test fixtures, never evidence that settles a rule**; sanctioned plans, when they
+  come, become the evidence and regression tests.
+- **A project starts from the raw survey: take what the drawing shows, ask only what it cannot**
+  (`intake.py`; `siteplan extract`, `siteplan start`; chat tools `start_project` and
+  `finish_project`). The survey readers keep the sheet's text with its position, the three colours
+  or layers drawn nearest each label, and the line work near the plot by colour or layer. `extract`
+  gives the plot and both areas, the levels, the roads measured across themselves, marks written on
+  the sheet (road widening, nala/lake/FTL, HT line) and the village, mandal and district;
+  `questions` asks only what stays open (which road, when there are several; its legal right of way
+  and where that width comes from; the dead end; whether it joins a 12 m street; land given up and
+  its side; a water body's colour and class; whose rules; CURE; then the brief), and offers what the
+  drawing suggests without choosing it: on Suchitra's sheet the line nearest the word "Nala" is grey
+  and a "Road" label sits on the cyan line, so a nearest-line guess would pick wrong.
+  `build_project` records every value's source, the side the chosen road runs (where the entrance
+  goes), and works out "max" floors itself. The firm's flat and amenity libraries, floor heights,
+  common-area loading and parking standards (cellar storey, utilities share, deepest cellar) are
+  workspace defaults (`siteplan.workspace.json`), never asked per site. "Max" means the height
+  search (`heights.py`) tests every height from one above the legal limit down: the law first (Table
+  IV's road for that height, the plot size, the dead end above 30 m, the airport height UNVERIFIED
+  without coordinates), then the ground, each height with the exact reason it fails; the options are
+  the best distinct layouts that pass, at any height. On Dhulapally's survey extraction found the
+  place is BHADURPALLE (V), QUTHBULLAPUR (M), not Doolapally, which matters to the ward and
+  jurisdiction.
+- **Every input says how far it can be trusted** (`provenance.py`; the project's `status` beside its
+  `sources`): VERIFIED (checked against a document, e.g. a certified right of way), USER_CONFIRMED
+  (the architect said so), EXTRACTED (read off the survey), ASSUMED_FOR_TEST (taken as given so a
+  test can run; never evidence) or UNVERIFIED (not known). An answer of "unknown" is UNVERIFIED; an
+  answers file relabels any value with a `_status` map (the Dhulapally one keeps the
+  Bhadurpalle/Doolapally jurisdiction UNVERIFIED); a workspace standard is USER_CONFIRMED when the
+  firm's file sets it and ASSUMED_FOR_TEST when the engine's default is used. Rule results are PASS,
+  FAIL or UNVERIFIED (NOT_CHECKED where the engine does not model a rule). When whose rules apply is
+  not established and it decides Table V's share (20% or 30%), a normal run stops and asks for it
+  (every height NOT TRIED, the reason naming what to confirm), and the checker passes a project's
+  parking only at 30% (UNVERIFIED when enough at 20% only). Only the named test mode
+  (`conservative_parking`, `--conservative-parking`) plans the GHMC column then, labelled
+  CONSERVATIVE_ASSUMPTION. GHMC, or a site inside CURE, is 30% either way and asks nothing.
+- **A site's temporary assumptions live in a test profile, never in the rules** (`profiles.py`,
+  `siteplan acceptance --profile`). While an architect's answers are pending, a profile sets chosen
+  project values for that one site (any `SiteIn` or `LayoutRequest` field), each with its source and
+  status (ASSUMED_FOR_TEST by default), and lists facts it keeps UNVERIFIED; `debug_fixture: true`
+  marks a run whose plot outline comes from a finished plan, so the report says DEBUG RUN, not
+  acceptance. Every value lands in the run's project `sources` and `status` and in the report's
+  section 0; nothing reaches `rules.py`, `constraints.py` or a workspace default. Profiles name real
+  sites, so they live in gitignored `fixtures/` (Dhulapally's:
+  `fixtures/acceptance/dhulapally.test-profile.json`, 2026-10-01: the west entry measured at 14.04 m
+  off the DXF, the stilt left out of the rule height, circulation inside the setback, 60 ft ROW kept
+  UNVERIFIED). Two general switches exist for profiles to set, both off by default:
+  `stilt_in_rule_height` (false leaves the stilt out of the height that picks the Table IV row and
+  the high-rise class; NBC's 30 m dead-end limit always takes the physical height, stilt included;
+  reports show both) and `circulation_in_setback` (towers stand at the setback and the ring inside
+  it is a perimeter lane, held to the 6 m fire lane and reported UNVERIFIED against 8(m)'s 9 m loop;
+  the approach is carried in at least 9 m and towers keep off it).
+- **Three massing strategies, design categories and never law** (`layout.STRATEGIES`,
+  `fits_strategy`, `pick_strategies`; ENGINE_DESIGN_ASSUMPTION in `constraints.py`). Option A,
+  maximum yield, takes the best score with no limit; Option B, balanced development, medium blocks
+  of up to 2 cores and 75 m, the largest of more than one core; Option C, conventional smaller
+  towers, one core each. Each is a different idea from the others; a strategy nothing passes for is
+  named as missing, never filled in. The search explores those shapes directly (a cap on cores per
+  tower, `compose_tower`), and a firm's `max_tower_length_m` always wins over a strategy's length.
+  Every option reports each tower's length, width, flats per floor, cores and flats per core, both
+  heights, required against actual setback and spacing, and the acceptance report adds a
+  side-by-side comparison (section 5a).
+- **Law and the firm's preferences are kept apart.** A number from an order lives in `rules.py` with
+  its clause; a firm's choice (its flats, floor heights, cellar standards, a longest block if it has
+  one) lives once in its workspace file; where neither sets something the search explores it rather
+  than asking. No rule limits a block's length since G.O.Ms.No.65 of 2019, so lengths are explored
+  (whole stretches, 60 and 45 m) unless the firm sets `max_tower_length_m`.
+- **Acceptance keeps the firm's plan out of the generator** (`acceptance.py`, `siteplan
+  acceptance`). `generate` is given the raw survey, the architect's answers and the firm's standard
+  libraries; `compare` reads the firm's plan (the case traced from their drawing, and their area
+  statement) only after the layouts exist, and measures both sides the same way (setbacks and gaps
+  off the delivered DXF, towers told from the club house by their names). A library sized from the
+  site's own plan leaks the answer: `flat_library.calibrated.json` was sized from Dhulapally's area
+  statement, so a Dhulapally acceptance run uses flats measured from another project
+  (`flat_library.suchitra.json`). The first run (2026-09-30, before roads, fire lanes and cellars
+  were modelled) gave 4 towers and 534,260 sft of tower floor, an upper bound. With them
+  (2026-09-30, same inputs): stilt + 10 fails on the 60 ft road, stilt + 9 is the most the ground
+  holds, and the best of three different passing layouts is 3 towers, 360 flats, 492,687 sft of
+  tower floor (the firm: 5 towers, 474,912 sft), 425,736 sft saleable from the flats, one cellar,
+  730 cars, 11 m setbacks and 10 m gaps against the firm's 7-8 m, which also runs 7 m driveways
+  where rule 8(m) asks 9 m roads.
+- **A project keeps what is declared apart from what is measured, and says what it does not know**
+  (`site` in the project file). The abutting road's declared width carries `abutting_road_status`
+  (`CERTIFIED_ROW`, `DECLARED_ON_SITE_PLAN` or `UNVERIFIED_DRAWING_VALUE`), and
+  `measured_carriageway_m` holds the survey's measure apart: reported beside it, never used by the
+  rules. `road_dead_end`, `inside_cure`, `proposed_floors`, `sanctioned_floors` (from an approval
+  only, never a drawing) and `site_coordinates` stay null for UNKNOWN; without coordinates, airport
+  and Air Force height are reported UNVERIFIED and nothing else is blocked. Inside CURE the parking
+  check takes Table V's GHMC column (G.O.Ms.No.45 of 2026), whichever corporation the site now falls
+  in. The test values set on 2026-09-30: Dhulapally 60 ft declared on the site plan with 14.08 m of
+  carriageway measured, dead end unknown (run both ways in `test_client_fixtures.py`), CMC inside
+  CURE (Doolapally is ward 289, Kompally circle, Qutbullapur zone of the Cyberabad Municipal
+  Corporation on the 2026 ward list), no coordinates; Suchitra 12.4 m as an unverified drawing
+  value, stilt + 10 proposed ("TYPICAL FLOOR PLAN(4-10)"), sanctioned unknown.
+- **The model does two jobs only:** read the brief into the `BriefExtraction` schema, and (if
+  `model_commentary` is on) add commentary. Comparisons between options are computed in
+  `compare_options`; a live run showed the 9B model mislabel which option sells the most while
+  quoting only real numbers. Numbers it reads are checked against the brief; commentary that ranks
+  options or quotes an unsourced number is dropped.
+- **The architect approves the interpreted request before anything is solved** (LangGraph
+  `interrupt`). There is no flag to skip it, and nothing with side effects runs before the
+  interrupt.
+- **Token budgets live in the config** (per step, per run, per day, with a daily ledger in
+  `out/usage/`). Crossing one halts the run. Rejections go to `out/logs/assistant.log`, never back
+  to the user.
 - Assistant tests use a scripted model and need no server.
-- **In the MCP server, the approval is asked of the person, never the model.** Only an explicit approval draws anything; a rejection, a timeout or a client that cannot ask all stop with nothing written. Hermes one-shot mode (`-z`, which also turns on yolo) declines, verified live.
-- **Two approval channels, chosen at startup, never falling back to each other** (`--approval`): `elicit` asks through the chat app (Hermes answers accept with an empty form, which is why `Approval.approve` defaults to true); `page` serves one page per request on 127.0.0.1 behind a one-time token that never goes into the tool's reply, so the model can neither see the link nor click it. Falling back would let a real rejection be retried in a channel that might answer differently. **Hermes 0.21 needs `page`:** its chat screen declines every MCP elicitation without showing it (the approval panel is registered on another thread; upstream PR #94520 is open and no longer applies to their tree).
-- **The MCP server reads only its `--workspace` folder** and refuses anything else with one generic message (the reason goes to the log). Point the workspace at made-up examples whenever the model runs on a machine the firm does not control.
-- **FreeCAD shows and edits; the engine decides** (`src/siteplan/cad/`, 2026-10-12). `scene` copies the engine's own shapes (step 1's boundary, step 3's net plot and land given up, step 4's setback zone, buildable area, green strip, fire lane, water buffers and each side's setback as a CAD dimension) vertex for vertex, metres times 1,000 into FreeCAD's millimetres, one object per piece with a stable `SiteplanId`, so a redraw updates in place; outlines are Draft wires (draggable points), zones with holes Part faces, each on its own Draft layer found by a tag. `live` runs steps 1 to 4 with the steps' own functions and checks every test tower with `land_left_at` and the taller one's setback, including a tower moved in FreeCAD and read back. The FreeCAD end (`cad/siteplan_live.FCMacro`) binds 127.0.0.1 only, needs the token on every call, refuses browser-style and non-loopback requests, saves and opens only bare `.FCStd`/`.png` names in its folder and has no call that runs code: freecad-mcp (MIT) and freecad-ai (LGPL-2.1) were read and not adopted because both always serve arbitrary-Python tools and neither upserts named objects, keeps Draft layers or reads coordinates back without them. A blind Dhulapally run stops at step 3 (the road strip's place), so its Step 4 in CAD is the debug run, labelled so. Step 4's arcs (Shapely's 16 segments a quarter) cut up to 12 mm inside a 10 m setback at an inside corner; CAD shows that faithfully, and it is the engine's to fix, not the link's.
-- **The MCP SDK stays on 1.x** (`mcp<2`) because Hermes 0.21's client is mcp 1.26; move to 2.x only after checking elicitation against the Hermes version in use.
-- In the harness path the model calls are Hermes's, so the per-run limit is `agent.max_turns` in the profile; there is no per-day token cap there yet.
-- **The ground round the towers is laid while the towers are chosen, not after** (`grounds.py`). With the roads and the fire bands fixed, the club house (rule 15(a)(x): 3% of the built-up area from 100 units, the block itself counted, a Table IV gap from every tower; the 3% minimum is the planning target ASSUMED_FOR_TEST, not settled law), the cellars and their ramp, and the tot-lot (10% of the larger of the net and gross site, pockets 3 m wide and 50 m², outside the roads, lanes and block gaps) take the ground that is left; when one cannot be met the smallest tower is dropped and the ground laid again, and the reasons are kept. Hundreds of placements are ranked this way by area; the best of every massing (a tower count and a direction) is then laid exactly, furnished with the firm's facilities and surface bays, and checked. The facilities are the firm's list, not law: one with no room is named, never forced in. Rule 15(a)(x) as rewritten in 2016 is still an open question in the inventory.
-- **Parking has to physically fit, not just add up** (`parking.py`, `parking_checks.py`). Table V row 4 asks 30% of the built-up area inside GHMC or CURE and 20% elsewhere; rule 13(b) lets it go in the stilt, the open space over and above the setbacks, and cellars. The plan counts the stilt less its cores (the validator only where an unbroken driveway's width, 4.5 m, of the block faces a road, a fire lane or a rule 8(l) pathway: the engine's reading, `validator.parking.stilt_reached`; the generator still counts every stilt), surface bays laid inside the setback envelope on ground a road reaches (never in a setback band, fire lane or road), and as many cellar levels as it takes, each the plot under the rule 13(c)(x) setback (3 m over 2,000 m², 0.5 m more for every extra level, applied to all) less the cores, the ramp and the 10% rule 13(c)(xi) lets utilities take. The ramp is rule 13(c)(vii)'s single 5.4 m ramp at 1 in 8, a cellar storey times 8 long, its top on a road, outside every setback and fire lane, and it takes floor on every level. The cars are then counted in 2.5 x 5 m bays and 6 m aisles (the engine's standards, ENGINE_DESIGN_ASSUMPTION: no order gives a bay size) on every floor, and the plan passes only when both the floor area and the cars (20 m² each) meet the need; a level is added or taken away until it needs no more and no fewer. Visitors' parking (13(c)(xii)) is read as parking at ground level. Podium parking is unsupported and never assumed.
-- **Every option is also drawn up as a sheet** (`sheet.py`, `option_N.sheet.dxf`): an A1 sheet at the tightest standard scale that fits, with dimensions, labels, a north arrow, a scale bar, the area statement and our own title block, all on SHEET-* layers so the firm can switch ours off and keep the BuildNow geometry underneath.
-- **A rule question is answered from the order, never from the model's memory** (`rulebook.py`, tools `rules_for_height` and `search_rules`). Heights come from the encoded Table IV; everything else comes back as the passage, its page, and a citation built from the section heading and clause marker in the document. A live run showed why the citation matters: the model quoted page 19 correctly and then called it "rule 7(a)(vii)" when it is rule 13(vii). Ranking is BM25 over clause-sized chunks plus a bonus for words the order splits ("drive way" for "driveway"). With no `--rules` document the search refuses rather than letting the model improvise. **Only the 2012 order is indexed** (the 2019 and 2026 orders are scans; the 2016 order has text but is not indexed yet), so its replaced passages announce themselves: `SUPERSEDED` in `rulebook.py` matches the 2012 wording of Table IV, the 18 m high-rise definition, the green-strip clause, the amenities minimum, the road-widening concessions and the EWS land rule, and every hit carries `superseded_by` and `still_in_force` while `search_rules` adds a `warning`. Without it a search quotes the 2012 order's 18 m high-rise line as if it stood, when G.O.Ms.No.95 made it 21 m in 2026. (An earlier version of this file said a 27 m building needs 10.6 m; that counted the 40 m note G.O.Ms.No.65 deleted, and the figure in force is the table's 9 m.)
+- **In the MCP server, the approval is asked of the person, never the model.** Only an explicit
+  approval draws anything; a rejection, a timeout or a client that cannot ask all stop with nothing
+  written. Hermes one-shot mode (`-z`, which also turns on yolo) declines, verified live.
+- **Two approval channels, chosen at startup, never falling back to each other** (`--approval`):
+  `elicit` asks through the chat app (Hermes answers accept with an empty form, which is why
+  `Approval.approve` defaults to true); `page` serves one page per request on 127.0.0.1 behind a
+  one-time token that never goes into the tool's reply, so the model can neither see the link nor
+  click it. Falling back would let a real rejection be retried in a channel that might answer
+  differently. **Hermes 0.21 needs `page`:** its chat screen declines every MCP elicitation without
+  showing it (the approval panel is registered on another thread; upstream PR #94520 is open and no
+  longer applies to their tree).
+- **The MCP server reads only its `--workspace` folder** and refuses anything else with one generic
+  message (the reason goes to the log). Point the workspace at made-up examples whenever the model
+  runs on a machine the firm does not control.
+- **FreeCAD shows and edits; the engine decides** (`src/siteplan/cad/`, 2026-10-12). `scene` copies
+  the engine's own shapes (step 1's boundary, step 3's net plot and land given up, step 4's setback
+  zone, buildable area, green strip, fire lane, water buffers and each side's setback as a CAD
+  dimension) vertex for vertex, metres times 1,000 into FreeCAD's millimetres, one object per piece
+  with a stable `SiteplanId`, so a redraw updates in place; outlines are Draft wires (draggable
+  points), zones with holes Part faces, each on its own Draft layer found by a tag. `live` runs
+  steps 1 to 4 with the steps' own functions and checks every test tower with `land_left_at` and the
+  taller one's setback, including a tower moved in FreeCAD and read back. The FreeCAD end
+  (`cad/siteplan_live.FCMacro`) binds 127.0.0.1 only, needs the token on every call, refuses
+  browser-style and non-loopback requests, saves and opens only bare `.FCStd`/`.png` names in its
+  folder and has no call that runs code: freecad-mcp (MIT) and freecad-ai (LGPL-2.1) were read and
+  not adopted because both always serve arbitrary-Python tools and neither upserts named objects,
+  keeps Draft layers or reads coordinates back without them. A blind Dhulapally run stops at step 3
+  (the road strip's place), so its Step 4 in CAD is the debug run, labelled so. Step 4's arcs
+  (Shapely's 16 segments a quarter) cut up to 12 mm inside a 10 m setback at an inside corner; CAD
+  shows that faithfully, and it is the engine's to fix, not the link's.
+- **The MCP SDK stays on 1.x** (`mcp<2`) because Hermes 0.21's client is mcp 1.26; move to 2.x only
+  after checking elicitation against the Hermes version in use.
+- In the harness path the model calls are Hermes's, so the per-run limit is `agent.max_turns` in the
+  profile; there is no per-day token cap there yet.
+- **The ground round the towers is laid while the towers are chosen, not after** (`grounds.py`).
+  With the roads and the fire bands fixed, the club house (rule 15(a)(x): 3% of the built-up area
+  from 100 units, the block itself counted, a Table IV gap from every tower; the 3% minimum is the
+  planning target ASSUMED_FOR_TEST, not settled law), the cellars and their ramp, and the tot-lot
+  (10% of the larger of the net and gross site, pockets 3 m wide and 50 m², outside the roads, lanes
+  and block gaps) take the ground that is left; when one cannot be met the smallest tower is dropped
+  and the ground laid again, and the reasons are kept. Hundreds of placements are ranked this way by
+  area; the best of every massing (a tower count and a direction) is then laid exactly, furnished
+  with the firm's facilities and surface bays, and checked. The facilities are the firm's list, not
+  law: one with no room is named, never forced in. Rule 15(a)(x) as rewritten in 2016 is still an
+  open question in the inventory.
+- **Parking has to physically fit, not just add up** (`parking.py`, `parking_checks.py`). Table V
+  row 4 asks 30% of the built-up area inside GHMC or CURE and 20% elsewhere; rule 13(b) lets it go
+  in the stilt, the open space over and above the setbacks, and cellars. The plan counts the stilt
+  less its cores (the validator only where an unbroken driveway's width, 4.5 m, of the block faces a
+  road, a fire lane or a rule 8(l) pathway: the engine's reading, `validator.parking.stilt_reached`;
+  the generator still counts every stilt), surface bays laid inside the setback envelope on ground a
+  road reaches (never in a setback band, fire lane or road), and as many cellar levels as it takes,
+  each the plot under the rule 13(c)(x) setback (3 m over 2,000 m², 0.5 m more for every extra
+  level, applied to all) less the cores, the ramp and the 10% rule 13(c)(xi) lets utilities take.
+  The ramp is rule 13(c)(vii)'s single 5.4 m ramp at 1 in 8, a cellar storey times 8 long, its top
+  on a road, outside every setback and fire lane, and it takes floor on every level. The cars are
+  then counted in 2.5 x 5 m bays and 6 m aisles (the engine's standards, ENGINE_DESIGN_ASSUMPTION:
+  no order gives a bay size) on every floor, and the plan passes only when both the floor area and
+  the cars (20 m² each) meet the need; a level is added or taken away until it needs no more and no
+  fewer. Visitors' parking (13(c)(xii)) is read as parking at ground level. Podium parking is
+  unsupported and never assumed.
+- **Every option is also drawn up as a sheet** (`sheet.py`, `option_N.sheet.dxf`): an A1 sheet at
+  the tightest standard scale that fits, with dimensions, labels, a north arrow, a scale bar, the
+  area statement and our own title block, all on SHEET-* layers so the firm can switch ours off and
+  keep the BuildNow geometry underneath.
+- **A rule question is answered from the order, never from the model's memory** (`rulebook.py`,
+  tools `rules_for_height` and `search_rules`). Heights come from the encoded Table IV; everything
+  else comes back as the passage, its page, and a citation built from the section heading and clause
+  marker in the document. A live run showed why the citation matters: the model quoted page 19
+  correctly and then called it "rule 7(a)(vii)" when it is rule 13(vii). Ranking is BM25 over
+  clause-sized chunks plus a bonus for words the order splits ("drive way" for "driveway"). With no
+  `--rules` document the search refuses rather than letting the model improvise. **Only the 2012
+  order is indexed** (the 2019 and 2026 orders are scans; the 2016 order has text but is not indexed
+  yet), so its replaced passages announce themselves: `SUPERSEDED` in `rulebook.py` matches the 2012
+  wording of Table IV, the 18 m high-rise definition, the green-strip clause, the amenities minimum,
+  the road-widening concessions and the EWS land rule, and every hit carries `superseded_by` and
+  `still_in_force` while `search_rules` adds a `warning`. Without it a search quotes the 2012
+  order's 18 m high-rise line as if it stood, when G.O.Ms.No.95 made it 21 m in 2026. (An earlier
+  version of this file said a 27 m building needs 10.6 m; that counted the 40 m note G.O.Ms.No.65
+  deleted, and the figure in force is the table's 9 m.)
 - **A missing input is reported, not guessed.** Checks return `UNVERIFIED` rather than assuming.
-- **No AGPL dependencies.** PyMuPDF is AGPL, so PDFs are read with pdfplumber (MIT). Check the licence of anything new before adding it.
-- **Every layout is re-checked by the rule checker, which measures the drawing again, and one that fails any rule is a rejected candidate, never an option** (`layout.search`). The report lists the rejected candidates with their reasons. The options are genuinely different ideas: another tower count, another direction, or towers on mostly other ground, whatever their height. Each carries the flat library's note and the caveat (not modelled: podium parking, blocks of mixed heights, landscaping, the 45 t specification). The example flat library is illustrative, not the firm's; `fixtures/workspace/flat_library.calibrated.json` is sized against the firm's own Dhulapally area statement and is still assumed, not their blocks.
-- **Towers are laid out on the net plot, never the gross** (`load_plot`). When a project states a net area smaller than the surveyed boundary, the difference is land lost to road widening, and setbacks are measured on the net plot (rule 7(a)(iii)). **Where the strip lies is never guessed from the area** (since 2026-10-01): it comes from `net_plot_m`, the strip's outline (`road_strip_m`), or its side and width (`road_strip_side`, `road_strip_width_m`, cut at that width along every run facing the side and refused unless it comes to the stated deduction within the larger of 50 m² and 2%); with none of them the run stops and says what to give, and intake records the strip UNVERIFIED. Found on the firm's own Dhulapally numbers, gross 20,131 m² against net 18,969 m², where planning on the gross had been inventing 16 flats. **The engine used to guess, and the guess was wrong there:** the firm gives a 40 ft road (rule 8(k)) along about 95 m of an east side made of three runs; cut from the whole east side the same area comes out 6.6 m wide, not 40 ft. What does work is the firm's own site-plan DXF given as the survey: its plot outline is the net plot with the strip where they drew it (Dhulapally's reads 18,968.9 m², the statement's 22,686 sq yd to 0.0%), `load_plot` takes an outline that matches the stated net area as it is, and the layout on it reaches 320 flats and 462,948 sft against 304 and 430,326 on the guessed strip (the firm's own statement: 474,912 sft).
-- **A water body the survey draws keeps its rule 3(a)(ii) buffer free** (`load_water`, the project's `site.water`). The architect names each lake, nala or river by class (`rules.WATER_BUFFER_M`: nala over 10 m wide 9 m, up to 10 m 2 m, lakes 30 or 9 m, river 50 m) and by the colour (PDF) or layer (DXF) the surveyor drew it in, because a drawn channel does not show a nala's defined width and surveyors use no standard colour. The buffer, and any channel its lines close, is taken out of the land for towers, facilities and bays, and the checker fails a block that overlaps it (standing on its edge is exactly the distance asked). On Suchitra (cyan, 9 m) the buffer takes 702 m² of the plot, against the 746 m² strip the firm drew beside a 9.6 m channel, and the best layout falls from 128 flats and 185,926 sft to 112 and 167,516: sixteen flats had stood in the buffer. The buffer and the Table IV setback are a union, never added. Beyond the buffer towers keep two separate things: the fire band NBC 4.6(c) asks (6.88 m on our reading), because the buffer is treated as not motorable, an UNRESOLVED_INTERPRETATION of rule 3(a); and the rest of the 9 m so the loop road runs along the water instead of ending at it, the engine's road pattern (`grounds.WATER_FIRE_CLEARANCE_M`, `WATER_LOOP_ROAD_EXTRA_M`). No crossing over water is drawn, so land on the far side of a nala from the entrance is left unbuilt rather than given towers a fire tender could not reach.
-- **A firm's flats are read from its own floor-plan DXF, one flat per kitchen** (`flat_import.py`). Three routes were tried on the firm's Suchitra file and two failed: walls are separate lines broken at every door, so 90 segments polygonized into no flat-sized face; and "MAIN DOOR" is this firm's block for every door, 633 of them against about 78 flats. What works is that the architect writes each room's size into its label ("MASTER BEDROOM 4315X3465") and that a flat has exactly one kitchen, so kitchens count the flats and every other room joins the kitchen it sits nearest. Saleable area is measured (carpet plus the stated common-area loading); the frontage is derived from that area at the shared depth with a 12% wall allowance, because label positions measure the draughtsman's hand, not the flat. A type must repeat, and a grouping with less than 22 m² of carpet per bedroom has swallowed a neighbour's room and is dropped. The depth it measured, 25.79 m, lands within 7% of the 24.13 m calibrated independently from the Dhulapally area statement.
-- **The tower floor is not saleable area; the flats are** (`LayoutOption`). Every option reports apart: `tower_floor_sqft` (every floor of every tower, wall to wall: what a firm's area statement prints before its loading), `flats_own_sqft` and `common_core_sqft` (the plate split into the flats and the corridors, lifts and stairs), `saleable_sqft` (each flat's own sale area from the flat library, times the flats placed, the only saleable figure reported), `amenity_sqft` (the club house) and `parking_sqft`. `test_the_areas_are_kept_apart_and_saleable_comes_from_the_flats` pins it; ranking uses the saleable area times how close the mix comes to the brief.
-- **Carpet, built-up and saleable are not interchangeable.** Carpet is the clear internal size room labels give; built-up adds walls and balconies and is what a firm's area statement prints; saleable adds the common-area loading and is what a flat sells for. `flat_import` runs carpet through `BUILT_UP_FROM_CARPET` before the loading. Quoting carpet as saleable is how the engine once showed 325,152 sft against the firm's 474,912 on the same site and looked a third worse than it was.
-- **Roads are measured across themselves** (`roads.py`, listed in every survey summary). Most roads a plot takes access from end at it, so a ray out of the plot runs between their edges; instead a line is laid at right angles to each drawn edge every 2 m near the plot, and the edge lines most cross-sections agree on are the road's. A dot or dash beside a cross-section counts as crossed: Suchitra's footpaths are dotted, and without them its 12.4 m (40 ft) road read as a 9 m carriageway. Widths are as drawn and may be the carriageway alone (Dhulapally's survey draws 7-14 m where its site plan draws a 60 ft entry road), so the floors calculator and the `max_floors` tool take the legal width from the architect and never from the drawing.
-- **A DWG is read in its own world coordinates and its own declared unit** (`dxf_entities.py`, used by the survey reader and the flat importer). The header's $INSUNITS says what one unit is (Dhulapally's site plan: inches; Suchitra's floor plans: millimetres), and a file that does not say is refused rather than guessed: the flat importer once assumed millimetres, which on an inch drawing puts rooms 25.4 times too far apart. Every block is opened out by its own placement (position, scale, rotation, nested blocks too), and its layer-0 contents take the block's layer, as CAD shows them; before this a boundary or a level drawn inside a block was not read at all. Positions are taken in world terms because a mirrored block turns its contents' own coordinate system over. A DWG carries no map location unless a surveyor georeferences it; the firm's does not.
-- **The printed scale on a survey sheet is not trusted.** Scale comes from the dimension labels, then snaps to a standard plot scale only when within 0.5% (Dhulapally's was plotted to fit the paper at 1:744.9; all seven labels agree to 0.01%). Every closed shape of every colour is tried as the plot except the sheet frame: keeping the largest shape per colour once returned Suchitra's black frame, 7,239 m², for its black plot of 8,063.8 m². Levels are the sheet's own densest run of decimals, because one survey levels from sea level (583 m) and another from a benchmark of 100.000. A sheet with no dimension labels (Suchitra) is scaled from its written area, the plot being the tightest shape round the spot levels, with a warning that the area is then not an independent check. Areas are read in acres and guntas (with trailing square yards), square metres and square yards, never square feet, and the site area is the largest written.
-- The BuildNow layer names in `dxf_export.py` are from the plugin's layer index; whether the plugin accepts pre-named layers is untested (needs Windows, ZWCAD 2025 and the plugin).
+- **No AGPL dependencies.** PyMuPDF is AGPL, so PDFs are read with pdfplumber (MIT). Check the
+  licence of anything new before adding it.
+- **Every layout is re-checked by the rule checker, which measures the drawing again, and one that
+  fails any rule is a rejected candidate, never an option** (`layout.search`). The report lists the
+  rejected candidates with their reasons. The options are genuinely different ideas: another tower
+  count, another direction, or towers on mostly other ground, whatever their height. Each carries
+  the flat library's note and the caveat (not modelled: podium parking, blocks of mixed heights,
+  landscaping, the 45 t specification). The example flat library is illustrative, not the firm's;
+  `fixtures/workspace/flat_library.calibrated.json` is sized against the firm's own Dhulapally area
+  statement and is still assumed, not their blocks.
+- **Towers are laid out on the net plot, never the gross** (`load_plot`). When a project states a
+  net area smaller than the surveyed boundary, the difference is land lost to road widening, and
+  setbacks are measured on the net plot (rule 7(a)(iii)). **Where the strip lies is never guessed
+  from the area** (since 2026-10-01): it comes from `net_plot_m`, the strip's outline
+  (`road_strip_m`), or its side and width (`road_strip_side`, `road_strip_width_m`, cut at that
+  width along every run facing the side and refused unless it comes to the stated deduction within
+  the larger of 50 m² and 2%); with none of them the run stops and says what to give, and intake
+  records the strip UNVERIFIED. Found on the firm's own Dhulapally numbers, gross 20,131 m² against
+  net 18,969 m², where planning on the gross had been inventing 16 flats. **The engine used to
+  guess, and the guess was wrong there:** the firm gives a 40 ft road (rule 8(k)) along about 95 m
+  of an east side made of three runs; cut from the whole east side the same area comes out 6.6 m
+  wide, not 40 ft. What does work is the firm's own site-plan DXF given as the survey: its plot
+  outline is the net plot with the strip where they drew it (Dhulapally's reads 18,968.9 m², the
+  statement's 22,686 sq yd to 0.0%), `load_plot` takes an outline that matches the stated net area
+  as it is, and the layout on it reaches 320 flats and 462,948 sft against 304 and 430,326 on the
+  guessed strip (the firm's own statement: 474,912 sft).
+- **A water body the survey draws keeps its rule 3(a)(ii) buffer free** (`load_water`, the project's
+  `site.water`). The architect names each lake, nala or river by class (`rules.WATER_BUFFER_M`: nala
+  over 10 m wide 9 m, up to 10 m 2 m, lakes 30 or 9 m, river 50 m) and by the colour (PDF) or layer
+  (DXF) the surveyor drew it in, because a drawn channel does not show a nala's defined width and
+  surveyors use no standard colour. The buffer, and any channel its lines close, is taken out of the
+  land for towers, facilities and bays, and the checker fails a block that overlaps it (standing on
+  its edge is exactly the distance asked). On Suchitra (cyan, 9 m) the buffer takes 702 m² of the
+  plot, against the 746 m² strip the firm drew beside a 9.6 m channel, and the best layout falls
+  from 128 flats and 185,926 sft to 112 and 167,516: sixteen flats had stood in the buffer. The
+  buffer and the Table IV setback are a union, never added. Beyond the buffer towers keep two
+  separate things: the fire band NBC 4.6(c) asks (6.88 m on our reading), because the buffer is
+  treated as not motorable, an UNRESOLVED_INTERPRETATION of rule 3(a); and the rest of the 9 m so
+  the loop road runs along the water instead of ending at it, the engine's road pattern
+  (`grounds.WATER_FIRE_CLEARANCE_M`, `WATER_LOOP_ROAD_EXTRA_M`). No crossing over water is drawn, so
+  land on the far side of a nala from the entrance is left unbuilt rather than given towers a fire
+  tender could not reach.
+- **A firm's flats are read from its own floor-plan DXF, one flat per kitchen** (`flat_import.py`).
+  Three routes were tried on the firm's Suchitra file and two failed: walls are separate lines
+  broken at every door, so 90 segments polygonized into no flat-sized face; and "MAIN DOOR" is this
+  firm's block for every door, 633 of them against about 78 flats. What works is that the architect
+  writes each room's size into its label ("MASTER BEDROOM 4315X3465") and that a flat has exactly
+  one kitchen, so kitchens count the flats and every other room joins the kitchen it sits nearest.
+  Saleable area is measured (carpet plus the stated common-area loading); the frontage is derived
+  from that area at the shared depth with a 12% wall allowance, because label positions measure the
+  draughtsman's hand, not the flat. A type must repeat, and a grouping with less than 22 m² of
+  carpet per bedroom has swallowed a neighbour's room and is dropped. The depth it measured, 25.79
+  m, lands within 7% of the 24.13 m calibrated independently from the Dhulapally area statement.
+- **The tower floor is not saleable area; the flats are** (`LayoutOption`). Every option reports
+  apart: `tower_floor_sqft` (every floor of every tower, wall to wall: what a firm's area statement
+  prints before its loading), `flats_own_sqft` and `common_core_sqft` (the plate split into the
+  flats and the corridors, lifts and stairs), `saleable_sqft` (each flat's own sale area from the
+  flat library, times the flats placed, the only saleable figure reported), `amenity_sqft` (the club
+  house) and `parking_sqft`. `test_the_areas_are_kept_apart_and_saleable_comes_from_the_flats` pins
+  it; ranking uses the saleable area times how close the mix comes to the brief.
+- **Carpet, built-up and saleable are not interchangeable.** Carpet is the clear internal size room
+  labels give; built-up adds walls and balconies and is what a firm's area statement prints;
+  saleable adds the common-area loading and is what a flat sells for. `flat_import` runs carpet
+  through `BUILT_UP_FROM_CARPET` before the loading. Quoting carpet as saleable is how the engine
+  once showed 325,152 sft against the firm's 474,912 on the same site and looked a third worse than
+  it was.
+- **Roads are measured across themselves** (`roads.py`, listed in every survey summary). Most roads
+  a plot takes access from end at it, so a ray out of the plot runs between their edges; instead a
+  line is laid at right angles to each drawn edge every 2 m near the plot, and the edge lines most
+  cross-sections agree on are the road's. A dot or dash beside a cross-section counts as crossed:
+  Suchitra's footpaths are dotted, and without them its 12.4 m (40 ft) road read as a 9 m
+  carriageway. Widths are as drawn and may be the carriageway alone (Dhulapally's survey draws 7-14
+  m where its site plan draws a 60 ft entry road), so the floors calculator and the `max_floors`
+  tool take the legal width from the architect and never from the drawing.
+- **A DWG is read in its own world coordinates and its own declared unit** (`dxf_entities.py`, used
+  by the survey reader and the flat importer). The header's $INSUNITS says what one unit is
+  (Dhulapally's site plan: inches; Suchitra's floor plans: millimetres), and a file that does not
+  say is refused rather than guessed: the flat importer once assumed millimetres, which on an inch
+  drawing puts rooms 25.4 times too far apart. Every block is opened out by its own placement
+  (position, scale, rotation, nested blocks too), and its layer-0 contents take the block's layer,
+  as CAD shows them; before this a boundary or a level drawn inside a block was not read at all.
+  Positions are taken in world terms because a mirrored block turns its contents' own coordinate
+  system over. A DWG carries no map location unless a surveyor georeferences it; the firm's does
+  not.
+- **The printed scale on a survey sheet is not trusted.** Scale comes from the dimension labels,
+  then snaps to a standard plot scale only when within 0.5% (Dhulapally's was plotted to fit the
+  paper at 1:744.9; all seven labels agree to 0.01%). Every closed shape of every colour is tried as
+  the plot except the sheet frame: keeping the largest shape per colour once returned Suchitra's
+  black frame, 7,239 m², for its black plot of 8,063.8 m². Levels are the sheet's own densest run of
+  decimals, because one survey levels from sea level (583 m) and another from a benchmark of
+  100.000. A sheet with no dimension labels (Suchitra) is scaled from its written area, the plot
+  being the tightest shape round the spot levels, with a warning that the area is then not an
+  independent check. Areas are read in acres and guntas (with trailing square yards), square metres
+  and square yards, never square feet, and the site area is the largest written.
+- The BuildNow layer names in `dxf_export.py` are from the plugin's layer index; whether the plugin
+  accepts pre-named layers is untested (needs Windows, ZWCAD 2025 and the plugin).
 - Lines stay at 100 characters or fewer (ruff).
