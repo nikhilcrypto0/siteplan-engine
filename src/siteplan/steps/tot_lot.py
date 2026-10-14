@@ -48,7 +48,7 @@ from siteplan.steps.buildings import (
 )
 from siteplan.steps.gate import on_net
 from siteplan.steps.inputs import Inputs, compass
-from siteplan.steps.setbacks import Setbacks, land_left_at
+from siteplan.steps.setbacks import Setbacks, below_high_rise, land_left_at
 from siteplan.steps.survey_copy import SHORT_RUN_M, SurveyCopy
 from siteplan.units import SQM_PER_ACRE
 
@@ -164,6 +164,11 @@ class Tier:
     tallest: BaseGeometry  # the part where this is the tallest building that fits
     band: BaseGeometry  # the setback land those blocks keep from the plot's edge
     high_rise: bool  # 21 m or more, counted (G.O.Ms.No.95): a fire lane all round
+    # Below 21 m, the band the resolver reads (setbacks.below_high_rise): ALLOWED with Table
+    # III's setback, or UNVERIFIED (no order read gives one: the setback drawn is Table IV's first
+    # row, a stand-in) or PROHIBITED, and why (2026-10-13).
+    permission: str = "ALLOWED"
+    why: str = ""
 
 
 @dataclass(frozen=True)
@@ -432,7 +437,11 @@ def height_map(s: Setbacks, blocks: Blocks, lowest: int,
             land = _overlay(land, buffer, DIFF)
         fits = block_land_in(land, blocks)
         high = s.height.storeys.counted_m(floors) >= rules.HIGH_RISE_THRESHOLD_M - CUT_TOLERANCE_M
-        out.append(Tier(floors, setback, land, fits, _overlay(fits, claimed, DIFF), band, high))
+        stretch = None if high else below_high_rise(s, floors)
+        settled = stretch is None or stretch.side_m is not None
+        out.append(Tier(floors, setback, land, fits, _overlay(fits, claimed, DIFF), band, high,
+                        "ALLOWED" if settled else stretch.permission.value,
+                        "" if settled else stretch.note))
         claimed = unary_union([claimed, fits])
     return tuple(out)
 

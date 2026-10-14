@@ -19,6 +19,7 @@ from siteplan import validator
 from siteplan.contracts import CandidateLayout, ValidationReport
 from siteplan.contracts.common import Status
 from siteplan.contracts.validation import Check, LegalVerdict
+from siteplan.optimizer import guard
 from siteplan.service import store
 from siteplan.service.models import UnresolvedItem
 from siteplan.service.store import Inputs, RunRecord
@@ -113,4 +114,6 @@ def refusals(judged: Judged) -> list[str]:
         out.append("the legal verdict is FAIL")
     if report.verdict.study is LegalVerdict.FAIL and not out:
         out.append("the legal verdict under the readings selected for this project is FAIL")
+    if guard.tot_lot_missing(judged.candidate, report):  # an export is never a study's
+        out.append(guard.TOT_LOT_MISSING)
     return list(dict.fromkeys(out))

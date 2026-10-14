@@ -233,6 +233,13 @@ def _output(t: TotLot) -> tuple[list[str], list[Table]]:
                  f"of leftovers; it cost {p.flats_lost} flat{'' if p.flats_lost == 1 else 's'}.")
     for change in p.changes:
         lines.append(f"For the tot-lot: {change}.")
+    used = {b.floors for b in p.layout.blocks}
+    for tier in p.tiers:
+        if tier.floors in used and tier.permission != "ALLOWED":
+            said = "CONDITIONAL" if tier.permission == "UNVERIFIED" else tier.permission
+            lines.append(f"STILT + {tier.floors} IS {said}: {tier.why}. Its setback is drawn at "
+                         f"Table IV's first row, {tier.setback_m:g} m, as a stand-in; the engine "
+                         "reports such a block the same way.")
     if p.short_sqm > 0:
         lines.append(f"THE LAND CANNOT HOLD THE TOT-LOT: it is short by {p.short_sqm:,.1f} m².")
     for other in t.placings[1:]:

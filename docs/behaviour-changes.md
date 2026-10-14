@@ -4,6 +4,37 @@ A characterization test (tests/manifest.py) pins what the engine produces today.
 only together with a normative replacement test and an entry here: what changed, why, the
 evidence, and the test that now holds the behaviour. Newest first.
 
+## 2026-10-13: one reading of the rules across the pipeline (regulatory audit, phase 4)
+
+- **The steps read the rules as the resolver and the validator do (D11).**
+  - Step 4 draws the 2 m planting strip only along sides whose setback is 9 m or more. That is
+    rule 7(a)(viii) as G.O.Ms.No.7 of 2016 substituted it, which the architect confirmed on
+    2026-10-13 (the steps' citation test now admits G.O.7 for it).
+  - Until now step 4 drew the strip on every side, the 2012 wording. The fire lane runs just
+    inside the strip, or from the edge where a side keeps none, and its room is measured side by
+    side.
+  - A height below 21 m in step 5's height map reads its band from the resolver
+    (`steps.setbacks.below_high_rise`, `legal.non_high_rise.stretches`). A height of 18 to 21 m,
+    where no order read gives a setback, is reported CONDITIONAL with the resolver's reason.
+    Its setback is still drawn at Table IV's first row, said to be a stand-in.
+  - Step 2 still reads the plot from the written area (the net plot is step 3's), and step 4
+    stops on the net plot as before, so the outcome is the engine's.
+  - FreeCAD draws step 4's own shapes, so it follows.
+- **One reading of which road width Table IV reads (D9).** Where the rules carry
+  `table_iv_road_width` (a master-plan width is known), the validator judges both the existing
+  width and the master-plan width (counted once its strip is surrendered). The result is
+  CONDITIONAL where they differ. Before, it took the master-plan width whenever land was
+  surrendered.
+- **Thresholds (D12).**
+  - The validator holds the 12 m pathway limit with the generator's height tolerance.
+  - A main approach road wider than rule 8(m)'s 9 to 18 m is CONDITIONAL with the gap named,
+    never a PASS.
+  - Exact tests for 9 m (the strip), 18 to 21 m and 4,000 m².
+- **No layout outside a study without its tot-lot.** The optimizer's guard and the export judge
+  refuse a candidate that draws no tot-lot where the report asks one (`guard.tot_lot_missing`),
+  whatever the validator could tell. A study still may, labelled STUDY and never exported.
+- **Tests:** `tests/test_pipeline_consistency.py`.
+
 ## 2026-10-13: the club house's ceiling and the client's 3%; Table V row 4 open (audit, phase 3)
 
 **The club house (D13).**

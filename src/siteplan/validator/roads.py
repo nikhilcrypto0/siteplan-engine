@@ -20,6 +20,7 @@ from siteplan.contracts.common import Status
 from siteplan.contracts.resolved_rules import (
     APPROACH_WIDTH,
     CIRCULATION_IN_SETBACK,
+    HEIGHT_TOL_M,
     OPENS_ONTO_ROAD,
     STILT_IN_RULE_HEIGHT,
 )
@@ -115,6 +116,12 @@ def _approach_checks(ctx: Context, ground: Ground, network: BaseGeometry) -> lis
             required = f">= {low:g} m (the order gives {low:g} to {high:g} m)"
             if width + TOL_M < low:
                 return Cell(Status.FAIL, shown, required)
+            if width > high + TOL_M:  # D12 (2026-10-13): the range's top, checked
+                return Cell(Status.UNVERIFIED, shown, f"{low:g} to {high:g} m, the range the order "
+                            "gives", f"Wider than the {high:g} m rule 8(m) names for a main "
+                            "approach road; the order does not say whether a wider one is "
+                            "allowed.", (rule_gap("a main approach road wider than rule 8(m)'s "
+                                                  "range", f"{width:.2f} m"),))
             if reading == MINIMUM_APPROACH:
                 return Cell(Status.PASS, shown, required,
                             f"Drawn at the least the order allows; it gives no test for when a "
@@ -298,7 +305,7 @@ def _served_check(ctx: Context, ground: Ground) -> Check | None:
     if not circ.block_over_12m_on_road.value:
         return None  # read as allowing a pathway to any block: nothing to hold them to
     limit = circ.pathway_max_block_height_m.value
-    tall = [t for t in ctx.towers if t.physical_height_m > limit]
+    tall = [t for t in ctx.towers if t.physical_height_m > limit + HEIGHT_TOL_M]
     if not tall:
         return None  # every block is low enough for a pathway: `_pathway_check` says what holds
     roads = _ground_of(ctx, ground, *ROAD_KINDS)
@@ -347,7 +354,7 @@ def _pathway_check(ctx: Context, ground: Ground) -> Check | None:
     if not circ.block_over_12m_on_road.value:
         return None  # read as allowing a pathway to any block: nothing to hold them to
     limit = circ.pathway_max_block_height_m.value
-    short = [t for t in ctx.towers if not t.physical_height_m > limit]
+    short = [t for t in ctx.towers if not t.physical_height_m > limit + HEIGHT_TOL_M]
     paths = ctx.drawn.roads_of(RoadKind.PATHWAY)
     if not short and not paths:
         return None

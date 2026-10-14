@@ -17,6 +17,8 @@ from shapely.ops import unary_union
 
 from siteplan import rules
 from siteplan.geometry import facing_deg, straight_runs
+from siteplan.legal.non_high_rise import Stretch, stretches
+from siteplan.provenance import Provenance
 from siteplan.steps.inputs import Inputs, compass
 from siteplan.steps.main_road_height import TABLE_IV_WAY, Height
 from siteplan.steps.road_widening import Widening
@@ -26,6 +28,7 @@ FACES_ALONG_M = 2.0  # a side meets a road when this much of it lies along the r
 LONG_BLOCKS_M = (40.0, 50.0, 60.0, 80.0, 100.0, 120.0)  # block lengths the note is shown for
 ARC_SEGMENTS = 16  # a quarter circle's segments, the geometry library's own default
 LANE_CROSSES_SQM = 0.5  # less of the fire lane than this in a water's buffer is drawing noise
+STRIP_TOL_M = 1e-6  # a side kept at exactly the strip's 9 m keeps the strip
 
 
 @dataclass(frozen=True)
@@ -76,9 +79,10 @@ class Setbacks:
 
     @property
     def fire_room_m(self) -> float:
-        """The least open space beside the green strip, where a fire lane must run."""
-        return min(s.metres for s in self.sides) - (
-            rules.PERIPHERAL_GREEN_STRIP_M if self.green is not None else 0.0)
+        """The least open space beside the green strip, where a fire lane must run: each side's
+        setback less the strip where that side keeps one."""
+        return min(s.metres - (rules.PERIPHERAL_GREEN_STRIP_M if _keeps_strip(s) else 0.0)
+                   for s in self.sides)
 
     @property
     def lane_in_water(self) -> tuple[tuple[str, float, float], ...]:
@@ -136,7 +140,7 @@ def set_back(inputs: Inputs, copy: SurveyCopy, height: Height, widening: Widenin
     s.open_space_m = _open_space(s, floors)
     s.band, s.left = _band_and_left(net, s.sides)
     if s.high_rise:
-        s.green = net.boundary.buffer(rules.PERIPHERAL_GREEN_STRIP_M).intersection(net)
+        s.green = _green(net, s.sides)
         s.fire_lane = _fire_lane(net, s.green)
         s.long_blocks = tuple((length, rules.long_block_open_space_m(s.open_space_m, length))
                               for length in LONG_BLOCKS_M)
@@ -155,6 +159,29 @@ def land_left_at(s: Setbacks, floors: int) -> tuple[BaseGeometry, float]:
     net = s.widening.net
     sides = _sides(s, net, _road_reach(s.copy, s.widening), floors)
     return _band_and_left(net, sides)[1], max(side.metres for side in sides)
+
+
+def below_high_rise(s: Setbacks, floors: int) -> Stretch | None:
+    """The band of rule 5 a height below 21 m falls in, as the resolver reads it
+    (legal.non_high_rise.stretches, on the height without the stilt): its permission, the setback
+    the order gives if any, and why. None for a high-rise. So a height of 18 to 21 m, which no
+    order read gives a setback, is the same open question here as in the engine (2026-10-13)."""
+    counted = s.height.storeys.counted_m(floors)
+    if counted >= rules.HIGH_RISE_THRESHOLD_M - STRIP_TOL_M:
+        return None
+    h = s.height
+    width = (h.width_m, Provenance.USER_CONFIRMED if h.width_from.upper() == "LEGAL"
+             else Provenance.UNVERIFIED)
+    found = stretches(plot_sqm=s.widening.net.area, plot_status=Provenance.USER_CONFIRMED,
+                      gross_sqm=h.plot_sqm, gross_status=Provenance.USER_CONFIRMED,
+                      widths=(width,), high_rise_from_m=rules.HIGH_RISE_THRESHOLD_M)
+    return next((x for x in found if _holds(x, counted)), None)
+
+
+def _holds(x: Stretch, height_m: float) -> bool:
+    above = height_m > x.above_m or (x.above_inclusive and abs(height_m - x.above_m) <= STRIP_TOL_M)
+    under = height_m < x.up_to_m or (x.up_to_inclusive and abs(height_m - x.up_to_m) <= STRIP_TOL_M)
+    return above and under
 
 
 def _stop(s: Setbacks, why: str, ask: str | None) -> Setbacks:
@@ -256,12 +283,32 @@ def _reach(line: LineString, metres: float) -> BaseGeometry:
     return unary_union([line.buffer(metres, quad_segs=ARC_SEGMENTS), *corners])
 
 
-def _fire_lane(net: Polygon, green: BaseGeometry) -> BaseGeometry:
+def _keeps_strip(side: SideSetback) -> bool:
+    """Whether a side keeps the planting strip: its setback is 9 m or more."""
+    return side.metres + STRIP_TOL_M >= rules.PERIPHERAL_GREEN_STRIP_FROM_SETBACK_M
+
+
+def _green(net: Polygon, sides) -> BaseGeometry | None:
+    """The 2 m planting strip along each side whose setback is 9 m or more (rule 7(a)(viii) as
+    G.O.Ms.No.7 of 2016 substituted it, which the architect confirmed on 2026-10-13, as the
+    resolver and the validator read it); None where no side keeps that much."""
+    held = [side.line for side in sides if _keeps_strip(side)]
+    if not held:
+        return None
+    return unary_union([line.buffer(rules.PERIPHERAL_GREEN_STRIP_M) for line in held]
+                       ).intersection(net)
+
+
+def _fire_lane(net: Polygon, green: BaseGeometry | None) -> BaseGeometry:
     """Where a fire lane can run all round a high-rise (NBC Part 3 4.6(c)): the band the lane's
-    width wide just inside the green strip. Where the buildings and roads put it, and its turns,
-    are step 6's; where a setback is too narrow for it the band reaches into the land left."""
-    reach = rules.PERIPHERAL_GREEN_STRIP_M + rules.FIRE_TENDER_MIN_WIDTH_M
-    return net.boundary.buffer(reach).intersection(net).difference(green)
+    width wide just inside the green strip where a side keeps one, from the plot's edge where it
+    does not. Where the buildings and roads put it, and its turns, are step 6's; where a setback
+    is too narrow for it the band reaches into the land left."""
+    lane = rules.FIRE_TENDER_MIN_WIDTH_M
+    if green is None:
+        return net.boundary.buffer(lane).intersection(net)
+    return unary_union([net.boundary.buffer(lane), green.buffer(lane)]).intersection(
+        net).difference(green)
 
 
 def _options(s: Setbacks, reach: dict[str, BaseGeometry]) -> tuple[Option, ...]:

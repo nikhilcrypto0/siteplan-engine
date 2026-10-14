@@ -44,6 +44,11 @@ FIRE_BAND = "fire_band"  # opens_onto_road, offered only when a project selects 
 # Whose Table V column applies is not an Interpretation: it is ResolvedRules.jurisdiction. When
 # it is OPEN the validator evaluates both columns, under this key.
 TABLE_V_COLUMN = "jurisdiction.table_v_column"
+# Which width of the access road Table IV reads when the master plan widens it (carried by the
+# rules only when a master-plan width is known): the road as it stands, or the master-plan width
+# once its strip is surrendered.
+TABLE_IV_ROAD_WIDTH = "table_iv_road_width"
+EXISTING_WIDTH, MASTER_PLAN_WIDTH = "existing", "master_plan"
 
 Assignment = dict[str, str]  # interpretation id -> the reading this cell is evaluated under
 

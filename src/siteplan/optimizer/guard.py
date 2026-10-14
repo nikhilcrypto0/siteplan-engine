@@ -77,6 +77,19 @@ def _selected(check) -> Status:
     return check.selected_status or check.finding.status
 
 
+TOT_LOT_MISSING = ("no tot-lot laid where rule 7(a)(vii) asks one: only a study (labelled STUDY, "
+                   "never exported) may leave it out")
+
+
+def tot_lot_missing(candidate: CandidateLayout, report: ValidationReport) -> bool:
+    """A layout that draws no tot-lot polygon where the report asks one: its tot-lot check is
+    neither met nor 'nothing asked' (2026-10-13: whatever the validator could tell, a layout
+    offered outside a study always lays its tot-lot)."""
+    asked = next((c for c in report.legal if c.finding.rule == STUDY_NOT_LAID), None)
+    return (asked is not None and not candidate.program.open_space
+            and _selected(asked) not in (Status.PASS, Status.INFO, Status.NOT_CHECKED))
+
+
 def why_refused(candidate: CandidateLayout, report: ValidationReport, inputs: Inputs,
                 *, study: bool = False) -> list[str]:
     """Why a candidate may not be returned on this report; empty when it may. `study` is the
@@ -97,6 +110,8 @@ def why_refused(candidate: CandidateLayout, report: ValidationReport, inputs: In
                     and not (study and c.finding.rule == STUDY_NOT_LAID)]
         reasons += [f"{d.item}: the {d.source} says {d.theirs}, the validator found {d.ours}"
                     for d in report.cross_checks if d.blocks_pass]
+    if not study and tot_lot_missing(candidate, report) and TOT_LOT_MISSING not in reasons:
+        reasons.append(TOT_LOT_MISSING)
     return reasons
 
 

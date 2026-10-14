@@ -1916,6 +1916,15 @@ REGISTRY: tuple[Constraint, ...] = (
         settles="Nothing: a drawing tolerance.",
     ),
     Constraint(
+        "Steps", "Setbacks (step 4): a side kept this near the planting strip's 9 m is taken to "
+                 "keep it (floating-point arithmetic on the setbacks).",
+        f"{step_setbacks.STRIP_TOL_M:g} m", Basis.ENGINE_DESIGN_ASSUMPTION,
+        "none (the engine's own)", ("steps.setbacks.STRIP_TOL_M",),
+        note="So a setback of exactly 9 m keeps the strip, as rule 7(a)(viii) as G.O.Ms.No.7 of "
+             "2016 substituted it says ('9m and above').",
+        settles="Nothing: a floating-point tolerance.",
+    ),
+    Constraint(
         "Steps", "Road widening (step 3): the plot's edge within this of a water body's lines "
                  "runs alongside it; the water's buffer is shown from that edge as well as from "
                  "the lines drawn.",

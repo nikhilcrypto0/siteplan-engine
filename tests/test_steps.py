@@ -500,6 +500,8 @@ def test_a_river_shows_both_of_its_2012_figures_and_asks_which(tmp_path):
 
 
 SEVEN_FILES = {"168", "50", "95", "119"}  # G.O.168/2012, G.O.50/2019, G.O.95/2026, AP G.O.119
+# Beyond them, what the architect said to use: G.O.Ms.No.7 of 2016's planting strip (2026-10-13)
+ARCHITECT_ADDED = {"7"}
 
 
 def test_every_steps_report_cites_only_the_architects_seven_files(tmp_path):
@@ -515,7 +517,7 @@ def test_every_steps_report_cites_only_the_architects_seven_files(tmp_path):
     for n in (1, 2, 3, 4, 5):
         text = (tmp_path / "out" / f"step{n}" / "REPORT.md").read_text()
         cited = set(re.findall(r"G\.O\.(?:M\.?S\.? ?)?(?:No\.)? ?(\d+)", text, re.I))
-        assert cited <= SEVEN_FILES, (n, cited - SEVEN_FILES)
+        assert cited <= SEVEN_FILES | ARCHITECT_ADDED, (n, cited - SEVEN_FILES)
 
 
 def test_the_biggest_road_is_the_main_road_when_the_answers_name_none(tmp_path):

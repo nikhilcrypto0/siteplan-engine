@@ -47,6 +47,9 @@ from siteplan.validator.measure import (
     setback_of,
 )
 from siteplan.validator.readings import (
+    EXISTING_WIDTH,
+    MASTER_PLAN_WIDTH,
+    TABLE_IV_ROAD_WIDTH,
     Assignment,
     Cell,
     check_from,
@@ -172,16 +175,19 @@ def _surrenders_land(site: CanonicalSiteModel) -> bool:
     return any(d.kind is DeductionKind.SURRENDER for d in site.ownership.deductions)
 
 
-def road_width(site: CanonicalSiteModel) -> tuple[float | None, str, bool]:
+def road_width(site: CanonicalSiteModel, reading: str | None = None
+               ) -> tuple[float | None, str, bool]:
     """The width of the access road the rules take, how it is known, and whether that is
-    settled. The master plan's width wins where there is one and the widening strip is
-    surrendered (otherwise the road is as wide as it is); the width the survey draws is never
-    used, and a width read off a drawing and never confirmed is a value, not a settled fact."""
+    settled. Under the master_plan reading of table_iv_road_width (or with no reading given, as
+    before), the master plan's width where there is one and the widening strip is surrendered;
+    under the existing reading, the road as it stands. The width the survey draws is never used,
+    and a width read off a drawing and never confirmed is a value, not a settled fact."""
     road = site.access_road()
     if road is None:
         return None, "no access road in the site model", False
     settled = road.row_status != UNVERIFIED_DRAWING
-    if is_known(road.master_plan_row_m) and _surrenders_land(site):
+    if (reading != EXISTING_WIDTH and is_known(road.master_plan_row_m)
+            and _surrenders_land(site)):
         return road.master_plan_row_m.value, "master plan", settled
     if is_known(road.legal_row_m):
         return road.legal_row_m.value, "existing", settled
@@ -201,11 +207,16 @@ def road_width_check(ctx: Context) -> Check | None:
     named and not judged; with nothing left to judge the cell is NOT_CHECKED."""
     if not ctx.towers:
         return None
-    width, how, settled = road_width(ctx.site)
     road = ctx.site.access_road()
+    # D9 (2026-10-13): every reading of which width Table IV reads, where the rules carry it
+    carried = {i.id for i in ctx.rules.interpretations}
+    widths = {r: road_width(ctx.site, r) for r in ([EXISTING_WIDTH, MASTER_PLAN_WIDTH]
+                                                  if TABLE_IV_ROAD_WIDTH in carried else [None])}
+    how = widths.get(MASTER_PLAN_WIDTH, widths.get(None))[1]  # what the master plan's width is
     tallest = max(ctx.high_rise_anywhere() or ctx.towers, key=lambda t: t.physical_height_m)
     below = ctx.rules.height.high_rise_from_m.value
-    basis = []
+    basis = ([f"Which width Table IV reads is open ({TABLE_IV_ROAD_WIDTH}): judged on the road as "
+              "it stands and on the master plan's."] if None not in widths else [])
     if road is not None and road.row_status:
         basis.append(f"Width status: {road.row_status}.")
     if road is not None and road.drawn_width_m is not None:
@@ -220,6 +231,7 @@ def road_width_check(ctx: Context) -> Check | None:
 
     def cell(a: Assignment) -> Cell:
         reading = a[STILT_IN_RULE_HEIGHT]
+        width, how, settled = widths[a.get(TABLE_IV_ROAD_WIDTH)]
         classes = _classes(ctx, reading)
         if classes is None:
             return unknown_reading(STILT_IN_RULE_HEIGHT, reading)
@@ -253,7 +265,8 @@ def road_width_check(ctx: Context) -> Check | None:
                     " ".join([*basis, *extra]))
 
     judged = _tables(ctx, ctx.towers, keep=lambda c: c.high_rise or _road_held(c))
-    return check_from(run(ctx.rules, [STILT_IN_RULE_HEIGHT], cell), family=Family.HEIGHT,
+    ids = [STILT_IN_RULE_HEIGHT, *([TABLE_IV_ROAD_WIDTH] if None not in widths else [])]
+    return check_from(run(ctx.rules, ids, cell), family=Family.HEIGHT,
                       rule=f"Abutting road width (for {tallest.name})",
                       clause=judged or _tables(ctx, ctx.towers) or _table_clause(ctx.rules),
                       subject=tallest.name)

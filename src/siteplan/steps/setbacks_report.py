@@ -42,8 +42,10 @@ def report(s: Setbacks) -> StepReport:
     ]
     if s.high_rise:
         r.did += [f"Marked the {rules.PERIPHERAL_GREEN_STRIP_M:g} m green strip inside the "
-                  f"setback, drew where a {rules.FIRE_TENDER_MIN_WIDTH_M:g} m fire lane can run "
-                  "just inside it (dark red), and checked it fits."]
+                  "setback along each side that keeps "
+                  f"{rules.PERIPHERAL_GREEN_STRIP_FROM_SETBACK_M:g} m or more, drew where a "
+                  f"{rules.FIRE_TENDER_MIN_WIDTH_M:g} m fire lane can run just inside it (dark "
+                  "red), and checked it fits."]
     if s.left_by_water:
         r.did.append("Laid the water's buffer over the setbacks.")
     r.did.append("Measured the land left for buildings, and showed what lower heights, longer "
@@ -87,8 +89,11 @@ def _rules(s: Setbacks) -> list[RuleUsed]:
                      "to 18 m, 5 m up to 24 m, 6 m up to 30 m, 7.5 m above (large plots).",
                      rules.TABLE_III_2012_CLAUSE),
             RuleUsed("Green strip", f"A {rules.PERIPHERAL_GREEN_STRIP_M:g} m green planting "
-                     "strip along every side, inside the setbacks.",
-                     rules.GREEN_STRIP_2012_CLAUSE),
+                     "strip inside the setbacks, along each side whose setback is "
+                     f"{rules.PERIPHERAL_GREEN_STRIP_FROM_SETBACK_M:g} m or more (you confirmed "
+                     "G.O.Ms.No.7 of 2016's wording on 2026-10-13; the 2012 text, without the "
+                     f"{rules.PERIPHERAL_GREEN_STRIP_FROM_SETBACK_M:g} m, is no longer applied).",
+                     rules.PERIPHERAL_GREEN_STRIP_CLAUSE),
             RuleUsed("Fire lane", f"A {rules.FIRE_TENDER_MIN_WIDTH_M:g} m open space a fire "
                      "engine can drive on, on all sides of a high-rise.",
                      rules.FIRE_ACCESS_CLAUSE),
@@ -164,7 +169,8 @@ def _choices(s: Setbacks) -> list[Choice]:
     if s.high_rise:
         green, lane = rules.PERIPHERAL_GREEN_STRIP_M, rules.FIRE_TENDER_MIN_WIDTH_M
         out.append(Choice(f"The fire lane is drawn just inside the green strip, {green:g} m to "
-                          f"{green + lane:g} m in from the edge, all round.", "NBC asks a "
+                          f"{green + lane:g} m in from the edge, and from the edge where a side "
+                          "keeps no strip.", "NBC asks a "
                           f"{lane:g} m lane on all sides and does not say where in the setback. "
                           "Where the buildings and roads finally put it, and its turns at the "
                           "corners, are step 6's."))
