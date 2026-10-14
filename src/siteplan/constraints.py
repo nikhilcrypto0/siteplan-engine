@@ -1400,7 +1400,9 @@ REGISTRY: tuple[Constraint, ...] = (
         f"{columns.STEP_M:g} m, a gap kept at the figure asked plus {columns.GAP_SLACK_M:g} m; "
         f"the {_lim.heights} tallest counts; for each profile {_lim.laid_per_profile} laid of "
         f"up to {_lim.attempts_per_profile} tried, {_lim.judged_per_profile} judged and "
-        f"{_lim.per_profile_proposed} proposed; evaluating stops at "
+        f"{_lim.per_profile_proposed} proposed; floor plates sized to the land in a pass of "
+        f"their own after the families', with {_pct(_lim.plate_share)} of each quota and the "
+        f"time left; evaluating stops at "
         f"{_pct(strategy.EVALUATE_SHARE)} of the time budget and laying out at "
         f"{_pct(strategy.LAY_OUT_SHARE)}; the ground the ring road leaves laid with blocks in the "
         f"configuration's direction and {fringe.FRINGE_DIRECTIONS} of the plot's own",
@@ -1411,6 +1413,7 @@ REGISTRY: tuple[Constraint, ...] = (
          "optimizer.search.strategy.Limits.attempts_per_profile",
          "optimizer.search.strategy.Limits.judged_per_profile",
          "optimizer.search.strategy.Limits.per_profile_proposed",
+         "optimizer.search.strategy.Limits.plate_share",
          "optimizer.search.strategy.PITCH_GAP_M", "optimizer.search.strategy.EVALUATE_SHARE",
          "optimizer.search.strategy.LAY_OUT_SHARE", "optimizer.search.columns.STEP_M",
          "optimizer.search.columns.GAP_SLACK_M", "optimizer.search.fringe.FRINGE_DIRECTIONS"),

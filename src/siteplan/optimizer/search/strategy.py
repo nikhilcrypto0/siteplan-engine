@@ -40,7 +40,7 @@ from shapely.geometry import Polygon
 from shapely.geometry.base import BaseGeometry
 
 from siteplan import validator as independent
-from siteplan.contracts import CandidateLayout, DesignBrief, ValidationReport
+from siteplan.contracts import CandidateLayout, DesignBrief, TowerPrototype, ValidationReport
 from siteplan.contracts.validation import LegalVerdict
 from siteplan.optimizer.guard import STUDY_NOT_LAID, held_to
 from siteplan.optimizer.interfaces import Budget, Proposal, SearchContext, Validator
@@ -49,7 +49,7 @@ from siteplan.optimizer.pareto import Scored, leaders, pareto_front, same_idea, 
 from siteplan.optimizer.preferences import not_weighed
 from siteplan.optimizer.search import fringe
 from siteplan.optimizer.search.build import build_candidate
-from siteplan.optimizer.search.columns import Choice
+from siteplan.optimizer.search.columns import Choice, Standing
 from siteplan.optimizer.search.layout import (
     SIDES,
     Config,
@@ -63,6 +63,7 @@ from siteplan.optimizer.search.layout import (
 from siteplan.optimizer.search.raising import raised
 from siteplan.optimizer.search.readings import Profile, profiles
 from siteplan.optimizer.search.verdicts import RestsOn, caveats, failed, rests_on
+from siteplan.prototypes.plates import PLATE_SOURCE
 from siteplan.towers import orientations
 
 NAME = "FULL"
@@ -90,6 +91,18 @@ class Limits:
     attempts_per_profile: int = 60
     judged_per_profile: int = 6  # candidates the validator judges, for each profile
     per_profile_proposed: int = 4  # the most proposed for each profile
+    # Floor plates sized to the land search in a pass of their own after the families' (whose
+    # quotas they never take), with this share of each quota (2026-10-13)
+    plate_share: float = 0.5
+
+    def for_plates(self) -> Limits:
+        """The plates' own pass: the same breadth, this share of each quota, at least one."""
+        def part(quota: int) -> int:
+            return max(1, round(quota * self.plate_share))
+        return replace(self, laid_per_profile=part(self.laid_per_profile),
+                       attempts_per_profile=part(self.attempts_per_profile),
+                       judged_per_profile=part(self.judged_per_profile),
+                       per_profile_proposed=part(self.per_profile_proposed))
 
 
 @dataclass(frozen=True)
@@ -112,6 +125,48 @@ class Tally:
     low_blocks: list[list[Polygon]] = field(default_factory=list)  # of each layout laid out
 
 
+@dataclass
+class _PlatePass:
+    """What the floor plates' own pass did."""
+
+    run: Run | None
+    found: list[Judged]
+    tally: Tally
+    skipped: bool = False  # the families spent the time budget
+
+    @property
+    def exhausted(self) -> bool:
+        return self.tally.exhausted
+
+    def note(self, share: float, chosen: Sequence[Judged]) -> str:
+        if self.skipped:
+            return ("floor plates: not searched, the families' search spent the time budget; "
+                    "the layouts proposed use the families alone")
+        mine = {j.candidate.candidate_id for j in self.found}
+        proposed = sum(1 for j in chosen if j.candidate.candidate_id in mine)
+        t = self.tally
+        return (f"floor plates: a pass of their own after the families' (whose search they "
+                f"leave as it is), {share:.0%} of each quota, every configuration in it laid "
+                f"out with a plate: {t.evaluated} configurations evaluated, {t.laid} laid out, "
+                f"{t.judged} judged, {proposed} proposed beside {len(chosen) - proposed} of the "
+                f"families'"
+                + ("; stopped on the time budget" if t.exhausted else ""))
+
+
+def _blocks(candidate: CandidateLayout) -> tuple:
+    """The blocks a layout stands, wherever it was found: two layouts alike in these are one."""
+    return tuple(sorted((t.prototype_id, t.floors_above_stilt, round(t.x, 3), round(t.y, 3),
+                         round(t.rotation_deg, 3), t.mirrored) for t in candidate.towers))
+
+
+def _kits(kit: Sequence[TowerPrototype]) -> tuple[list[TowerPrototype], list[TowerPrototype]]:
+    """The families and the floor plates sized to the land; a kit of plates alone searches
+    them as families would be."""
+    plates = [p for p in kit if p.source.startswith(PLATE_SOURCE)]
+    families = [p for p in kit if not p.source.startswith(PLATE_SOURCE)]
+    return (families, plates) if families else (plates, [])
+
+
 class _Stage:
     """The share of the time budget a stage may use: it expires when the share is spent. With no
     budget nothing expires."""
@@ -130,36 +185,83 @@ class FullSearchStrategy:
     def __init__(self, *, validator: Validator | None = None, limits: Limits | None = None):
         self.validator = validator or independent
         self.limits = limits or Limits()
+        self.prefix = NAME.lower()  # of every candidate id this search draws
+        self.plates: frozenset[str] = frozenset()  # when set, it lays only layouts using one
 
     def propose(self, context: SearchContext) -> Proposal:
+        """The families' search, exactly as without plates, then the floor plates' own bounded
+        pass, each layout in it using a plate, on what is left of the time budget; what both
+        judged is ranked together (2026-10-13). A plate is proposed only where its layout is
+        better, and never takes a family's place in the search."""
         site, rules, brief = context.site, context.rules, context.brief
         stop = _cannot_run(context)
         if stop:
             return Proposal(NAME, notes=(stop,))
         envelope = context.envelope or _envelope(site, rules)
+        families, plates = _kits(context.prototypes)
         found: list[Judged] = []
         tally = Tally()
         run: Run | None = None
         notes: list[str] = []
+        plating: _PlatePass | None = None
         passes = (True, False) if brief.design_margins.any_set else (False,)
         for with_margins in passes:
-            kit = list(context.prototypes)
-            wanted = profiles(rules, brief, kit)
-            run = make_run(site, rules, brief, envelope, kit, wanted, with_margins)
-            if not any(run.classes[p.key][pid] for p in wanted for pid in run.classes[p.key]):
+            run, found, tally = self._pass(context, families, envelope, with_margins)
+            plating = self._plate_pass(context, families, plates, envelope, with_margins, found)
+            if run is None and (plating is None or plating.run is None):
                 return Proposal(NAME, notes=(_no_floors(),))
-            tally = Tally()
-            found = self._search(context, run, wanted, tally)
+            found = [*found, *(plating.found if plating else [])]
             if found:
                 if brief.design_margins.any_set and not with_margins:
                     notes.append("the design margins could not all be kept on this site: the "
                                  "layouts keep the legal minimums, and each says what it misses")
                 break
         chosen = self._choose(found, brief)
-        return Proposal(NAME, tuple(j.candidate for j in chosen),
-                        tuple(notes + _notes(run, tally, found, chosen)
-                              + (_region_notes(run, tally, chosen) if run else [])),
-                        budget_exhausted=tally.exhausted)
+        notes += _notes(run, tally, found, chosen) + (_region_notes(run, tally, chosen)
+                                                      if run else [])
+        if plating is not None:
+            notes.append(plating.note(self.limits.plate_share, chosen))
+        return Proposal(NAME, tuple(j.candidate for j in chosen), tuple(notes),
+                        budget_exhausted=tally.exhausted or (plating is not None
+                                                             and plating.exhausted))
+
+    def _pass(self, context: SearchContext, kit: Sequence[TowerPrototype], envelope,
+              with_margins: bool) -> tuple[Run | None, list[Judged], Tally]:
+        """One search over one kit; no run when the law leaves its prototypes no floor count."""
+        site, rules, brief = context.site, context.rules, context.brief
+        kit = list(kit)
+        wanted = profiles(rules, brief, kit)
+        run = make_run(site, rules, brief, envelope, kit, wanted, with_margins)
+        if not any(run.classes[p.key][pid] for p in wanted for pid in run.classes[p.key]):
+            return None, [], Tally()
+        tally = Tally()
+        return run, self._search(context, run, wanted, tally), tally
+
+    def _plate_pass(self, context: SearchContext, families: Sequence[TowerPrototype],
+                    plates: Sequence[TowerPrototype], envelope, with_margins: bool,
+                    families_found: Sequence[Judged]) -> _PlatePass | None:
+        """The floor plates' own search: the families beside them (they still set the main
+        column depth), a share of each quota (Limits.for_plates), only configurations with a
+        plate laid out, on the time the families left. What its repairs and raises make is kept
+        whether or not a plate stays in it, so a layout found only this way is never lost; one
+        whose blocks the families' search already found is kept once, as theirs. None when there
+        are no plates to try."""
+        if not plates:
+            return None
+        budget = context.budget.rest()
+        if budget.expired():
+            return _PlatePass(None, [], Tally(exhausted=True), skipped=True)
+        searcher = FullSearchStrategy(validator=self.validator, limits=self.limits.for_plates())
+        searcher.prefix = f"{self.prefix}-plates"
+        searcher.plates = frozenset(p.id for p in plates)
+        run, found, tally = searcher._pass(replace(context, budget=budget),
+                                           [*families, *plates], envelope, with_margins)
+        theirs = {_blocks(j.candidate) for j in families_found}
+        return _PlatePass(run, [j for j in found if _blocks(j.candidate) not in theirs], tally)
+
+    def _admits(self, standing: Iterator[Standing] | Sequence[Standing]) -> bool:
+        """Whether a layout of these blocks belongs to this pass: any, or one with a plate."""
+        return not self.plates or any(s.choice.prototype.id in self.plates for s in standing)
 
     # --- the three stages -------------------------------------------------------------------
 
@@ -335,7 +437,8 @@ class FullSearchStrategy:
                 break
             _, _, ev = heapq.heappop(heap)
             signature = _signature(ev)
-            if signature in seen or not open_(ev.config.low_blocks):
+            if signature in seen or not open_(ev.config.low_blocks) or not self._admits(
+                    [*ev.standing, *(f.standing for f in ev.fringe)]):
                 continue
             seen.add(signature)
             result, why = _guarded(lay_out, run, ev, failed=(None, ""))
@@ -377,7 +480,7 @@ class FullSearchStrategy:
             candidate = build_candidate(
                 result, site=site, rules=rules, brief=brief, plot=run.plot, q=run.q,
                 profile=profile, envelope=run.envelope,
-                candidate_id=f"{NAME.lower()}-{profile.key}-{number}", seed=context.seed,
+                candidate_id=f"{self.prefix}-{profile.key}-{number}", seed=context.seed,
                 notes=_planning_notes(run))
             drawn.append((measure(candidate, brief), profile, candidate))
         order = []

@@ -4,6 +4,41 @@ A characterization test (tests/manifest.py) pins what the engine produces today.
 only together with a normative replacement test and an entry here: what changed, why, the
 evidence, and the test that now holds the behaviour. Newest first.
 
+## 2026-10-13: floor plates searched beside the families, never in their place (audit, phase 6)
+
+- **What changed.** The full search used to take the families and the floor plates as one kit,
+  and each column's best sequence could take a plate in a family's place.
+  - Now the families' search runs exactly as it does without plates, on its own quotas.
+  - The plates then have a pass of their own (`Limits.plate_share`, half of each quota, on the
+    time the families leave; skipped, and said so, when none is left). The families stand
+    beside them and still set the main column depth; only configurations with a plate are laid
+    out, their ids starting `full-plates-`. A repair or a raise of one that gives the plate up is
+    kept all the same (a layout only this pass reached is never lost), and one whose blocks the
+    families' search already judged is kept once, as theirs.
+  - What both passes judged is ranked together by the same selection, and the notes say what
+    the plates' pass did and how many of the proposed are its.
+- **Why.** On made-up land (200 x 120 m, the plate tests' flats) the merged kit lost family
+  layouts the families alone judged. One configuration came out with a plate at 597,596 sft
+  where its family version made 600,630.
+- **Tests.**
+  - `tests/test_search_plates_additive.py`: everything a families-only run judges is still
+    judged, unchanged by digest, with plates added. That test fails on the old merged kit (six
+    family layouts gone).
+  - Every layout the plates add is the plates' pass, some keep a plate, and the pass keeps a
+    layout only it found and drops a copy of a family's. On 200 x 60 m a plate layout is
+    proposed and beats every family layout judged.
+  - The pass is bounded and noted, and a spent budget leaves it unsearched and says so.
+  - `tests/test_service_plates.py` holds as before.
+- **The service baseline moves back to the families' four**
+  (`tests/test_service_proposals_baseline.py`, characterization). The four layouts shown on its
+  made-up land are again the four shown before plates joined the search: maximum yield and
+  robust are the same candidates to the digest. Balanced is `-109` (376 flats) where the merged
+  kit showed `-218` (384 flats, no plate in it). `-218` was a repair (C4-07) of one of the merged
+  run's most valuable layouts, a set the plates had entered, and neither pass now repairs it.
+  The open-space option is `ALL-77` (306 flats) where it was the plates' `ALL-ALL-134` (120
+  flats), which lies beyond their half quota. Three of the fifteen proposed are the plates'. The
+  normative replacement is `tests/test_search_plates_additive.py`.
+
 ## 2026-10-13: one reading of the rules across the pipeline (regulatory audit, phase 4)
 
 - **The steps read the rules as the resolver and the validator do (D11).**

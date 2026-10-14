@@ -51,6 +51,12 @@ class Budget:
     def expired(self) -> bool:
         return self.seconds is not None and self.elapsed() >= self.seconds
 
+    def rest(self) -> Budget:
+        """What is left of this allowance, as an allowance of its own starting now (none left
+        is zero seconds; no limit stays no limit)."""
+        left = None if self.seconds is None else max(0.0, self.seconds - self.elapsed())
+        return Budget(left, self._clock)
+
 
 @dataclass(frozen=True)
 class SearchContext:

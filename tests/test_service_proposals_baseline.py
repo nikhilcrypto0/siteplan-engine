@@ -134,6 +134,19 @@ balanced and robust are the same layouts; the open-space option is the same idea
 flats, 163,800 sft, numbered `ALL-ALL-134` where it was `-136`; among those not shown `-115`, 5 x
 S+8 and 272 flats, takes `-116`'s place (256 flats). The approval page is the same.
 
+Re-pinned on 2026-10-13 a sixth time (phase 6): the plates search in a bounded pass of their own
+after the families', whose search runs as it does without them, and both are ranked together.
+The four shown are the four this land showed before plates joined the search: maximum yield
+`-86` and robust `ALL-ALL-1`, the same candidates to the digest; balanced `-109` (S+2, S+2 and 3
+x S+10, 376 flats, 511,440 sft) where the merged kit showed `-218` (384 flats, 522,960 sft, no
+plate in it); the open-space option `ALL-77` (306 flats, 415,140 sft) where it showed
+`ALL-ALL-134` (5 x S+3 of plates, 120 flats). `-218` was a repair (C4-07) of one of the merged
+run's six most valuable layouts of its profile, a set the plates had entered: with the families'
+repair quota their own again and the plates' pass at half of each quota, neither repairs that
+layout. `ALL-ALL-134` lies beyond the plates' half quota. Three of the fifteen proposed are the
+plates' (`full-plates-`), 352, 340 and 200 flats, none shown; 150 laid out by the families and
+108 by the plates where the merged kit laid 219. The approval page is the same.
+
 The values pin exact output on the locked dependencies (uv.lock). They move only with a normative
 replacement and an entry in docs/behaviour-changes.md.
 """
@@ -209,40 +222,44 @@ PLATE_NOTES = [
 PINNED = {
     "notes": [
         *PLATE_NOTES,
-        ("FULL: 1536 configurations evaluated, 219 laid out, 24 judged by the validator, 15 "
+        ("FULL: 1536 configurations evaluated, 150 laid out, 24 judged by the validator, 15 "
          "proposed"),
         ("FULL: 3 of 15 proposed hold under every reading of the open questions; the others each "
          "name the readings they rest on"),
         ("FULL: every layout leaves the height above sea level CONDITIONAL (the site's location is "
          "not known), and the 45 t loading of the paving is not checked (a specification)"),
+        ("FULL: floor plates: a pass of their own after the families' (whose search they leave as "
+         "it is), 50% of each quota, every configuration in it laid out with a plate: 1536 "
+         "configurations evaluated, 108 laid out, 12 judged, 3 proposed beside 12 of the "
+         "families'"),
     ],
     "proposed": [
         "full-not_counted-allowed-86",
-        "full-not_counted-allowed-87",
+        "full-not_counted-allowed-92",
+        "full-not_counted-ALL-147",
         "full-ALL-allowed-30",
-        "full-not_counted-allowed-218",
-        "full-not_counted-ALL-215",
         "full-not_counted-allowed-109",
-        "full-not_counted-ALL-62",
-        "full-ALL-allowed-32",
-        "full-not_counted-ALL-169",
-        "full-ALL-allowed-213",
-        "full-not_counted-ALL-79",
+        "full-not_counted-ALL-60",
+        "full-plates-ALL-allowed-16",
+        "full-plates-not_counted-ALL-75",
+        "full-not_counted-allowed-133",
+        "full-not_counted-ALL-77",
+        "full-ALL-allowed-51",
         "full-ALL-ALL-1",
-        "full-ALL-ALL-115",
-        "full-ALL-allowed-165",
-        "full-ALL-ALL-134",
+        "full-ALL-ALL-114",
+        "full-ALL-ALL-13",
+        "full-plates-ALL-allowed-72",
     ],
-    "proposed_sha256": "f5c1a5d878c6e9b2d1a0abf350f9e45c67586a84de78f6da857029b54bbd434e",
+    "proposed_sha256": "c5f234667d4f41274472a37afbf0314f0fbc325dd37b0ae7548f34cc7c755f84",
     "shown": [
-        ["full-not_counted-allowed-218", "BALANCED"],
+        ["full-not_counted-allowed-109", "BALANCED"],
         ["full-not_counted-allowed-86", "MAX_YIELD"],
-        ["full-ALL-ALL-134", "CONVENTIONAL_OPEN_SPACE"],
+        ["full-not_counted-ALL-77", "CONVENTIONAL_OPEN_SPACE"],
         ["full-ALL-ALL-1", "ROBUST"],
     ],
-    "shown_digests": ["7553b768453c3625", "275fab1c4b11249a",
-                      "b514b685b7cc331d", "44abf7de5fada1c3"],
-    "answer_sha256": "ffcb56649dce3483a86669f8a63f285ada1b8a013a303d004dda378980e2e1ec",
+    "shown_digests": ["aa95405793f270e1", "275fab1c4b11249a",
+                      "576bb7d74270f252", "44abf7de5fada1c3"],
+    "answer_sha256": "eca9773e8ba28532f16f477e9f66a4f72a7adde6d8ed2efee1e524cddf13f1a0",
     "approval_page_sha256": "2b9223fec60c0f2988b8ade6b34bb309ab94b2935c794437dad5a125cb6ce087",
 }
 PROPOSALS: list = []
