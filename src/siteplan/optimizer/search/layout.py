@@ -543,8 +543,9 @@ def lay_out(run: Run, ev: Evaluation) -> tuple[Laid | None, str]:
         anchor=entrance.gate.centroid, cores=_cores(placements),
         gate_way=gate_way_in(run.plot.net, entrance.gate),
         # no fire band is laid round a block below the high-rise height, so no cellar runs under
-        # one
-        low=unary_union([f for f, tall in zip(footprints, high, strict=True) if not tall]))
+        # one; the cellar reaches every other block first (its lifts reach the parking)
+        low=unary_union([f for f, tall in zip(footprints, high, strict=True) if not tall]),
+        reaching=tuple(f for f, tall in zip(footprints, high, strict=True) if tall))
     furnished, why = _furnish_where_best(run, program)
     if furnished is None:
         return None, why
@@ -595,6 +596,7 @@ class _Program:
     low: BaseGeometry
     club_anchor: Point | None = None  # where the club house is looked for; the gate's when None
     gate_way: BaseGeometry = EMPTY  # the gate's width straight in across the plot: no tot-lot
+    reaching: tuple[Polygon, ...] = ()  # the blocks a cellar may stand under, reached first
 
 
 @dataclass(frozen=True)
@@ -682,7 +684,7 @@ def _furnish(run: Run, program: _Program, repair: str | None = None
 
     def parking(club_sqm: float, ramps: list[Polygon]):
         return plan_parking(plot.net, plot.excluded, rules, q, p.stilts, p.cores, ramps,
-                            p.tower_sqm + club_sqm, angle, p.low)
+                            p.tower_sqm + club_sqm, angle, p.low, reach=p.reaching)
 
     ramps: list[Polygon] = []
     avoid = p.open_land if repair == CLUB_OFF_OPEN else EMPTY

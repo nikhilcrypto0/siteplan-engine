@@ -1135,18 +1135,28 @@ REGISTRY: tuple[Constraint, ...] = (
     ),
     Constraint(
         "Parking", "How the full search sizes a cellar to what the need asks (C4-13): a "
-                   "rectangle grown round the ramp, its size found by halving, for the floor the "
+                   "region grown round the ramp, its size found by halving, for the floor the "
                    "need asks and then, while the cars counted leave it short, for the floor that "
-                   "many cars ask at the density counted and a little more.",
+                   "many cars ask at the density counted and a little more. Where it is dug "
+                   "(C4-17): first under every block that may stand over one (a block with a fire "
+                   "band, on the ground the ramp reaches), the region starting from the hull of "
+                   "the ramp's box and the boxes of their parts on that ground, then no further "
+                   "than the need. That every block's lifts reach the parking is a design choice, "
+                   "never a rule.",
         f"{parking_plan.CUT_STEPS} halvings; at most {parking_plan.FIT_ROUNDS} car counts, each "
-        f"asking {_pct(parking_plan.FIT_MARGIN)} more floor", Basis.ENGINE_DESIGN_ASSUMPTION,
+        f"asking {_pct(parking_plan.FIT_MARGIN)} more floor; a block's part left out by less than "
+        f"{parking_plan.REACH_SQM:g} m² is reached", Basis.ENGINE_DESIGN_ASSUMPTION,
         "none (optimizer.search.parking_plan._sized)",
         ("optimizer.search.parking_plan.CUT_STEPS", "optimizer.search.parking_plan.FIT_ROUNDS",
-         "optimizer.search.parking_plan.FIT_MARGIN"),
-        note="A search precision, never a rule: the cellar the plan keeps holds the need by its "
-             "floor area and by the cars laid out in it, and the validator counts both again on "
-             "the outline as drawn.",
-        settles="Nothing that passes a layout: how close to the need a cellar is cut.",
+         "optimizer.search.parking_plan.FIT_MARGIN", "optimizer.search.parking_plan.REACH_SQM"),
+        note="A search precision and a design choice, never a rule: the cellar the plan keeps "
+             "holds the need by its floor area and by the cars laid out in it, and the validator "
+             "counts both again on the outline as drawn. No order asks for a cellar under a "
+             "tower. The search digs none under a block below the high-rise height because it "
+             "lays no fire band round one; a cellar there would make it a special building (NBC "
+             "Part 4 1.2(b)(6), a separate LEGAL_RULE entry) held to 4.6's fire access.",
+        settles="The firm's drawn schemes: whether its lifts reach a cellar under every tower, "
+                "and how close to the need a cellar is cut.",
     ),
     Constraint(
         "Parking", "The share of a parking floor that bays and aisles are expected to fill, for "

@@ -6,10 +6,13 @@ setback of rule 13(c)(x), which grows with every level, less the cores, the ramp
 rule 13(c)(xi) allows for utilities, and runs under no block the search lays no fire band for: a
 block over a cellar of more than 500 m², or of two levels, is an NBC special building (Part 4
 1.2(b)(6)), held to 4.6's fire access whatever its height. It takes only what the need asks
-(C4-13): once the fewest levels are known, its outline is a rectangle square to the configuration's
+(C4-13): once the fewest levels are known, its outline is a region square to the configuration's
 turn grown round the ramp, the piece of the plot under the setback inside it that the ramp reaches
 and that holds the need, the same on every level; a level of the whole plot dug for a few cars was
-the rule before. The area is not
+the rule before. The region starts from the hull of the ramp's box and the box of each part, on the
+ground the ramp reaches, of a block that may stand over a cellar (C4-17), so the cellar reaches
+under each of them before it grows for the need, and their lifts reach the parking: a design
+choice, never a rule. The area is not
 enough: the cars laid out in bays and aisles on every floor have to meet it too, and that count is
 made here the way a floor is really laid out.
 
@@ -20,7 +23,7 @@ that meets the need here meets it there.
 from __future__ import annotations
 
 import math
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
 import numpy as np
@@ -31,7 +34,7 @@ from shapely.geometry.base import BaseGeometry
 from shapely.ops import unary_union
 
 from siteplan.contracts import ResolvedRules
-from siteplan.optimizer.search.land import EMPTY, erode, polygons
+from siteplan.optimizer.search.land import EMPTY, erode, grow, polygons
 from siteplan.optimizer.search.quantities import Quantities
 
 EPS_M = 0.01
@@ -42,6 +45,7 @@ SAFETY_SQM = 1.0  # what the plan keeps above the need, so rounding never leaves
 CUT_STEPS = 12  # halvings that size a cellar round its ramp: to 1/4096 of the plot (C4-13)
 FIT_ROUNDS = 4  # car counts a cellar is grown by at most, before the whole is kept
 FIT_MARGIN = 0.02  # each growth asks this much more floor than the cars counted suggest
+REACH_SQM = 0.01  # a block's part left outside a cellar's piece by less than this is reached
 
 
 def cars_on_floor(floor: BaseGeometry, turns_deg: Sequence[float], bay: tuple[float, float],
@@ -122,10 +126,13 @@ class ParkingPlan:
 def plan_parking(net: Polygon, excluded: BaseGeometry, rules: ResolvedRules, q: Quantities,
                  towers: Sequence[Polygon], cores: Sequence[BaseGeometry],
                  ramps: Sequence[Polygon], built_up_sqm: float, turn_deg: float,
-                 clear_of: BaseGeometry = EMPTY) -> tuple[ParkingPlan | None, str]:
+                 clear_of: BaseGeometry = EMPTY, *, reach: Sequence[Polygon] = ()
+                 ) -> tuple[ParkingPlan | None, str]:
     """The fewest cellar levels that meet Table V by floor area and by cars laid out, or why none
     do within the deepest the brief allows. The cellars run under nothing in `clear_of`: the
-    blocks with no fire band, which a cellar under them would make special buildings."""
+    blocks with no fire band, which a cellar under them would make special buildings. They reach
+    under every block in `reach` (the blocks that may stand over one) that the ramp's ground
+    joins, before they grow for the need (C4-17)."""
     need = max(q.parking_shares, default=0.0) / 100 * built_up_sqm * (1 + q.parking_margin)
     turns = sorted({turn_deg % 180, 0.0})
     core_land = unary_union([c for c in cores if not c.is_empty]) if cores else EMPTY
@@ -153,7 +160,7 @@ def plan_parking(net: Polygon, excluded: BaseGeometry, rules: ResolvedRules, q: 
         if provided >= level.target:
             if ramps:
                 density = cars_per_level / max(level.floor_of(outline), 1.0)
-                sized = _sized(outline, unary_union(ramps), turn_deg, level, density)
+                sized = _sized(outline, unary_union(ramps), turn_deg, level, density, reach)
                 if sized is not None:
                     outline, (per_level, cars_per_level, provided) = sized
             return ParkingPlan(need, stilt_sqm, stilt_cars,
@@ -200,40 +207,66 @@ class _Level:
 
 
 def _sized(outline: BaseGeometry, ramps: BaseGeometry, turn_deg: float, level: _Level,
-           density: float) -> tuple[BaseGeometry, tuple[float, int, float]] | None:
-    """The part of a cellar's outline the need takes (C4-13): a rectangle square to the turn grown
-    round the ramps, the piece of the outline inside it the ramps reach. The growth is placed for
-    the floor the need asks, by area and by its cars at the `density` the whole level was counted
-    at, and a little more (FIT_MARGIN); then, while the cars counted leave it short, for the floor
-    that many cars ask at the density counted on the piece, at most FIT_ROUNDS counts. The piece
-    and its count (`_Level.counted`); None, for the whole outline, when no smaller piece holds the
-    need."""
+           density: float, reach: Sequence[Polygon] = ()
+           ) -> tuple[BaseGeometry, tuple[float, int, float]] | None:
+    """The part of a cellar's outline the need takes (C4-13): a region square to the turn grown
+    round the ramps, the piece of the outline inside it the ramps reach. The region starts from the
+    hull of the ramps' box and the box of each block in `reach`'s part on the ramps' ground, where
+    that part is a bay or more (C4-17), and grows first until the piece holds those parts, then
+    for the need.
+    The growth is placed for the floor the need asks, by area and by its cars at the `density` the
+    whole level was counted at, and a little more (FIT_MARGIN); then, while the cars counted leave
+    it short, for the floor that many cars ask at the density counted on the piece, at most
+    FIT_ROUNDS counts. The piece and its count (`_Level.counted`); None, for the whole outline,
+    when no smaller piece holds the need and the blocks."""
     turned = rotate(outline, -turn_deg, origin=(0, 0))
     down = rotate(ramps, -turn_deg, origin=(0, 0))
-    rx0, ry0, rx1, ry1 = down.bounds
+    ground = min(polygons(outline), key=lambda p: p.distance(ramps), default=EMPTY)
+    bay_sqm = level.q.bay_m[0] * level.q.bay_m[1]
+    wanted = [part for block in reach if (part := block.intersection(ground)).area >= bay_sqm]
+    seed = unary_union([shapely.box(*g.bounds) for g in
+                        (down, *(rotate(w, -turn_deg, origin=(0, 0)) for w in wanted))]
+                       ).convex_hull
+    sx0, sy0, sx1, sy1 = seed.bounds
     x0, y0, x1, y1 = turned.bounds
-    whole = max(rx0 - x0, x1 - rx1, ry0 - y0, y1 - ry1, 0.0)  # the growth that takes it all
+    whole = max(sx0 - x0, x1 - sx1, sy0 - y0, y1 - sy1, 0.0)  # the growth that takes it all
+    if wanted:  # a hull, not a box: the farthest ground from it (its corners are never acute)
+        whole = max(whole, seed.hausdorff_distance(turned) + EPS_M)
 
     def piece(grown: float) -> BaseGeometry:
-        parts = polygons(turned.intersection(
-            shapely.box(rx0 - grown, ry0 - grown, rx1 + grown, ry1 + grown)))
+        region = grow(seed, grown) if wanted else \
+            shapely.box(sx0 - grown, sy0 - grown, sx1 + grown, sy1 + grown)
+        parts = polygons(turned.intersection(region))
         if not parts:
             return EMPTY
         near = min(parts, key=lambda p: p.distance(down))
         return rotate(near, turn_deg, origin=(0, 0))
 
+    def reaches(grown: float) -> bool:
+        held = piece(grown).buffer(EPS_M)
+        return all(w.difference(held).area < REACH_SQM for w in wanted)
+
+    def least(holds: Callable[[float], bool], short: float) -> float:
+        """The least growth from `short` up for which `holds` (halving, CUT_STEPS times)."""
+        enough = whole
+        for _ in range(CUT_STEPS):
+            middle = (short + enough) / 2
+            short, enough = (short, middle) if holds(middle) else (middle, enough)
+        return enough
+
+    if not reaches(whole):
+        return None
+    reached = 0.0 if reaches(0.0) else least(reaches, 0.0)
     most = level.floor_of(piece(whole))
 
     def grown_for(floor_sqm: float) -> float:
-        """The least growth whose piece gives this much floor a level (all of it if none does)."""
+        """The least growth past the blocks whose piece gives this much floor a level (all of it
+        if none does)."""
+        if wanted and level.floor_of(piece(reached)) >= floor_sqm:
+            return reached
         if most < floor_sqm:
             return whole
-        short, enough = 0.0, whole
-        for _ in range(CUT_STEPS):
-            middle = (short + enough) / 2
-            short, enough = (short, middle) if level.floor_of(piece(middle)) >= floor_sqm \
-                else (middle, enough)
-        return enough
+        return least(lambda grown: level.floor_of(piece(grown)) >= floor_sqm, reached)
 
     grown = grown_for(max(level.floor_needed,
                           level.cars_needed / max(density, 1e-9) * (1 + FIT_MARGIN)))

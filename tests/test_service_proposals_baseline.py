@@ -147,6 +147,12 @@ layout. `ALL-ALL-134` lies beyond the plates' half quota. Three of the fifteen p
 plates' (`full-plates-`), 352, 340 and 200 flats, none shown; 150 laid out by the families and
 108 by the plates where the merged kit laid 219. The approval page is the same.
 
+Re-pinned on 2026-10-16 (C4-17), where a cellar reaches under every block that may stand over one
+before it grows for the need: the notes, the fifteen proposed, the four shown, the answer and the
+approval page are the same; only the digests move, each cellar's outline now the hull of the ramp's
+and the blocks' boxes grown for the need. The normative replacement is tests/test_search_parking.py
+(no layout leaves a block that may have a cellar without one).
+
 The values pin exact output on the locked dependencies (uv.lock). They move only with a normative
 replacement and an entry in docs/behaviour-changes.md.
 """
@@ -250,15 +256,15 @@ PINNED = {
         "full-ALL-ALL-13",
         "full-plates-ALL-allowed-72",
     ],
-    "proposed_sha256": "c5f234667d4f41274472a37afbf0314f0fbc325dd37b0ae7548f34cc7c755f84",
+    "proposed_sha256": "5238999b2608b379680d86ac0d777bf446c02decdb86bec8831e9cbf5734210c",
     "shown": [
         ["full-not_counted-allowed-109", "BALANCED"],
         ["full-not_counted-allowed-86", "MAX_YIELD"],
         ["full-not_counted-ALL-77", "CONVENTIONAL_OPEN_SPACE"],
         ["full-ALL-ALL-1", "ROBUST"],
     ],
-    "shown_digests": ["aa95405793f270e1", "275fab1c4b11249a",
-                      "576bb7d74270f252", "44abf7de5fada1c3"],
+    "shown_digests": ["65354b18c7372901", "482af45294dd6248",
+                      "708cab7c3bc67ad9", "bdfef8d8dfee250b"],
     "answer_sha256": "eca9773e8ba28532f16f477e9f66a4f72a7adde6d8ed2efee1e524cddf13f1a0",
     "approval_page_sha256": "2b9223fec60c0f2988b8ade6b34bb309ab94b2935c794437dad5a125cb6ce087",
 }

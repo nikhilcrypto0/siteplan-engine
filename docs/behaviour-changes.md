@@ -4,6 +4,35 @@ A characterization test (tests/manifest.py) pins what the engine produces today.
 only together with a normative replacement test and an entry here: what changed, why, the
 evidence, and the test that now holds the behaviour. Newest first.
 
+## 2026-10-16: a cellar reaches under every block that may stand over one, then the need (C4-17)
+
+- **What changed.** The full search sized a cellar (C4-13) as a box square to the turn grown
+  evenly round its ramp until it held the need. Now the growth starts from the hull of the ramp's
+  box and the boxes of the parts, on the ground the ramp reaches, of every block that may stand
+  over a cellar (a block with a fire band; a part smaller than a bay is left out), grows first
+  until the piece holds those parts, and then only as far as the need asks, by floor area and by
+  cars laid out (`parking_plan._sized`, its new `reach`; `layout._Program.reaching`). A block
+  below the high-rise height still gets no cellar (`clear_of`: the search lays no fire band round
+  it, and a cellar would make it an NBC special building); a block cut off from the ramp's ground
+  is left alone; with no such block the cellar is exactly C4-13's.
+- **Why.** Every block's lifts reaching the parking is a design choice the architect asked for,
+  never a rule (constraints.py, the C4-13 entry). On the real sites' debug runs (figures kept
+  locally, client data) the cellar ran under ground no block needed while the block farthest
+  from the ramp stood mostly off it. Re-run: the same layouts, flats and verdicts on both sites,
+  every block that may stand over a cellar now wholly over it, for at most a few per cent more
+  cellar, the cars still meeting the need.
+- **Tests.** `tests/test_search_parking.py` (normative): a far block is reached and the cellar
+  stays within 1.1 times the need; a small need digs no more than the hull of the ramp and the
+  blocks; the cellar runs round a low block to reach a block, and leaves alone one no ground
+  joins to the ramp; and every proposal on the made-up rectangle and L-plots that digs a cellar
+  has each block the validator does not hold low under it (this fails on the old growth:
+  `full-not_counted-allowed-20` left T2 uncovered).
+- **The service baseline's digests move** (`tests/test_service_proposals_baseline.py`,
+  characterization): the notes, the fifteen proposed, the four shown, the answer and the approval
+  page are the same; only `proposed_sha256` and `shown_digests` move, every proposal there digging
+  a one-level cellar whose outline is now cut the new way. The normative replacement is
+  `tests/test_search_parking.py`.
+
 ## 2026-10-13: floor plates searched beside the families, never in their place (audit, phase 6)
 
 - **What changed.** The full search used to take the families and the floor plates as one kit,
