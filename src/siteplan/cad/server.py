@@ -118,6 +118,46 @@ def build(session: Session) -> FastMCP:
         parent's digest recorded; the validator judges it now and whenever it is used."""
         return guard(lambda: session.keep_layout(site, run_id, layout_id, note))
 
+    # Stage C (2026-10-16): each edit is saved as a version of its own, judged by the validator
+    # and drawn; the roads, fire lanes and parking stay as drawn, and what broke is named.
+
+    @server.tool()
+    def move_block(site: str, run_id: str, layout_id: str, block: str, east_m: float = 0.0,
+                   north_m: float = 0.0) -> dict:
+        """Move a block of a layout by east_m and north_m metres (negative for west or south)."""
+        return guard(lambda: session.move_block(site, run_id, layout_id, block, east_m,
+                                                north_m))
+
+    @server.tool()
+    def turn_block(site: str, run_id: str, layout_id: str, block: str, degrees: float) -> dict:
+        """Turn a block of a layout by degrees anticlockwise about the middle of its footprint."""
+        return guard(lambda: session.turn_block(site, run_id, layout_id, block, degrees))
+
+    @server.tool()
+    def move_club_house(site: str, run_id: str, layout_id: str, east_m: float = 0.0,
+                        north_m: float = 0.0) -> dict:
+        """Move a layout's club house by east_m and north_m metres."""
+        return guard(lambda: session.move_club_house(site, run_id, layout_id, east_m, north_m))
+
+    @server.tool()
+    def move_tot_lot_piece(site: str, run_id: str, layout_id: str, piece: int,
+                           east_m: float = 0.0, north_m: float = 0.0) -> dict:
+        """Move tot-lot piece `piece` (counted from 1, as CAD names them) by east_m, north_m."""
+        return guard(lambda: session.move_tot_lot_piece(site, run_id, layout_id, piece, east_m,
+                                                        north_m))
+
+    @server.tool()
+    def lock_blocks(site: str, run_id: str, layout_id: str, blocks: list[str]) -> dict:
+        """Lock blocks of a layout: a version in which, and in every version made from it, an
+        edit that would move them is refused."""
+        return guard(lambda: session.lock_blocks(site, run_id, layout_id, blocks))
+
+    @server.tool()
+    def read_layout_from_cad(site: str, run_id: str, layout_id: str) -> dict:
+        """Take a layout as it now stands in FreeCAD (blocks dragged or turned, the club house or
+        a tot-lot piece redrawn) into a version of its own, judged by the validator."""
+        return guard(lambda: session.read_layout_from_cad(site, run_id, layout_id))
+
     @server.tool()
     def save_drawing(site: str, file_name: str) -> str:
         """Save the site's FreeCAD document as file_name (a bare name ending .FCStd) in the

@@ -91,6 +91,7 @@ EXEMPT = {
 # message's length. A new number belongs in constraints.py unless it is plainly one of these.
 NOT_DOMAIN = {
     "contracts.resolved_rules.ELIGIBILITY_RANK": "the order of the Eligibility labels",
+    "service.versions.WORSE": "the order of results, PASS below CONDITIONAL below FAIL",
     "geometry.COMPASS_DEG": "the bearing each compass label names",
     "flat_import.MM_M": "a unit: room sizes are written in millimetres",
     "flat_import.SQM_SQFT": "a unit: square feet in a square metre",

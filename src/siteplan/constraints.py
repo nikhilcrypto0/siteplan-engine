@@ -74,6 +74,7 @@ from siteplan.prototypes import compose, plates
 from siteplan.prototypes import library as prototype_library
 from siteplan.service import brief as service_brief
 from siteplan.service import describe as service_describe
+from siteplan.service import edits as service_edits
 from siteplan.steps import buildings as step_buildings
 from siteplan.steps import main_road_height as step_height
 from siteplan.steps import road_widening as step_widening
@@ -2030,6 +2031,19 @@ REGISTRY: tuple[Constraint, ...] = (
         ("cad.live.POLE_M",),
         note="Where a test footprint lands, never a layout.",
         settles="Nothing: a search tolerance.",
+    ),
+    Constraint(
+        "Live CAD", "Reading an edited layout back from FreeCAD (Stage C, 2026-10-16): a shape "
+                    "that differs from the layout's by less than this area did not change, a "
+                    "block turned by less than this angle was only moved, and a block's outline "
+                    "must be its own footprint moved and turned, corner for corner, within this "
+                    "distance (else it is refused as reshaped).",
+        f"{cad_live.SAME_SQM:g} m²; {cad_live.TURN_DEG:g} degrees; "
+        f"{_m(service_edits.RIGID_TOL_M)}", Basis.ENGINE_DESIGN_ASSUMPTION,
+        "none (the engine's own)",
+        ("cad.live.SAME_SQM", "cad.live.TURN_DEG", "service.edits.RIGID_TOL_M"),
+        note="Drawing tolerances, never a rule: the validator measures every edited layout.",
+        settles="Nothing: a drawing tolerance.",
     ),
     Constraint(
         "Live CAD", "The acceptance run moves its test tower this far east through MCP and this "

@@ -25,12 +25,15 @@ from pydantic import BaseModel, ConfigDict
 
 from siteplan import validator
 from siteplan.contracts import CandidateLayout, ValidationReport, digest
+from siteplan.contracts.common import Status
 from siteplan.service import store
 from siteplan.service.store import Inputs, RunRecord, StoreError
 
 VERSIONS = "versions"
 FILES = ("version.json", "candidate.json", "report.json")
 _SUFFIX = re.compile(r"-v\d+$")
+WORSE = {Status.PASS: 0, Status.INFO: 0, Status.NOT_CHECKED: 0, Status.CONDITIONAL: 1,
+         Status.FAIL: 2}  # an ordering of results, not a figure
 
 
 class LayoutVersion(BaseModel):
@@ -45,6 +48,10 @@ class LayoutVersion(BaseModel):
     edits: list[str] = []  # what was changed from the parent, in the engine's words
     note: str = ""
     saved_at: str  # UTC, ISO 8601
+    # Stage C: the blocks locked in it (kept in every version made from it), and what the edit
+    # broke, every legal check that held in the parent and holds no more (`what_broke`)
+    locked: list[str] = []
+    broke: list[str] = []
 
 
 def folder(out: Path, run_id: str, version_id: str) -> Path:
@@ -127,10 +134,13 @@ def next_id(out: Path, record: RunRecord, parent_id: str) -> str:
 
 def make_version(out: Path, record: RunRecord, parent_id: str,
                  candidate: CandidateLayout | None = None, edits: list[str] | None = None,
-                 note: str = "") -> tuple[LayoutVersion, CandidateLayout, ValidationReport]:
+                 note: str = "", *, locked: list[str] | None = None,
+                 before: ValidationReport | None = None
+                 ) -> tuple[LayoutVersion, CandidateLayout, ValidationReport]:
     """Save a version of `parent_id` in its run: the parent unchanged when no candidate is given,
     else the candidate given (an edit). Refused when the parent's references do not hold or the
-    candidate was not made for the run's stored inputs. The validator judges it now."""
+    candidate was not made for the run's stored inputs. The validator judges it now; with the
+    parent's fresh report (`before`), what the edit broke is written into the version."""
     inputs = store.load_inputs(out, record)
     base, recorded, broken = parent(out, record, inputs, parent_id)
     if broken:
@@ -144,9 +154,34 @@ def make_version(out: Path, record: RunRecord, parent_id: str,
     version = LayoutVersion(
         version_id=version_id, run_id=record.run_id, parent_id=parent_id,
         parent_digest=recorded, digest=digest(made), report_digest=digest(report),
-        edits=list(edits or []), note=note, saved_at=datetime.now(UTC).isoformat())
+        edits=list(edits or []), note=note, saved_at=datetime.now(UTC).isoformat(),
+        locked=sorted(locked or []), broke=what_broke(before, report) if before else [])
     _write_once(folder(out, record.run_id, version_id), version, made, report)
     return version, made, report
+
+
+def what_broke(before: ValidationReport, after: ValidationReport) -> list[str]:
+    """Every legal check that held before and holds no more, or worse than it did (PASS to
+    CONDITIONAL, or either to FAIL), in the validator's words, and every discrepancy that now
+    blocks a pass. A check found only after counts as having held."""
+    from siteplan.service.judge import item_name  # noqa: PLC0415 - judge reads versions
+
+    was = {_key(c): c.finding.status for c in before.legal}
+    found = []
+    for check in after.legal:
+        old, new = was.get(_key(check), Status.PASS), check.finding.status
+        if WORSE.get(new, 0) > WORSE.get(old, 0):
+            f = check.finding
+            found.append(f"{item_name(check)}: {old.value} -> {new.value}: {f.measured} "
+                         f"(needs {f.required})")
+    blocked = {d.item for d in before.cross_checks if d.blocks_pass}
+    found += [f"{d.item}: now blocks a pass ({d.source} {d.theirs}, validator {d.ours})"
+              for d in after.cross_checks if d.blocks_pass and d.item not in blocked]
+    return found
+
+
+def _key(check) -> tuple:
+    return check.family, check.subject, check.finding.rule
 
 
 def _write_once(path: Path, version: LayoutVersion, candidate: CandidateLayout,

@@ -21,7 +21,7 @@ from siteplan.cad import scene
 from siteplan.cad.bridge import Bridge, from_cad, to_cad
 from siteplan.profiles import load_profile
 from siteplan.prototypes.plates import PLATE_SOURCE
-from siteplan.service import describe, judge, render, store, versions
+from siteplan.service import describe, edits, judge, render, store, versions
 from siteplan.service.models import Mode
 from siteplan.service.store import RunRecord
 from siteplan.steps.inputs import Inputs, from_answers, from_project
@@ -35,6 +35,8 @@ FIT_M = 0.01  # a footprint this far past a line still keeps it (drawing noise)
 MATCH_M = 0.001  # CAD and engine agree when no vertex is further apart than this
 MATCH_SHARE = 1e-6  # ... and their areas differ by less than this share
 POLE_M = 0.1  # how finely the middle of the buildable area is looked for
+SAME_SQM = 1e-4  # a shape read back from CAD differing by less than this area did not change
+TURN_DEG = 0.01  # a block read back turned by less than this was only moved
 
 
 @dataclass
@@ -92,6 +94,21 @@ def tower_polygon(x: float, y: float, length_m: float, depth_m: float,
     hl, hd = length_m / 2, depth_m / 2
     return Polygon([(x + ux * sl * hl + vx * sd * hd, y + uy * sl * hl + vy * sd * hd)
                     for sl, sd in ((-1, -1), (1, -1), (1, 1), (-1, 1))])
+
+
+def _moved(what: str, east_m: float, north_m: float) -> str:
+    east_m, north_m = round(east_m, 2) + 0.0, round(north_m, 2) + 0.0  # no '-0.00 m'
+    return (f"{what} moved {abs(east_m):.2f} m {'east' if east_m >= 0 else 'west'}, "
+            f"{abs(north_m):.2f} m {'north' if north_m >= 0 else 'south'}")
+
+
+def _shift_words(old, new, before: Polygon, after: Polygon) -> str:
+    """How a block read back from CAD moved: turned, and how far its middle went."""
+    turn = (new.rotation_deg - old.rotation_deg + 180) % 360 - 180
+    east, north = after.centroid.x - before.centroid.x, after.centroid.y - before.centroid.y
+    moved = _moved(old.name, east, north)
+    return (f"{old.name} turned {turn:.2f} degrees anticlockwise and {moved.split(' ', 1)[1]}"
+            if abs(turn) >= TURN_DEG else moved)
 
 
 class Session:
@@ -384,6 +401,93 @@ class Session:
         return {"site": name, "run": run_id, "version": version.version_id,
                 "parent": version.parent_id, "verdict": judged.report.verdict.legal.value,
                 "refusals": judge.refusals(judged)}
+
+    # --- edits of a layout (Stage C, 2026-10-16) ----------------------------------------------
+
+    def move_block(self, name: str, run_id: str, layout_id: str, block: str, east_m: float,
+                   north_m: float) -> dict:
+        return self._edit(name, run_id, layout_id,
+                          lambda c: edits.moved_block(c, block, east_m, north_m),
+                          [_moved(block, east_m, north_m)], [block])
+
+    def turn_block(self, name: str, run_id: str, layout_id: str, block: str,
+                   degrees: float) -> dict:
+        return self._edit(name, run_id, layout_id,
+                          lambda c: edits.turned_block(c, block, degrees),
+                          [f"{block} turned {degrees:g} degrees anticlockwise"], [block])
+
+    def move_club_house(self, name: str, run_id: str, layout_id: str, east_m: float,
+                        north_m: float) -> dict:
+        return self._edit(name, run_id, layout_id,
+                          lambda c: edits.moved_club(c, east_m, north_m),
+                          [_moved("club house", east_m, north_m)])
+
+    def move_tot_lot_piece(self, name: str, run_id: str, layout_id: str, piece: int,
+                           east_m: float, north_m: float) -> dict:
+        return self._edit(name, run_id, layout_id,
+                          lambda c: edits.moved_piece(c, piece, east_m, north_m),
+                          [_moved(f"tot-lot piece {piece}", east_m, north_m)])
+
+    def lock_blocks(self, name: str, run_id: str, layout_id: str, blocks: list[str]) -> dict:
+        out, record = self._run(name, run_id)
+        done = edits.lock(out, record, layout_id, blocks)
+        return self._after(name, run_id, done)
+
+    def read_layout_from_cad(self, name: str, run_id: str, layout_id: str) -> dict:
+        """Take a layout as it now stands in FreeCAD (blocks dragged or turned, the club house or
+        a tot-lot piece redrawn) into a version of its own, judged by the validator; nothing is
+        saved when nothing changed. A block reshaped in CAD is refused."""
+        out, record = self._run(name, run_id)
+        candidate = judge.judge_again(out, record, layout_id).candidate
+        self.bridge.document(self._document(name))
+        changed, words, moved = candidate, [], []
+        for tower in candidate.towers:
+            outline = self._outline(f"{scene.LAYOUT}{tower.name.lower()}")
+            placed = candidate.placed_footprint(tower)
+            if outline is None or outline.symmetric_difference(placed).area < SAME_SQM:
+                continue
+            changed = edits.block_from_outline(changed, tower.name, outline)
+            new = next(t for t in changed.towers if t.name == tower.name)
+            words.append(_shift_words(tower, new, placed, changed.placed_footprint(new)))
+            moved.append(tower.name)
+        club = candidate.program.club_house
+        outline = self._outline(f"{scene.LAYOUT}club-1")
+        if club is not None and outline is not None and outline.symmetric_difference(
+                club.shape.to_shapely()).area >= SAME_SQM:
+            changed = edits.club_from_outline(changed, outline)
+            words.append("club house redrawn in CAD")
+        for k, pocket in enumerate(candidate.program.open_space, 1):
+            outline = self._outline(f"{scene.LAYOUT}open-{k}")
+            if outline is not None and outline.symmetric_difference(
+                    pocket.to_shapely()).area >= SAME_SQM:
+                changed = edits.piece_from_outline(changed, k, outline)
+                words.append(f"tot-lot piece {k} redrawn in CAD")
+        if not words:
+            return {"site": name, "run": run_id, "layout": layout_id, "version": None,
+                    "edits": [], "said": "nothing in FreeCAD differs from the layout"}
+        final = changed
+        return self._edit(name, run_id, layout_id, lambda _: final, words, moved)
+
+    def _edit(self, name: str, run_id: str, layout_id: str, change, words: list[str],
+              moves: list[str] = ()) -> dict:
+        out, record = self._run(name, run_id)
+        done = edits.edit(out, record, layout_id, change, words, moves)
+        return self._after(name, run_id, done)
+
+    def _after(self, name: str, run_id: str, done) -> dict:
+        """The version an edit made, drawn in FreeCAD, and what it broke."""
+        shown = self.show_layout(name, run_id, done.version.version_id)
+        return {"site": name, "run": run_id, "version": done.version.version_id,
+                "parent": done.version.parent_id, "edits": list(done.version.edits),
+                "locked": list(done.version.locked), "broke": list(done.broke),
+                "verdict": done.report.verdict.legal.value, "refusals": list(done.refusals),
+                "labels": shown["labels"]}
+
+    def _outline(self, ident: str) -> Polygon | None:
+        got = self.bridge.read(ident)
+        if not got or not got.get("rings"):
+            return None
+        return Polygon([from_cad(p) for p in got["rings"][0]])
 
     def _run(self, name: str, run_id: str) -> tuple[Path, RunRecord]:
         """A run of the service for this site: in the folder the sites file names as 'runs' (the

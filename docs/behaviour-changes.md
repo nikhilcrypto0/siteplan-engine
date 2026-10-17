@@ -33,6 +33,28 @@ evidence, and the test that now holds the behaviour. Newest first.
   a one-level cellar whose outline is now cut the new way. The normative replacement is
   `tests/test_search_parking.py`.
 
+## 2026-10-16: a layout edited by hand, each edit a judged version (Stage C)
+
+- **What changed.** Nothing a run proposes, shows or judges moves; editing is added.
+  - Edits (`service/edits.py`): a block moved or turned (about its own middle), the club house
+    or a tot-lot piece moved, blocks locked; a layout dragged in FreeCAD read back (a block
+    must be its own outline moved and turned, `RIGID_TOL_M`, else it is refused as reshaped).
+    Each edit is a version (`versions.make_version`), judged by the validator, with what it
+    broke written into it (`versions.what_broke`: every legal check that held in the parent
+    and holds no more, and every discrepancy that now blocks a pass). A locked block stays
+    locked down the line and an edit that would move it is refused.
+  - Roads, fire lanes and parking stay as drawn; nothing is laid again (Stage D). An edited
+    layout drops what the generator worked out from where things stood (its ledger, rule
+    layers, claims, scores and Pareto tag) and claims only the open space the validator counts,
+    so no stale figure of the generator's is reported as a discrepancy (found on Dhulapally: a
+    club house moved onto open ground kept the generator's open-space figure).
+  - FreeCAD (`siteplan-cad`): move_block, turn_block, move_club_house, move_tot_lot_piece,
+    lock_blocks, read_layout_from_cad; each saves the version, draws it and says what broke.
+- **Why.** The architect's roadmap, 2026-10-16: architect control, every change through the
+  independent validator, roads and parking kept as drawn and what broke named.
+- **Tests.** `tests/test_layout_edits.py` (normative, made-up land, every figure worked by
+  hand); `tests/test_cad.py`'s list of tools.
+
 ## 2026-10-16: any layout of a run in FreeCAD, and versions in the run's folder (Stage B)
 
 - **What changed.** Nothing a run proposes, shows or judges moves; two things are added.
