@@ -95,6 +95,13 @@ class Limits:
     # quotas they never take), with this share of each quota (2026-10-13)
     plate_share: float = 0.5
 
+    def for_options(self, options: int) -> Limits:
+        """Enough judged and proposed for each profile to hold the layouts a brief asks to see
+        (2026-10-16): as many different ideas as it asks may come from one profile. The layouts
+        laid out are not raised, so the extra time is the validator's."""
+        return replace(self, judged_per_profile=max(self.judged_per_profile, options),
+                       per_profile_proposed=max(self.per_profile_proposed, options))
+
     def for_plates(self) -> Limits:
         """The plates' own pass: the same breadth, this share of each quota, at least one."""
         def part(quota: int) -> int:
@@ -159,6 +166,14 @@ def _blocks(candidate: CandidateLayout) -> tuple:
                          round(t.rotation_deg, 3), t.mirrored) for t in candidate.towers))
 
 
+def options_beyond_points(brief: DesignBrief) -> int:
+    """How many layouts the brief asks to see when that is more than its Pareto points (the
+    alternatives it always gets, one a point), else 0: only such a brief raises the search's
+    quotas (Limits.for_options), so one asking for no more than its points runs as before."""
+    asked = brief.objectives.options
+    return asked if asked > len(set(brief.objectives.pareto)) else 0
+
+
 def _kits(kit: Sequence[TowerPrototype]) -> tuple[list[TowerPrototype], list[TowerPrototype]]:
     """The families and the floor plates sized to the land; a kit of plates alone searches
     them as families would be."""
@@ -194,6 +209,9 @@ class FullSearchStrategy:
         judged is ranked together (2026-10-13). A plate is proposed only where its layout is
         better, and never takes a family's place in the search."""
         site, rules, brief = context.site, context.rules, context.brief
+        wider = self.limits.for_options(options_beyond_points(brief))
+        if wider != self.limits:  # the brief asks to see more than these limits judge
+            return FullSearchStrategy(validator=self.validator, limits=wider).propose(context)
         stop = _cannot_run(context)
         if stop:
             return Proposal(NAME, notes=(stop,))

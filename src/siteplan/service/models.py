@@ -386,6 +386,11 @@ class CandidateSummary(Frozen):
     program_verdict: ProgramVerdict
     unverified: list[UnresolvedItem]
     holds_under_every_reading: bool
+    # 2026-10-16: the layout in one plain line (blocks, heights, the way they run, where the open
+    # space and the club house are, how it differs from the most alike shown), and its verdict
+    # with what it rests on; both measured by service.describe, never the model's
+    description: str = ""
+    verdict: str = ""
 
 
 class ProposeStatus(StrEnum):

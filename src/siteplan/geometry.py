@@ -21,6 +21,21 @@ FACING_DEG = 45.0
 DIAGONAL_SLOP_DEG = 22.5
 
 
+COMPASS_WORDS = {"N": "north", "NE": "north-east", "E": "east", "SE": "south-east",
+                 "S": "south", "SW": "south-west", "W": "west", "NW": "north-west"}
+
+
+def compass_of(bearing_deg: float) -> str:
+    """The nearest of the eight compass points to a bearing (0 north, 90 east), as a word."""
+    code = min(COMPASS_DEG, key=lambda c: angle_between(bearing_deg, COMPASS_DEG[c]))
+    return COMPASS_WORDS[code]
+
+
+def bearing_to(origin: tuple[float, float], to: tuple[float, float]) -> float:
+    """The bearing from one point to another, clockwise from north (y is north)."""
+    return math.degrees(math.atan2(to[0] - origin[0], to[1] - origin[1])) % 360
+
+
 def angle_between(a_deg: float, b_deg: float) -> float:
     """The smaller angle between two bearings, in degrees."""
     return abs((a_deg - b_deg + 180) % 360 - 180)

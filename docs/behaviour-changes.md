@@ -33,6 +33,29 @@ evidence, and the test that now holds the behaviour. Newest first.
   a one-level cellar whose outline is now cut the new way. The normative replacement is
   `tests/test_search_parking.py`.
 
+## 2026-10-16: up to ten genuinely different layouts shown, each described (Stage A)
+
+- **What changed.** A service run shows the brief's four points and then the next different
+  ideas by yield, up to 10 (`service.brief.SHOWN_LAYOUTS`; the brief's `options`, 3 before).
+  - Two layouts are one idea as before (`pareto.same_idea`: as many blocks, running the same way,
+    on mostly the same ground); no copy is shown.
+  - When fewer than asked are found, the run's notes say how many passed the validator and how
+    many of the rest are the same idea as one shown (`pareto.shortfall`).
+  - The full search judges and proposes at least as many for each profile as the brief asks
+    (`Limits.for_options`), only when it asks to see more than its points
+    (`strategy.options_beyond_points`): a brief asking 3 (the contract's default, fewer than its
+    four points) runs exactly as before. What it lays out is unchanged.
+  - Each layout shown carries `description` (its blocks, heights, the way they run, where the
+    open space and the club house are, how it differs from the most alike shown) and `verdict`
+    (PASS, CONDITIONAL with what it rests on, or FAIL with the rules), measured by
+    `service.describe`.
+- **Why.** The architect's roadmap, 2026-10-16: about ten genuinely different layouts per site,
+  only different ones, each told apart in plain words with its verdict.
+- **Tests.** `tests/test_shown_layouts.py` (normative): only different ideas, the shortfall
+  said, the quotas raised and nothing else, the words worked out by hand from the geometry.
+  `tests/test_service_proposals_baseline.py` (characterization) re-pinned, with a test that
+  every layout shown is a different idea, described, with its verdict, and none fails.
+
 ## 2026-10-13: floor plates searched beside the families, never in their place (audit, phase 6)
 
 - **What changed.** The full search used to take the families and the floor plates as one kit,

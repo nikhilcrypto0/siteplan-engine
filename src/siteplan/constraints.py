@@ -72,6 +72,8 @@ from siteplan.optimizer.search import layout as search_layout
 from siteplan.optimizer.search import raising as search_raising
 from siteplan.prototypes import compose, plates
 from siteplan.prototypes import library as prototype_library
+from siteplan.service import brief as service_brief
+from siteplan.service import describe as service_describe
 from siteplan.steps import buildings as step_buildings
 from siteplan.steps import main_road_height as step_height
 from siteplan.steps import road_widening as step_widening
@@ -1431,6 +1433,31 @@ REGISTRY: tuple[Constraint, ...] = (
              "validator judges every candidate. A firm's design margin on the gap is added "
              "apart (design_margins.tower_gap_extra_m).",
         settles="Nothing: search breadth.",
+    ),
+    Constraint(
+        "Towers", "How many genuinely different layouts a run shows (2026-10-16): the brief's "
+                  "points first, then the next different ideas by yield; never a copy (as many "
+                  "blocks, running the same way, on mostly the same ground), and the run says "
+                  "why when the site gives fewer. The search judges and proposes at least as many "
+                  "for each profile (Limits.for_options) when more are asked than the brief's "
+                  "points.",
+        f"up to {service_brief.SHOWN_LAYOUTS}", Basis.ENGINE_DESIGN_ASSUMPTION,
+        "the architect's roadmap, 2026-10-16: about 10 genuinely different layouts per site "
+        "(service.brief.SHOWN_LAYOUTS)",
+        ("service.brief.SHOWN_LAYOUTS",),
+        note="A count of options to show, never a rule: each is judged by the validator.",
+        settles="The architect, once he has seen how many each site gives.",
+    ),
+    Constraint(
+        "Towers", "How a layout shown is described in words: where in the plot a thing is (the "
+                  "net plot's bounds cut in three each way: the centre or a compass point) and "
+                  "which way a block runs (the nearest of four compass axes to its long side).",
+        f"{service_describe.PLOT_CELLS} x {service_describe.PLOT_CELLS} cells; axes at "
+        f"{', '.join(f'{a} degrees' for a in service_describe.AXES)}",
+        Basis.ENGINE_DESIGN_ASSUMPTION, "none (service.describe)",
+        ("service.describe.PLOT_CELLS", "service.describe.AXES"),
+        note="Words for a description only: no check, score or choice reads them.",
+        settles="Nothing: wording.",
     ),
     Constraint(
         "Towers", "When the plot has no room to spare, the end of it the full search keeps for "

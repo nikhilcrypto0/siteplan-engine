@@ -35,7 +35,7 @@ from siteplan.contracts.design_brief import ParetoPoint, UnitsMode
 from siteplan.optimizer.guard import Rejection, Validated, guard, inputs_of, why_refused
 from siteplan.optimizer.interfaces import Budget, SearchContext, Strategy, Validator
 from siteplan.optimizer.objective import measure
-from siteplan.optimizer.pareto import Scored, select
+from siteplan.optimizer.pareto import Scored, select, shortfall
 from siteplan.optimizer.search.verdicts import rests_on
 
 
@@ -92,8 +92,12 @@ def optimize(site: CanonicalSiteModel, rules: ResolvedRules, brief: DesignBrief,
 
     scores = {c.candidate_id: measure(c, brief) for c in candidates}
     guarded = guard(candidates, validator, site, rules, brief, envelope)
-    selection = select([Scored(v.candidate, scores[v.candidate.candidate_id], _rests(v.report))
-                        for v in guarded.passed], brief)
+    pool = [Scored(v.candidate, scores[v.candidate.candidate_id], _rests(v.report))
+            for v in guarded.passed]
+    selection = select(pool, brief)
+    short = shortfall(selection, pool, brief)
+    if short:  # fewer genuinely different layouts than the brief asks to see, and why
+        notes.append(short)
 
     inputs = inputs_of(site, rules, brief)
     alternatives, rejected = [], list(guarded.rejected)

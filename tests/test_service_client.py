@@ -27,6 +27,7 @@ from siteplan.contracts.common import SourceKind
 from siteplan.contracts.design_brief import ParetoPoint
 from siteplan.contracts.validation import LegalVerdict
 from siteplan.intake import WORKSPACE_FILE, build_project, extract, load_defaults, save
+from siteplan.optimizer.pareto import same_idea
 from siteplan.profiles import apply_profile, load_profile
 from siteplan.provenance import Provenance
 from siteplan.service import (
@@ -42,6 +43,7 @@ from siteplan.service import (
     ServiceError,
     ValidateCandidate,
 )
+from siteplan.service.brief import SHOWN_LAYOUTS
 from siteplan.validator.shapes import sides_of
 
 TEST_CLASS = "normative"
@@ -121,9 +123,16 @@ def site(request, tmp_path_factory):
 
 
 def test_the_service_proposes_full_alternatives_with_no_legal_fail(site):
-    name, _, service, proposed, _ = site
+    name, folder, service, proposed, _ = site
     assert proposed.status is ProposeStatus.PROPOSED, (name, proposed.notes)
-    assert 1 <= len(proposed.candidates) <= len(ParetoPoint), name  # one a point at most
+    # one a point at most, then (Stage A, 2026-10-16) the next different ideas, up to SHOWN_LAYOUTS
+    assert 1 <= len(proposed.candidates) <= SHOWN_LAYOUTS, name
+    points = [c.pareto_point for c in proposed.candidates if c.pareto_point]
+    assert len(points) == len(set(points)) <= len(ParetoPoint), name
+    shown = [CandidateLayout.model_validate_json(
+        (folder / "out" / proposed.run_id / "candidates" / f"{c.candidate_id}.json").read_text())
+        for c in proposed.candidates]
+    assert not any(same_idea(a, b) for i, a in enumerate(shown) for b in shown[i + 1:]), name
     for candidate in proposed.candidates:
         assert candidate.strategy == "FULL", name
         assert candidate.legal_verdict is not LegalVerdict.FAIL, (name, candidate.candidate_id)

@@ -9,6 +9,9 @@ checked; what was removed goes to the log only.
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
+
+from shapely.geometry import Polygon
 
 from siteplan.contracts import (
     BuildableEnvelope,
@@ -25,6 +28,7 @@ from siteplan.guards import sanitize_brief
 from siteplan.intake import Draft
 from siteplan.optimizer.search.verdicts import rests_on
 from siteplan.prototypes.plates import PLATE_SOURCE, Plate
+from siteplan.service import describe
 from siteplan.service.judge import unresolved_items
 from siteplan.service.models import (
     MAX_TEXT_CHARS,
@@ -280,7 +284,10 @@ def plate_line(plate: Plate) -> str:
 
 
 def candidate_summary(candidate: CandidateLayout, report: ValidationReport,
-                      preferred: ParetoPoint | None) -> CandidateSummary:
+                      preferred: ParetoPoint | None, net: Polygon | None = None,
+                      shown: Sequence[CandidateLayout] = ()) -> CandidateSummary:
+    """What the architect and the model are told of a layout shown; with the net plot, its one
+    plain line beside the others `shown` (service.describe)."""
     m = candidate.metrics
     return CandidateSummary(
         candidate_id=candidate.candidate_id, strategy=candidate.strategy,
@@ -293,7 +300,9 @@ def candidate_summary(candidate: CandidateLayout, report: ValidationReport,
         open_space_share_pct=round(m.open_space_share_pct, 2) if m else 0.0,
         legal_verdict=report.verdict.legal, program_verdict=report.verdict.program,
         unverified=unresolved_items(report),
-        holds_under_every_reading=rests_on(report).holds_under_every_reading)
+        holds_under_every_reading=rests_on(report).holds_under_every_reading,
+        description=describe.describe(candidate, net, shown) if net is not None else "",
+        verdict=describe.verdict_line(report))
 
 
 def check_out(check) -> CheckOut:

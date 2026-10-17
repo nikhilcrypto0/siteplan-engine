@@ -31,6 +31,9 @@ from siteplan.service.standards import Standard
 from siteplan.site_amenities import AmenityLibrary
 
 log = logging.getLogger("siteplan.service")
+# The most layouts a run shows, each a genuinely different idea (2026-10-16, the architect's
+# roadmap: "about 10"); fewer when the site has fewer, and the run says why
+SHOWN_LAYOUTS = 10
 
 
 def read_brief(text: str, intent: Intent, project: Project, library: FlatLibrary
@@ -84,7 +87,7 @@ def design(project: Project, defaults: WorkspaceDefaults, amenities: AmenityLibr
             value={k: v / total for k, v in intent.unit_mix_percent.items()},
             status=Provenance.USER_CONFIRMED, source_kind=SourceKind.ARCHITECT,
             source=f"the architect's brief, approved before the run: {_percent(intent)}")})
-    objectives = base.objectives
+    objectives = base.objectives.model_copy(update={"options": SHOWN_LAYOUTS})
     if intent.massing is not None:
         order = [intent.massing, *(p for p in objectives.pareto if p is not intent.massing)]
         objectives = objectives.model_copy(update={"pareto": order})

@@ -330,7 +330,9 @@ class Service:
         return ProposeResult(
             status=ProposeStatus.PROPOSED if judged else ProposeStatus.NOTHING_PROPOSED,
             run_id=record.run_id, debug_run=self._mode is Mode.DEBUG,
-            candidates=[summaries.candidate_summary(c, r, request.intent.massing)
+            candidates=[summaries.candidate_summary(c, r, request.intent.massing,
+                                                    site.net_plot.value.to_shapely(),
+                                                    [shown for shown, _ in judged])
                         for c, r in judged],
             unfilled=record.unfilled, notes=record.notes,
             next=NEXT_PROPOSED if judged else "Nothing passed: the notes say why.")

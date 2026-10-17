@@ -153,6 +153,16 @@ approval page are the same; only the digests move, each cellar's outline now the
 and the blocks' boxes grown for the need. The normative replacement is tests/test_search_parking.py
 (no layout leaves a block that may have a cellar without one).
 
+Re-pinned on 2026-10-16 again (Stage A), where a run shows up to ten genuinely different layouts
+(service.brief.SHOWN_LAYOUTS) and the search judges and proposes at least as many for each profile
+(Limits.for_options): 40 judged and 39 proposed where 24 and 15 were; ten shown, the brief's four
+points and six more different ideas by yield (432, 440, 440, 420, 420 and 400 flats). Maximum
+yield, the open-space and the robust options are the same layouts; balanced is `-156` (S+5 x 3 and
+S+9 x 3, 384 flats, 525,960 sft) where it was `-109` (376 flats, 511,440 sft), found among the
+more judged. Every digest moves: each candidate carries its brief's digest, and the brief now asks
+for ten. The approval page is the same. The normative replacement is tests/test_shown_layouts.py,
+and test_every_layout_shown_is_a_different_idea_described_with_its_verdict below.
+
 The values pin exact output on the locked dependencies (uv.lock). They move only with a normative
 replacement and an entry in docs/behaviour-changes.md.
 """
@@ -167,10 +177,12 @@ from shapely.ops import unary_union
 from test_service import Approver, _propose, make_workspace
 
 from siteplan.contracts import digest
+from siteplan.optimizer.pareto import same_idea
 from siteplan.optimizer.search import FullSearchStrategy
 from siteplan.optimizer.search.layout import gate_way_in
 from siteplan.service import Service
 from siteplan.service import service as service_module
+from siteplan.service.brief import SHOWN_LAYOUTS
 
 TEST_CLASS = "characterization"
 
@@ -228,44 +240,50 @@ PLATE_NOTES = [
 PINNED = {
     "notes": [
         *PLATE_NOTES,
-        ("FULL: 1536 configurations evaluated, 150 laid out, 24 judged by the validator, 15 "
+        ("FULL: 1536 configurations evaluated, 156 laid out, 40 judged by the validator, 39 "
          "proposed"),
-        ("FULL: 3 of 15 proposed hold under every reading of the open questions; the others each "
+        ("FULL: 9 of 39 proposed hold under every reading of the open questions; the others each "
          "name the readings they rest on"),
         ("FULL: every layout leaves the height above sea level CONDITIONAL (the site's location is "
          "not known), and the 45 t loading of the paving is not checked (a specification)"),
         ("FULL: floor plates: a pass of their own after the families' (whose search they leave as "
          "it is), 50% of each quota, every configuration in it laid out with a plate: 1536 "
-         "configurations evaluated, 108 laid out, 12 judged, 3 proposed beside 12 of the "
+         "configurations evaluated, 112 laid out, 20 judged, 9 proposed beside 30 of the "
          "families'"),
     ],
     "proposed": [
-        "full-not_counted-allowed-86",
-        "full-not_counted-allowed-92",
-        "full-not_counted-ALL-147",
-        "full-ALL-allowed-30",
-        "full-not_counted-allowed-109",
-        "full-not_counted-ALL-60",
-        "full-plates-ALL-allowed-16",
-        "full-plates-not_counted-ALL-75",
-        "full-not_counted-allowed-133",
-        "full-not_counted-ALL-77",
-        "full-ALL-allowed-51",
-        "full-ALL-ALL-1",
-        "full-ALL-ALL-114",
-        "full-ALL-ALL-13",
-        "full-plates-ALL-allowed-72",
+        "full-not_counted-allowed-86", "full-not_counted-allowed-89",
+        "full-plates-not_counted-allowed-38", "full-plates-not_counted-allowed-39",
+        "full-not_counted-allowed-92", "full-not_counted-allowed-93",
+        "full-plates-not_counted-allowed-90", "full-not_counted-ALL-149", "full-ALL-allowed-30",
+        "full-not_counted-allowed-153", "full-not_counted-ALL-145", "full-not_counted-ALL-57",
+        "full-not_counted-allowed-156", "full-not_counted-ALL-59", "full-not_counted-ALL-60",
+        "full-not_counted-ALL-61", "full-plates-ALL-allowed-15", "full-plates-ALL-allowed-16",
+        "full-plates-not_counted-ALL-75", "full-ALL-allowed-36", "full-not_counted-ALL-63",
+        "full-not_counted-ALL-66", "full-ALL-allowed-33", "full-not_counted-allowed-133",
+        "full-plates-ALL-allowed-64", "full-ALL-allowed-141", "full-ALL-allowed-142",
+        "full-not_counted-ALL-77", "full-ALL-allowed-51", "full-ALL-ALL-1", "full-ALL-ALL-3",
+        "full-ALL-ALL-4", "full-plates-ALL-ALL-47", "full-ALL-ALL-137", "full-ALL-ALL-138",
+        "full-ALL-ALL-140", "full-ALL-ALL-114", "full-ALL-ALL-13", "full-plates-ALL-allowed-72",
     ],
-    "proposed_sha256": "5238999b2608b379680d86ac0d777bf446c02decdb86bec8831e9cbf5734210c",
+    "proposed_sha256": "36d7d1c3774a908393bd3ce9b40bcd094e678af5d46ed7b9c0aa01d14e53ab99",
     "shown": [
-        ["full-not_counted-allowed-109", "BALANCED"],
+        ["full-not_counted-allowed-156", "BALANCED"],
         ["full-not_counted-allowed-86", "MAX_YIELD"],
         ["full-not_counted-ALL-77", "CONVENTIONAL_OPEN_SPACE"],
         ["full-ALL-ALL-1", "ROBUST"],
+        ["full-not_counted-allowed-89", None],
+        ["full-plates-not_counted-allowed-39", None],
+        ["full-plates-not_counted-allowed-38", None],
+        ["full-not_counted-allowed-92", None],
+        ["full-not_counted-allowed-93", None],
+        ["full-plates-not_counted-allowed-90", None],
     ],
-    "shown_digests": ["65354b18c7372901", "482af45294dd6248",
-                      "708cab7c3bc67ad9", "bdfef8d8dfee250b"],
-    "answer_sha256": "eca9773e8ba28532f16f477e9f66a4f72a7adde6d8ed2efee1e524cddf13f1a0",
+    "shown_digests": ["a58c3d033029396f", "2c859535703008f4", "a9b98123f3ce414d",
+                      "32924ea2051c7db3", "879f39581165ac0d", "83645cf59761143a",
+                      "31f21107005c4318", "e1f739e1284bcad7", "a896a83ff1e74362",
+                      "ee8f52edce633d18"],
+    "answer_sha256": "37d082e87155917243ca82749d4d1e1db84ff1a271018228e8e132a2c6250939",
     "approval_page_sha256": "2b9223fec60c0f2988b8ade6b34bb309ab94b2935c794437dad5a125cb6ce087",
 }
 PROPOSALS: list = []
@@ -305,6 +323,7 @@ def observe(folder) -> dict:
         "shown_digests": [c["digest"] for c in record["candidates"]],
         "answer_sha256": _sha256(result.model_dump(mode="json", exclude={"run_id"})),
         "approval_page_sha256": _sha256(approver.asked),
+        "summaries": result.candidates,  # not pinned: read by the Stage A test below
     }
 
 
@@ -335,6 +354,22 @@ def test_no_layout_proposed_or_shown_lays_open_space_in_front_of_the_gate(observ
         way = unary_union([gate_way_in(net, g.shape.to_shapely()) for g in c.circulation.gates])
         pockets = unary_union([s.to_shapely() for s in c.program.open_space])
         assert way.area > 0 and pockets.intersection(way).area < 1e-6, c.candidate_id
+
+
+def test_every_layout_shown_is_a_different_idea_described_with_its_verdict(observed):
+    """Stage A (2026-10-16): up to SHOWN_LAYOUTS shown, no two the same idea, none failing the
+    law, each with its one plain line and its verdict; fewer only with the reason said."""
+    proposed = {c.candidate_id: c for c in PROPOSALS[-1].candidates}
+    shown = [proposed[s.candidate_id] for s in observed["summaries"]]
+    assert 0 < len(shown) <= SHOWN_LAYOUTS
+    assert not any(same_idea(a, b) for i, a in enumerate(shown) for b in shown[i + 1:])
+    for s, c in zip(observed["summaries"], shown, strict=True):
+        assert s.legal_verdict.value != "FAIL", s.candidate_id
+        assert s.verdict.startswith(s.legal_verdict.value), s.candidate_id
+        count = len(c.towers)
+        assert s.description.startswith(f"{count} block{'s' if count != 1 else ''}: ")
+    if len(shown) < SHOWN_LAYOUTS:
+        assert any(n.startswith(f"{len(shown)} different layout") for n in observed["notes"])
 
 
 def test_the_architect_is_asked_the_same_approval(observed):

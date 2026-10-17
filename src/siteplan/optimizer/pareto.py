@@ -180,6 +180,23 @@ def select(pool: Sequence[Scored], brief: DesignBrief) -> Selection:
     return Selection(tuple(picks), tuple(unfilled), tuple(front))
 
 
+def shortfall(selection: Selection, pool: Sequence[Scored], brief: DesignBrief) -> str | None:
+    """Why fewer layouts are shown than the brief asks to see, when it asks for more than its
+    points (2026-10-16): how many passed, and how many of the rest are the same idea as one shown.
+    None when as many are shown as asked, or the brief asks for no more than its points."""
+    asked, shown = brief.objectives.options, len(selection.picks)
+    if asked <= len(set(brief.objectives.pareto)) or shown >= asked:
+        return None
+    picked = [p.scored for p in selection.picks]
+    copies = sum(1 for s in pool if not any(s is p for p in picked)
+                 and any(same_idea(s.candidate, p.candidate) for p in picked))
+    rest = len(pool) - shown
+    return (f"{shown} different layout{'s' if shown != 1 else ''} shown of the {asked} asked: "
+            f"{len(pool)} passed the validator, and {copies} of the other {rest} "
+            f"{'is' if copies == 1 else 'are'} the same idea as one shown (as many blocks, "
+            f"running the same way, on mostly the same ground)")
+
+
 def leaders(pool: Sequence[Scored], brief: DesignBrief) -> list[Scored]:
     """Before any layout is judged: for each point the brief asks for whose measure needs no
     validation report (all but ROBUST), the front's best by that point's own measure, each once,

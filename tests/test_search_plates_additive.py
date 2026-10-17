@@ -18,7 +18,7 @@ from siteplan import validator as independent
 from siteplan.contracts import digest
 from siteplan.optimizer.interfaces import Budget
 from siteplan.optimizer.search import FullSearchStrategy
-from siteplan.optimizer.search.strategy import Judged, Tally
+from siteplan.optimizer.search.strategy import Judged, Tally, options_beyond_points
 from siteplan.prototypes import compose_library
 from siteplan.prototypes.plates import PLATE_SOURCE, kit_for
 
@@ -138,12 +138,14 @@ def test_without_plates_the_search_says_nothing_of_them():
 
 
 def test_the_plates_pass_is_bounded():
-    """At most its share of each profile's judging quota is judged in the plates' pass."""
+    """At most its share of each profile's judging quota is judged in the plates' pass: the quota
+    the search runs on, raised to the options the brief asks to see (Limits.for_options)."""
     _, alone = _run(False)
     _, together = _run(True)
     added = [c for d, c in together.items() if d not in alone]
     profiles = {tuple(sorted(c.interpretation_basis.items())) for c in added}
-    assert len(added) <= len(profiles) * FAST.for_plates().judged_per_profile
+    asked = options_beyond_points(_kits()[0].brief)
+    assert len(added) <= len(profiles) * FAST.for_options(asked).for_plates().judged_per_profile
 
 
 def test_a_spent_budget_leaves_the_plates_unsearched_and_says_so():

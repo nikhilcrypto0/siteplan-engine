@@ -24,6 +24,7 @@ from test_service import Approver, _propose, make_workspace
 import siteplan.optimizer.core as core
 import siteplan.validator
 from siteplan.contracts import CandidateLayout, DesignBrief, ValidationReport, digest
+from siteplan.contracts.design_brief import ParetoPoint
 from siteplan.optimizer.objective import measure
 from siteplan.optimizer.pareto import Scored, select
 from siteplan.optimizer.search import FullSearchStrategy
@@ -40,6 +41,7 @@ from siteplan.service import (
     store,
 )
 from siteplan.service import service as service_module
+from siteplan.service.brief import SHOWN_LAYOUTS
 
 TEST_CLASS = "normative"
 
@@ -147,8 +149,11 @@ def test_every_layout_the_search_proposed_is_kept_with_the_report_the_guard_made
         assert entry.basis == candidate.interpretation_basis != {}
         assert entry.holds_under_every_reading is rests_on(report).holds_under_every_reading
         assert entry.shown is (entry.candidate_id in shown)
-    # the brief's four points (ROBUST since C4-09), each filled here
-    assert sum(p.shown for p in record.proposed_candidates) == len(record.candidates) == 4
+    # the brief's four points (ROBUST since C4-09), each filled here, then (Stage A, 2026-10-16)
+    # the next different ideas, up to SHOWN_LAYOUTS in all
+    assert sum(p.shown for p in record.proposed_candidates) == len(record.candidates)
+    assert {c.point for c in record.candidates} >= {p.value for p in ParetoPoint}
+    assert len(record.candidates) <= SHOWN_LAYOUTS
     assert len(record.proposed_candidates) > len(record.candidates)  # some were not shown
     held = sum(p.holds_under_every_reading for p in record.proposed_candidates)
     assert any(f"{held} of {len(ran.proposals)} proposed hold under every reading" in note
@@ -170,7 +175,7 @@ def test_the_three_shown_are_what_select_chooses_from_the_proposals_kept(ran):
         for p in record.proposed_candidates]
     picks = select([Scored(c, measure(c, brief), core._rests(r))
                     for c, r in zip(kept, reports, strict=True)], brief).picks
-    chosen = {p.scored.candidate.candidate_id: p.point.value for p in picks}
+    chosen = {p.scored.candidate.candidate_id: p.point.value if p.point else None for p in picks}
     assert chosen == {c.candidate_id: c.point for c in record.candidates}
     assert {c.candidate_id: c.pareto_point for c in ran.proposed.candidates} == chosen
 
