@@ -33,6 +33,24 @@ evidence, and the test that now holds the behaviour. Newest first.
   a one-level cellar whose outline is now cut the new way. The normative replacement is
   `tests/test_search_parking.py`.
 
+## 2026-10-17: the sheet's label short and within the plot, the verdict in full in a note
+
+- **What changed.** A layout drawn in FreeCAD (`cad.live.show_layout`) says its verdict on the
+  sheet in a few words (`describe.verdict_short`: how many readings, facts, gaps or rules it
+  rests on or fails), drawn 5 m high (`scene.SHEET_TEXT_M`, readable when a whole site is
+  shown; the other labels stay 2 m) with every line wrapped to the plot's width
+  (`scene.wrapped`). The verdict in
+  full and why it could not be exported are a note below the plot on a layer of their own
+  (`scene.DETAIL`, `scene.sheet_note`). A screenshot (`Session.screenshot`, the siteplan-cad
+  tool `screenshot`) hides that layer for the shot, so the view is framed on the plot and its
+  short label, and shows it again after.
+- **Why.** Found live in FreeCAD 1.1.3 (2026-10-17): the one-line verdict ran hundreds of
+  metres wide, so fitting the view zoomed out until the plot was a third of the picture and
+  nothing on the label could be read; the in-memory stand-in only kept the text.
+- **Tests.** `tests/test_layout_versions.py`: the label no wider than the plot (the old one-line
+  verdict on the test's layout is 174 m on a 150 m plot), the full verdict a note below the plot
+  on its own layer, a screenshot showing the plot and label without the note.
+
 ## 2026-10-16: a layout edited by hand, each edit a judged version (Stage C)
 
 - **What changed.** Nothing a run proposes, shows or judges moves; editing is added.

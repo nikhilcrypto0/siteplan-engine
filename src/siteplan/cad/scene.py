@@ -8,6 +8,7 @@ several pieces becomes several items (`id`, `id#2`, ...), so each is one object 
 from __future__ import annotations
 
 import math
+import textwrap
 
 from shapely import set_precision
 from shapely.geometry import LineString, Point, Polygon
@@ -39,12 +40,16 @@ OPEN_SPACE = "Open space and tot-lot"
 FLATS = "Flats"
 CORES = "Lift and stair cores"
 NOTES = "Notes"
+DETAIL = "Notes: verdict in full"  # the long note under a layout, hidden for a screenshot
 LAYERS = (SURVEY, NET, GIVEN, SETBACK, BUILDABLE, DIMENSIONS, GREEN, FIRE, WATER, GATE,
           OUTSIDE_ROADS, ROADS, FOOTPRINTS, TOWERS, FLATS, CORES, PARKING, OPEN_SPACE,
-          AMENITIES, NOTES)
+          AMENITIES, NOTES, DETAIL)
 DIMENSION_SIDE_M = 5.0  # rendering: sides shorter than this get no dimension (jogs)
 DIMENSION_SHIFT_M = 1.5  # rendering: a dimension line sits this far along its side
 TEXT_SIZE_M = 2.0  # rendering: a label's height in the drawing, readable at site scale
+SHEET_TEXT_M = 5.0  # rendering: the sheet label's height, readable when a whole site is shown
+CHAR_WIDTH = 0.6  # rendering: a character's width as a share of the text's height
+LINE_PITCH = 1.5  # rendering: a text line's height, baseline to baseline, in text heights
 SNAP_M = 1e-6  # a hole nearer its outer edge than this is snapped to a grid this fine
 
 
@@ -71,6 +76,7 @@ def styles() -> dict[str, dict]:
             ROADS: style("#5a5a5a", "#9a9a9a", 40), FOOTPRINTS: style("#111111", "#7ea6dc", 15),
             TOWERS: style("#111111", "#1f3f7a", 15, 2.5), PARKING: style("#6a3d9a", "#cab2d6", 40),
             AMENITIES: style("#b15928", "#ffd8a8", 30), NOTES: style("#222222"),
+            DETAIL: style("#444444"),
             OPEN_SPACE: style("#4d9221", "#b8e186", 35), FLATS: style("#1f3f7a", "#7ea6dc", 20,
                                                                          0.8),
             CORES: style("#333333", "#8c8c8c", 10, 0.8)}
@@ -314,14 +320,35 @@ def candidate_layers(plan, setback_zone: BaseGeometry | None, setback_words: str
 LAYOUT = "layout-"  # every object of a layout drawn from a run starts so (candidate_layers)
 
 
+def wrapped(lines: list[str], width_m: float, size_m: float = TEXT_SIZE_M) -> list[str]:
+    """The lines broken at words so that none, drawn `size_m` high, is wider than `width_m`
+    (2026-10-17: in FreeCAD one long line made the view zoom out until nothing was readable)."""
+    chars = max(1, int(width_m / (size_m * CHAR_WIDTH)))
+    out: list[str] = []
+    for line in lines:
+        out += textwrap.wrap(line, chars, break_long_words=True) or [""]
+    return out
+
+
 def sheet_label(plot: BaseGeometry, lines: list[str]) -> dict:
     """What the sheet says of the layout drawn (2026-10-16, the architect): DEBUG or STUDY where
-    they apply, its verdict, PRELIMINARY for floor plates, one text above the plot's north-west
-    corner."""
-    x0, _, _, y1 = plot.bounds
+    they apply, its verdict in a few words, PRELIMINARY for floor plates; above the plot's
+    north-west corner, no wider than the plot."""
+    x0, _, x1, y1 = plot.bounds
+    text = wrapped(lines, x1 - x0, SHEET_TEXT_M)
     return {"id": f"{LAYOUT}sheet-label", "label": "What this layout is", "layer": NOTES,
-            "kind": "text", "at": to_cad((x0, y1 + 2 * TEXT_SIZE_M * len(lines))),
-            "size": TEXT_SIZE_M * 1000, "text": "\n".join(lines)}
+            "kind": "text", "at": to_cad((x0, y1 + LINE_PITCH * SHEET_TEXT_M * len(text))),
+            "size": SHEET_TEXT_M * 1000, "text": "\n".join(text)}
+
+
+def sheet_note(plot: BaseGeometry, lines: list[str]) -> dict:
+    """The verdict in full (every reading, fact and rule it rests on, and why it could not be
+    exported), below the plot, no wider than it, on a layer of its own (DETAIL) that a
+    screenshot hides so the view is framed on the plot."""
+    x0, y0, x1, _ = plot.bounds
+    return {"id": f"{LAYOUT}sheet-note", "label": "The verdict in full", "layer": DETAIL,
+            "kind": "text", "at": to_cad((x0, y0 - LINE_PITCH * TEXT_SIZE_M)),
+            "size": TEXT_SIZE_M * 1000, "text": "\n".join(wrapped(lines, x1 - x0))}
 
 
 def step4_items(s: Setbacks) -> list[dict]:

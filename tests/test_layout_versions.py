@@ -200,10 +200,63 @@ def test_the_sheet_says_its_verdict_and_nothing_it_is_not(tmp_path):
     session, drawing = _session(tmp_path)
     lines = session.show_layout("plot", RUN, "rectangle-1")["labels"]
     text = drawing.docs["Siteplan_plot"]["layout-sheet-label"]["text"]
-    assert text == "\n".join(lines)
+    assert " ".join(text.split()) == " ".join(" ".join(lines).split())  # wrapped, same words
     assert lines[0].startswith(f"rectangle-1 (run {RUN}")
     assert any(line.startswith(("PASS", "CONDITIONAL", "FAIL")) for line in lines)
     assert not any(word in text for word in ("DEBUG", "STUDY", "PRELIMINARY"))
+
+
+def _verdict_with_many_items(tmp_path):
+    """A layout whose verdict names many things: T1 moved 400 m off the plot fails rule after
+    rule, so its verdict in full runs far wider than the plot."""
+    record, inputs = _run(tmp_path)
+    towers = list(inputs.candidate.towers)
+    towers[0] = towers[0].model_copy(update={"x": towers[0].x + 400.0})
+    versions.make_version(tmp_path, record, "rectangle-1",
+                          inputs.candidate.model_copy(update={"towers": towers}), ["T1 off"])
+    return inputs
+
+
+def test_the_sheet_label_is_short_and_no_wider_than_the_plot(tmp_path):
+    """Found in a real FreeCAD (2026-10-17): the verdict, every reading and fact it rests on, was
+    one line hundreds of metres wide, so fitting the view zoomed out until nothing was readable.
+    The sheet says the verdict in a few words, each line within the plot's width."""
+    inputs = _verdict_with_many_items(tmp_path)
+    session, drawing = _session(tmp_path)
+    session.show_layout("plot", RUN, "rectangle-1-v1")
+    label = drawing.docs["Siteplan_plot"]["layout-sheet-label"]["text"].split("\n")
+    x0, _, x1, _ = inputs.site.net_plot.value.to_shapely().bounds
+    size_m = drawing.docs["Siteplan_plot"]["layout-sheet-label"]["size"] / 1000
+    assert size_m > scene.TEXT_SIZE_M  # larger than the drawing's other labels, to be read
+    widest_m = max(len(line) for line in label) * size_m * scene.CHAR_WIDTH
+    assert widest_m <= x1 - x0
+    assert any(line.startswith("FAIL: ") and "rules" in line for line in label)
+    assert "(listed in the note below the plot)" in " ".join(label)
+
+
+def test_the_verdict_in_full_is_a_note_below_the_plot_on_its_own_layer(tmp_path):
+    inputs = _verdict_with_many_items(tmp_path)
+    session, drawing = _session(tmp_path)
+    shown = session.show_layout("plot", RUN, "rectangle-1-v1")
+    note = drawing.docs["Siteplan_plot"]["layout-sheet-note"]
+    _, y0, _, _ = inputs.site.net_plot.value.to_shapely().bounds
+    assert note["layer"] == scene.DETAIL and from_cad(note["at"])[1] < y0
+    text = " ".join(note["text"].split("\n"))
+    failed = [r for r in shown["refusals"] if r.startswith("FAIL ")]
+    assert failed and all(" ".join(r.split()) in " ".join(text.split()) for r in failed[:3])
+
+
+def test_a_screenshot_is_framed_on_the_plot_and_its_label(tmp_path):
+    """The note of the verdict in full is hidden for the shot (its own layer), the plot, its
+    blocks and the short label are shown, and the note is shown again after."""
+    _verdict_with_many_items(tmp_path)
+    session, drawing = _session(tmp_path)
+    session.show_layout("plot", RUN, "rectangle-1-v1")
+    assert session.screenshot("plot", "edited.png") == "edited.png"
+    [shot] = drawing.shots
+    assert scene.DETAIL not in shot["layers"]
+    assert {scene.NOTES, scene.TOWERS, scene.NET} <= shot["layers"]
+    assert scene.DETAIL not in drawing.hidden
 
 
 def test_a_debug_run_is_labelled_so_and_a_blind_site_refuses_it(tmp_path):

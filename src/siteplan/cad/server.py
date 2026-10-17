@@ -159,6 +159,13 @@ def build(session: Session) -> FastMCP:
         return guard(lambda: session.read_layout_from_cad(site, run_id, layout_id))
 
     @server.tool()
+    def screenshot(site: str, file_name: str) -> str:
+        """Save a picture of the site's FreeCAD document (a bare name ending .png in the live
+        link's folder), framed on the plot and its short label; the note of the verdict in full
+        is hidden for the shot."""
+        return guard(lambda: session.screenshot(site, file_name))
+
+    @server.tool()
     def save_drawing(site: str, file_name: str) -> str:
         """Save the site's FreeCAD document as file_name (a bare name ending .FCStd) in the
         live link's folder."""

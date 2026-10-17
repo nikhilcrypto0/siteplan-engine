@@ -165,7 +165,7 @@ def test_each_edit_in_cad_saves_a_version_redraws_it_and_says_what_broke(tmp_pat
     moved = session.move_block("plot", RUN, "rectangle-1", "T1", 1.0, 0.0)
     assert moved["version"] == "rectangle-1-v1"
     assert any("PASS -> FAIL" in b for b in moved["broke"])
-    text = drawing.docs["Siteplan_plot"]["layout-sheet-label"]["text"]
+    text = " ".join(drawing.docs["Siteplan_plot"]["layout-sheet-label"]["text"].split())
     assert "a version of rectangle-1: T1 moved 1.00 m east, 0.00 m north" in text
     turned = session.turn_block("plot", RUN, moved["version"], "T3", 90.0)
     assert turned["version"] == "rectangle-1-v2"

@@ -37,6 +37,7 @@ MATCH_SHARE = 1e-6  # ... and their areas differ by less than this share
 POLE_M = 0.1  # how finely the middle of the buildable area is looked for
 SAME_SQM = 1e-4  # a shape read back from CAD differing by less than this area did not change
 TURN_DEG = 0.01  # a block read back turned by less than this was only moved
+SHOT_PX = (1600, 1200)  # a screenshot's width and height in pixels
 
 
 @dataclass
@@ -381,6 +382,7 @@ class Session:
         refusals = judge.refusals(judged)
         lines = self._labels(out, record, judged, layout_id, sorted(plates), refusals)
         items.append(scene.sheet_label(plan.plot, lines))
+        items.append(scene.sheet_note(plan.plot, self._note(report, refusals)))
         drawn = {i["id"] for i in items}
         self.bridge.document(self._document(name))
         stale = [o["id"] for o in self.bridge.listing() if o["id"].startswith(scene.LAYOUT)
@@ -522,14 +524,38 @@ class Session:
             lines.append("DEBUG RUN: drawn on the firm's finished plan, not an acceptance")
         if judged.inputs.brief.objectives.study:
             lines.append("STUDY, NOT A LEGAL LAYOUT")
-        lines.append(describe.verdict_line(report))
+        detail = report.verdict.legal.value != "PASS"
+        lines.append(describe.verdict_short(report)
+                     + (" (listed in the note below the plot)" if detail else ""))
         if plates:
             lines.append(f"PRELIMINARY: floor plates sized to the land, not the firm's drawing "
                          f"({', '.join(plates)})")
         if refusals:
-            lines.append(f"NOT EXPORTABLE: {refusals[0]}"
-                         + (f" (and {len(refusals) - 1} more)" if len(refusals) > 1 else ""))
+            lines.append(f"NOT EXPORTABLE: {len(refusals)} reason"
+                         f"{'s' if len(refusals) != 1 else ''} (in the note)")
         return lines
+
+    @staticmethod
+    def _note(report, refusals: list[str]) -> list[str]:
+        """The verdict in full, and why the layout could not be exported as it stands."""
+        lines = [f"Verdict in full: {describe.verdict_line(report)}"]
+        if refusals:
+            lines += ["Not exportable as it stands:", *(f"- {r}" for r in refusals)]
+        return lines
+
+    def screenshot(self, name: str, file_name: str, width: int = SHOT_PX[0],
+                   height: int = SHOT_PX[1]) -> str:
+        """A picture of the site's FreeCAD document framed on the plot and its short label: the
+        note of the verdict in full (its own layer) is hidden for the shot and shown again."""
+        self.bridge.document(self._document(name))
+        note = any(layer["layer"] == scene.DETAIL for layer in self.bridge.layers())
+        if note:
+            self.bridge.show_layer(scene.DETAIL, False)
+        try:
+            return self.bridge.snapshot(file_name, width, height)
+        finally:
+            if note:
+                self.bridge.show_layer(scene.DETAIL, True)
 
     def save(self, name: str, file_name: str) -> str:
         self.bridge.document(self.site(name).document)

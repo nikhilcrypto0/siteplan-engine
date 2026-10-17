@@ -60,7 +60,27 @@ def verdict_line(report: ValidationReport) -> str:
     return line
 
 
-def _rests(report: ValidationReport) -> str:
+def verdict_short(report: ValidationReport) -> str:
+    """The verdict in a few words for a drawing's sheet (2026-10-17): how many things of each
+    kind it rests on, or how many rules it fails; the names are in `verdict_line`."""
+    verdict = report.verdict.legal.value
+    if verdict == "FAIL":
+        failed = {c.finding.rule for c in report.legal if c.finding.status is Status.FAIL}
+        line = (f"FAIL: {len(failed)} rule{'s' if len(failed) != 1 else ''}" if failed
+                else "FAIL: a blocking discrepancy")
+    elif verdict == "CONDITIONAL":
+        found = _resting(report)
+        line = "CONDITIONAL, resting on " + " and ".join(
+            f"{len(found[kind])} {KINDS[kind]}" for kind in KINDS if kind in found)
+    else:
+        line = "PASS"
+    study = report.verdict.study
+    if study is not None and study is not report.verdict.legal:
+        line += f" ({study.value} under the readings selected for this study)"
+    return line
+
+
+def _resting(report: ValidationReport) -> dict[DependsOn, list[str]]:
     found: dict[DependsOn, list[str]] = {}
     for check in report.legal:
         if check.finding.status is not Status.CONDITIONAL:
@@ -69,6 +89,11 @@ def _rests(report: ValidationReport) -> str:
             names = found.setdefault(dependency.kind, [])
             if dependency.id not in names:
                 names.append(dependency.id)
+    return found
+
+
+def _rests(report: ValidationReport) -> str:
+    found = _resting(report)
     return "; ".join(f"{KINDS[kind]}: {', '.join(found[kind])}" for kind in KINDS if kind in found)
 
 

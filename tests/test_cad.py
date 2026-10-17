@@ -71,6 +71,24 @@ class Drawing:
     def view(self, fit=True):
         return True
 
+    def layers(self):
+        found: dict[str, int] = {}
+        for item in self.docs[self.active].values():
+            found[item["layer"]] = found.get(item["layer"], 0) + 1
+        return [{"layer": layer, "objects": n} for layer, n in found.items()]
+
+    def show_layer(self, name, visible):
+        hidden = self.__dict__.setdefault("hidden", set())
+        (hidden.discard if visible else hidden.add)(name)
+        return sum(1 for i in self.docs[self.active].values() if i["layer"] == name)
+
+    def snapshot(self, name, width, height):
+        """What a screenshot would show: every layer not hidden at the time."""
+        hidden = self.__dict__.setdefault("hidden", set())
+        shown = {i["layer"] for i in self.docs[self.active].values()} - hidden
+        self.__dict__.setdefault("shots", []).append({"name": name, "layers": shown})
+        return name
+
 
 @pytest.fixture
 def made_up(tmp_path):
@@ -156,7 +174,8 @@ def test_the_mcp_tools_reach_the_session_and_none_runs_code(made_up):
                      "compare_cad_with_engine", "measure_setbacks_in_cad", "save_drawing",
                      "reopen_drawing", "show_layout", "keep_layout",  # Stage B, 2026-10-16
                      "move_block", "turn_block", "move_club_house", "move_tot_lot_piece",
-                     "lock_blocks", "read_layout_from_cad"}  # Stage C, 2026-10-16
+                     "lock_blocks", "read_layout_from_cad",  # Stage C, 2026-10-16
+                     "screenshot"}  # 2026-10-17
     asyncio.run(server.call_tool("show_site", {"site": "plot", "what": "setbacks"}))
     asyncio.run(server.call_tool("place_tower", {"site": "plot", "tower": "T1",
                                                  "length_m": 40.0, "depth_m": 24.13}))
