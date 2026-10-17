@@ -20,6 +20,10 @@ from shapely.ops import polylabel, unary_union
 from siteplan.cad import scene
 from siteplan.cad.bridge import Bridge, from_cad, to_cad
 from siteplan.profiles import load_profile
+from siteplan.prototypes.plates import PLATE_SOURCE
+from siteplan.service import describe, judge, render, store, versions
+from siteplan.service.models import Mode
+from siteplan.service.store import RunRecord
 from siteplan.steps.inputs import Inputs, from_answers, from_project
 from siteplan.steps.main_road_height import height_for
 from siteplan.steps.road_widening import take_off
@@ -339,6 +343,89 @@ class Session:
                                      "setback_m": side.metres, "measured_m": round(distance, 4),
                                      "kept": distance >= side.metres - MATCH_M}
         return {"site": name, "sides": out, "all_kept": all(v["kept"] for v in out.values())}
+
+    # --- a layout a service run made (Stage B, 2026-10-16) -----------------------------------
+
+    def show_layout(self, name: str, run_id: str, layout_id: str) -> dict:
+        """Draw a layout a run showed or proposed, or a version saved of one, in the site's
+        document: judged again by the independent validator from the run's stored contracts
+        (service.judge), labelled on the sheet (DEBUG or STUDY where they apply, its verdict,
+        PRELIMINARY for floor plates), the previous layout's objects removed."""
+        out, record = self._run(name, run_id)
+        judged = judge.judge_again(out, record, layout_id)
+        candidate, report = judged.candidate, judged.report
+        plan = render.plan_of(judged.inputs.site, candidate)
+        plates = {t.name for t in candidate.towers
+                  if candidate.prototype(t.prototype_id).source.startswith(PLATE_SOURCE)}
+        items = [i for _, group in scene.candidate_layers(plan, None, "") for i in group]
+        for item in items:  # each plate tower's own label says so
+            if item["kind"] == "text" and item["label"].removesuffix(" label") in plates:
+                item["text"] += "\nPRELIMINARY floor plate"
+        refusals = judge.refusals(judged)
+        lines = self._labels(out, record, judged, layout_id, sorted(plates), refusals)
+        items.append(scene.sheet_label(plan.plot, lines))
+        drawn = {i["id"] for i in items}
+        self.bridge.document(self._document(name))
+        stale = [o["id"] for o in self.bridge.listing() if o["id"].startswith(scene.LAYOUT)
+                 and o["id"].split("#")[0] not in drawn]
+        removed = self.bridge.remove(stale) if stale else 0
+        done = self.bridge.upsert(items, scene.styles())
+        self.bridge.view(True)
+        return {"site": name, "run": run_id, "layout": layout_id, "labels": lines,
+                "verdict": report.verdict.legal.value, "refusals": refusals,
+                "drawn": len(done), "removed": removed}
+
+    def keep_layout(self, name: str, run_id: str, layout_id: str, note: str = "") -> dict:
+        """Save a layout of a run, unchanged, as a version of its own in the run's folder
+        (service.versions): its parent's digest recorded, judged by the validator now."""
+        out, record = self._run(name, run_id)
+        version, _, _ = versions.make_version(out, record, layout_id, None, [], note)
+        judged = judge.judge_again(out, record, version.version_id)
+        return {"site": name, "run": run_id, "version": version.version_id,
+                "parent": version.parent_id, "verdict": judged.report.verdict.legal.value,
+                "refusals": judge.refusals(judged)}
+
+    def _run(self, name: str, run_id: str) -> tuple[Path, RunRecord]:
+        """A run of the service for this site: in the folder the sites file names as 'runs' (the
+        service's out); a blind site never reads a DEBUG run (the firm's finished plan)."""
+        if name not in self.specs:
+            raise KeyError(f"no site named {name!r}; known: {', '.join(sorted(self.specs))}")
+        spec = self.specs[name]
+        if not spec.get("runs"):
+            raise ValueError(f"the sites file names no 'runs' folder (the service's out) for "
+                             f"{name}")
+        out = Path(spec["runs"])
+        record = store.read_record(out, run_id)
+        if record.mode is Mode.DEBUG and spec.get("mode", "blind") == "blind":
+            raise ValueError("that run used the firm's finished plan; a blind site does not "
+                             "read it")
+        return out, record
+
+    def _document(self, name: str) -> str:
+        return self.sites[name].document if name in self.sites else f"Siteplan_{name}"
+
+    @staticmethod
+    def _labels(out: Path, record: RunRecord, judged: judge.Judged, layout_id: str,
+                plates: list[str], refusals: list[str]) -> list[str]:
+        candidate, report = judged.candidate, judged.report
+        point = f", {candidate.pareto_tag}" if candidate.pareto_tag else ""
+        lines = [f"{layout_id} (run {record.run_id}{point})"]
+        if versions.exists(out, record, layout_id):
+            version, _, _ = versions.load(out, record, layout_id)
+            lines.append(f"a version of {version.parent_id}: "
+                         + ("; ".join(version.edits) if version.edits else "unchanged"))
+        if record.mode is Mode.DEBUG:
+            lines.append("DEBUG RUN: drawn on the firm's finished plan, not an acceptance")
+        if judged.inputs.brief.objectives.study:
+            lines.append("STUDY, NOT A LEGAL LAYOUT")
+        lines.append(describe.verdict_line(report))
+        if plates:
+            lines.append(f"PRELIMINARY: floor plates sized to the land, not the firm's drawing "
+                         f"({', '.join(plates)})")
+        if refusals:
+            lines.append(f"NOT EXPORTABLE: {refusals[0]}"
+                         + (f" (and {len(refusals) - 1} more)" if len(refusals) > 1 else ""))
+        return lines
 
     def save(self, name: str, file_name: str) -> str:
         self.bridge.document(self.site(name).document)

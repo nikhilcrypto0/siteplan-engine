@@ -311,5 +311,18 @@ def candidate_layers(plan, setback_zone: BaseGeometry | None, setback_words: str
     return groups
 
 
+LAYOUT = "layout-"  # every object of a layout drawn from a run starts so (candidate_layers)
+
+
+def sheet_label(plot: BaseGeometry, lines: list[str]) -> dict:
+    """What the sheet says of the layout drawn (2026-10-16, the architect): DEBUG or STUDY where
+    they apply, its verdict, PRELIMINARY for floor plates, one text above the plot's north-west
+    corner."""
+    x0, _, _, y1 = plot.bounds
+    return {"id": f"{LAYOUT}sheet-label", "label": "What this layout is", "layer": NOTES,
+            "kind": "text", "at": to_cad((x0, y1 + 2 * TEXT_SIZE_M * len(lines))),
+            "size": TEXT_SIZE_M * 1000, "text": "\n".join(lines)}
+
+
 def step4_items(s: Setbacks) -> list[dict]:
     return [*survey_items(s), *net_items(s), *setback_items(s)]

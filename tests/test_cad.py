@@ -154,7 +154,7 @@ def test_the_mcp_tools_reach_the_session_and_none_runs_code(made_up):
     assert names == {"cad_status", "show_site", "site_summary", "place_tower", "move_tower",
                      "delete_tower", "read_tower_from_cad", "validate_towers",
                      "compare_cad_with_engine", "measure_setbacks_in_cad", "save_drawing",
-                     "reopen_drawing"}
+                     "reopen_drawing", "show_layout", "keep_layout"}  # Stage B, 2026-10-16
     asyncio.run(server.call_tool("show_site", {"site": "plot", "what": "setbacks"}))
     asyncio.run(server.call_tool("place_tower", {"site": "plot", "tower": "T1",
                                                  "length_m": 40.0, "depth_m": 24.13}))

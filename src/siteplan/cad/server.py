@@ -105,6 +105,20 @@ def build(session: Session) -> FastMCP:
         return guard(lambda: session.setback_distances(site))
 
     @server.tool()
+    def show_layout(site: str, run_id: str, layout_id: str) -> dict:
+        """Draw a layout of a service run (one shown, one proposed, or a version saved of one)
+        in the site's FreeCAD document, judged again by the independent validator, its sheet
+        saying DEBUG or STUDY where they apply, its verdict and PRELIMINARY for floor plates.
+        The run is read from the 'runs' folder the sites file names for the site."""
+        return guard(lambda: session.show_layout(site, run_id, layout_id))
+
+    @server.tool()
+    def keep_layout(site: str, run_id: str, layout_id: str, note: str = "") -> dict:
+        """Save a layout of a run, unchanged, as a version of its own in the run's folder, its
+        parent's digest recorded; the validator judges it now and whenever it is used."""
+        return guard(lambda: session.keep_layout(site, run_id, layout_id, note))
+
+    @server.tool()
     def save_drawing(site: str, file_name: str) -> str:
         """Save the site's FreeCAD document as file_name (a bare name ending .FCStd) in the
         live link's folder."""

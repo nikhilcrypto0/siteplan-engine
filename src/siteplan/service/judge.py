@@ -20,7 +20,7 @@ from siteplan.contracts import CandidateLayout, ValidationReport
 from siteplan.contracts.common import Status
 from siteplan.contracts.validation import Check, LegalVerdict
 from siteplan.optimizer import guard
-from siteplan.service import store
+from siteplan.service import store, versions
 from siteplan.service.models import UnresolvedItem
 from siteplan.service.store import Inputs, RunRecord
 
@@ -42,10 +42,14 @@ class Judged:
 
 
 def judge_again(out: Path, record: RunRecord, candidate_id: str) -> Judged:
-    """An alternative the run showed, or a layout its search proposed that it did not show (only
-    through the run's own record of its proposals), judged again from the stored contracts."""
+    """An alternative the run showed, a layout its search proposed that it did not show (only
+    through the run's own record of its proposals), or a version the architect saved of either
+    (service.versions, with its parent's digest held), judged again from the stored contracts."""
     inputs = store.load_inputs(out, record)
-    if record.shows(candidate_id):
+    if versions.exists(out, record, candidate_id):  # a version the architect saved (Stage B)
+        version, candidate, stored = versions.load(out, record, candidate_id)
+        references = versions.problems(out, record, inputs, version, candidate, stored)
+    elif record.shows(candidate_id):
         candidate = store.load_candidate(out, record, candidate_id)
         references = store.reference_problems(record, inputs, candidate,
                                               record.entry(candidate_id).digest)

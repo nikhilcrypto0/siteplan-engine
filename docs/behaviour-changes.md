@@ -33,6 +33,26 @@ evidence, and the test that now holds the behaviour. Newest first.
   a one-level cellar whose outline is now cut the new way. The normative replacement is
   `tests/test_search_parking.py`.
 
+## 2026-10-16: any layout of a run in FreeCAD, and versions in the run's folder (Stage B)
+
+- **What changed.** Nothing a run proposes, shows or judges moves; two things are added.
+  - Versions (`service/versions.py`, `versions.make_version`): a layout of a run, unchanged or
+    edited, kept in `out/<run_id>/versions/<id>/` with its parent and the parent's digest, its
+    edits and its report. Written once; saving again makes another (`<layout>-v<n>`). Made only
+    for the run's own inputs; judged by the validator when saved and whenever used
+    (`judge.judge_again` reaches a version, so validate_candidate and export_candidate do),
+    refused when its files, its inputs or any parent along its line changed. Saved through
+    FreeCAD (the CAD session) alone: `Service` and the model's host keep their nine operations.
+  - FreeCAD (`siteplan-cad` tools `show_layout`, `keep_layout`; a site's `runs` folder in the
+    sites file): any layout of a run drawn vertex for vertex after a fresh judgement, its sheet
+    saying DEBUG RUN or STUDY where they apply, its verdict with what it rests on,
+    PRELIMINARY for floor plates (and on each plate tower), and for a version what it is a
+    version of and its edits; the previous layout's objects are removed; a blind site refuses
+    a DEBUG run.
+- **Why.** The architect's roadmap, 2026-10-16: open any layout in FreeCAD, keep it as its own
+  version, every change through the independent validator.
+- **Tests.** `tests/test_layout_versions.py` (normative); `tests/test_cad.py`'s list of tools.
+
 ## 2026-10-16: up to ten genuinely different layouts shown, each described (Stage A)
 
 - **What changed.** A service run shows the brief's four points and then the next different
