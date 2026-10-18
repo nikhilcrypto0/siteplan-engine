@@ -208,6 +208,17 @@ def locked_standing(run: Run, profile: Profile) -> tuple[list[Standing], str]:
     return out, ""
 
 
+def _through_locked(locked: Sequence[Standing], frame: Frame, roads: Sequence[Road]) -> str:
+    """The first road whose pavement crosses a locked block, by name; '' when none does. A street
+    runs from the ring to the ring between two columns, and the columns keep off the locked
+    blocks, but the street itself may not; such a configuration is not offered."""
+    if not locked:
+        return ""
+    blocks = unary_union([placement_of(s, s.name or "", frame).footprint for s in locked])
+    return next((r.id for r in roads
+                 if r.ground.intersection(blocks).area > network.RING_CLIP_SQM), "")
+
+
 def _locked_room(run: Run, locked: Sequence[Standing], choices: Sequence[Choice]
                  ) -> BaseGeometry:
     """The ground new blocks keep off round the locked ones: each locked footprint grown by the
@@ -277,7 +288,13 @@ def evaluate(run: Run, config: Config) -> Evaluation | Failure:
         return Failure("no floor count is left open")
     beyond = fringe.options(run.fringe_kit, classes, config.max_floors, q) \
         if config.low_blocks else []
-    asked = [c.cls for c in [*choices, *others, *beyond]]
+    locked, why = locked_standing(run, config.profile) if run.locked else ([], "")
+    if why:
+        return Failure(why)
+    # the setback zone is as deep as the deepest any block standing needs, the locked ones
+    # included (2026-10-18: a locked block taller than the configuration's blocks set a deeper
+    # zone than the land was made with, so the open space laid in it did not count)
+    asked = [c.cls for c in [*choices, *others, *beyond]] + [s.choice.cls for s in locked]
     zone_depth = max(cls.zone_m for cls in asked)
     strip_width = max(cls.strip_m for cls in asked)
     street = max(q.road_m, max(c.cls.gap_m for c in [*choices, *others]) + q.gap_margin_m)
@@ -296,9 +313,6 @@ def evaluate(run: Run, config: Config) -> Evaluation | Failure:
                      kept_clear=kept_clear)
     if land.cluster_land.is_empty:
         return Failure("the ring road leaves no ground for a block")
-    locked, why = locked_standing(run, config.profile) if run.locked else ([], "")
-    if why:
-        return Failure(why)
     standing, _ = _columns(run, config, frame, land, choices, street, others,
                            avoid=_locked_room(run, locked, [*choices, *others]))
     if not standing and not locked:
@@ -323,6 +337,9 @@ def evaluate(run: Run, config: Config) -> Evaluation | Failure:
             return Failure("no further cluster stands on the ground the first leaves")
     if config.mixed_depths and all(round(s.choice.depth_m, 2) == run.depth_m for s in fitted):
         return Failure("no column of another depth stands")  # the same as without them
+    crossing = _through_locked(locked, frame, [*streets, *links])
+    if crossing:  # 2026-10-18: a street between two columns ran on through a locked block
+        return Failure(f"{crossing} would run through a locked block")
     rings = unary_union([*(c.ring for c in clusters), *(r.ground for r in links)])
     hulls = unary_union([c.hull for c in clusters])
     extra = fringe.place(plot, q, frame, land, rings, hulls, [*fitted, *locked], beyond,

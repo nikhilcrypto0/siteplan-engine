@@ -4,6 +4,27 @@ A characterization test (tests/manifest.py) pins what the engine produces today.
 only together with a normative replacement test and an entry here: what changed, why, the
 evidence, and the test that now holds the behaviour. Newest first.
 
+## 2026-10-18: round a locked block, the search lays only tot-lot and roads the validator allows
+
+- **What changed.** In a search round locked blocks (Stage D), `layout.evaluate` sizes the setback
+  zone (and the planted strip) from the deepest any block standing needs, the locked ones included,
+  where it took only the configuration's own blocks; and a configuration whose street or link road
+  would cross a locked block is not offered, with the reason "street-N would run through a locked
+  block" (`layout._through_locked`). A search with nothing locked is unchanged.
+- **Why.** On Dhulapally's debug run, with T1 locked at Stilt + 10 and ten alternatives asked, the
+  validator refused ten of the fifteen layouts judged: eight for too little countable tot-lot,
+  because the generator laid open space 8 or 9 m in where the validator's setback zone, as deep as
+  the locked Stilt + 10 block asks, starts 10 m in (3,623.5 m² summed over those layouts, inside
+  the setback); and five for a tower under a road, a street between two columns running on
+  through the locked block. With the fix: fifteen judged, none refused. The validator is
+  unchanged (figures kept locally, client data).
+- **Tests.** `tests/test_search_round_locked.py` (normative, made-up rectangle): the land a
+  configuration lays open space on starts as deep as the locked block's zone; no street or link
+  runs through a locked block, and the configuration that would is refused with that reason; and
+  the search round a taller lock judges no layout refused, its tot-lot counted. All three fail on
+  the old generator (1,136 m² of interior inside the 10 m zone; street-1 over 164 m² of the
+  block; one layout refused for the tot-lot and its roads).
+
 ## 2026-10-16: a cellar reaches under every block that may stand over one, then the need (C4-17)
 
 - **What changed.** The full search sized a cellar (C4-13) as a box square to the turn grown
