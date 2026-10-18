@@ -24,10 +24,13 @@ from test_service import Approver, make_workspace
 from validator_helpers import check, fixture
 from validator_low_helpers import floors_of
 
+from siteplan.contracts import ValidationReport
 from siteplan.contracts.common import Provenance, SourceKind, Status
+from siteplan.contracts.resolved_rules import CIRCULATION_IN_SETBACK, STILT_IN_RULE_HEIGHT
 from siteplan.contracts.site_model import ApplicationStatus
 from siteplan.contracts.validation import DependsOn
 from siteplan.legal.resolve import resolve
+from siteplan.optimizer.search.verdicts import rests_on
 from siteplan.service import ProposeLayouts, ResolveRules, Service
 from siteplan.service.models import HeightChoice, Intent
 
@@ -124,6 +127,28 @@ def test_the_selection_reaches_the_search_the_validator_and_the_stored_reports(p
         named = next(c for c in report["legal"] if c["finding"]["rule"] == "Rule set applied")
         assert "G.O.Ms.No.95 of 2026" in named["finding"]["measured"]
         assert "the application filed, received 10-01-2026" in named["finding"]["note"]
+
+
+def test_with_readings_selected_the_search_lays_out_for_them_alone(proposed):
+    """2026-10-18: a project file that selects readings is searched for those readings alone, no
+    layout built for every reading nor for another one (what makes Dhulapally's run fast), and
+    every verdict shown still names each open reading it rests on: the validator judges every
+    reading of a question the law leaves open whatever the study selected."""
+    run, result = proposed
+    record = json.loads((run / "run.json").read_text())
+    laid_for = {(c["basis"]["stilt_in_rule_height"], c["basis"]["circulation_in_setback"])
+                for c in record["proposed_candidates"]}
+    assert laid_for == {("not_counted", "allowed")}
+    named = 0
+    for shown in result.candidates:
+        report = ValidationReport.model_validate_json(
+            (run / "reports" / f"{shown.candidate_id}.json").read_text())
+        rests = rests_on(report).readings
+        assert not rests_on(report).holds_under_every_reading
+        for reading in rests:
+            assert reading in shown.verdict, (shown.candidate_id, reading, shown.verdict)
+        named += STILT_IN_RULE_HEIGHT in rests or CIRCULATION_IN_SETBACK in rests
+    assert named, "a layout built for the selections rests on them, and says so"
 
 
 def test_a_client_requirement_stays_in_the_brief_and_never_moves_the_rules(ws, tmp_path):
