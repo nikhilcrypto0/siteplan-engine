@@ -29,6 +29,7 @@ from siteplan.contracts.common import Provenance, SourceKind, Status
 from siteplan.contracts.resolved_rules import CIRCULATION_IN_SETBACK, STILT_IN_RULE_HEIGHT
 from siteplan.contracts.site_model import ApplicationStatus
 from siteplan.contracts.validation import DependsOn
+from siteplan.legal.readings import BACHUPALLY_PERMIT
 from siteplan.legal.resolve import resolve
 from siteplan.optimizer.search.verdicts import rests_on
 from siteplan.service import ProposeLayouts, ResolveRules, Service
@@ -85,6 +86,20 @@ def test_the_architects_selection_is_recorded_beside_the_law_and_every_reading_s
     assert sorted(stilt.readings_evaluated) == ["counted", "not_counted"]
     assert (roads.selected, roads.status) == ("allowed", Provenance.ASSUMED_FOR_TEST)
     assert "a feasibility study, 2026-10-13 (a study assumption)" in roads.sources
+
+
+def test_the_bachupally_permit_supports_the_stilt_reading_and_settles_nothing(ws):
+    """2026-10-18: HMDA's Bachupally permit (Stilt + 12 at 35.4 m = 12 x 2.95 m) is supporting
+    evidence for the stilt left out, beside the architect's selection; the reading stays open and
+    both are still judged, so a result resting on it stays CONDITIONAL."""
+    stilt = next(i for i in _rules(ws).interpretations if i.id == "stilt_in_rule_height")
+    assert BACHUPALLY_PERMIT in stilt.sources
+    assert "004812/BP/HMDA/1054/MED/2024" in BACHUPALLY_PERMIT and "35.4 m" in BACHUPALLY_PERMIT
+    assert stilt.status is Provenance.USER_CONFIRMED  # the architect's selection, still open
+    assert sorted(stilt.readings_evaluated) == ["counted", "not_counted"]
+    unselected = resolve(fixture("rectangle").site).interpretation("stilt_in_rule_height")
+    assert BACHUPALLY_PERMIT in unselected.sources and unselected.selected == "ALL"
+    assert not unselected.settled
 
 
 def test_a_reading_said_twice_two_ways_is_refused(tmp_path):

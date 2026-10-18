@@ -4,6 +4,21 @@ A characterization test (tests/manifest.py) pins what the engine produces today.
 only together with a normative replacement test and an entry here: what changed, why, the
 evidence, and the test that now holds the behaviour. Newest first.
 
+## 2026-10-18: the stilt reading carries the Bachupally permit as supporting evidence
+
+- **What changed.** The sources of `stilt_in_rule_height` gain HMDA's TG-bPASS permit
+  004812/BP/HMDA/1054/MED/2024 of 08-08-2024 (Bachupally, Survey No. 306/P): Block A, 2 cellars +
+  1 stilt + 12 upper floors, permitted at 35.4 m = 12 x 2.95 m, its height without the stilt
+  (`legal/readings.BACHUPALLY_PERMIT`; the inventory entry says the same). The reading stays open:
+  ALL by default, the architect's selection not settling it, both readings judged.
+- **Why.** The architect's request of 2026-10-18; the figures were read off the permit itself. It
+  names no setback, so it does not show which Table IV row the authority applied.
+- **Tests.** `tests/test_service_proposals_baseline.py` (characterization) is re-pinned: the rules'
+  digest moves, so the proposed and shown digests move; the notes, the 39 proposed, the ten shown,
+  the model's answer and the approval page are unchanged. The normative test is
+  `test_the_bachupally_permit_supports_the_stilt_reading_and_settles_nothing`
+  (`tests/test_project_inputs.py`).
+
 ## 2026-10-18: alternatives round locked blocks may use every block in the firm's library
 
 - **What changed.** `service.around.alternatives` takes the site's workspace and gives the search

@@ -132,7 +132,10 @@ INVENTORY: tuple[Entry, ...] = (
                "(ENGINE_DESIGN_ASSUMPTION in constraints.py).",
         settles="A sanctioned stilt + N floors high-rise whose approved setback or road width "
                 "fits one reading and not the other. The firm's own Dhulapally drawing (not "
-                "sanctioned) keeps the setbacks of its blocks without their stilt.",
+                "sanctioned) keeps the setbacks of its blocks without their stilt. Supporting "
+                "since 2026-10-18 (not settling): HMDA's TG-bPASS permit "
+                "004812/BP/HMDA/1054/MED/2024 (Bachupally) permits a 1 stilt + 12 floors block "
+                "at 35.4 m = 12 x 2.95 m, its height without the stilt; it names no setback.",
     ),
     Entry(
         "Height", "The storeys start above the ground the height is measured from: a parking "

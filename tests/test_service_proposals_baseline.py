@@ -162,6 +162,10 @@ S+9 x 3, 384 flats, 525,960 sft) where it was `-109` (376 flats, 511,440 sft), f
 more judged. Every digest moves: each candidate carries its brief's digest, and the brief now asks
 for ten. The approval page is the same. The normative replacement is tests/test_shown_layouts.py,
 and test_every_layout_shown_is_a_different_idea_described_with_its_verdict below.
+Re-pinned on 2026-10-18, where the stilt reading's sources gain the HMDA Bachupally permit as
+supporting evidence (legal/readings.BACHUPALLY_PERMIT): no value the search or the validator reads
+changes, but each candidate carries the rules' digest, so the same notes, the same 39 proposed
+and the same ten shown carry new digests; the model's answer and the approval page are unchanged.
 
 The values pin exact output on the locked dependencies (uv.lock). They move only with a normative
 replacement and an entry in docs/behaviour-changes.md.
@@ -266,7 +270,7 @@ PINNED = {
         "full-ALL-ALL-4", "full-plates-ALL-ALL-47", "full-ALL-ALL-137", "full-ALL-ALL-138",
         "full-ALL-ALL-140", "full-ALL-ALL-114", "full-ALL-ALL-13", "full-plates-ALL-allowed-72",
     ],
-    "proposed_sha256": "36d7d1c3774a908393bd3ce9b40bcd094e678af5d46ed7b9c0aa01d14e53ab99",
+    "proposed_sha256": "774e41ceb611b7e51359db694a5de5bf09b2f741bf9bf2d1683a32147dbfe2f2",
     "shown": [
         ["full-not_counted-allowed-156", "BALANCED"],
         ["full-not_counted-allowed-86", "MAX_YIELD"],
@@ -279,10 +283,10 @@ PINNED = {
         ["full-not_counted-allowed-93", None],
         ["full-plates-not_counted-allowed-90", None],
     ],
-    "shown_digests": ["a58c3d033029396f", "2c859535703008f4", "a9b98123f3ce414d",
-                      "32924ea2051c7db3", "879f39581165ac0d", "83645cf59761143a",
-                      "31f21107005c4318", "e1f739e1284bcad7", "a896a83ff1e74362",
-                      "ee8f52edce633d18"],
+    "shown_digests": ["baef7e309ad77e65", "309daf3075717f79", "e13ca52fe987fd3d",
+                      "08ce7bcb3a1dff45", "5d38ccb987b35b1b", "da61ed41b680b4a9",
+                      "659d23ad9d051fde", "e2c050232bb5748f", "78939c1f66685b90",
+                      "9f00383a1a1917d7"],
     "answer_sha256": "37d082e87155917243ca82749d4d1e1db84ff1a271018228e8e132a2c6250939",
     "approval_page_sha256": "2b9223fec60c0f2988b8ade6b34bb309ab94b2935c794437dad5a125cb6ce087",
 }

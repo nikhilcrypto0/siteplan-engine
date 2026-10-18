@@ -52,6 +52,14 @@ CELLAR_EXTRA_SETBACK = "cellar_extra_setback"
 TABLE_IV_ROAD_WIDTH = "table_iv_road_width"  # carried only when a master-plan width is known
 NAMED_USES = "'greenery, tot lot or soft landscaping, etc.'"
 SELECTED_BY_PROFILE = "selected by a test profile"  # the marker an answer later replaces
+# Supporting evidence for the stilt left out, never settling the reading (2026-10-18): a sanctioned
+# Stilt + 12 high-rise whose permitted height is its twelve floors alone, read from the permit
+BACHUPALLY_PERMIT = (
+    "supporting, not settling: HMDA's TG-bPASS permit 004812/BP/HMDA/1054/MED/2024 of 08-08-2024 "
+    "(Survey No. 306/P, Bachupally) permits Block A, 2 cellars + 1 stilt + 12 upper floors, at a "
+    "proposed height of 35.4 m, which is 12 x 2.95 m; counting the stilt, twelve floors of NBC "
+    "Part 3 12.2.1's 2.75 m room and a 0.15 m slab would leave it 0.6 m, so the height leaves the "
+    "stilt out. The permit names no setback, so it does not show which Table IV row was applied")
 AMENITY_2016_READ = (
     "G.O.Ms.No.7 of 2016, Amendment 15 (pp.4-5), read from its text on 2026-10-13: 'upto 3% of "
     "the total built up area (or) 50,000 Sft. whichever is lower shall be planned and developed "
@@ -107,7 +115,8 @@ def _defaults(master_plan_road: bool) -> list[dict]:
                      "for the class",
                      rules.PARKING_FLOOR_HEIGHT_CLAUSE,
                      "the firm's own unsanctioned drawing keeps setbacks as if the stilt were "
-                     "not counted (not evidence)"],
+                     "not counted (not evidence)",
+                     BACHUPALLY_PERMIT],
             settles="a sanctioned stilt + N high-rise whose approved setback or road width fits "
                     "one reading only"),
         _reading(
