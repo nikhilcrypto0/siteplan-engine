@@ -10,6 +10,7 @@ as the claim that lost, not as two uses of one square metre.
 
 from __future__ import annotations
 
+import itertools
 from collections.abc import Sequence
 from dataclasses import dataclass
 
@@ -98,9 +99,12 @@ def _sorted_standing(standing: Sequence[Standing]) -> list[Standing]:
 def named_placements(standing: Sequence[Standing], frame: Frame,
                      fringe: Sequence[Standing] = ()) -> list[Placement]:
     """The blocks of the columns, named T1, T2... column by column, then the blocks on the ground
-    the ring road leaves, in the order they were placed."""
+    the ring road leaves, in the order they were placed; a locked block keeps its own name
+    (Stage D) and the others take the next names free."""
     ordered = [*_sorted_standing(standing), *fringe]
-    return [placement_of(s, f"T{i}", frame) for i, s in enumerate(ordered, 1)]
+    taken = {s.name for s in ordered if s.locked}
+    free = (f"T{i}" for i in itertools.count(1) if f"T{i}" not in taken)
+    return [placement_of(s, s.name if s.locked else next(free), frame) for s in ordered]
 
 
 # --- The ledger -------------------------------------------------------------------------------

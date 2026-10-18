@@ -202,37 +202,41 @@ def _violation(hull: Polygon, land: Land, ring_width_m: float) -> float:
 
 def fit_cluster(standing: Sequence[Standing], frame: Frame, street_m: float, land: Land,
                 ring_width_m: float, road_width_m: float, values: Sequence[float],
-                ring_id: str = "ring", first_street: int = 1
+                ring_id: str = "ring", first_street: int = 1,
+                fixed: Sequence[Polygon] = ()
                 ) -> tuple[list[Standing], list[Road], Cluster | None, str]:
     """The blocks, with the fewest taken away, whose cluster the ground holds with the ring road
     round it, and the streets between them. The columns are laid on ground where each block fits;
     the convex hull of them all may not (a plot with an arm, a notch). Of the blocks that make the
     hull stand off the ground, the one whose removal leaves least of it off, and then the least
-    valuable, goes first."""
+    valuable, goes first. The `fixed` footprints (blocks the architect locked, Stage D) are in the
+    cluster and never taken away: when no cluster holds them, none is returned, with why."""
     value = {id(s): v for s, v in zip(standing, values, strict=True)}
     current = list(standing)
     why = "no block stands"
-    while current:
-        footprints = [frame.to_survey(box(s.x0, s.y0, s.x1, s.y1)) for s in current]
+    least = 0 if fixed else 1  # the column blocks a cluster may be left with before giving up
+    while current or fixed:
+        footprints = [*fixed, *(frame.to_survey(box(s.x0, s.y0, s.x1, s.y1)) for s in current)]
         cluster, why = cluster_of(footprints, street_pieces(current, frame, street_m), land,
                                   ring_width_m, road_width_m, ring_id)
         if cluster is not None:
             return current, street_roads(current, frame, street_m, cluster, first_street), \
                 cluster, ""
-        if len(current) == 1:
+        if len(current) <= least:
             break
-        cost = partial(_cost_of_dropping, current, frame, street_m, land, ring_width_m, value)
+        cost = partial(_cost_of_dropping, current, frame, street_m, land, ring_width_m, value,
+                       fixed)
         drop = min(range(len(current)), key=cost)
         current = current[:drop] + current[drop + 1:]
     return [], [], None, why
 
 
 def _cost_of_dropping(current: Sequence[Standing], frame: Frame, street_m: float, land: Land,
-                      ring_width_m: float, value: dict[int, float], i: int
-                      ) -> tuple[float, float]:
+                      ring_width_m: float, value: dict[int, float], fixed: Sequence[Polygon],
+                      i: int) -> tuple[float, float]:
     """What is still off the ground with block `i` gone, and then what the block was worth."""
     rest = [*current[:i], *current[i + 1:]]
-    kept = [frame.to_survey(box(s.x0, s.y0, s.x1, s.y1)) for s in rest]
+    kept = [*fixed, *(frame.to_survey(box(s.x0, s.y0, s.x1, s.y1)) for s in rest)]
     hull = _hull_of([*kept, *street_pieces(rest, frame, street_m)])
     return (_violation(hull, land, ring_width_m), value[id(current[i])])
 

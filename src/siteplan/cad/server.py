@@ -159,6 +159,14 @@ def build(session: Session) -> FastMCP:
         return guard(lambda: session.read_layout_from_cad(site, run_id, layout_id))
 
     @server.tool()
+    def alternatives_around(site: str, run_id: str, layout_id: str, n: int = 10) -> dict:
+        """Up to n genuinely different alternatives round the blocks locked in a layout: the
+        locked blocks kept to the millimetre, the rest placed again with new roads, club house,
+        tot-lot and parking, each judged by the validator and saved as a version of the layout;
+        the first is drawn. When none can be laid, why."""
+        return guard(lambda: session.alternatives_around(site, run_id, layout_id, n))
+
+    @server.tool()
     def screenshot(site: str, file_name: str) -> str:
         """Save a picture of the site's FreeCAD document (a bare name ending .png in the live
         link's folder), framed on the plot and its short label; the note of the verdict in full

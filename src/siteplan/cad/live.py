@@ -21,7 +21,8 @@ from siteplan.cad import scene
 from siteplan.cad.bridge import Bridge, from_cad, to_cad
 from siteplan.profiles import load_profile
 from siteplan.prototypes.plates import PLATE_SOURCE
-from siteplan.service import describe, edits, judge, render, store, versions
+from siteplan.service import around, describe, edits, judge, render, store, versions
+from siteplan.service.brief import SHOWN_LAYOUTS
 from siteplan.service.models import Mode
 from siteplan.service.store import RunRecord
 from siteplan.steps.inputs import Inputs, from_answers, from_project
@@ -469,6 +470,25 @@ class Session:
                     "edits": [], "said": "nothing in FreeCAD differs from the layout"}
         final = changed
         return self._edit(name, run_id, layout_id, lambda _: final, words, moved)
+
+    def alternatives_around(self, name: str, run_id: str, layout_id: str,
+                            n: int = SHOWN_LAYOUTS) -> dict:
+        """Up to n genuinely different alternatives round the blocks locked in a layout (Stage D,
+        service.around): the locked blocks kept to the millimetre, the rest placed again and the
+        roads, club house, tot-lot and parking laid again, each judged by the validator and saved
+        as a version of the layout; the first drawn. When none can be laid, why."""
+        out, record = self._run(name, run_id)
+        got = around.alternatives(out, record, layout_id, n)
+        net = judge.judge_again(out, record, layout_id).inputs.site.net_plot.value.to_shapely()
+        shown = [a.candidate for a in got.alternatives]
+        rows = [{"version": a.version.version_id, "verdict": a.report.verdict.legal.value,
+                 "description": describe.describe(a.candidate, net, shown),
+                 "broke": list(a.version.broke)} for a in got.alternatives]
+        if rows:
+            self.show_layout(name, run_id, rows[0]["version"])
+        return {"site": name, "run": run_id, "layout": layout_id, "locked": list(got.locked),
+                "alternatives": rows, "why_none": got.why_none, "why_fewer": got.short,
+                "seconds": round(got.seconds, 1)}
 
     def _edit(self, name: str, run_id: str, layout_id: str, change, words: list[str],
               moves: list[str] = ()) -> dict:

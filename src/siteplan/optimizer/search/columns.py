@@ -70,6 +70,13 @@ class Standing:
     x0: float  # the column's left edge, in the turned frame
     y0: float
     frame: Frame | None = None  # the frame it was laid in, when not the configuration's
+    # Stage D (2026-10-17): a block the architect locked keeps its name, its place and its
+    # height; the search places the rest round it and never moves, raises or drops it
+    name: str | None = None
+
+    @property
+    def locked(self) -> bool:
+        return self.name is not None
 
     @property
     def y1(self) -> float:

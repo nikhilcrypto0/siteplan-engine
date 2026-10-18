@@ -175,7 +175,8 @@ def test_the_mcp_tools_reach_the_session_and_none_runs_code(made_up):
                      "reopen_drawing", "show_layout", "keep_layout",  # Stage B, 2026-10-16
                      "move_block", "turn_block", "move_club_house", "move_tot_lot_piece",
                      "lock_blocks", "read_layout_from_cad",  # Stage C, 2026-10-16
-                     "screenshot"}  # 2026-10-17
+                     "screenshot",  # 2026-10-17
+                     "alternatives_around"}  # Stage D, 2026-10-17
     asyncio.run(server.call_tool("show_site", {"site": "plot", "what": "setbacks"}))
     asyncio.run(server.call_tool("place_tower", {"site": "plot", "tower": "T1",
                                                  "length_m": 40.0, "depth_m": 24.13}))

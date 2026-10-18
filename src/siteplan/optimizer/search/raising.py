@@ -92,6 +92,8 @@ def raised(run: Run, ev: Evaluation, why: list[str] | None = None, *, nudge: boo
         return ""
 
     def taller(i: int) -> FloorClass | None:
+        if blocks[i].standing.locked:  # Stage D: a locked block keeps its height
+            return None
         current = blocks[i].cls
         above = sorted((c for c in ladder[blocks[i].standing.choice.prototype.id]
                         if c.floors > current.floors), key=lambda c: c.floors)
@@ -131,7 +133,7 @@ def _nudge(blocks: list[_Block], ev: Evaluation, allowed, taller, footprint) -> 
     moved_any = False
     columns: dict[int, list[int]] = {}
     for i, b in enumerate(blocks):
-        if not b.in_fringe and b.standing.frame is None:
+        if not b.in_fringe and b.standing.frame is None and not b.standing.locked:
             columns.setdefault(b.standing.column, []).append(i)
     for members in columns.values():
         members.sort(key=lambda i: blocks[i].standing.y0)

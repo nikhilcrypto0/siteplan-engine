@@ -249,7 +249,8 @@ class FullSearchStrategy:
         site, rules, brief = context.site, context.rules, context.brief
         kit = list(kit)
         wanted = profiles(rules, brief, kit)
-        run = make_run(site, rules, brief, envelope, kit, wanted, with_margins)
+        run = make_run(site, rules, brief, envelope, kit, wanted, with_margins,
+                       locked=context.locked)
         if not any(run.classes[p.key][pid] for p in wanted for pid in run.classes[p.key]):
             return None, [], Tally()
         tally = Tally()

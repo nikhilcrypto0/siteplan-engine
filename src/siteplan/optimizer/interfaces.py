@@ -33,6 +33,7 @@ from siteplan.contracts import (
     TowerPrototype,
     ValidationReport,
 )
+from siteplan.contracts.candidate import PlacedTower
 
 
 class Budget:
@@ -70,6 +71,9 @@ class SearchContext:
     prototypes: tuple[TowerPrototype, ...] = ()
     seed: int = 0
     budget: Budget = field(default_factory=Budget)
+    # Stage D (2026-10-17): blocks every layout keeps exactly where they stand (the full search
+    # places the rest round them); their prototypes are among `prototypes`
+    locked: tuple[PlacedTower, ...] = ()
 
     def rng(self, stream: str = "") -> random.Random:
         """A generator seeded from the run's seed (and a name, for a strategy that wants

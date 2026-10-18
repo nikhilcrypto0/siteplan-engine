@@ -72,6 +72,7 @@ from siteplan.optimizer.search import layout as search_layout
 from siteplan.optimizer.search import raising as search_raising
 from siteplan.prototypes import compose, plates
 from siteplan.prototypes import library as prototype_library
+from siteplan.service import around as service_around
 from siteplan.service import brief as service_brief
 from siteplan.service import describe as service_describe
 from siteplan.service import edits as service_edits
@@ -2044,6 +2045,18 @@ REGISTRY: tuple[Constraint, ...] = (
         ("cad.live.SAME_SQM", "cad.live.TURN_DEG", "service.edits.RIGID_TOL_M"),
         note="Drawing tolerances, never a rule: the validator measures every edited layout.",
         settles="Nothing: a drawing tolerance.",
+    ),
+    Constraint(
+        "Towers", "Alternatives round locked blocks (Stage D, 2026-10-17): a locked block stands "
+                  "in every alternative where it stood, to within this distance, at its own "
+                  "height; an alternative that does not keep it so is never offered.",
+        _m(search_layout.LOCK_EXACT_M), Basis.ENGINE_DESIGN_ASSUMPTION,
+        "the architect, 2026-10-17: locked buildings stay fixed to the millimetre",
+        ("optimizer.search.layout.LOCK_EXACT_M", "service.around.OVERLAP_SQM"),
+        note="A tolerance, never a rule: the validator judges every alternative. Before any "
+             f"search, locked blocks off the net plot, or on each other, by more than "
+             f"{service_around.OVERLAP_SQM:g} m² are refused with why.",
+        settles="Nothing: the architect's requirement.",
     ),
     Constraint(
         "Live CAD", "The acceptance run moves its test tower this far east through MCP and this "

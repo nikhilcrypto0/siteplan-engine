@@ -33,6 +33,32 @@ evidence, and the test that now holds the behaviour. Newest first.
   a one-level cellar whose outline is now cut the new way. The normative replacement is
   `tests/test_search_parking.py`.
 
+## 2026-10-17: alternatives round locked blocks (Stage D)
+
+- **What changed.** Nothing a run without locked blocks proposes, shows or judges moves; laying
+  alternatives round locked blocks is added.
+  - The full search takes locked blocks (`SearchContext.locked`, `Run.locked`): each stands in
+    a frame of its own exactly where it stood (`layout.locked_standing`, its placement checked
+    to `LOCK_EXACT_M`, 1 mm), at its own height, under its own name (`Standing.name`; the
+    search's blocks take the next names free). New columns keep off the ground round it
+    (`_locked_room`: the gap any block that may stand asks); the ring road is fitted round the
+    columns and the locked blocks and never drops a locked one (`network.fit_cluster`'s
+    `fixed`); the raising pass never raises or moves one. The roads, fire lanes, club house,
+    tot-lot and parking are laid as for any layout.
+  - `service/around.py`: on a layout with blocks locked (Stage C's lock), the search on the run's
+    stored inputs and its own kit, every candidate held to the locked blocks and passed by the
+    optimizer's guard, up to N genuinely different ones chosen (`pareto.select`, as Stage A),
+    each saved as a version of the chosen layout with what it broke. Locked blocks off the net
+    plot or on each other are refused before any search; when nothing can be laid the search's
+    own reasons are returned, never an empty answer; when fewer than asked are found, why
+    (`Around.short`: how many passed, how many were copies, how many the validator failed).
+  - FreeCAD: `alternatives_around` lays them, draws the first and gives each one's line and
+    verdict.
+- **Why.** The architect's roadmap, 2026-10-17: locked buildings fixed to the millimetre, the
+  rest placed and laid again round them, every alternative judged and kept as a version.
+- **Tests.** `tests/test_layout_around.py` (normative, made-up land); the search's own tests
+  unchanged (nothing locked, nothing different).
+
 ## 2026-10-17: the sheet's label short and within the plot, the verdict in full in a note
 
 - **What changed.** A layout drawn in FreeCAD (`cad.live.show_layout`) says its verdict on the
