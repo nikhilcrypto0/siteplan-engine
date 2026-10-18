@@ -310,7 +310,13 @@ def build_project(draft: Draft, answers: dict, defaults: WorkspaceDefaults | Non
     how far it can be trusted. `answers` may carry a `_status` map that relabels a value, keyed
     as asked or as the sources are (e.g. {"authority": "UNVERIFIED"}), a `_source` map that
     says who gave it (e.g. {"road_row": "architect, 2026-10-02"}) and a `_source_kind` map
-    (e.g. {"road_row": "ARCHITECT"}); a blind acceptance run refuses FIRM_FINISHED_PLAN."""
+    (e.g. {"road_row": "ARCHITECT"}); a blind acceptance run refuses FIRM_FINISHED_PLAN. Two
+    answers no question asks may be given too (2026-10-18), so a run built from the answers
+    carries them as a project file would: `readings`, the readings of open questions the
+    project selects for its studies, each with its source and status (the project file's
+    `layout.readings`), and `application_status` (NOT_FILED, FILED or SANCTIONED) with
+    `application_date` where it was received, labelled through the three maps like any answer;
+    with neither, nothing is selected and the application stays unknown."""
     defaults = defaults or WorkspaceDefaults()
     problems = missing(draft, answers)
     if problems:
@@ -377,6 +383,13 @@ def build_project(draft: Draft, answers: dict, defaults: WorkspaceDefaults | Non
         layout["maximise"] = True
     else:
         layout["floors"] = int(given["floors"])
+    if answers.get("readings"):
+        layout["readings"] = answers["readings"]
+    for key in ("application_status", "application_date"):
+        if answers.get(key):
+            site[key] = answers[key]
+            sources[key] = f"architect: {answers[key]}"
+            status[key] = Provenance.USER_CONFIRMED
     for key, value in (answers.get("_status") or {}).items():
         status[STATUS_KEYS.get(key, key)] = Provenance(value)
     for key, text in (answers.get("_source") or {}).items():

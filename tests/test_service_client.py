@@ -98,11 +98,22 @@ def _suchitra(folder: Path) -> tuple[str, str]:
     """Suchitra's project as `siteplan start` writes it from the architect's answers, with the
     longest block the architect's own project file sets (the workspace sets none)."""
     built = build_project(extract(SUCHITRA_SURVEY), SUCHITRA_ANSWERS, load_defaults(WORKSPACE))
-    longest = json.loads(SUCHITRA_PROJECT.read_text())["layout"]["max_tower_length_m"]
+    architect = json.loads(SUCHITRA_PROJECT.read_text())
+    longest = architect["layout"]["max_tower_length_m"]
     assert longest == SUCHITRA_LONGEST_M, "Suchitra's project file changed its longest block"
     built["layout"]["max_tower_length_m"] = longest
     built["sources"]["max_tower_length_m"] = f"architect: {SUCHITRA_PROJECT.name}"
     built["status"]["max_tower_length_m"] = Provenance.USER_CONFIRMED
+    # the readings he selects and where the application stands, as his project file gives them
+    # (2026-10-18), so the blind run is the one he asked for
+    if architect["layout"].get("readings"):
+        built["layout"]["readings"] = architect["layout"]["readings"]
+    if architect["site"].get("application_status"):
+        built["site"]["application_status"] = architect["site"]["application_status"]
+        for part in ("sources", "status", "source_kinds"):
+            if "application_status" in architect.get(part, {}):
+                built.setdefault(part, {})["application_status"] = (
+                    architect[part]["application_status"])
     save(built, folder / "suchitra.project.json")
     shutil.copy(SUCHITRA_SURVEY, folder / SUCHITRA_SURVEY.name)
     return "suchitra.project.json", SUCHITRA_SURVEY.name

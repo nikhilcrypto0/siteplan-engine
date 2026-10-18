@@ -23,6 +23,8 @@ from siteplan.intake import (
     missing,
     questions,
 )
+from siteplan.legal.site import readings_of, sources_of
+from siteplan.project import Project
 from siteplan.provenance import Provenance
 from siteplan.roads import Road
 
@@ -98,6 +100,40 @@ def test_a_marked_nala_must_be_answered_and_its_nearest_lines_are_shown_not_chos
     assert "#808080 2.9 m" in water.prompt and "#00FFFF 6.9 m" in water.prompt
     unmarked = {q.key: q for q in questions(_draft())}["water"]
     assert unmarked.default == "no"
+
+
+READINGS = {"stilt_in_rule_height": {"reading": "not_counted", "status": "USER_CONFIRMED",
+                                     "source": "the architect, 2026-10-11"},
+            "nbc_fire_height": {"reading": "nbc_line", "status": "USER_CONFIRMED",
+                                "source": "the architect, 2026-10-13"}}
+
+
+def test_the_answers_may_carry_the_readings_and_the_application_as_a_project_file_does():
+    """2026-10-18: a blind run is built from the answers, so they carry what the project file
+    would: the readings the architect selects and where the application stands, each labelled."""
+    answers = ANSWERS | {"readings": READINGS, "application_status": "NOT_FILED",
+                         "_source": {"application_status": "the architect's office, 2026-10-18"},
+                         "_source_kind": {"application_status": "ARCHITECT"}}
+    built = build_project(_draft(), answers)
+    project = Project.model_validate(built)
+    assert readings_of(project)[0] == {"stilt_in_rule_height": "not_counted",
+                                       "nbc_fire_height": "nbc_line"}
+    assert sources_of(project)[0]["nbc_fire_height"] == "the architect, 2026-10-13"
+    assert project.site.application_status == "NOT_FILED"
+    assert built["status"]["application_status"] == "USER_CONFIRMED"
+    assert built["sources"]["application_status"] == "the architect's office, 2026-10-18"
+    assert built["source_kinds"]["application_status"] == "ARCHITECT"
+    filed = build_project(_draft(), ANSWERS | {"application_status": "FILED",
+                                               "application_date": "2026-01-10"})
+    assert filed["site"]["application_date"] == "2026-01-10"
+
+
+def test_answers_that_say_neither_select_nothing_and_leave_the_application_unknown():
+    project = Project.model_validate(build_project(_draft(), ANSWERS))
+    assert readings_of(project)[0] == {} and project.site.application_status is None
+    with pytest.raises(ValueError, match="application_date given for an application NOT_FILED"):
+        build_project(_draft(), ANSWERS | {"application_status": "NOT_FILED",
+                                           "application_date": "2026-01-10"})
 
 
 def test_the_project_keeps_declared_and_measured_apart_and_says_where_each_came_from():
