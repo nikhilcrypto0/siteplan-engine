@@ -6,25 +6,44 @@ of the chosen layout; a lock that leaves no room says why. Made-up land (the con
 rectangle, 200 x 120 m, its net plot 150 x 100 m) and the search's quick limits."""
 
 import asyncio
+import json
 from functools import cache
 from pathlib import Path
 
 import pytest
+from contract_fixtures.build import LIBRARY
 from search_support import FAST
 from test_cad import Drawing
 from test_layout_versions import RUN, _run
 
 from siteplan.cad.live import Session
 from siteplan.cad.server import build
+from siteplan.intake import WORKSPACE_FILE
 from siteplan.optimizer.pareto import same_idea
-from siteplan.service import around, edits, store, versions
+from siteplan.service import around, edits, judge, store, versions
 from siteplan.service.edits import EditRefused
+from siteplan.service.service import search_kit
 
 TEST_CLASS = "normative"
 
 
 def _tower(candidate, name):
     return next(t for t in candidate.towers if t.name == name)
+
+
+def _workspace(root: Path) -> Path:
+    """A made-up firm's workspace beside the runs: its settings naming its flat library, the
+    contract fixtures' own flats."""
+    folder = root / "workspace"
+    folder.mkdir(exist_ok=True)
+    (folder / "flats.json").write_text(LIBRARY.model_dump_json())
+    (folder / WORKSPACE_FILE).write_text(json.dumps({"flat_library": "flats.json"}))
+    return folder
+
+
+def _alternatives(root: Path, layout_id: str, n: int):
+    return around.alternatives(root, _workspace(root), store.read_record(root, RUN), layout_id,
+                               n, limits=FAST)
 
 
 def _locked_run(out: Path, change=None, names=("T1",)):
@@ -40,7 +59,7 @@ def _locked_run(out: Path, change=None, names=("T1",)):
 @cache
 def _around(root: Path):
     record, inputs, locked = _locked_run(root)
-    got = around.alternatives(root, record, locked.version.version_id, 4, limits=FAST)
+    got = _alternatives(root, locked.version.version_id, 4)
     return record, inputs, locked, got
 
 
@@ -96,7 +115,7 @@ def test_fewer_than_asked_says_how_many_passed_and_how_many_were_copies(made):
 def test_a_block_turned_to_an_odd_angle_and_locked_is_kept_exactly(tmp_path):
     record, _, locked = _locked_run(tmp_path, lambda c: edits.turned_block(c, "T3", 33.3),
                                     names=("T3",))
-    got = around.alternatives(tmp_path, record, locked.version.version_id, 2, limits=FAST)
+    got = _alternatives(tmp_path, locked.version.version_id, 2)
     t3 = _tower(locked.candidate, "T3")
     for alt in got.alternatives:
         mine = _tower(alt.candidate, "T3")
@@ -109,7 +128,7 @@ def test_a_block_turned_to_an_odd_angle_and_locked_is_kept_exactly(tmp_path):
 def test_a_lock_off_the_plot_says_why_and_saves_nothing(tmp_path):
     record, _, locked = _locked_run(tmp_path, lambda c: edits.moved_block(c, "T1", 400.0, 0.0))
     before = len(versions.listed(tmp_path, record))
-    got = around.alternatives(tmp_path, record, locked.version.version_id, 4, limits=FAST)
+    got = _alternatives(tmp_path, locked.version.version_id, 4)
     assert got.alternatives == () and "T1 stands off the net plot" in got.why_none
     assert len(versions.listed(tmp_path, store.read_record(tmp_path, RUN))) == before
 
@@ -119,7 +138,7 @@ def test_a_lock_that_leaves_no_room_says_why_in_the_searchs_words(tmp_path):
     86.99 m, the plot's at 100 m): on the plot, but no 9 m ring road can run round it, so no
     layout keeps it, and the reason is the search's own."""
     record, _, locked = _locked_run(tmp_path, lambda c: edits.moved_block(c, "T1", 0.0, 12.0))
-    got = around.alternatives(tmp_path, record, locked.version.version_id, 4, limits=FAST)
+    got = _alternatives(tmp_path, locked.version.version_id, 4)
     assert got.alternatives == ()
     assert got.why_none.startswith("no layout can be laid round the locked blocks")
     assert "round the locked blocks" in got.why_none.split(":", 1)[1]
@@ -128,19 +147,20 @@ def test_a_lock_that_leaves_no_room_says_why_in_the_searchs_words(tmp_path):
 def test_a_layout_with_nothing_locked_is_refused(tmp_path):
     record, _ = _run(tmp_path)
     with pytest.raises(EditRefused, match="no locked block"):
-        around.alternatives(tmp_path, record, "rectangle-1", 4, limits=FAST)
+        _alternatives(tmp_path, "rectangle-1", 4)
 
 
 def test_the_cad_tool_lays_the_alternatives_and_draws_the_first(tmp_path):
     record, _, locked = _locked_run(tmp_path)
     drawing = Drawing()
-    session = Session({"plot": {"runs": str(tmp_path), "mode": "blind"}}, drawing)
+    session = Session({"plot": {"runs": str(tmp_path), "mode": "blind",
+                               "workspace": str(_workspace(tmp_path))}}, drawing)
     names = {t.name for t in asyncio.run(build(session).list_tools())}
     assert "alternatives_around" in names
     session_around = around.alternatives  # the CAD tool runs the same, with the default limits
 
-    def quick(out, record_, layout_id, n, limits=None, seed=0):
-        return session_around(out, record_, layout_id, n, limits=FAST, seed=seed)
+    def quick(out, workspace, record_, layout_id, n, limits=None, seed=0):
+        return session_around(out, workspace, record_, layout_id, n, limits=FAST, seed=seed)
 
     around.alternatives = quick
     try:
@@ -152,3 +172,41 @@ def test_the_cad_tool_lays_the_alternatives_and_draws_the_first(tmp_path):
     assert first["description"] and first["verdict"] != "FAIL"
     label = " ".join(drawing.docs["Siteplan_plot"]["layout-sheet-label"]["text"].split())
     assert label.startswith(f"{first['version']} (run {RUN}")
+
+
+def test_the_search_round_the_locks_is_given_every_block_in_the_firms_library(tmp_path,
+                                                                                monkeypatch):
+    """The architect's decision of 2026-10-18: the alternatives may use every block type the
+    firm's flat library in the workspace gives, composed as the run's own search was given them
+    (`service.search_kit`), not only the blocks the run's layouts used; the chosen layout's own
+    blocks beside them, so the locked one is always there."""
+    record, _, locked = _locked_run(tmp_path)
+    parent = judge.judge_again(tmp_path, record, locked.version.version_id)
+    library, _ = search_kit(LIBRARY, parent.inputs.brief, parent.inputs.envelope)
+    used = {p.id for p in parent.candidate.prototypes_used}
+    given = []
+
+    class Watched(around.FullSearchStrategy):
+        def propose(self, context):
+            given.append({p.id for p in context.prototypes})
+            return super().propose(context)
+
+    monkeypatch.setattr(around, "FullSearchStrategy", Watched)
+    _alternatives(tmp_path, locked.version.version_id, 2)
+    assert given == [used | {p.id for p in library}]
+    assert given[0] - used, "the library gives blocks the run's layouts never used"
+
+
+def test_a_workspace_that_names_no_flat_library_is_refused(tmp_path):
+    record, _, locked = _locked_run(tmp_path)
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    with pytest.raises(EditRefused, match="names no flat_library"):
+        around.alternatives(tmp_path, empty, record, locked.version.version_id, 2, limits=FAST)
+
+
+def test_the_cad_tool_asks_for_the_sites_workspace(tmp_path):
+    _, _, locked = _locked_run(tmp_path)
+    session = Session({"plot": {"runs": str(tmp_path), "mode": "blind"}}, Drawing())
+    with pytest.raises(ValueError, match="names no 'workspace' for plot"):
+        session.alternatives_around("plot", RUN, locked.version.version_id, 2)

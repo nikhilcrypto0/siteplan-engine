@@ -7,9 +7,12 @@ are judged by the independent validator and each saved as a version of the chose
 the search's own reasons, never an empty answer.
 
 The search runs on the run's stored inputs (site, rules, brief, envelope), so every alternative is
-made for exactly them; the number asked shapes only which are chosen. Its kit is the blocks the
-run's own layouts used. An alternative that does not keep every locked block where it stood is
-never offered (it cannot arise; it is checked all the same).
+made for exactly them; the number asked shapes only which are chosen. Its kit is every block the
+firm's flat library in the site's workspace gives the stored brief, composed as the service
+composed the run's own search (`service.search_kit`), with the chosen layout's blocks beside them
+(2026-10-18, the architect: every block type in the firm's library, not only those the run used).
+An alternative that does not keep every locked block where it stood is never offered (it cannot
+arise; it is checked all the same).
 """
 
 from __future__ import annotations
@@ -20,6 +23,8 @@ from pathlib import Path
 
 from siteplan import validator
 from siteplan.contracts import CandidateLayout, TowerPrototype, ValidationReport
+from siteplan.intake import WORKSPACE_FILE, load_defaults
+from siteplan.library import FlatLibrary
 from siteplan.optimizer.core import _rests
 from siteplan.optimizer.guard import guard
 from siteplan.optimizer.interfaces import Budget, SearchContext
@@ -27,9 +32,10 @@ from siteplan.optimizer.objective import measure
 from siteplan.optimizer.pareto import Scored, select, shortfall
 from siteplan.optimizer.search import FullSearchStrategy, Limits
 from siteplan.optimizer.search.layout import LOCK_EXACT_M
-from siteplan.service import judge, store, versions
+from siteplan.service import judge, versions
 from siteplan.service.edits import EditRefused, locks
-from siteplan.service.store import RunRecord, StoreError
+from siteplan.service.service import search_kit
+from siteplan.service.store import Inputs, RunRecord
 
 OVERLAP_SQM = 0.01  # two locked blocks sharing more ground than this overlap
 
@@ -52,7 +58,7 @@ class Around:
     short: str = ""  # when fewer than asked: how many passed, how many were copies (Stage A)
 
 
-def alternatives(out: Path, record: RunRecord, layout_id: str, n: int,
+def alternatives(out: Path, workspace: Path, record: RunRecord, layout_id: str, n: int,
                  limits: Limits | None = None, seed: int = 0) -> Around:
     """Up to `n` different alternatives round the blocks locked in `layout_id`, each a version."""
     started = time.monotonic()
@@ -69,7 +75,7 @@ def alternatives(out: Path, record: RunRecord, layout_id: str, n: int,
     if why:
         return Around(layout_id, tuple(names), (), why, (), time.monotonic() - started)
     context = SearchContext(inputs.site, inputs.rules, inputs.brief, inputs.envelope,
-                            tuple(_kit(out, record, parent.candidate)), seed,
+                            tuple(_kit(workspace, inputs, parent.candidate)), seed,
                             Budget(inputs.brief.objectives.search_budget_s), tuple(locked))
     proposal = FullSearchStrategy(limits=(limits or Limits()).for_options(n)).propose(context)
     kept = [c for c in proposal.candidates if _keeps(c, parent.candidate, locked)]
@@ -127,20 +133,28 @@ def _keeps(candidate: CandidateLayout, parent: CandidateLayout, locked) -> bool:
     return True
 
 
-def _kit(out: Path, record: RunRecord, parent: CandidateLayout) -> list[TowerPrototype]:
-    """The blocks the run's own layouts used (its shown alternatives, the proposals it kept where
-    its record allows them, the chosen layout): the kit its search was given, as far as it shows."""
+def library_of(workspace: Path) -> FlatLibrary:
+    """The firm's flat library: the file the workspace's settings name, inside the workspace."""
+    root = Path(workspace).resolve()
+    name = load_defaults(root).flat_library
+    if not name:
+        raise EditRefused(f"the workspace's {WORKSPACE_FILE} names no flat_library: the "
+                          "alternatives are laid with the firm's blocks")
+    path = (root / name).resolve()
+    if not path.is_relative_to(root) or not path.is_file():
+        raise EditRefused(f"the workspace's flat library {name} is not a file in it")
+    return FlatLibrary.model_validate_json(path.read_text())
+
+
+def _kit(workspace: Path, inputs: Inputs, parent: CandidateLayout) -> list[TowerPrototype]:
+    """Every block the firm's library gives the stored brief, composed as the run's own search
+    was given them (the families for its mix and the floor plates its land takes, within the
+    firm's longest block), and the chosen layout's blocks, which win on an id they share, so a
+    locked block is placed as it is even when the library has changed since."""
     found = {p.id: p for p in parent.prototypes_used}
-    for entry in record.candidates:
-        for p in store.load_candidate(out, record, entry.candidate_id).prototypes_used:
-            found.setdefault(p.id, p)
-    for entry in record.proposed_candidates:
-        try:
-            candidate, _ = store.load_proposed(out, record, entry.candidate_id)
-        except StoreError:
-            break  # a run with no approved proposal: its shown layouts alone
-        for p in candidate.prototypes_used:
-            found.setdefault(p.id, p)
+    kit, _ = search_kit(library_of(workspace), inputs.brief, inputs.envelope)
+    for p in kit:
+        found.setdefault(p.id, p)
     return list(found.values())
 
 

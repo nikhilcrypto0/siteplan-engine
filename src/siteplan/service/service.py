@@ -290,7 +290,7 @@ class Service:
             return ProposeResult(status=ProposeStatus.STOPPED, next=str(error))
         design = brief.design(loaded.project, loaded.defaults, self._amenities(loaded.defaults),
                               request.intent, words)
-        kit, left_out = _kit(library, design, env)
+        kit, left_out = search_kit(library, design, env)
         if not kit:
             return ProposeResult(status=ProposeStatus.STOPPED, notes=left_out, next=NO_PROTOTYPE)
         title = f"Generate layout options for {loaded.project.name}"
@@ -573,7 +573,7 @@ NO_PLATES_YET = ("No floor plates sized to the land are listed: the net plot is 
                  "(name the survey beside the project file).")
 
 
-def _kit(library: FlatLibrary, design: DesignBrief, env: BuildableEnvelope | None
+def search_kit(library: FlatLibrary, design: DesignBrief, env: BuildableEnvelope | None
          ) -> tuple[list[TowerPrototype], list[str]]:
     """The prototypes the search is given: the firm's flats composed for the brief's mix and,
     beside them, the floor plates this site's land takes (prototypes.plates, each PRELIMINARY),

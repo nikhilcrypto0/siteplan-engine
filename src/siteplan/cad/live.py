@@ -476,9 +476,14 @@ class Session:
         """Up to n genuinely different alternatives round the blocks locked in a layout (Stage D,
         service.around): the locked blocks kept to the millimetre, the rest placed again and the
         roads, club house, tot-lot and parking laid again, each judged by the validator and saved
-        as a version of the layout; the first drawn. When none can be laid, why."""
+        as a version of the layout; the first drawn. When none can be laid, why. The rest are laid
+        with every block the firm's flat library in the site's workspace gives."""
         out, record = self._run(name, run_id)
-        got = around.alternatives(out, record, layout_id, n)
+        workspace = self.specs[name].get("workspace")
+        if not workspace:
+            raise ValueError(f"the sites file names no 'workspace' for {name}: the alternatives "
+                             "are laid with the firm's flat library from it")
+        got = around.alternatives(out, Path(workspace), record, layout_id, n)
         net = judge.judge_again(out, record, layout_id).inputs.site.net_plot.value.to_shapely()
         shown = [a.candidate for a in got.alternatives]
         rows = [{"version": a.version.version_id, "verdict": a.report.verdict.legal.value,

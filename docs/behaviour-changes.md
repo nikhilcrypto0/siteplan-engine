@@ -4,6 +4,21 @@ A characterization test (tests/manifest.py) pins what the engine produces today.
 only together with a normative replacement test and an entry here: what changed, why, the
 evidence, and the test that now holds the behaviour. Newest first.
 
+## 2026-10-18: alternatives round locked blocks may use every block in the firm's library
+
+- **What changed.** `service.around.alternatives` takes the site's workspace and gives the search
+  every block the firm's flat library there gives the stored brief, composed as `propose_layouts`
+  composed the run's own kit (`service.search_kit`, formerly `service._kit`: the families for the
+  brief's mix and the floor plates its land takes, within the firm's longest block), with the
+  chosen layout's own blocks beside them, which win on an id they share. It used to take only the
+  blocks the run's shown and proposed layouts used. A workspace that names no flat library is
+  refused with that reason; the CAD tool asks for the site's `workspace` in the sites file.
+- **Why.** The architect's decision 3 of 2026-10-18: "let alternatives use every block type in
+  the firm's library from the workspace, not only those the run used."
+- **Tests.** `tests/test_layout_around.py` (normative): the search round the locks is given the
+  library's blocks and the run's (it fails with the old kit), a workspace with no library is
+  refused, and the CAD tool asks for the workspace.
+
 ## 2026-10-18: round a locked block, the search lays only tot-lot and roads the validator allows
 
 - **What changed.** In a search round locked blocks (Stage D), `layout.evaluate` sizes the setback
