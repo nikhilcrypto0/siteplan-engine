@@ -9,7 +9,7 @@ from dataclasses import dataclass
 
 from shapely.geometry import LineString, Point, Polygon
 from shapely.geometry.base import BaseGeometry
-from shapely.ops import linemerge, unary_union
+from shapely.ops import linemerge, substring, unary_union
 
 COMPASS_DEG = {"N": 0, "NE": 45, "E": 90, "SE": 135, "S": 180, "SW": 225, "W": 270, "NW": 315}
 # A stretch of boundary faces a compass side when its outward normal is within FACING_DEG of the
@@ -128,6 +128,62 @@ def strip_along_side(boundary: Polygon, side: str, width_m: float) -> Polygon:
     if not parts:
         raise ValueError(f"A {width_m:g} m strip off the {side} side leaves no plot.")
     return max(parts, key=lambda p: p.area)
+
+
+STRIP_LENGTH_TOL_M = 0.01  # how closely the length of a strip from a corner is found
+
+
+@dataclass(frozen=True)
+class CornerStrip:
+    """Land given up along part of the boundary, from a corner (`strip_from_corner`)."""
+
+    plot: Polygon  # what is left
+    strip: BaseGeometry  # the land given up
+    stretch: LineString  # the boundary it runs along, from the corner
+    corner: tuple[float, float]
+
+
+def strip_from_corner(boundary: Polygon, corner: str, toward: str, width_m: float,
+                      area_sqm: float) -> CornerStrip:
+    """The plot left after a strip `width_m` wide, measured square into the plot from the
+    boundary, comes off it from the plot's corner furthest toward `corner` (a compass point),
+    running along the boundary the way that sets off nearer `toward` and on round any corner it
+    meets, for as long as it takes to reach `area_sqm`; it ends cut square. Nothing is inferred:
+    the corner, the direction, the width and the area are the architect's, and the caller checks
+    what comes off against the stated deduction."""
+    if area_sqm <= 0:
+        raise ValueError(f"A strip of {area_sqm:,.0f} m² takes nothing off the plot.")
+    ring = list(boundary.exterior.coords)[:-1]
+    east, north = math.sin(math.radians(COMPASS_DEG[corner])), math.cos(
+        math.radians(COMPASS_DEG[corner]))
+    start = max(range(len(ring)), key=lambda i: ring[i][0] * east + ring[i][1] * north)
+    onward = [*ring[start:], *ring[:start], ring[start]]
+    ways = sorted((onward, onward[::-1]), key=lambda path: angle_between(
+        bearing_to(path[0], path[1]), COMPASS_DEG[toward]))
+    off = [angle_between(bearing_to(p[0], p[1]), COMPASS_DEG[toward]) for p in ways]
+    if off[0] >= off[1]:
+        raise ValueError(f"From the {corner} corner both ways along the boundary head as far "
+                         f"from {toward}; say which way the strip runs.")
+    path = LineString(ways[0])
+
+    def band(length: float) -> BaseGeometry:
+        line = substring(path, 0, length)
+        return line.buffer(width_m, cap_style="flat", join_style="mitre").intersection(boundary)
+
+    if band(path.length).area < area_sqm:
+        raise ValueError(f"A {width_m:g} m strip all round the plot comes to less than "
+                         f"{area_sqm:,.0f} m².")
+    short, long = 0.0, path.length
+    while long - short > STRIP_LENGTH_TOL_M:
+        mid = (short + long) / 2
+        short, long = (mid, long) if band(mid).area < area_sqm else (short, mid)
+    strip = band(long)
+    rest = boundary.difference(strip)
+    parts = [p for p in getattr(rest, "geoms", [rest]) if p.geom_type == "Polygon"]
+    if not parts:
+        raise ValueError(f"A {width_m:g} m strip from the {corner} corner leaves no plot.")
+    return CornerStrip(max(parts, key=lambda p: p.area), strip, substring(path, 0, long),
+                       ring[start])
 
 
 def frontage(footprint: Polygon, near: BaseGeometry, within_m: float) -> float:

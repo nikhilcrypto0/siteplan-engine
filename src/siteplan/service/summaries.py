@@ -123,7 +123,9 @@ def site_facts(site: CanonicalSiteModel) -> list[Fact]:
     out = [fact("gross ownership", own.gross_sqm, "m²"), fact("net ownership", own.net_sqm, "m²")]
     for d in own.deductions:
         where = d.location
-        placed = (f"{where.side} side, {where.width_m:g} m wide" if where.width_m
+        placed = (f"{where.width_m:g} m wide along {where.extent.to_shapely().length:.1f} m of "
+                  "the boundary from a corner" if where.extent
+                  else f"{where.side} side, {where.width_m:g} m wide" if where.width_m
                   else "its own outline" if where.shape
                   else f"{where.side} side, where along it not known" if where.side
                   else "where it lies is not known")

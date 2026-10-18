@@ -225,6 +225,9 @@ def _inputs(project: dict, standards: dict) -> list[str]:
                                  for w in site.get("water", [])) or "none",
               "road_strip": (f"{site['road_strip_width_m']:g} m off the "
                              f"{site.get('road_strip_side', '?')} side"
+                             + (f", from the {site['road_strip_from']} corner toward "
+                                f"{site.get('road_strip_toward', '?')}"
+                                if site.get("road_strip_from") else "")
                              if site.get("road_strip_width_m") else ""),
               "conservative_parking": "GHMC column planned while the jurisdiction is open"
               if layout.get("conservative_parking") else "",

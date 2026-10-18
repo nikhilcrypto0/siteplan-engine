@@ -9,8 +9,11 @@ even width invented a 6.6 m strip where the firm draws a 40 ft road along part o
 import json
 
 import pytest
-from shapely.geometry import box
+from shapely.geometry import Point, box
 
+from siteplan.adapters.legacy_site import _site_fields, site_model
+from siteplan.contracts.accounting import LocationHow
+from siteplan.geometry import strip_from_corner
 from siteplan.project import Project
 from siteplan.runner import load_plot
 
@@ -61,6 +64,62 @@ def test_load_plot_leaves_the_boundary_alone_when_no_net_area_is_stated(tmp_path
     plot, basis = load_plot(_project(tmp_path, authority="HMDA"), "survey.pdf")
     assert plot.area == pytest.approx(6_000)
     assert "NOT deducted" in basis
+
+
+CORNER = {"net_area_sqm": 5_200, "road_strip_side": "E", "road_strip_width_m": 10,
+          "road_strip_from": "NE", "road_strip_toward": "S"}  # 800 m² off, from the north-east
+
+
+def test_a_strip_from_a_corner_runs_along_the_boundary_and_round_a_corner_as_far_as_its_area(
+        tmp_path):
+    """Dhulapally, 2026-10-18: 'on the east side ... at the right-hand corner, about 1,113 m²'.
+    10 m off the 60 m east side is 600 m²; the rest of the 800 m² comes off the south side from
+    the corner on, 30 m of it (the corner square is counted once), so the strip ends at x = 70."""
+    plot, basis = load_plot(_project(tmp_path, **CORNER), "survey.pdf")
+    assert plot.area == pytest.approx(5_200, abs=0.5)
+    assert not plot.contains(Point(95, 30)) and not plot.contains(Point(75, 5))
+    assert plot.contains(Point(65, 5)) and plot.contains(Point(85, 15))
+    assert "10 m strip along 90.0 m of the boundary from its NE corner toward S" in basis
+
+
+def test_the_way_a_corner_strip_runs_is_the_architects(tmp_path):
+    plot, _ = load_plot(_project(tmp_path, **{**CORNER, "road_strip_toward": "W"}), "survey.pdf")
+    assert not plot.contains(Point(95, 55)) and not plot.contains(Point(50, 55))  # the north side
+    assert plot.contains(Point(95, 30))
+
+
+def test_a_corner_strip_that_cannot_hold_the_deduction_is_refused():
+    with pytest.raises(ValueError, match="all round the plot comes to less"):
+        strip_from_corner(PLOT, "NE", "S", 1, 6_000)
+    with pytest.raises(ValueError, match="say which way the strip runs"):
+        strip_from_corner(box(0, 0, 100, 100), "NE", "SW", 10, 500)  # both ways as far off SW
+
+
+def test_a_corner_strip_reaches_the_site_model_as_the_stretch_it_runs_along(tmp_path):
+    """The contract carries it as EXTENT (the stretch of boundary and the width); taken back to a
+    project it is the strip's outline, which gives the same net plot."""
+    project = _project(tmp_path, gross_area_sqm=6_000, **CORNER)
+    site = site_model(project, boundary=PLOT)
+    where = site.ownership.deductions[0].location
+    assert where.how is LocationHow.EXTENT and where.width_m == 10
+    line = where.extent.to_shapely()
+    assert line.coords[0] == (100, 60) and line.length == pytest.approx(90, abs=0.05)
+    back, *_ = _site_fields(site)
+    again, _ = load_plot(_project(tmp_path, net_area_sqm=5_200, road_strip_m=back["road_strip_m"]),
+                         "survey.pdf")
+    plot, _ = load_plot(project, "survey.pdf")
+    assert again.symmetric_difference(plot).area < 0.5
+
+
+def test_a_corner_strip_is_never_laid_on_an_outline_that_is_already_net(tmp_path):
+    """The firm's site plan given as the survey draws the net plot itself: no strip is left to
+    place on it, so none is laid (it would take a negative area), and nothing is cut twice."""
+    project = _project(tmp_path, gross_area_sqm=6_800, **CORNER)  # 5,200 stated net
+    net_outline = box(0, 0, 100, 52)  # 5,200 m²: already the net plot
+    where = site_model(project, boundary=net_outline).ownership.deductions[0].location
+    assert where.how is LocationHow.UNKNOWN
+    with pytest.raises(ValueError, match="takes nothing off"):
+        strip_from_corner(PLOT, "NE", "S", 10, 0)
 
 
 def test_a_site_plan_whose_outline_is_already_net_is_taken_as_it_is(tmp_path):

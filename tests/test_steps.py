@@ -333,6 +333,23 @@ def test_a_strip_and_the_road_it_widens_make_no_corner_cut(tmp_path):
     assert piece.widens == (east.name,) and widening.splays == ()
 
 
+def test_a_strip_from_a_corner_is_one_road_whatever_sides_its_pieces_lie_on(tmp_path):
+    """Dhulapally, 2026-10-18: the architect runs the strip from the east corner down the east
+    side and on along the south side. Its two pieces are one road: no corner cut between them,
+    and the south piece is not put to him again, his answer having placed it."""
+    inputs = _inputs(tmp_path, gross_area_sqm=10_800, net_area_sqm=10_200, road_strip_side="E",
+                     road_strip_width_m=5.0, road_strip_from="NE", road_strip_toward="S")
+    widening = take_off(inputs, copy_survey(inputs))
+    assert widening.net.area == pytest.approx(10_200, abs=0.5)
+    assert {p.lies for p in widening.pieces if p.counted} == {"east", "south"}
+    assert widening.given_sqm == pytest.approx(600, abs=0.5)
+    assert not any(sum("land given up" in name for name in s.roads) == 2
+                   for s in widening.splays)
+    report = road_widening_report.report(widening)
+    assert not any(q.startswith("Piece ") for q in report.questions)
+    assert "from the north-east corner toward the south" in report.markdown()
+
+
 def test_a_stopped_step_says_only_what_it_did_and_asks_what_would_let_it_go_on(tmp_path):
     unplaced = _inputs(tmp_path, gross_area_sqm=10_800, net_area_sqm=10_200, road_strip_side="S")
     report = road_widening_report.report(take_off(unplaced, copy_survey(unplaced)))

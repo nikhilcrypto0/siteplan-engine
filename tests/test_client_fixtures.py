@@ -112,8 +112,9 @@ def test_suchitra_road_is_a_drawing_value_and_its_floors_only_proposed():
 
 
 # Dhulapally, two runs never mixed (client_baseline.py). BLIND: the raw survey, the architect's
-# answers and the firm's standard libraries; it stops and asks until the architect says where the
-# 1,160 m² road strip lies. DEBUG: the firm's net outline, fitted onto the survey and tagged
+# answers and the firm's standard libraries; since 2026-10-18 the road strip is placed from the
+# architect's answer (about 1,113 m², 40 ft, from the east corner toward the south), and without
+# such an answer it stops and asks. DEBUG: the firm's net outline, fitted onto the survey and tagged
 # FIRM_FINISHED_PLAN, stands in for the strip; it carries the regression load, pinned under both
 # readings of whether the stilt counts toward the Table IV height.
 
@@ -124,13 +125,32 @@ def _answers() -> dict:
     return json.loads(ANSWERS.read_text())
 
 
-def test_dhulapally_blind_run_stops_and_asks_where_the_strip_lies(tmp_path):
+def test_dhulapally_blind_run_stops_and_asks_where_the_strip_lies_when_nobody_has_said(tmp_path):
     """The engine once cut 1,160 m² off the whole east side at an even 6.6 m, where the firm
-    draws a 40 ft road along part of it. It no longer guesses."""
+    draws a 40 ft road along part of it. It never guesses: the same answers with the strip's
+    width and corner left out stop and ask."""
     from siteplan.acceptance import generate
 
+    unplaced = {**_answers(), "surrender": "1113 m2, E"}
     with pytest.raises(ValueError, match="does not guess a strip's location"):
-        generate(SURVEY, _answers(), tmp_path, FIXTURES / "workspace", conservative_parking=True)
+        generate(SURVEY, unplaced, tmp_path, FIXTURES / "workspace", conservative_parking=True)
+
+
+def test_dhulapally_blind_run_places_the_strip_from_the_architects_answer():
+    """2026-10-18: the architect's answer (2026-10-08, USER_CONFIRMED) places the strip: 40 ft
+    wide from the plot's east corner down the east side and on along the south side, as far as
+    about 1,113 m² takes it; the stretch is worked out from his words, not the firm's plan."""
+    from siteplan.intake import build_project, extract, load_defaults
+    from siteplan.runner import load_plot
+
+    built = build_project(extract(SURVEY), _answers(), load_defaults(FIXTURES / "workspace"))
+    project = Project.model_validate(built)
+    assert (project.site.road_strip_from, project.site.road_strip_toward) == ("E", "S")
+    assert project.status["road_strip"] == "USER_CONFIRMED"
+    assert project.sources["road_strip"].startswith("architect, 2026-10-08")
+    plot, basis = load_plot(project, SURVEY)
+    assert plot.area == pytest.approx(project.site.net_sqm(), abs=1)
+    assert "from its E corner toward S" in basis and "as the architect gave it" in basis
 
 
 def test_dhulapally_blind_run_refuses_the_firms_finished_plan(tmp_path):

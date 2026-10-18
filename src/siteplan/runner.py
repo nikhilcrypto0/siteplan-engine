@@ -14,7 +14,7 @@ from shapely.ops import polygonize, unary_union
 from siteplan import rules
 from siteplan.area_statement import render
 from siteplan.dxf_survey import DxfProfile, read_dxf_survey
-from siteplan.geometry import strip_along_side
+from siteplan.geometry import CornerStrip, strip_along_side, strip_from_corner
 from siteplan.heights import HeightSearch, search_heights
 from siteplan.layout import LayoutRequest, SiteFacts, area_statement
 from siteplan.layout import stop_reason as _stop_reason
@@ -95,6 +95,14 @@ def load_plot(project: Project, survey: str | Path | None) -> tuple[Polygon, str
     raise ValueError("Give a survey file, or net_plot_m in the project file.")
 
 
+def corner_strip(project: Project, boundary: Polygon, deducted: float) -> CornerStrip:
+    """The strip a project places by its corner, its direction and its width (road_strip_from,
+    road_strip_toward, road_strip_width_m), run as far as the deduction it states."""
+    site = project.site
+    return strip_from_corner(boundary, site.road_strip_from, site.road_strip_toward,
+                             site.road_strip_width_m, deducted)
+
+
 def _less_strip(project: Project, boundary: Polygon, net: float) -> tuple[Polygon, str]:
     """The boundary less the strip the architect describes; refused when nobody has said where
     it lies, or when what they describe does not come to the deduction they state."""
@@ -104,6 +112,12 @@ def _less_strip(project: Project, boundary: Polygon, net: float) -> tuple[Polygo
         rest = boundary.difference(Polygon(site.road_strip_m))
         parts = [p for p in getattr(rest, "geoms", [rest]) if p.geom_type == "Polygon"]
         plot, how = max(parts, key=lambda p: p.area), "the strip outline in the project file"
+    elif site.road_strip_from and site.road_strip_toward and site.road_strip_width_m:
+        cut = corner_strip(project, boundary, deducted)
+        plot, how = cut.plot, (f"a {site.road_strip_width_m:g} m strip along "
+                               f"{cut.stretch.length:.1f} m of the boundary from its "
+                               f"{site.road_strip_from} corner toward {site.road_strip_toward}, "
+                               "as far as the stated deduction takes it, as the architect gave it")
     elif site.road_strip_side and site.road_strip_width_m:
         plot = strip_along_side(boundary, site.road_strip_side, site.road_strip_width_m)
         how = (f"a {site.road_strip_width_m:g} m strip along the {site.road_strip_side} side, "
@@ -112,8 +126,10 @@ def _less_strip(project: Project, boundary: Polygon, net: float) -> tuple[Polygo
         raise ValueError(
             f"The project states {deducted:,.0f} m² is given up for road widening, but neither "
             "the survey nor the answers show where it lies. Give the side and the width of the "
-            "strip (road_strip_side and road_strip_width_m), its outline (road_strip_m), or the "
-            "net plot outline (net_plot_m). The engine does not guess a strip's location.")
+            "strip (road_strip_side and road_strip_width_m), the corner it starts at and the "
+            "way it runs with its width (road_strip_from, road_strip_toward), its outline "
+            "(road_strip_m), or the net plot outline (net_plot_m). The engine does not guess a "
+            "strip's location.")
     taken = boundary.area - plot.area
     if abs(taken - deducted) > max(NET_AREA_TOLERANCE_SQM, STRIP_AREA_TOLERANCE * deducted):
         raise ValueError(

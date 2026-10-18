@@ -34,7 +34,7 @@ from siteplan.project import Project
 from siteplan.provenance import Provenance, weakest
 from siteplan.runner import NET_AREA_TOLERANCE_SQM, load_plot, read_survey
 
-PLACED_BY_ARCHITECT = (LocationHow.OUTLINE, LocationHow.SIDE_AND_WIDTH)
+PLACED_BY_ARCHITECT = (LocationHow.OUTLINE, LocationHow.SIDE_AND_WIDTH, LocationHow.EXTENT)
 
 
 def site_from_project(project: Project, survey: str | Path | None = None, *,

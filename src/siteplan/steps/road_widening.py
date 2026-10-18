@@ -235,7 +235,10 @@ def _declared(inputs: Inputs) -> list[tuple[str, str, str]]:
         where = " ".join(filter(None, (
             f"along the {compass_word(site.road_strip_side)} side" if site.road_strip_side
             else None,
-            f"{site.road_strip_width_m:g} m wide" if site.road_strip_width_m else None)))
+            f"{site.road_strip_width_m:g} m wide" if site.road_strip_width_m else None,
+            f"from the {compass_word(site.road_strip_from)} corner toward the "
+            f"{compass_word(site.road_strip_toward)}, as far as the area given up takes it"
+            if site.road_strip_from and site.road_strip_toward else None)))
         out.append(("Where the strip lies", where, inputs.told("road_strip")))
     if site.road_strip_m:
         out.append(("The strip's outline", f"{len(site.road_strip_m)} corners",
@@ -327,9 +330,11 @@ def _runs_round(piece: Polygon, a, b) -> bool:
     return min(along) > 2 * width
 
 
-def _grounds(copy: SurveyCopy, pieces: list[Piece]) -> list[Ground]:
+def _grounds(copy: SurveyCopy, pieces: list[Piece], one_strip: bool) -> list[Ground]:
     """Every road that may meet a corner of the net plot: the drawn ones that reach the plot,
-    and the land given up for one (its road's width is not known)."""
+    and the land given up for one (its road's width is not known). A strip the architect runs
+    from a corner round the next one (`one_strip`) is one road, whatever sides its pieces lie
+    on, so it never meets itself at that corner."""
     out = []
     for road in (r for r in copy.roads if r.reaches and r.ground is not None):
         if road.legal_width_m:
@@ -338,7 +343,8 @@ def _grounds(copy: SurveyCopy, pieces: list[Piece]) -> list[Ground]:
             out.append(Ground(road.name, road.ground, road.drawn_width_m,
                               "its drawn width (no legal width given)"))
     for k, piece in enumerate((p for p in pieces if p.counted), 1):
-        name = (f"the land given up ({piece.lies})" if k == 1 else
+        name = ("the land given up (one strip, round the corner)" if one_strip else
+                f"the land given up ({piece.lies})" if k == 1 else
                 f"the land given up ({piece.lies}, part {k})")
         out.append(Ground(name, piece.polygon, None, "its road's width is not known",
                           piece.widens))
@@ -347,7 +353,7 @@ def _grounds(copy: SurveyCopy, pieces: list[Piece]) -> list[Ground]:
 
 def _splays(net: Polygon, inputs: Inputs, copy: SurveyCopy, pieces: list[Piece]
             ) -> list[Splay]:
-    grounds = _grounds(copy, pieces)
+    grounds = _grounds(copy, pieces, one_strip=bool(inputs.project.site.road_strip_from))
     runs = straight_runs(orient(net, 1.0))
     centre = net.centroid
 

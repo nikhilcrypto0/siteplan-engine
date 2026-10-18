@@ -263,8 +263,10 @@ def _edge_questions(draft: Draft) -> list[Question]:
                      for g in draft.line_work) or "none"
     return [Question(
         "surrender", f"{seen}Is land given up for road widening or a new road? 'no', or the net "
-        "plot area or the area given up, the side it comes off and the strip's width. Without "
-        "the side and width, where the strip lies stays UNVERIFIED and no layout is drawn",
+        "plot area or the area given up, the side it comes off and the strip's width, and, when "
+        "it runs along only part of the boundary, the corner it starts at and the way it runs "
+        "('1113 m2, E, 40 ft, from E toward S'). Without the side and width, where the strip "
+        "lies stays UNVERIFIED and no layout is drawn",
         example="net 22686 sq yd, E, 40 ft", parse=_surrender,
     ), Question(
         "water", f"{marked}Other line work near the plot: {work}. Is a lake, nala or river near "
@@ -321,7 +323,7 @@ def build_project(draft: Draft, answers: dict, defaults: WorkspaceDefaults | Non
         "survey: drawn boundary")
     status["gross_area_sqm"] = Provenance.EXTRACTED
     if surrender:
-        kind, area, side, width = surrender
+        kind, area, side, width, start, toward = surrender
         site["net_area_sqm"] = round(area if kind == "net" else draft.area_sqm - area, 1)
         sources["net_area_sqm"] = f"architect: {given['surrender']}"
         status["net_area_sqm"] = Provenance.USER_CONFIRMED
@@ -329,6 +331,8 @@ def build_project(draft: Draft, answers: dict, defaults: WorkspaceDefaults | Non
             site["road_strip_side"] = side
         if width:
             site["road_strip_width_m"] = round(width, 3)
+        if start:
+            site["road_strip_from"], site["road_strip_toward"] = start, toward
         sources["road_strip"] = f"architect: {given['surrender']}"
         status["road_strip"] = (Provenance.USER_CONFIRMED if side and width
                                 else Provenance.UNVERIFIED)
@@ -508,10 +512,12 @@ _AREA = re.compile(r"(\d[\d,]*(?:\.\d+)?)\s*(sq\.?\s*y(?:ar)?ds?|sqyds?|yd2|"
 _WIDTH = re.compile(r"(\d+(?:\.\d+)?)\s*(ft|feet|foot|m|metres?|meters?)\b", re.I)
 
 
-def _surrender(value: str) -> tuple[str, float, str | None, float | None] | None:
+def _surrender(value: str) -> tuple[str, float, str | None, float | None, str | None,
+                                    str | None] | None:
     """'no' -> None; 'net 22686 sq yd, E, 40 ft' or '1163 m2 E 12 m' -> (net|given, m², side,
-    the strip's width in m); the side and the width may be left out, and then where the strip
-    lies is not known."""
+    the strip's width in m, None, None); the side and the width may be left out, and then where
+    the strip lies is not known. A strip along part of the boundary adds the corner it starts at
+    and the way it runs: '1113 m2, E, 40 ft, from E toward S' -> (..., 'E', 'S')."""
     if value.strip().lower() in ("no", "none", "nil", "0"):
         return None
     match = _AREA.search(value)
@@ -528,9 +534,23 @@ def _surrender(value: str) -> tuple[str, float, str | None, float | None] | None
         rest = rest[:wide.start()] + " " + rest[wide.end():]
     rest = rest.upper()
     rest = re.sub(r"(NORTH|SOUTH)[\s-]+(EAST|WEST)", r"\1\2", rest)  # 'north-west' is one side
+    ends = {}
+    for key, pattern in (("from", r"\bFROM\s+(?:THE\s+)?([A-Z]+)(?:\s+CORNER)?"),
+                         ("toward", r"\bTOWARDS?\s+(?:THE\s+)?([A-Z]+)")):
+        found = re.search(pattern, rest)
+        if found:
+            point = _WORDS.get(found.group(1), found.group(1))
+            if point not in COMPASS:
+                raise ValueError(f"'{key}' takes a compass point, e.g. 'from E toward S'")
+            ends[key] = point
+            rest = rest[:found.start()] + " " + rest[found.end():]
+    if len(ends) == 1:
+        raise ValueError("give both the corner the strip starts at and the way it runs, "
+                         "e.g. 'from E toward S'")
     sides = [_WORDS.get(word, word) for word in re.findall(r"[A-Z]+", rest)]
     side = next((s for s in sides if s in COMPASS), None)
-    return ("net" if "NET" in rest.split() else "given", area, side, width)
+    return ("net" if "NET" in rest.split() else "given", area, side, width, ends.get("from"),
+            ends.get("toward"))
 
 
 def _water(value: str) -> list[dict]:

@@ -48,12 +48,22 @@ def _draft(**changes) -> Draft:
     ("given 500 sq m on the north-west", ("given", 500.0, "NW")),
 ])
 def test_land_given_up_is_read_in_the_ways_architects_say_it(text, expected):
-    kind, area, side, _ = _surrender(text) or (None, None, None, None)
+    kind, area, side, *_ = _surrender(text) or (None, None, None, None)
     if expected is None:
         assert kind is None
     else:
         assert (kind, side) == (expected[0], expected[2])
         assert area == pytest.approx(expected[1], abs=0.1)
+
+
+def test_a_strip_along_part_of_the_boundary_is_read_with_its_corner_and_way():
+    """Dhulapally, 2026-10-18: the strip starts at one corner and runs as far as its area."""
+    got = _surrender("1113 m2, east, 40 ft, from the east corner towards the south")
+    assert got[:3] == ("given", 1113.0, "E") and got[3] == pytest.approx(12.192)
+    assert got[4:] == ("E", "S")
+    assert _surrender("1163 m2 E 12 m")[4:] == (None, None)
+    with pytest.raises(ValueError, match="the way it runs"):
+        _surrender("1113 m2, E, 40 ft, from E")
 
 
 def test_land_given_up_needs_an_area():
@@ -153,7 +163,7 @@ def test_a_strip_named_for_a_side_comes_off_that_side_at_the_width_given():
 def test_the_surrender_answer_carries_the_strips_side_and_width(answer, side, width):
     from siteplan.intake import _surrender
 
-    _, _, got_side, got_width = _surrender(answer)
+    _, _, got_side, got_width, *_ = _surrender(answer)
     assert got_side == side
     assert got_width == (pytest.approx(width) if width else None)
 

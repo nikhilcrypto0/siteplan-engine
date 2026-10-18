@@ -105,6 +105,14 @@ class SiteIn(BaseModel):
     road_strip_m: Ring | None = Field(
         None, description="The strip given up, as an outline in the survey's own coordinates, "
         "when it is not an even strip along one side")
+    road_strip_from: Literal["N", "NE", "E", "SE", "S", "SW", "W", "NW"] | None = Field(
+        None, description="With road_strip_toward and road_strip_width_m: the strip starts at "
+        "the plot's corner furthest toward this compass point and runs along part of the "
+        "boundary only, round any corner it meets, as far as the stated deduction takes it "
+        "(geometry.strip_from_corner); the architect's words, the stretch worked out from them")
+    road_strip_toward: Literal["N", "NE", "E", "SE", "S", "SW", "W", "NW"] | None = Field(
+        None, description="Which way along the boundary the strip runs from that corner: the "
+        "way that sets off nearer this compass point")
     open_space_pockets_m: list[Ring] = []
     water: list[WaterIn] = []
     authority: str | None = Field(

@@ -4,6 +4,37 @@ A characterization test (tests/manifest.py) pins what the engine produces today.
 only together with a normative replacement test and an entry here: what changed, why, the
 evidence, and the test that now holds the behaviour. Newest first.
 
+## 2026-10-18: a road strip along part of the boundary, from a corner; Dhulapally's blind run places it
+
+- **What changed.** A project may place land given up as a strip that starts at a corner and runs
+  along part of the boundary (`road_strip_from`, `road_strip_toward`, with `road_strip_width_m`;
+  an answer like "1113 m2, E, 40 ft, from E toward S"): `geometry.strip_from_corner` runs it from
+  the plot's corner furthest toward the compass point named, the way that sets off nearer the
+  direction named, round any corner it meets, as far as the stated deduction takes it. The site
+  model carries it as EXTENT (the stretch and the width), step 3 treats its pieces as one road
+  (no corner cut between them, the second piece not asked about again), and a survey outline that
+  is already net gets no strip laid on it. Dhulapally's answers (client data, never in git) now
+  hold the architect's answer of 2026-10-08, USER_CONFIRMED: about 1,113 m², 40 ft, from the east
+  corner toward the south, the reading his office confirmed against the firm's site plan on
+  2026-10-18. The blind run, which stopped at step 3, now places it: 1,110.6 m² along 104.9 m of
+  boundary (the east side and about 40 m of the south side), a net plot of 19,018.1 m²; the
+  firm's statement gave 18,968.4 m² (22,686 sq yd), which the answers had assumed.
+- **Why.** The architect's answer, recorded and used as he gave it, never taken from the firm's
+  finished plan.
+- **Tests.** New (normative): `tests/test_net_plot.py` (the strip from a corner, the way it runs,
+  its refusals, the site model's EXTENT and its round trip, no strip on an outline already net),
+  `tests/test_steps.py::test_a_strip_from_a_corner_is_one_road_whatever_sides_its_pieces_lie_on`,
+  `tests/test_intake.py::test_a_strip_along_part_of_the_boundary_is_read_with_its_corner_and_way`.
+  On the client data: `test_dhulapally_blind_run_places_the_strip_from_the_architects_answer` and
+  `test_the_blind_dhulapally_site_takes_its_net_plot_from_the_architects_answer` replace the tests
+  that pinned the blind run stopping; the stop itself is still held, on the same answers with the
+  strip's width and corner left out (`..._when_nobody_has_said`,
+  `test_the_blind_dhulapally_site_with_no_strip_placed_has_no_net_plot_and_says_so`,
+  `test_the_command_stops_on_a_blind_dhulapally_project_with_no_strip_placed`). The open space
+  asked on the net reading moves from 1,896.84 to 1,901.81 m² (and the debug command's line from
+  1,897 to 1,902 m²) with the net area; the firm's site plan given as the survey stays
+  FIRM_FINISHED_PLAN with no strip placed on it.
+
 ## 2026-10-18: the stilt reading carries the Bachupally permit as supporting evidence
 
 - **What changed.** The sources of `stilt_in_rule_height` gain HMDA's TG-bPASS permit

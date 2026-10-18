@@ -502,6 +502,21 @@ REGISTRY: tuple[Constraint, ...] = (
         settles="Nothing: tolerances; the strip's location is a site input.",
     ),
     Constraint(
+        "Plot", "How a strip along part of the boundary is laid from the architect's words "
+                "(geometry.strip_from_corner, 2026-10-18): from the plot's corner furthest "
+                "toward the compass point named, the way along the boundary that sets off "
+                "nearer the direction named, round any corner on the way, measured square into "
+                "the plot from each run, mitred at a bend and cut square at its end, run as far "
+                "as the stated deduction takes it.",
+        f"its length found to within {geometry.STRIP_LENGTH_TOL_M:g} m",
+        Basis.ENGINE_DESIGN_ASSUMPTION, "none (geometry.strip_from_corner, runner.load_plot)",
+        ("geometry.STRIP_LENGTH_TOL_M",),
+        note="The corner, the direction, the width and the area are the architect's (SITE_INPUT); "
+             "how the strip turns a corner, and that its length comes from the area, are the "
+             "engine's reading of words like 'along the east side, at the right-hand corner'.",
+        settles="The strip's outline drawn by the architect or the authority (road_strip_m).",
+    ),
+    Constraint(
         "Plot", "How the envelope reports the land's widths: where a narrow region is split "
                 "off, the widths it reports land narrower than, and the noise it ignores.",
         f"regions split below {widths.REGION_SPLIT_M:g} m; land narrower than "

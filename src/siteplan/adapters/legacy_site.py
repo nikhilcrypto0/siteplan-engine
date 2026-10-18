@@ -31,6 +31,7 @@ from siteplan.contracts.resolved_rules import (
     WhenOpen,
 )
 from siteplan.contracts.site_model import CanonicalSiteModel
+from siteplan.geometry import strip_from_corner
 from siteplan.intake import ROW_STATUS, WORKSPACE_FILE, Draft, WorkspaceDefaults
 from siteplan.layout import LayoutRequest
 from siteplan.project import Project, _metres
@@ -123,7 +124,7 @@ def site_model(project: Project, *, site_id: str | None = None, boundary: Polygo
             "purpose": project.sources.get("road_strip") or project.sources.get(
                 "net_area_sqm", "land given up"),
             "area_sqm": sourced(project, "net_area_sqm", gross - net),
-            "location": _location(project)})
+            "location": _location(project, boundary, net)})
     roads, chosen = _roads(project, draft)
     return CanonicalSiteModel(
         site_id=site_id or re.sub(r"[^a-z0-9]+", "-", project.name.lower()).strip("-"),
@@ -165,10 +166,19 @@ def site_model(project: Project, *, site_id: str | None = None, boundary: Polygo
         if s.sanctioned_floors else None)
 
 
-def _location(project: Project) -> dict:
+def _location(project: Project, boundary: Polygon | None, net: float) -> dict:
     s = project.site
     if s.road_strip_m:
         return {"how": LocationHow.OUTLINE, "shape": Shape.from_shapely(Polygon(s.road_strip_m))}
+    if s.road_strip_from and s.road_strip_toward and s.road_strip_width_m:
+        # the stretch is worked out on the survey's gross boundary; an outline already net (the
+        # firm's site plan given as the survey) has no strip left to place on it
+        if boundary is None or boundary.area - net <= NET_GROSS_TOLERANCE_SQM:
+            return {"how": LocationHow.UNKNOWN, "side": s.road_strip_side}
+        stretch = strip_from_corner(boundary, s.road_strip_from, s.road_strip_toward,
+                                    s.road_strip_width_m, boundary.area - net).stretch
+        return {"how": LocationHow.EXTENT, "side": s.road_strip_side,
+                "width_m": s.road_strip_width_m, "extent": {"points": list(stretch.coords)}}
     if s.road_strip_side and s.road_strip_width_m:
         return {"how": LocationHow.SIDE_AND_WIDTH, "side": s.road_strip_side,
                 "width_m": s.road_strip_width_m}
@@ -354,6 +364,14 @@ def _site_fields(site: CanonicalSiteModel) -> tuple[dict, dict, dict, dict]:
         where = deduction.location
         if where.shape is not None:
             fields["road_strip_m"] = where.shape.outer
+        if where.extent is not None and site.boundary is not None:
+            # the strip along its stretch, as its outline: the same net plot whichever is read
+            band = where.extent.to_shapely().buffer(where.width_m, cap_style="flat",
+                                                    join_style="mitre")
+            strip = band.intersection(site.boundary.to_shapely())
+            fields["road_strip_m"] = list(max(getattr(strip, "geoms", [strip]),
+                                              key=lambda g: g.area).exterior.coords)[:-1]
+            continue
         if where.side is not None:
             fields["road_strip_side"] = where.side
         if where.width_m is not None:

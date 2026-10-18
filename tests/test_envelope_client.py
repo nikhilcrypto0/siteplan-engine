@@ -2,9 +2,10 @@
 
 The drawings, the architect's answers and the debug profiles live in fixtures/ (gitignored), so no
 client data is committed and these tests skip on a clean clone. Dhulapally is run two ways that
-are never mixed: BLIND (the raw survey and the architect's answers: the net plot cannot be placed,
-and the envelope stops and says so) and DEBUG (the firm's net outline, tagged FIRM_FINISHED_PLAN,
-stands in for the strip: it carries the geometry checks and is never evidence for a rule).
+are never mixed: BLIND (the raw survey and the architect's answers: since 2026-10-18 the strip is
+placed from his answer, and without one the envelope stops and says so) and DEBUG (the firm's net
+outline, tagged FIRM_FINISHED_PLAN, stands in for the strip: it carries the geometry checks and is
+never evidence for a rule).
 """
 
 import functools
@@ -143,7 +144,9 @@ def test_dhulapally_open_space_is_asked_under_each_reading_of_its_area():
     rules = resolve(site)
     asked = rules.open_space.requirement_sqm_by_reading
     assert asked["gross_before_surrender"] == pytest.approx(2013.11, rel=1e-4)
-    assert asked["net_after_surrender"] == pytest.approx(1896.84, rel=1e-4)
+    # 10% of the 19,018.1 m² net the architect's answer leaves (20,131.1 less about 1,113 m²);
+    # 1,896.84 m² before 2026-10-18, when the answers took the firm's 22,686 sq yd
+    assert asked["net_after_surrender"] == pytest.approx(1901.81, rel=1e-4)
     assert asked["gross_after_surrender"] == pytest.approx(asked["net_after_surrender"])
     for reading in (STILT_IN_RULE_HEIGHT, OPEN_SPACE_BASIS, CIRCULATION_IN_SETBACK):
         assert rules.interpretation(reading).selected == ALL
@@ -158,24 +161,48 @@ def test_no_floor_count_is_asserted_anywhere_in_dhulapallys_rules_or_envelope():
     assert not [f for f in env.facts if "floor" in f.rule.lower()]
 
 
-# --- The blind run stops where the strip is unknown -------------------------------------------
+# --- The blind run: the strip as the architect places it, or a stop ---------------------------
 
 
-def test_the_blind_dhulapally_site_has_no_net_plot_and_the_envelope_stops_and_says_so():
-    project, site = _dhulapally()
+@functools.cache
+def _unplaced():
+    """Dhulapally's answers with the strip's width and corner left out: where it lies unknown."""
+    _need(DHULAPALLY, ANSWERS)
+    answers = {**json.loads(ANSWERS.read_text()), "surrender": "1113 m2, E"}
+    project = Project.model_validate(_project(DHULAPALLY, answers))
+    return answers, project, site_from_project(project, DHULAPALLY)
+
+
+def test_the_blind_dhulapally_site_takes_its_net_plot_from_the_architects_answer():
+    """2026-10-18: about 1,113 m², 40 ft wide, from the east corner toward the south: the site
+    model carries the strip as the stretch of boundary it runs along, and the net plot is the
+    architect's (USER_CONFIRMED), never the firm's finished plan."""
+    _, site = _dhulapally()
+    assert site.net_plot.source_kind.value == "ARCHITECT"
+    assert site.net_plot.status is Provenance.USER_CONFIRMED
+    deduction, = site.ownership.deductions
+    where = deduction.location
+    assert where.how.value == "EXTENT" and where.width_m == pytest.approx(12.192)
+    assert where.extent.to_shapely().length == pytest.approx(104.9, abs=0.5)
+    assert site.net_plot.value.to_shapely().area == pytest.approx(19_018.1, abs=1)
+    assert envelope(site, resolve(site)).bands
+
+
+def test_the_blind_dhulapally_site_with_no_strip_placed_has_no_net_plot_and_says_so():
+    _, _, site = _unplaced()
     assert site.net_plot is None
     deduction, = site.ownership.deductions
     assert deduction.location.how.value == "UNKNOWN" and deduction.location.side == "E"
     with pytest.raises(NetPlotUnknown) as stop:
         envelope(site, resolve(site))
     for what in ("net plot cannot be placed", "the E side is named", "road_strip_width_m",
-                 "net_plot_m", "does not guess a strip's location"):
+                 "road_strip_from", "net_plot_m", "does not guess a strip's location"):
         assert what in str(stop.value)
 
 
-def test_the_command_stops_on_the_blind_dhulapally_project_and_writes_nothing(tmp_path, capsys):
-    _need(DHULAPALLY, ANSWERS)
-    path = save(_project(DHULAPALLY, json.loads(ANSWERS.read_text())), tmp_path / "blind.json")
+def test_the_command_stops_on_a_blind_dhulapally_project_with_no_strip_placed(tmp_path, capsys):
+    answers, _, _ = _unplaced()
+    path = save(_project(DHULAPALLY, answers), tmp_path / "blind.json")
     out = tmp_path / "out"
     assert main(["envelope", str(path), "--survey", str(DHULAPALLY), "--out", str(out)]) == 2
     assert "net plot cannot be placed" in capsys.readouterr().err
@@ -245,14 +272,15 @@ def test_the_northern_arm_is_in_every_width_profile_and_held_back_by_nothing():
 
 
 def test_the_firms_own_site_plan_given_as_the_survey_is_a_debug_outline_with_the_same_bands():
-    """The firm's DXF draws the net outline itself, so the blind project needs no strip placed;
-    the outline is FIRM_FINISHED_PLAN (the workspace lists the file), and the land it gives is
-    the land the registered debug profile gives."""
+    """The firm's DXF draws the net outline itself, so no strip is placed on it (nor cut twice);
+    the outline is FIRM_FINISHED_PLAN (the workspace lists the file), never the architect's
+    blind one, and the land it gives is the land the registered debug profile gives."""
     plan = WORKSPACE / "DULAPALLY_SITE_PLANS.dxf"
     _need(plan)
     project, blind = _dhulapally()
-    assert blind.net_plot is None
+    assert blind.net_plot.source_kind.value == "ARCHITECT"
     site = site_from_project(project, plan)
+    assert site.ownership.deductions[0].location.how.value == "UNKNOWN"
     assert site.net_plot.source_kind.value == "FIRM_FINISHED_PLAN"
     assert site.net_plot.status.value == "ASSUMED_FOR_TEST"
     here = envelope(site, resolve(site))
@@ -284,7 +312,7 @@ def test_the_debug_command_writes_all_four_files_and_flags_the_outline_as_debug(
                                                "envelope.svg"}
     assert "DEBUG ONLY: the net outline comes from the firm's finished plan" in printed
     assert "rule_height: 30 m [USER_CONFIRMED]" in printed
-    assert "OPEN SPACE REQUIRED (10%" in printed and "net_after_surrender: 1,897 m2" in printed
+    assert "OPEN SPACE REQUIRED (10%" in printed and "net_after_surrender: 1,902 m2" in printed
     doc = ezdxf.readfile(out / "envelope.dxf")
     assert doc.header["$INSUNITS"] == 6
     assert {"NET-SITE", "SETBACK-21-24", "BUILDABLE-27-30", "WIDTH-REGIONS-27-30"} <= {

@@ -79,8 +79,10 @@ def _what_is_missing(site: CanonicalSiteModel) -> str:
                      f"{named}")
     return ("The net plot cannot be placed. " + "; ".join(lines) + ". The setbacks are measured "
             "on the land that is left, so give the side and the width of the strip "
-            "(road_strip_side and road_strip_width_m), its outline (road_strip_m), or the net "
-            "plot outline (net_plot_m). The engine does not guess a strip's location.")
+            "(road_strip_side and road_strip_width_m), the corner it starts at and the way it "
+            "runs with its width (road_strip_from, road_strip_toward), its outline "
+            "(road_strip_m), or the net plot outline (net_plot_m). The engine does not guess a "
+            "strip's location.")
 
 
 def _bands(rules: ResolvedRules, lands, cap_note: str) -> list[BandEnvelope]:

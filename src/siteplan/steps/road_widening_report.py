@@ -322,8 +322,10 @@ def _questions(w: Widening) -> list[str]:
             out.append(f"The corner cut at the {s.lies} corner is sized from a drawn width, not "
                        "a legal one. Give both roads' legal widths to size it properly.")
     counted = [p for p in w.pieces if p.counted]
+    round_a_corner = bool(w.inputs.project.site.road_strip_from)  # the answer runs it round
     for i, piece in enumerate(w.pieces, 1):
-        if piece.counted and len(counted) > 1 and piece is not counted[0]:
+        if (piece.counted and len(counted) > 1 and piece is not counted[0]
+                and not round_a_corner):
             out.append(f"Piece {i} ({piece.area_sqm:,.1f} m², up to {piece.widest_m:.1f} m wide, "
                        f"on the {piece.lies} side) is taken as land given up because it lies "
                        f"{piece.why.split(',')[0]}. Is it road land, or a difference between "
