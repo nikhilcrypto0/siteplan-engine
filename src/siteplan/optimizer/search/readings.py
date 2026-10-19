@@ -16,9 +16,10 @@ every reading allows) is not tried. Everything else the rules leave open (the tu
 spacing of blocks of different heights, the denominators of the open space, the club house share)
 is always met under every reading, which costs nothing here. NBC's own 15 m high-rise line
 (nbc_fire_height) does cost something: under it a block of 15 to 21 m is held to 4.6's fire
-access, which the search lays round no block below 21 m. The profile built for every reading
-takes no such block, so its layouts hold under both lines; a profile that rests on a reading of
-the stilt or of circulation may rest on the state's line too (C4-06).
+access. Since 2026-10-18 the search lays that access round such a block as it does round a
+high-rise (`FloorClass.fire_held`: the lane and the tender's turning room clear on every side),
+so its layouts hold under both lines and every profile may take it; before, the search laid it
+round no block below 21 m, and the profile built for every reading took no such block (C4-06).
 
 The floor counts below the high-rise height are here too (C3), each with its Table III band's
 figures: the setback on the sides, the Building Line on the access road's frontage, the gap
@@ -102,14 +103,22 @@ class FloorClass:
         """The most it keeps from any stretch of the plot line: the larger of its two setbacks."""
         return max(self.setback_m, self.front)
 
+    @property
+    def fire_held(self) -> bool:
+        """Held to NBC 4.6's fire access under some reading: a high-rise, or a block below it
+        that NBC's own 15 m line holds; the search lays the lane and the tender's turning room
+        round either (2026-10-18)."""
+        return self.high_rise or self.nbc_held
+
 
 def floor_classes(rules: ResolvedRules, brief: DesignBrief, prototype: TowerPrototype,
                   profile: Profile) -> list[FloorClass]:
     """The floor counts a block of this prototype may take under every reading of the profile,
-    lowest first. A count the law leaves open under one reading only is not here; nor, in a
-    profile built to hold under every reading, a block below the high-rise height that NBC's own
-    15 m line would hold to 4.6's fire access (the nbc_line reading): the search lays no fire lane
-    round a block that low (C3), so it would stand only under the state's line (C4-06)."""
+    lowest first. A count the law leaves open under one reading only is not here. A block below
+    the high-rise height that NBC's own 15 m line would hold to 4.6's fire access (the nbc_line
+    reading) is here, marked `nbc_held`: the search lays its fire access as a high-rise's, so it
+    stands under either line (2026-10-18; before, it was left out of the profile built for every
+    reading, C4-06)."""
     readings = profile.stilt_readings(rules)
     per_reading = [{o.floors: o for o in feasible_floors(rules, brief, prototype, reading)}
                    for reading in readings]
@@ -123,8 +132,6 @@ def floor_classes(rules: ResolvedRules, brief: DesignBrief, prototype: TowerProt
         high_rise = any(not o.below_high_rise for o in options)
         nbc_held = (not high_rise and nbc_line
                     and physical >= rules.fire.nbc_high_rise_m.value - HEIGHT_TOL_M)
-        if nbc_held and profile.every_reading(rules):
-            continue
         classes.append(FloorClass(
             floors=floors, physical_m=physical,
             setback_m=max(o.setback_m for o in options),

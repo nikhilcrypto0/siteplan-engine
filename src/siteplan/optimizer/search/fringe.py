@@ -93,10 +93,11 @@ def pathway_serves(q: Quantities, cls: FloorClass) -> bool:
 def need_m(q: Quantities, a: FloorClass, b: FloorClass) -> float:
     """What two blocks keep between them: the gap of the one that asks more (rule 5(f)(xiii) for
     two blocks below 21 m; beside a high-rise the greater gap holds under every reading of the open
-    spacing question), never less than a high-rise's fire lane and the room its tender turns in at
-    a corner, and the firm's margin over it."""
+    spacing question), never less than the fire lane and the room a tender turns in at a corner of
+    a block held to NBC 4.6 (a high-rise, or one NBC's own 15 m line holds), and the firm's margin
+    over it."""
     gap = max(a.gap_m, b.gap_m)
-    if a.high_rise or b.high_rise:
+    if a.fire_held or b.fire_held:
         gap = max(gap, q.lane_m, q.reach_m)
     return gap + q.gap_margin_m
 
@@ -147,21 +148,45 @@ def place(plot: Plot, q: Quantities, frame: Frame, land: Land, rings: BaseGeomet
 
     The fringe is laid in the configuration's direction and (C4-05) in up to FRINGE_DIRECTIONS of
     the plot's own, along and across its longest edges, where the ground the columns leave often
-    runs; the most valuable is kept, the configuration's between equals, and a block laid in
-    another direction carries it (`Standing.frame`)."""
+    runs, and (2026-10-18) along each piece of that ground big enough for a block, so a narrow arm
+    is tried in its own direction; the most valuable is kept, the configuration's between equals,
+    and a block laid in another direction carries it (`Standing.frame`)."""
     if not choices:
         return []
     given = dict(own=own, kept_clear=kept_clear, roads_in_setback=roads_in_setback, eps_m=eps_m,
                  room_sqm=room_sqm)
     best = _place_in(plot, q, frame, land, rings, hulls, standing, choices, **given)
     framed = [s if s.frame is not None else replace(s, frame=frame) for s in standing]
-    for angle in distinct_angles([frame.angle_deg, *orientations(plot.net)])[
-            1:1 + FRINGE_DIRECTIONS]:
+    plot_ways = distinct_angles([frame.angle_deg, *orientations(plot.net)])[
+        :1 + FRINGE_DIRECTIONS]
+    pieces = _piece_angles(plot, land, rings, hulls, kept_clear, choices)
+    for angle in distinct_angles([*plot_ways, *pieces])[1:]:
         turned = Frame(angle)
         found = _place_in(plot, q, turned, land, rings, hulls, framed, choices, **given)
         if _value(found) > _value(best):
             best = [replace(f, standing=replace(f.standing, frame=turned)) for f in found]
     return best
+
+
+def _piece_angles(plot: Plot, land: Land, rings: BaseGeometry, hulls: BaseGeometry,
+                  kept_clear: BaseGeometry | None, choices: Sequence[Choice]) -> list[float]:
+    """The direction of each piece of the ground the columns leave that could hold the smallest
+    block: along its longest edge (a narrow arm's own direction)."""
+    smallest = min(c.length_m * c.depth_m for c in choices)
+    left = plot.net.difference(unary_union([
+        land.zone, land.strip, hulls, rings, plot.excluded,
+        *([kept_clear] if kept_clear is not None else [])]))
+    return [orientations(piece)[0] for piece in polygons(left)
+            if piece.area >= smallest and orientations(piece)]
+
+
+def _band_ground(plot: Plot, land: Land, kept_clear: BaseGeometry | None,
+                 roads_in_setback: bool) -> BaseGeometry:
+    """Where a fire lane and the tender's turn may lie: the net plot off the planted strip, the
+    water and ground kept for something else, and off the setback where roads may not use it."""
+    off = [land.strip, plot.excluded, *([kept_clear] if kept_clear is not None else []),
+           *([] if roads_in_setback else [land.zone])]
+    return plot.net.difference(unary_union([g for g in off if not g.is_empty]))
 
 
 def _value(placed: Sequence[Fringed]) -> float:
@@ -186,11 +211,16 @@ def _place_in(plot: Plot, q: Quantities, frame: Frame, land: Land, rings: BaseGe
     taken = unary_union([hull, ring, *kept])
     blocks = [(_in_frame(s, frame), s.choice.cls) for s in standing]
     by_key = {_key(c.cls): c.cls for c in choices}
+    # a block NBC's own line holds keeps its lane and the tender's turn clear on every side, on
+    # ground a lane may use (2026-10-18): it stands that far inside it
+    band = erode(frame.to_turned(_band_ground(plot, land, kept_clear, roads_in_setback)),
+                 q.reach_m)
     lands = {}
     for key, cls in by_key.items():
         near = [grow(b, need_m(q, cls, other)) for b, other in blocks]
-        lands[key] = erode(frame.to_turned(own[(cls.front, cls.setback_m)]).difference(
-            unary_union([taken, *near])), eps_m)
+        ground = frame.to_turned(own[(cls.front, cls.setback_m)]).difference(
+            unary_union([taken, *near]))
+        lands[key] = erode(ground.intersection(band) if cls.fire_held else ground, eps_m)
     fits = _Fits(lands, ring)
     if not any(len(fits.of(c)[0]) for c in choices):
         return []

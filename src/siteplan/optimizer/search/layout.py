@@ -550,7 +550,7 @@ def lay_out(run: Run, ev: Evaluation) -> tuple[Laid | None, str]:
     placements = named_placements(ev.standing, frame, [f.standing for f in ev.fringe])
     footprints = [p.footprint for p in placements]
     gaps = [p.standing.choice.cls.gap_m for p in placements]
-    high = [p.standing.choice.cls.high_rise for p in placements]
+    high = [p.standing.choice.cls.fire_held for p in placements]  # held to NBC 4.6
     blocks = unary_union(footprints)
     blocked = unary_union([blocks, ev.kept_clear]) if ev.kept_clear is not None else blocks
     turnings = [Turning(*t) for t in q.turnings]
@@ -877,7 +877,7 @@ def _club(run: Run, land: Land, buildable: BaseGeometry, zones: ground.Zones,
     own = _club_gap_m(run.rules, _club_height_m(run.rules, floors, run.q.floor_m))
     keep = unary_union([grow(p.footprint, max(
         p.standing.choice.cls.gap_m, own,
-        run.q.reach_m if p.standing.choice.cls.high_rise else 0.0)) for p in placements])
+        run.q.reach_m if p.standing.choice.cls.fire_held else 0.0)) for p in placements])
     room = _club_ground(run, land, zones, floors, buildable).difference(
         unary_union([keep, avoid]))
     # C4-07: in the plot's own directions too, where the ground the towers leave often runs

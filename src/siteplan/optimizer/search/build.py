@@ -383,7 +383,7 @@ def _layers(laid: Laid, rules: ResolvedRules, envelope: BuildableEnvelope, plot:
     taken = {layer["id"] for layer in layers}
     lane = rules.fire.clear_width_m.value
     footprints = [p.footprint for p in laid.placements]
-    high = [p.footprint for p in laid.placements if p.standing.choice.cls.high_rise]
+    high = [p.footprint for p in laid.placements if p.standing.choice.cls.fire_held]
     bands = unary_union([f.buffer(lane, join_style="mitre") for f in high]).difference(
         unary_union(footprints)) if high else EMPTY
     added = [
