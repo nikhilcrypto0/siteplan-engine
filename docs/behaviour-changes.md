@@ -4,6 +4,23 @@ A characterization test (tests/manifest.py) pins what the engine produces today.
 only together with a normative replacement test and an entry here: what changed, why, the
 evidence, and the test that now holds the behaviour. Newest first.
 
+## 2026-10-19: the firm's stilt is the architect's 2.65 m
+
+- **What changed.** No engine code. The firm's workspace settings and both sites' project files
+  (client data, never in git) now give a 2.65 m stilt, the architect's rule of 2026-10-11 (G.O.168
+  rule 5(c)'s 2.5 m and a 0.15 m slab, as the steps use), USER_CONFIRMED, where they gave the
+  engine's 3.0 m default. Every building with a stilt stands 0.35 m lower.
+- **What moves.** The legacy debug baseline (`test_the_debug_baseline_is_reproduced`,
+  characterization) is re-pinned with `tests/client_baseline.py`: with the stilt counted the
+  heights tried fall by 0.35 m (stilt + 9 is 28.9 m, stilt + 10 31.8 m and still over the road's
+  30 m); the options, their flats, areas and statuses are the same on both readings. The
+  production search on the architect's readings lays the same layouts on all three runs
+  (Dhulapally blind and DEBUG, Suchitra), each 0.35 m lower; fewer of them rest on open readings
+  (Suchitra's stilt + 4 blocks fall to 14.40 m, under NBC's 15 m line, and its ROBUST layout of
+  three stilt + 4 blocks now holds under every reading of the open questions).
+- **Tests.** No test changes what it asks; the characterization baseline is re-pinned on the new
+  input.
+
 ## 2026-10-18: the firm's floors are the architect's 2.9 m; the client tests follow
 
 - **What changed.** No engine code. The firm's workspace settings and both sites' project files
