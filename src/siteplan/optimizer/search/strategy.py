@@ -64,7 +64,6 @@ from siteplan.optimizer.search.raising import raised
 from siteplan.optimizer.search.readings import Profile, profiles
 from siteplan.optimizer.search.verdicts import RestsOn, caveats, failed, rests_on
 from siteplan.prototypes.plates import PLATE_SOURCE
-from siteplan.towers import orientations
 
 NAME = "FULL"
 ROOM_FAILURES = ("no room", "open space", "no approach", "no road touches", "the ring road")
@@ -335,7 +334,7 @@ class FullSearchStrategy:
         seed and the same part for the same seed. The configurations that let blocks below 21 m
         stand come after the rest, in their own order, so the others are evaluated as they were
         before such blocks could stand."""
-        angles = orientations(run.plot.net)
+        angles = run.directions(run.plot.net)
         configs: dict[bool, list[tuple]] = {False: [], True: []}
         for profile in wanted:
             floors = sorted({c.floors for found in run.classes[profile.key].values()
@@ -670,6 +669,10 @@ def _notes(run: Run | None, tally: Tally, found: Sequence[Judged], chosen: Seque
                  "location is not known), and the 45 t loading of the paving is not checked (a "
                  "specification)")
     wished = run.brief.objectives.soft_preferences
+    if run.axis_deg is not None:  # 2026-10-19: the client's requirement, never law
+        notes.append(f"every block laid with its long axis at {run.axis_deg:g} degrees from the "
+                     "survey's east (0: the long faces look north and south), the orientation "
+                     "the brief requires; a layout that cannot be laid so is not offered")
     if wished:  # C4-16: what of the architect's soft preferences was weighed, and what was not
         weighed = [p.kind for p in wished if p.kind not in not_weighed([p])]
         if weighed:
@@ -706,7 +709,8 @@ def _region_notes(run: Run, tally: Tally, chosen: Sequence[Judged]) -> list[str]
         return []
     below = run.rules.height.high_rise_from_m.value
     notes = []
-    for tried in fringe.try_regions(run.plot, regions, choices, orientations(run.plot.net), run.q):
+    for tried in fringe.try_regions(run.plot, regions, choices, run.directions(run.plot.net),
+                                    run.q):
         centre = tried.shape.centroid
         where = (f"the narrow part of the plot at ({centre.x:,.0f}, {centre.y:,.0f}), "
                  f"{tried.area_sqm:,.0f} m² and {tried.width_m:.1f} m wide, was tried for a block "

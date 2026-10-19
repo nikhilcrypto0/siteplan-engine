@@ -154,6 +154,13 @@ def approval_lines(*, debug: bool, finished: tuple[str, ...], project_file: str,
     lines += [f"Height ({'the brief' if intent.height else 'the project file'}): {height}",
               f"Unit mix ({'the brief' if intent.unit_mix_percent else 'the project file'}): "
               + ", ".join(f"{k} {v * 100:g}%" for k, v in sorted(mix.items()))]
+    for wish in brief.objectives.soft_preferences:
+        if wish.required and wish.kind == "orientation":  # 2026-10-19: the client's, never law
+            how = ", ".join(x for x in (wish.status.value if wish.status else "", wish.source)
+                            if x)
+            lines.append(f"Every tower's long axis at {wish.params['axis_deg']:g} degrees from "
+                         "the survey's east (0: long faces north and south), the client's "
+                         f"requirement, never law" + (f" [{how}]" if how else ""))
     if intent.massing is not None:
         lines.append(f"Shown first (the brief): {intent.massing.value}")
     lines.append(f"Brief: {brief.words}")

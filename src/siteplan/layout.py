@@ -97,6 +97,21 @@ class SelectedReading(BaseModel):
         "ASSUMED_FOR_TEST when it is taken for a study only")
 
 
+class TowerOrientation(BaseModel):
+    """The way every tower must run, a requirement of the client's, never law (2026-10-19: the
+    architect, Vastu: the long faces look north and south, square to true north). The survey's
+    +y is taken as north, as both surveys' north arrows draw it; the search lays every block at
+    this axis and the program check judges it."""
+
+    axis_deg: float = Field(
+        0.0, ge=0, lt=180, description="The towers' long axis, in degrees anticlockwise from the "
+        "survey's x axis (east): 0 runs the long axis east-west, so the long faces look north "
+        "and south")
+    source: str = Field(min_length=1, description="Who asked for it and when")
+    status: Literal["USER_CONFIRMED", "ASSUMED_FOR_TEST"] = Field(
+        "ASSUMED_FOR_TEST", description="USER_CONFIRMED when the architect said so")
+
+
 class LayoutRequest(BaseModel):
     """What the architect (or, in Stage 2b, the LLM from a brief) asks the solver for."""
 
@@ -145,6 +160,10 @@ class LayoutRequest(BaseModel):
         "its studies, by interpretation id (any the rules carry, e.g. nbc_fire_height), each "
         "with its source; read by the contract pipeline (the service, `siteplan envelope`), not "
         "by this legacy layout, which reads its own two switches above")
+    orientation: TowerOrientation | None = Field(
+        None, description="The way every tower must run, the client's requirement (Vastu); "
+        "read by the contract pipeline (the service's full search and the validator's program "
+        "check), not by this legacy layout")
     cellar_floor_height_m: PositiveFloat = Field(
         3.0, description="Floor to floor of a cellar: the rise each 1 in 8 ramp climbs")
     cellar_utilities_pct: float = Field(

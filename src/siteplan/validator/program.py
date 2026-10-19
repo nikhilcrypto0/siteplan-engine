@@ -7,6 +7,8 @@ among the legal checks and none of them changes the legal verdict.
 
 from __future__ import annotations
 
+import math
+
 from siteplan.contracts.candidate import CandidateLayout
 from siteplan.contracts.common import Status
 from siteplan.contracts.design_brief import (
@@ -20,7 +22,7 @@ from siteplan.contracts.resolved_rules import ResolvedRules
 from siteplan.contracts.validation import Check, Family
 from siteplan.validator.measure import TOL_M, TowerGeometry
 from siteplan.validator.readings import plain, verdict
-from siteplan.validator.shapes import polygon_of, sides_of
+from siteplan.validator.shapes import oriented_box, polygon_of, sides_of
 
 BRIEF = "the brief"
 # How prototypes.plates.PLATE_SOURCE begins: the validator keeps its own copy (it imports no
@@ -28,6 +30,7 @@ BRIEF = "the brief"
 PLATE_MARK = "ENGINE-COMPOSED floor plate, PRELIMINARY"
 UNITS_TARGET_TOLERANCE = 0.05  # a units target is met within this share
 SIZE_SLACK_SQM = 0.5
+ORIENTATION_TOLERANCE_DEG = 1.0  # a required orientation is met within this
 
 
 def units_by_type(towers: tuple[TowerGeometry, ...]) -> dict[str, int]:
@@ -177,6 +180,37 @@ def _standards_check(brief: DesignBrief, candidate: CandidateLayout,
                  BRIEF)
 
 
+def _off_axis_deg(footprint, axis_deg: float) -> float:
+    """How far a block's long side, measured on its outline, turns from the axis, 0 to 90."""
+    angle, _, _ = oriented_box(footprint)
+    turn = (math.degrees(angle) - axis_deg) % 180.0
+    return min(turn, 180.0 - turn)
+
+
+def _orientation_checks(brief: DesignBrief, towers: tuple[TowerGeometry, ...]) -> list[Check]:
+    """Each orientation the brief requires (2026-10-19, the architect's Vastu: the long faces
+    look north and south): every block's long side, measured on its outline, within
+    ORIENTATION_TOLERANCE_DEG of the axis. The client's requirement, never law; a preference
+    the brief only wishes for is scored by the optimizer and not judged here."""
+    out = []
+    for wish in brief.objectives.soft_preferences:
+        if not (wish.required and wish.kind == "orientation") or not towers:
+            continue
+        axis = float(wish.params["axis_deg"]) % 180.0
+        off = {t.name: _off_axis_deg(t.footprint, axis) for t in towers}
+        astray = {n: d for n, d in off.items() if d > ORIENTATION_TOLERANCE_DEG}
+        measured = ("; ".join(f"{n} turned {d:.1f} degrees from it" for n, d in astray.items())
+                    if astray else f"every block's long side within {max(off.values()):.1f} "
+                    "degrees of it")
+        source = ", ".join(x for x in (wish.source, wish.status.value if wish.status else "")
+                           if x) or BRIEF
+        out.append(plain(Family.PROGRAM, "Orientation", verdict(not astray), measured,
+                         f"long axis at {axis:g} degrees from the survey's east (0: the long "
+                         f"faces look north and south), within {ORIENTATION_TOLERANCE_DEG:g} "
+                         "degrees: the client's requirement, never law", source))
+    return out
+
+
 def _plate_check(towers: tuple[TowerGeometry, ...]) -> Check | None:
     """Blocks drawn from a floor plate sized to the land (2026-10-13): said, never judged. Its
     flats, cores and corridor are the library's; egress, lifts, accessibility, ventilation and
@@ -201,6 +235,7 @@ def program_checks(brief: DesignBrief, candidate: CandidateLayout,
     height = _height_check(brief, towers)
     out += [height] if height else []
     out.append(_standards_check(brief, candidate, towers))
+    out += _orientation_checks(brief, towers)
     plate = _plate_check(towers)
     out += [plate] if plate else []
     return out

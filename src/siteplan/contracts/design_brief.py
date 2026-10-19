@@ -262,10 +262,37 @@ class DesignMargins(Part):
         return legal_sqm * (1 + self.parking_extra_fraction.value)
 
 
+REQUIRABLE_KINDS = ("orientation",)  # the preferences the search can hold every layout to
+
+
 class SoftPreference(Part):
     kind: str  # e.g. 'keep_away_from_road'
     params: dict[str, Any] = {}
     weight: float = Field(1.0, ge=0)
+    # Since 2026-10-19: a preference the client requires (the architect's Vastu: every tower's
+    # long faces north and south). The search lays every layout to it and the program check
+    # judges it; it is still never law. With how far it can be trusted and where it came from.
+    # Left out of a stored brief when not given, so briefs stored before keep their digest.
+    required: bool = False
+    status: Provenance | None = None
+    source_kind: SourceKind | None = None
+    source: str = ""
+
+    @model_serializer(mode="wrap")
+    def _as_stored_when_absent(self, handler):
+        dumped = handler(self)
+        for name, unset in (("required", False), ("status", None), ("source_kind", None),
+                            ("source", "")):
+            if dumped.get(name, unset) == unset:
+                dumped.pop(name, None)
+        return dumped
+
+    @model_validator(mode="after")
+    def _requirable(self) -> SoftPreference:
+        if self.required and self.kind not in REQUIRABLE_KINDS:
+            raise ValueError(f"only {', '.join(REQUIRABLE_KINDS)} can be required, not "
+                             f"{self.kind}")
+        return self
 
 
 class Objectives(Part):

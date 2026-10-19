@@ -108,6 +108,14 @@ READINGS = {"stilt_in_rule_height": {"reading": "not_counted", "status": "USER_C
                                 "source": "the architect, 2026-10-13"}}
 
 
+def test_the_answers_may_carry_the_clients_orientation_as_a_project_file_does():
+    """2026-10-19: the architect's Vastu requirement reaches a blind run built from answers."""
+    given = {"axis_deg": 0, "source": "the architect, 2026-10-19", "status": "USER_CONFIRMED"}
+    project = Project.model_validate(build_project(_draft(), ANSWERS | {"orientation": given}))
+    assert project.layout.orientation.model_dump() == given
+    assert Project.model_validate(build_project(_draft(), ANSWERS)).layout.orientation is None
+
+
 def test_the_answers_may_carry_the_readings_and_the_application_as_a_project_file_does():
     """2026-10-18: a blind run is built from the answers, so they carry what the project file
     would: the readings the architect selects and where the application stands, each labelled."""

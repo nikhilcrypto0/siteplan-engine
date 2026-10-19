@@ -316,7 +316,9 @@ def build_project(draft: Draft, answers: dict, defaults: WorkspaceDefaults | Non
     project selects for its studies, each with its source and status (the project file's
     `layout.readings`), and `application_status` (NOT_FILED, FILED or SANCTIONED) with
     `application_date` where it was received, labelled through the three maps like any answer;
-    with neither, nothing is selected and the application stays unknown."""
+    with neither, nothing is selected and the application stays unknown. An `orientation` (the
+    project file's `layout.orientation`: the towers' axis, its source and status) carries the
+    client's requirement the same way (2026-10-19)."""
     defaults = defaults or WorkspaceDefaults()
     problems = missing(draft, answers)
     if problems:
@@ -385,6 +387,8 @@ def build_project(draft: Draft, answers: dict, defaults: WorkspaceDefaults | Non
         layout["floors"] = int(given["floors"])
     if answers.get("readings"):
         layout["readings"] = answers["readings"]
+    if answers.get("orientation"):  # the client's requirement, never law (2026-10-19)
+        layout["orientation"] = answers["orientation"]
     for key in ("application_status", "application_date"):
         if answers.get(key):
             site[key] = answers[key]

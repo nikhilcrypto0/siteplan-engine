@@ -90,6 +90,16 @@ def understood(preference: SoftPreference) -> bool:
     return True
 
 
+def required_axis_deg(preferences: Sequence[SoftPreference]) -> float | None:
+    """The axis every block must run along when the brief requires an orientation (2026-10-19,
+    the client's requirement, never law): the search lays every block at it alone. None when
+    the brief requires none."""
+    for p in preferences:
+        if p.required and p.kind == "orientation" and understood(p):
+            return float(p.params["axis_deg"]) % 180.0
+    return None
+
+
 def not_weighed(preferences: Sequence[SoftPreference]) -> list[str]:
     """The preferences given that are not weighed, named by their kind."""
     return [p.kind for p in preferences if not understood(p)]

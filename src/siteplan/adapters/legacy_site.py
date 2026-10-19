@@ -24,6 +24,7 @@ from siteplan.contracts.design_brief import (
     ClubSize,
     DesignBrief,
     HeightMode,
+    SoftPreference,
 )
 from siteplan.contracts.resolved_rules import (
     CIRCULATION_IN_SETBACK,
@@ -301,7 +302,27 @@ def brief(project: Project, defaults: WorkspaceDefaults | None = None,
             "max_tower_length_m": sourced(project, "max_tower_length_m", r.max_tower_length_m)
             if r.max_tower_length_m else None},
         design_margins=design_margins(defaults),
-        objectives={"options": r.options})
+        objectives={"options": r.options, "soft_preferences": _orientation(r)})
+
+
+def _orientation(r: LayoutRequest) -> list[SoftPreference]:
+    """The project's orientation, a requirement of the client's (never law), as the brief's
+    required orientation preference with where it came from."""
+    if r.orientation is None:
+        return []
+    return [SoftPreference(kind="orientation", params={"axis_deg": r.orientation.axis_deg},
+                           required=True, status=Provenance(r.orientation.status),
+                           source_kind=SourceKind.ARCHITECT, source=r.orientation.source)]
+
+
+def _orientation_back(brief: DesignBrief) -> dict | None:
+    wish = next((p for p in brief.objectives.soft_preferences
+                 if p.required and p.kind == "orientation"), None)
+    if wish is None:
+        return None
+    return {"axis_deg": wish.params["axis_deg"], "source": wish.source or "the brief",
+            "status": "USER_CONFIRMED" if wish.status is Provenance.USER_CONFIRMED
+            else "ASSUMED_FOR_TEST"}
 
 
 def request(brief: DesignBrief, readings: Readings, floors_for_max: int | None = None
@@ -328,7 +349,7 @@ def request(brief: DesignBrief, readings: Readings, floors_for_max: int | None =
         cellar_floor_height_m=f.cellar_floor_height_m.value,
         cellar_utilities_pct=round(f.cellar_utilities_share.value * 100, 9),
         max_cellars=p.parking.max_cellars.value, options=brief.objectives.options,
-        maximise=h.mode is HeightMode.MAX_LEGAL)
+        maximise=h.mode is HeightMode.MAX_LEGAL, orientation=_orientation_back(brief))
 
 
 def join_project(site: CanonicalSiteModel, brief: DesignBrief, readings: Readings,

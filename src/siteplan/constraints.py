@@ -1336,6 +1336,16 @@ REGISTRY: tuple[Constraint, ...] = (
         settles="The architect's brief, which may set its own tolerance.",
     ),
     Constraint(
+        "Towers", "How closely a block must run along an orientation the brief requires (the "
+                  "client's Vastu requirement of 2026-10-19: long faces north and south).",
+        f"its long side within {program.ORIENTATION_TOLERANCE_DEG:g} degree of the axis",
+        Basis.ENGINE_DESIGN_ASSUMPTION, "none (validator.program)",
+        ("validator.program.ORIENTATION_TOLERANCE_DEG",),
+        note="The search lays every block exactly on the axis; the slack is for a block an "
+             "architect turns by hand in CAD. A requirement of the client's, never law.",
+        settles="The architect, who may ask for a finer or a looser fit.",
+    ),
+    Constraint(
         "Towers", "The tower prototypes composed from the firm's flats: the cores a block has, "
                   "the flats each core serves on a side, and what a core holds.",
         "; ".join(f"{family.value} {plan.cores} x {plan.flats_per_core_per_side}"
