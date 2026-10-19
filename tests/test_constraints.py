@@ -33,7 +33,8 @@ AUDITED_PACKAGES = ("adapters", "cad", "contracts", "legal", "optimizer", "proto
                     "service", "steps", "validator")
 # Top-level modules whose numbers shape a generated layout, size it, or accept or reject one.
 AUDITED_MODULES = (
-    "access", "access_checks", "acceptance", "area_statement", "assistant", "basis", "blind",
+    "access", "access_checks", "acceptance", "acceptance_full", "area_statement", "assistant",
+    "basis", "blind",
     "cases", "checks", "findings", "flat_import", "geometry", "grounds", "heights", "intake",
     "layout", "library", "max_floors", "parking", "parking_checks", "profiles", "project",
     "provenance", "rules", "runner", "site_amenities", "towers",
@@ -96,6 +97,7 @@ NOT_DOMAIN = {
     "geometry.COMPASS_DEG": "the bearing each compass label names",
     "flat_import.MM_M": "a unit: room sizes are written in millimetres",
     "flat_import.SQM_SQFT": "a unit: square feet in a square metre",
+    "acceptance_full.SQFT": "a unit: square feet in a square metre",
     "prototypes.plates.SQFT_A_SQM": "a unit: square feet in a square metre",
     "prototypes.compose.COORD_DIGITS": "the decimals a composed prototype is saved to",
     "optimizer.search.network.STREET_REACH_M": "a stand-in for infinity, far beyond any plot",

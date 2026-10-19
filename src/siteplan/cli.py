@@ -194,29 +194,30 @@ def _cmd_start(args: argparse.Namespace) -> int:
 
 
 def _cmd_acceptance(args: argparse.Namespace) -> int:
-    """Raw survey and answers -> layouts; only then is the firm's plan read, to compare."""
-    from siteplan.acceptance import compare, generate, report
+    """Raw survey and answers -> the service's full search, with the readings the project selects;
+    only then is the firm's plan read, to compare (the legacy flow is kept for the regression
+    baseline only, acceptance.generate)."""
+    from siteplan.acceptance_full import compare, generate, proposed, report
     from siteplan.cases import Case
 
     out = Path(args.out)
     from siteplan.profiles import load_profile
 
     profile = load_profile(args.profile) if args.profile else None
-    generated = generate(Path(args.survey), json.loads(Path(args.answers).read_text()), out,
-                         Path(args.workspace) if args.workspace else None,
-                         conservative_parking=args.conservative_parking, profile=profile,
-                         mode="debug" if args.debug else "blind")
+    run = generate(Path(args.survey), json.loads(Path(args.answers).read_text()), out,
+                   Path(args.workspace) if args.workspace else None,
+                   conservative_parking=args.conservative_parking, profile=profile,
+                   mode="debug" if args.debug else "blind")
     rows = []
-    if generated.options:
+    if proposed(run):
         case = Case.model_validate_json(Path(args.firm_case).read_text())  # read only now
         statement = (Project.model_validate_json(Path(args.firm_project).read_text())
                      .area_statement if args.firm_project else None)
-        rows = compare(generated, case, statement)
-    text = report(generated, rows or [("No layout passed", "-", "-")])
-    out.mkdir(parents=True, exist_ok=True)
+        rows = compare(run, case, statement)
+    text = report(run, rows or [("No layout passed", "-", "-")])
     (out / "acceptance.txt").write_text(text + "\n")
-    print(text + f"\n\nWrote the options and acceptance.txt to {out}/")
-    return 0 if generated.options else 1
+    print(text + f"\n\nWrote the run (runs/) and acceptance.txt to {out}/")
+    return 0 if proposed(run) else 1
 
 
 def _cmd_steps(args: argparse.Namespace) -> int:

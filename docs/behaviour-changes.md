@@ -4,6 +4,21 @@ A characterization test (tests/manifest.py) pins what the engine produces today.
 only together with a normative replacement test and an entry here: what changed, why, the
 evidence, and the test that now holds the behaviour. Newest first.
 
+## 2026-10-18: `siteplan acceptance` runs the production search
+
+- **What changed.** The command lays the site out with the service's full search and the readings
+  the project selects (`acceptance_full.py`), every layout judged by the independent validator,
+  where it used the legacy layout, which reads only its own stilt switch (so it counted the stilt
+  whatever the architect chose) and its own checker. The report's sections 4 to 7 describe the
+  full search's run; sections 0 to 3 are the legacy report's own. The legacy flow
+  (`acceptance.generate`, `compare`, `report`) is unchanged and still pins the regression baseline.
+- **Why.** The architect's decision of 2026-10-18: the report should show the real gap. On
+  Dhulapally's blind run it read the engine 7.8% under the firm's tower floor area (the legacy
+  search at Stilt + 8, the stilt counted); the production search with his readings is 0.6% under
+  (472,063 against 474,912 sft).
+- **Tests.** `tests/test_acceptance_full.py` (normative, made-up land); `tests/test_acceptance.py`
+  (characterization) is unchanged.
+
 ## 2026-10-18: a road strip along part of the boundary, from a corner; Dhulapally's blind run places it
 
 - **What changed.** A project may place land given up as a strip that starts at a corner and runs
