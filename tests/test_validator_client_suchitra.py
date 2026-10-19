@@ -52,13 +52,11 @@ RECLASSIFIED = {
 
 
 # Cross-checks the validator blocks on a run planned for one reading of the stilt, and why.
-STRICTER_CROSS_CHECKS = {
-    ("not_counted", "open space"):
-        "planned with the stilt left out of the height; if it counts, stilt + 8 is 27.15 m from "
-        "the ground (the stilt floor 0.15 m up, NBC Part 3 12.1.2) and asks Table IV's 10 m, so "
-        "part of the open space the generator counted lies in that setback; the validator counts "
-        "what holds under every reading",
-}
+# Until 2026-10-18 the not_counted run blocked on the open space: with 3.0 m floors stilt + 8 was
+# 27.15 m with the stilt and asked Table IV's 10 m, so part of the open space the generator
+# counted lay in that setback. With the architect's 2.9 m floors it is 26.35 m and asks 9 m, and
+# nothing blocks.
+STRICTER_CROSS_CHECKS: dict[tuple[str, str], str] = {}
 
 
 OTHER = {"counted": "not_counted", "not_counted": "counted"}
@@ -80,15 +78,15 @@ def _parting(reading, rule, check) -> tuple:
 # Where the validator parts from today's checker only under the reading the generator did not
 # plan for (it agrees under the one planned for), and what it says there: the stilt + 6 options
 # planned with the stilt counted are 18 m without it (no setback is given 18-21 m: NOT_CHECKED);
-# the stilt + 8 ones planned without it are 27.15 m with it and ask 10 m (FAIL).
+# the stilt + 8 ones planned without it were 27.15 m with it and asked 10 m (FAIL). Since
+# 2026-10-18 the workspace carries the architect's 2.9 m floors: stilt + 8 is 26.35 m with the
+# stilt, Table IV's 9 m, and the not_counted run's options agree with the checker under both
+# readings, so it parts nowhere.
 ON_THE_OTHER_READING = {
     ("counted", "All-round setback", "CONDITIONAL", "NOT_CHECKED"),
     ("counted", "Cellar ramp", "CONDITIONAL", "CONDITIONAL"),
     ("counted", "Organized open space (tot-lot)", "CONDITIONAL", "CONDITIONAL"),
     ("counted", "Plot size for high-rise", "CONDITIONAL", "NOT_CHECKED"),
-    ("not_counted", "All-round setback", "CONDITIONAL", "FAIL"),
-    ("not_counted", "Cellar ramp", "CONDITIONAL", "FAIL"),
-    ("not_counted", "Organized open space (tot-lot)", "CONDITIONAL", "CONDITIONAL"),
 }
 
 
@@ -221,15 +219,17 @@ def test_a_tower_pushed_into_the_nala_buffer_fails_the_water_check(suchitra):
 
 
 def test_a_tower_off_the_plot_fails_its_setback_even_at_the_table_seam(suchitra):
-    """Found on this site: the tower is 24 m with its stilt, so exactly 21 m, the high-rise
-    threshold, if the stilt is not counted. A short setback there is only UNVERIFIED (the row
-    above is an upper bound), but a block that is not on the plot meets no row of any table."""
+    """Found on this site with 3.0 m floors: the tower was 24 m with its stilt, so exactly 21 m,
+    the high-rise threshold, if the stilt is not counted. A short setback there is only UNVERIFIED
+    (the row above is an upper bound), but a block that is not on the plot meets no row of any
+    table. With the architect's 2.9 m floors (2026-10-18) the same tower is 20.3 m without its
+    stilt, in the 18-21 m band no order gives a setback for: off the plot it still fails."""
     from siteplan.validator import validate
 
     _, plot, _, site, rules, design, candidates = suchitra
     candidate = candidates[0].model_copy(deep=True)
     tower = candidate.towers[0]
-    tower.floors_above_stilt = 7  # 24.15 m with the stilt, so exactly 21 m without: the seam
+    tower.floors_above_stilt = 7  # 21 m without the stilt at 3.0 m floors, 20.3 m at 2.9 m
     centre = candidate.placed_footprint(tower).centroid
     move_tower(candidate, tower.name, plot.bounds[2] + 80.0 - centre.x, 0.0)
     report = validate(site, rules, design, candidate)

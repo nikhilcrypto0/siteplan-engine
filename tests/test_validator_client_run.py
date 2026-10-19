@@ -42,14 +42,12 @@ RECLASSIFIED = {
         "NOT_CHECKED beside the verdict (2026-10-13), where the checker says UNVERIFIED",
 }
 
-# Cross-checks the validator blocks on a run planned for one reading of the stilt, and why.
-STRICTER_CROSS_CHECKS = {
-    ("not_counted", "open space"):
-        "planned with the stilt left out of the height; if it counts, stilt + 8 is 27.15 m from "
-        "the ground (the stilt floor 0.15 m up, NBC Part 3 12.1.2) and asks Table IV's 10 m, so "
-        "part of the open space the generator counted lies in that setback; the validator counts "
-        "what holds under every reading",
-}
+# Cross-checks the validator blocks on a run planned for one reading of the stilt, and why. Until
+# 2026-10-18 the not_counted run blocked on the open space: with 3.0 m floors stilt + 8 was
+# 27.15 m with the stilt and asked Table IV's 10 m, so part of the open space the generator
+# counted lay in that setback. With the architect's 2.9 m floors it is 26.35 m and asks 9 m, and
+# nothing blocks.
+STRICTER_CROSS_CHECKS: dict[tuple[str, str], str] = {}
 
 
 OTHER = {"counted": "not_counted", "not_counted": "counted"}
@@ -72,7 +70,10 @@ def _parting(reading, rule, check) -> tuple:
 # plan for (it agrees under the one planned for), and what it says there. With 3 m storeys and
 # the stilt floor 0.15 m up the two readings land in different rows: the stilt + 6 options planned
 # with the stilt counted are 21.15 m, and 18 m without it, a stretch no order gives a setback for
-# (NOT_CHECKED); the stilt + 8 options planned without it are 27.15 m with it and ask 10 m (FAIL).
+# (NOT_CHECKED); the stilt + 8 options planned without it were 27.15 m with it and asked 10 m
+# (FAIL). Since 2026-10-18 the workspace carries the architect's 2.9 m floors: stilt + 8 is 26.35 m
+# with the stilt, Table IV's 9 m, and the not_counted run's options agree with the checker under
+# both readings, so it parts nowhere.
 ON_THE_OTHER_READING = {
     ("counted", "Abutting road width (for T1)", "CONDITIONAL", "NOT_CHECKED"),
     ("counted", "All-round setback", "CONDITIONAL", "NOT_CHECKED"),
@@ -80,9 +81,6 @@ ON_THE_OTHER_READING = {
     ("counted", "Gap between blocks", "CONDITIONAL", "NOT_CHECKED"),
     ("counted", "Organized open space (tot-lot)", "CONDITIONAL", "CONDITIONAL"),
     ("counted", "Plot size for high-rise", "CONDITIONAL", "NOT_CHECKED"),
-    ("not_counted", "All-round setback", "CONDITIONAL", "FAIL"),
-    ("not_counted", "Gap between blocks", "CONDITIONAL", "FAIL"),
-    ("not_counted", "Organized open space (tot-lot)", "CONDITIONAL", "FAIL"),
 }
 
 

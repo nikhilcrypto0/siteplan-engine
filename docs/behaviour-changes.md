@@ -4,6 +4,28 @@ A characterization test (tests/manifest.py) pins what the engine produces today.
 only together with a normative replacement test and an entry here: what changed, why, the
 evidence, and the test that now holds the behaviour. Newest first.
 
+## 2026-10-18: the firm's floors are the architect's 2.9 m; the client tests follow
+
+- **What changed.** No engine code. The firm's workspace settings and both sites' project files
+  (client data, never in git) now give 2.9 m floor-to-floor, the architect's rule of 2026-10-11
+  (NBC Part 3 12.2.1's 2.75 m room and a slab, already used by the steps), USER_CONFIRMED, where
+  they gave the engine's 3.0 m default. A building's height falls by 0.1 m a floor.
+- **Why it moves the client tests.** The legacy debug baseline
+  (`test_the_debug_baseline_is_reproduced`, characterization) is re-pinned with
+  `tests/client_baseline.py`: with the stilt counted the legacy search now reaches stilt + 9
+  (29.25 m) where it stopped at stilt + 8, and its three options are a floor taller (288, 276 and
+  252 flats become 336, 308 and 280); with the stilt left out it is unchanged (stilt + 10; the same
+  three ideas). The validator's known disagreements with the legacy checker on the not_counted
+  runs of Dhulapally and Suchitra came from stilt + 8 landing exactly on Table IV lines with 3.0 m
+  floors (24 m without the stilt, 27.15 m with it); at 2.9 m it lands on none, the two agree, and
+  the lists in `tests/test_validator_client_run.py` and `tests/test_validator_client_suchitra.py`
+  are emptied for that reading, each with the reason. The production search, on the architect's
+  readings: Dhulapally's best is the same 480 flats and 576,160 sft, its blocks 0.8 m lower; some
+  lower-ranked layouts gain (432 to 456 flats); Suchitra's best rises from 128 flats and 152,224
+  sft to 136 and 163,600 (one S+8 and two S+4 blocks).
+- **Tests.** The normative tests are unchanged in what they ask; the characterization baseline is
+  re-pinned on the new input.
+
 ## 2026-10-18: a block off the plot fails its setback even in a band with no setback figure
 
 - **What changed.** The validator's all-round setback check fails a block that is not wholly

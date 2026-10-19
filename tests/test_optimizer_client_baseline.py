@@ -63,11 +63,12 @@ def test_the_wrapped_run_is_the_pinned_baseline(wrapped):
 
 
 def test_the_starting_floors_come_from_the_law_and_agree_with_the_baselines_project(wrapped):
-    """The baseline's project says 8 floors (the stilt counted: stilt + 9 is 30.15 m from the
-    ground) or 10 (not counted); the run here was given no number and worked out the same from
-    30 m of rule height."""
+    """The baseline's project says 9 floors (the stilt counted: with the architect's 2.9 m floors,
+    2026-10-18, stilt + 9 is 29.25 m from the ground and stilt + 10 is 32.15 m; it said 8 with
+    3.0 m floors) or 10 (not counted: 29 m); the run here was given no number and worked out the
+    same from 30 m of rule height."""
     reading, project, _, run = wrapped
-    assert run.request.floors == project.layout.floors == (8 if reading == "counted" else 10)
+    assert run.request.floors == project.layout.floors == (9 if reading == "counted" else 10)
     assert run.request.stilt_in_rule_height is (reading == "counted")
     assert run.found.max_legal_floors == run.request.floors
 
