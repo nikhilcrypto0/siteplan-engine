@@ -84,6 +84,17 @@ def test_a_block_in_a_band_the_rules_do_not_model_is_never_passed():
     assert "Table III" in check(report, "All-round setback: T1").finding.required
 
 
+def test_a_block_off_the_plot_fails_its_setback_even_in_a_band_with_no_figure():
+    """2026-10-18, found when the architect's 2.9 m floors put a Suchitra block in the 18-21 m
+    band: a band that gives no setback is NOT_CHECKED for a block on the plot, but a block that is
+    not wholly on the plot meets no row of any table and fails, whatever its band."""
+    inputs = unmodelled_below(all_low(fixture("rectangle"))).edited(_t2_to_the_west(20.0))
+    c = check(inputs.report(), "All-round setback: T2")
+    assert c.finding.status is Z.FAIL and "not wholly inside the net plot" in c.finding.measured
+    on_plot = unmodelled_below(all_low(fixture("rectangle"))).report()
+    assert status(on_plot, "All-round setback: T2") is Z.NOT_CHECKED
+
+
 def test_a_modelled_band_that_gives_no_setback_is_not_modelled_either():
     nothing = low_band(0, 12, setback=None, road=None)
     bands = (nothing, low_band(12, 18, setback=3.7, gap=4.3, road=8.4),

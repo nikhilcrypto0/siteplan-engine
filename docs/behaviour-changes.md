@@ -4,6 +4,20 @@ A characterization test (tests/manifest.py) pins what the engine produces today.
 only together with a normative replacement test and an entry here: what changed, why, the
 evidence, and the test that now holds the behaviour. Newest first.
 
+## 2026-10-18: a block off the plot fails its setback even in a band with no setback figure
+
+- **What changed.** The validator's all-round setback check fails a block that is not wholly
+  inside the net plot whatever its band. A band that gives no setback (Table III bands the rules
+  do not model, and 18-21 m, which no order read gives one for) used to answer NOT_CHECKED before
+  the block's position was looked at, so a block standing off the plot in such a band was never
+  failed. A block on the plot in such a band is NOT_CHECKED as before. Stricter, never looser.
+- **Why.** Found when the architect's 2.9 m floors moved a Suchitra test block from exactly 21 m
+  (the high-rise line, where the check already failed it) to 20.3 m, in the 18-21 m band: 80 m off
+  the plot, it was no longer failed.
+- **Tests.** `tests/test_validator_low_blocks.py::test_a_block_off_the_plot_fails_its_setback_even_in_a_band_with_no_figure`
+  (normative, made-up land; it fails on the old check), and the client test
+  `test_a_tower_off_the_plot_fails_its_setback_even_at_the_table_seam`, unchanged in what it asks.
+
 ## 2026-10-18: `siteplan acceptance` runs the production search
 
 - **What changed.** The command lays the site out with the service's full search and the readings

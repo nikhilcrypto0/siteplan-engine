@@ -517,6 +517,9 @@ def setback_checks(ctx: Context) -> list[Check]:
                 return unknown_reading(STILT_IN_RULE_HEIGHT, reading)
             stopped = _stopped(cls, "setback")
             if stopped is not None:
+                if not ctx.net.contains(t.footprint):  # no row of any table is met off the plot
+                    return Cell(Status.FAIL, f"{d.nearest_m:.2f} m: not wholly inside the net "
+                                "plot", stopped.required, stopped.note)
                 return Cell(stopped.status, f"{d.nearest_m:.2f} m", stopped.required, stopped.note)
             return setback_cell(ctx, t.footprint, d, cls)
 
