@@ -237,8 +237,13 @@ def test_two_roads_or_amenities_with_one_name_stay_two_objects():
                 fire=(), gates=(), green_strip=(), open_space=(), club=None, club_floors=0,
                 amenities=(("Gym", box(70, 70, 80, 80)), ("Gym", box(85, 85, 95, 95))),
                 ramps=(), cellars=(), bays=())
-    ids = [i["id"] for _, items in scene.candidate_layers(plan, None, "") for i in items]
-    assert len(ids) == len(set(ids)) == 5  # the plot, two roads, two amenities
+    items = [i for _, group in scene.candidate_layers(plan, None, "") for i in group]
+    ids = [i["id"] for i in items]
+    assert len(ids) == len(set(ids))
+    shapes = [i for i in items if i["kind"] != "text" and i["layer"] != scene.NORTH]
+    assert len(shapes) == 5  # the plot, two roads, two amenities
+    labels = [i["text"] for i in items if i["kind"] == "text" and i["layer"] == scene.NOTES]
+    assert labels == ["Internal Road 9 M", "Internal Road 9 M"]  # each road says its width
 
 
 def test_a_hole_a_hair_inside_its_outer_edge_reaches_cad_as_the_c_it_is():

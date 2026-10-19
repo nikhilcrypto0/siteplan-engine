@@ -92,6 +92,7 @@ from siteplan.validator import (
     open_space,
     program,
     refusals,
+    routes,
     shapes,
 )
 from siteplan.validator import network as validator_network
@@ -1334,6 +1335,23 @@ REGISTRY: tuple[Constraint, ...] = (
          "validator.program.UNITS_TARGET_TOLERANCE"),
         note="The brief's program, judged by the validator; neither is law.",
         settles="The architect's brief, which may set its own tolerance.",
+    ),
+    Constraint(
+        "Towers", "How each tower's way in from the gate is measured (2026-10-19, the client's "
+                  "requirement): where a car's centre may run on a road, how finely the roads' "
+                  "outline is read, and what a driveway may cross.",
+        f"a car's centre {routes.CAR_CLEAR_M:g} m in from a road's edge; the outline simplified "
+        f"by {routes.SIMPLIFY_M:g} m; a sight line {routes.COVER_EPS_M:g} m outside it still "
+        f"inside; a driveway crossing under {routes.CROSSING_SQM:g} m² of another use does not "
+        f"cross it; a block within {routes.ON_ROAD_M:g} m of a road stands on it, with no "
+        "driveway", Basis.ENGINE_DESIGN_ASSUMPTION, "none (validator.routes)",
+        ("validator.routes.CAR_CLEAR_M", "validator.routes.SIMPLIFY_M",
+         "validator.routes.COVER_EPS_M", "validator.routes.CROSSING_SQM",
+         "validator.routes.ON_ROAD_M"),
+        note="The route is the shortest path a car can take; a driver's line is a little "
+             "longer. The driveway's width is rule 13(c)(viii)'s. A requirement of the "
+             "client's, never law.",
+        settles="The architect, who may ask for a driver's line or another clearance.",
     ),
     Constraint(
         "Towers", "How closely a block must run along an orientation the brief requires (the "

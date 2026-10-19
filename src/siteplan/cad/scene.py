@@ -16,6 +16,7 @@ from shapely.geometry.base import BaseGeometry
 from shapely.validation import make_valid
 
 from siteplan.cad.bridge import to_cad
+from siteplan.service.render import driveway_shape, route_words
 from siteplan.steps import carried
 from siteplan.steps.gate import on_net
 from siteplan.steps.setbacks import Setbacks
@@ -41,9 +42,11 @@ FLATS = "Flats"
 CORES = "Lift and stair cores"
 NOTES = "Notes"
 DETAIL = "Notes: verdict in full"  # the long note under a layout, hidden for a screenshot
+ROUTES = "Entrances, driveways and routes from the gate"
+NORTH = "North arrow"
 LAYERS = (SURVEY, NET, GIVEN, SETBACK, BUILDABLE, DIMENSIONS, GREEN, FIRE, WATER, GATE,
           OUTSIDE_ROADS, ROADS, FOOTPRINTS, TOWERS, FLATS, CORES, PARKING, OPEN_SPACE,
-          AMENITIES, NOTES, DETAIL)
+          AMENITIES, ROUTES, NORTH, NOTES, DETAIL)
 DIMENSION_SIDE_M = 5.0  # rendering: sides shorter than this get no dimension (jogs)
 DIMENSION_SHIFT_M = 1.5  # rendering: a dimension line sits this far along its side
 TEXT_SIZE_M = 2.0  # rendering: a label's height in the drawing, readable at site scale
@@ -51,6 +54,8 @@ SHEET_TEXT_M = 5.0  # rendering: the sheet label's height, readable when a whole
 CHAR_WIDTH = 0.6  # rendering: a character's width as a share of the text's height
 LINE_PITCH = 1.5  # rendering: a text line's height, baseline to baseline, in text heights
 SNAP_M = 1e-6  # a hole nearer its outer edge than this is snapped to a grid this fine
+NORTH_SIZE_M = 12.0  # rendering: the north arrow's length on the ground
+NORTH_GAP_M = 10.0  # rendering: the north arrow stands this far right of the plot
 
 
 def _rgb(hex_colour: str) -> list[float]:
@@ -76,7 +81,8 @@ def styles() -> dict[str, dict]:
             ROADS: style("#5a5a5a", "#9a9a9a", 40), FOOTPRINTS: style("#111111", "#7ea6dc", 15),
             TOWERS: style("#111111", "#1f3f7a", 15, 2.5), PARKING: style("#6a3d9a", "#cab2d6", 40),
             AMENITIES: style("#b15928", "#ffd8a8", 30), NOTES: style("#222222"),
-            DETAIL: style("#444444"),
+            DETAIL: style("#444444"), ROUTES: style("#c2185b", "#f8bbd0", 30, 2.5),
+            NORTH: style("#111111", "#111111", 0, 2.0),
             OPEN_SPACE: style("#4d9221", "#b8e186", 35), FLATS: style("#1f3f7a", "#7ea6dc", 20,
                                                                          0.8),
             CORES: style("#333333", "#8c8c8c", 10, 0.8)}
@@ -314,7 +320,61 @@ def candidate_layers(plan, setback_zone: BaseGeometry | None, setback_words: str
                       "kind": "text", "at": to_cad((c.x, c.y)), "size": TEXT_SIZE_M * 1500,
                       "text": tower_label(tower, "\n")})
         groups.append((f"{TOWERS}: {tower.name}", items))
+    groups += [g for g in (_road_labels(plan), _ways(plan), _north(plan.plot)) if g[1]]
     return groups
+
+
+def _road_labels(plan) -> tuple[str, list[dict]]:
+    """Every piece of every road says its width (2026-10-19)."""
+    items = []
+    for n, (words, pieces) in enumerate(plan.roads, 1):
+        for k, part in enumerate((p for piece in pieces for p in parts(piece)), 1):
+            at = part.representative_point()
+            items.append({"id": f"layout-road-{n}-label-{k}", "label": f"{words.title()} label",
+                          "layer": NOTES, "kind": "text", "at": to_cad((at.x, at.y)),
+                          "size": TEXT_SIZE_M * 1000, "text": words.title()})
+    return NOTES, items
+
+
+def _ways(plan) -> tuple[str, list[dict]]:
+    """Each tower's way in from the gate (validator.routes): its entrance, its driveway from the
+    road and its route along the roads, with the route's length."""
+    items: list[dict] = []
+    for way in plan.ways:
+        key = f"layout-way-{way.tower.lower().replace(' ', '-')}"
+        drive = driveway_shape(way, plan.driveway_m)
+        if drive is not None:
+            items += polygon_items(f"{key}-driveway", f"{way.tower} driveway", ROUTES, drive,
+                                   "outline")
+        if way.route is not None:
+            points = [*way.route.coords, (way.road_point.x, way.road_point.y)]
+            items.append({"id": f"{key}-route", "label": f"{way.tower} route from the gate",
+                          "layer": ROUTES, "kind": "line", "points": [to_cad(p) for p in points]})
+        if way.entrance is not None:
+            items.append({"id": f"{key}-entrance", "label": f"{way.tower} entrance",
+                          "layer": ROUTES, "kind": "point",
+                          "at": to_cad((way.entrance.x, way.entrance.y))})
+        at = way.entrance or next((t.footprint.representative_point() for t in plan.towers
+                                   if t.name == way.tower), None)
+        if at is not None:
+            items.append({"id": f"{key}-text", "label": f"{way.tower} route length",
+                          "layer": ROUTES, "kind": "text", "at": to_cad((at.x, at.y)),
+                          "size": TEXT_SIZE_M * 1000, "text": route_words(way)})
+    return ROUTES, items
+
+
+def _north(plot: Polygon) -> tuple[str, list[dict]]:
+    """A north arrow beside the plot's top right corner: the survey's +y, as both surveys'
+    arrows draw north."""
+    _, _, maxx, maxy = plot.bounds
+    x, y, size = maxx + NORTH_GAP_M, maxy, NORTH_SIZE_M
+    head = [(x - size / 3, y - size), (x, y), (x + size / 3, y - size), (x, y - size * 0.7),
+            (x - size / 3, y - size)]
+    return NORTH, [{"id": "layout-north-arrow", "label": "North", "layer": NORTH,
+                    "kind": "line", "points": [to_cad(p) for p in head]},
+                   {"id": "layout-north-text", "label": "North label", "layer": NORTH,
+                    "kind": "text", "at": to_cad((x, y + TEXT_SIZE_M)),
+                    "size": TEXT_SIZE_M * 1500, "text": "N"}]
 
 
 LAYOUT = "layout-"  # every object of a layout drawn from a run starts so (candidate_layers)

@@ -4,6 +4,7 @@ judged by the independent validator, and compares the best with the firm's plan 
 both measured the same way. Made-up land: test_acceptance.py's 150 x 120 m plot."""
 
 import json
+import re
 
 import pytest
 from test_acceptance import ANSWERS, _firm_case, _workspace
@@ -56,6 +57,8 @@ def test_the_report_says_how_it_was_generated_and_names_what_each_verdict_rests_
         assert candidate.candidate_id in text
         for reading in rests_on(report).readings:
             assert reading in text
+    # 2026-10-19: every tower's way in from the gate, with its length
+    assert re.search(r"T1: .*; route: [\d,]+ m from the gate", text)
 
 
 def test_the_best_is_compared_with_the_firms_plan_measured_the_same_way(run):

@@ -223,12 +223,15 @@ def _layout(candidate: CandidateLayout, report: ValidationReport, net: Polygon,
     head = candidate.pareto_tag or "a further different idea"
     lines = [f"  {candidate.candidate_id} ({head}): "
              f"{describe_layout.describe(candidate, net, shown)}"]
+    routes = {c.subject: c.finding.measured for c in report.program
+              if c.finding.rule.startswith("Route: ")}  # the way in from the gate (2026-10-19)
     for t, foot in zip(candidate.towers, feet, strict=True):
         p = protos[t.prototype_id]
         lines.append(f"    {t.name}: {p.id}, {p.length_m:.1f} x {p.depth_m:.1f} m, stilt + "
                      f"{t.floors_above_stilt}, {p.per_floor.flats} flats a floor, "
                      f"{p.per_floor.flats * t.floors_above_stilt} flats; footprint "
-                     f"{foot.area:,.0f} m²")
+                     f"{foot.area:,.0f} m²; route: {routes.get(t.name, 'not measured')}")
+    orientation = [c for c in report.program if c.finding.rule == "Orientation"]
     m = candidate.metrics
     lines += [
         f"    Flats: {m.total_flats} ({', '.join(f'{k} {v}' for k, v in m.flats_by_type.items())});"
@@ -239,6 +242,8 @@ def _layout(candidate: CandidateLayout, report: ValidationReport, net: Polygon,
         f"    Tot-lot: {_said(report, 'Organized open space')}",
         f"    Club house: {_said(report, 'Amenities')}",
         f"    Parking: {_said(report, 'Parking (Table V)')}",
+        *(f"    Orientation (the client's requirement): {c.finding.status.value}, "
+          f"{c.finding.measured}" for c in orientation),
         f"    Verdict: {report.verdict.legal.value} (the study's: "
         f"{report.verdict.study.value if report.verdict.study else '-'}); resting on "
         f"{_rests(report)}",

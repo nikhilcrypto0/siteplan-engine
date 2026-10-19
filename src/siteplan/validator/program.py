@@ -20,6 +20,7 @@ from siteplan.contracts.design_brief import (
 )
 from siteplan.contracts.resolved_rules import ResolvedRules
 from siteplan.contracts.validation import Check, Family
+from siteplan.validator import routes
 from siteplan.validator.measure import TOL_M, TowerGeometry
 from siteplan.validator.readings import plain, verdict
 from siteplan.validator.shapes import oriented_box, polygon_of, sides_of
@@ -211,6 +212,28 @@ def _orientation_checks(brief: DesignBrief, towers: tuple[TowerGeometry, ...]) -
     return out
 
 
+def route_checks(candidate: CandidateLayout, rules: ResolvedRules) -> list[Check]:
+    """Each tower's way in from the gate (2026-10-19, the architect): a drivable route from a
+    gate to its entrance, and its length (`routes`). The client's requirement, never law."""
+    driveway = rules.circulation.driveway_min_m.value
+    out = []
+    for way in routes.ways(candidate, driveway):
+        if way.found:
+            measured = f"{way.total_m:,.0f} m from the gate" + (
+                f", the last {way.driveway_m:.1f} m a driveway from the road"
+                if way.driveway_m > 0 else ", its entrance on the road")
+        else:
+            measured = f"no drivable route: {way.why}"
+        out.append(plain(Family.PROGRAM, f"Route: {way.tower}", verdict(way.found), measured,
+                         f"a road a car can drive from a gate to its entrance, then a "
+                         f"{driveway:g} m driveway where it stands back from the road: the "
+                         "client's requirement, never law", BRIEF, subject=way.tower,
+                         note="the shortest path a car's centre can take, kept "
+                         f"{routes.CAR_CLEAR_M:g} m in from the road's edges; a driver's line "
+                         "is a little longer"))
+    return out
+
+
 def _plate_check(towers: tuple[TowerGeometry, ...]) -> Check | None:
     """Blocks drawn from a floor plate sized to the land (2026-10-13): said, never judged. Its
     flats, cores and corridor are the library's; egress, lifts, accessibility, ventilation and
@@ -236,6 +259,7 @@ def program_checks(brief: DesignBrief, candidate: CandidateLayout,
     out += [height] if height else []
     out.append(_standards_check(brief, candidate, towers))
     out += _orientation_checks(brief, towers)
+    out += route_checks(candidate, rules)
     plate = _plate_check(towers)
     out += [plate] if plate else []
     return out

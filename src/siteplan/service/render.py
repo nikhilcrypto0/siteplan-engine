@@ -26,6 +26,7 @@ import ezdxf
 from ezdxf.enums import MTextEntityAlignment, TextEntityAlignment
 from shapely.geometry import Polygon
 
+from siteplan import rules as law
 from siteplan.contracts import CandidateLayout, CanonicalSiteModel
 from siteplan.contracts.candidate import RoadKind
 from siteplan.contracts.common import Shape
@@ -41,8 +42,16 @@ from siteplan.sheet import (
     _scale_bar,
     pick_scale,
 )
+from siteplan.validator.routes import Way, ways
 
 NOTE_LAYERS = {"SOLVER-NOTES": 1, "SHEET-NOTES": 1}  # AutoCAD colour index: red
+# 2026-10-19: each tower's way in from the gate (validator.routes: its entrance, its driveway
+# and the route), and a north arrow on the plain DXF too, on the sheet's own layer
+ROUTE_LAYERS = {"SOLVER-TOWER-ENTRANCE": 1, "SOLVER-DRIVEWAYS": 4, "SOLVER-ROUTES": 6,
+                "SHEET-NORTH": 7}
+ENTRANCE_MARK_M = 1.2  # an entrance's mark, its radius on the ground
+PLAIN_ARROW_M_PER_MM = 1.0  # the plain DXF's north arrow, drawn as the sheet's at 1:1000
+SVG_ARROW_PX = 26  # the SVG's north arrow
 DXF_TEXT_M = 2.5  # label height in the plain DXF, metres on the ground
 NOTE_PITCH = 1.8  # line pitch of the DXF's notes, in text heights
 NOTE_TEXT_MM = 2.2  # printed height of the sheet's notes
@@ -85,6 +94,8 @@ class Plan:
     ramps: tuple[Polygon, ...]
     cellars: tuple[Polygon, ...]
     bays: tuple[Polygon, ...]
+    ways: tuple[Way, ...] = ()  # each tower's entrance, driveway and route from the gate
+    driveway_m: float = law.DRIVEWAY_MIN_WIDTH_M  # rule 13(c)(viii), the width drawn
 
 
 def _shapes(shapes: list[Shape]) -> tuple[Polygon, ...]:
@@ -118,7 +129,26 @@ def plan_of(site: CanonicalSiteModel, candidate: CandidateLayout) -> Plan:
         club_floors=p.club_house.floors if p.club_house else 0,
         amenities=tuple((a.name, a.shape.to_shapely()) for a in p.amenities),
         ramps=_shapes(p.ramps), cellars=_shapes(p.cellars.outline) if p.cellars else (),
-        bays=_shapes(p.bays))
+        bays=_shapes(p.bays), ways=tuple(ways(candidate, law.DRIVEWAY_MIN_WIDTH_M)))
+
+
+def driveway_shape(way: Way, width_m: float) -> Polygon | None:
+    """A tower's driveway as drawn: the rules' driveway width, from the road to its entrance."""
+    line = way.driveway
+    return line.buffer(width_m / 2, cap_style="flat") if line is not None else None
+
+
+def _tower_point(plan: Plan, name: str):
+    """Where a tower's way-in words go when it has no entrance: on the tower."""
+    return next((t.footprint.representative_point() for t in plan.towers if t.name == name),
+                None)
+
+
+def route_words(way: Way) -> str:
+    """A tower's way in, in words for a drawing (the DXF writes them in capitals)."""
+    if not way.found:
+        return f"{way.tower}: no drivable route ({way.why})"
+    return f"{way.tower}: {way.total_m:,.0f} m from the gate"
 
 
 # --- DXF -------------------------------------------------------------------------------------
@@ -150,11 +180,11 @@ def _draw(msp, plan: Plan, text_h: float, label_layer: str) -> None:
     poly(plan.plot, "Plot")
     for part in plan.green_strip:
         poly(part, "SOLVER-GREEN-STRIP")
-    for words, pieces in plan.roads:
+    for words, pieces in plan.roads:  # every piece of every road says its width (2026-10-19)
         for piece in pieces:
             poly(piece, "SOLVER-ROADS")
-        if pieces:
-            label(words, max(pieces, key=lambda s: s.area), 0.8)
+            for part in _parts(piece):
+                label(words, part, 0.8)
     for part in plan.fire:
         poly(part, "SOLVER-FIRE-LANES")
     for gate in plan.gates:
@@ -183,12 +213,37 @@ def _draw(msp, plan: Plan, text_h: float, label_layer: str) -> None:
         for core in tower.cores:
             poly(core, "SOLVER-CORES")
         label(f"{tower.name} · {tower.flats_per_floor} FLATS/FLOOR", tower.footprint, 0.9)
+    _draw_ways(msp, plan, text_h)
+
+
+def _draw_ways(msp, plan: Plan, text_h: float) -> None:
+    """Each tower's way in: its entrance (a ring), its driveway from the road (rule 13(c)(viii)'s
+    width) and its route from the gate along the roads, with the route's length."""
+    for way in plan.ways:
+        at = way.entrance or _tower_point(plan, way.tower)
+        if at is None:
+            continue
+        if way.found:
+            msp.add_circle((at.x, at.y), ENTRANCE_MARK_M,
+                           dxfattribs={"layer": "SOLVER-TOWER-ENTRANCE"})
+            drive = driveway_shape(way, plan.driveway_m)
+            if drive is not None:
+                for part in _parts(drive):
+                    msp.add_lwpolyline(_ring(part), close=True,
+                                       dxfattribs={"layer": "SOLVER-DRIVEWAYS"})
+            if way.route is not None:
+                msp.add_lwpolyline([*way.route.coords, (way.road_point.x, way.road_point.y)],
+                                   dxfattribs={"layer": "SOLVER-ROUTES"})
+        msp.add_text(route_words(way).upper(), height=text_h * 0.7,
+                     dxfattribs={"layer": "SOLVER-TOWER-ENTRANCE"}).set_placement(
+            (at.x + ENTRANCE_MARK_M * 1.5, at.y), align=TextEntityAlignment.MIDDLE_LEFT)
 
 
 def write_dxf(plan: Plan, path: Path, notes: list[str]) -> Path:
-    doc = _new_drawing(LAYERS | NOTE_LAYERS)
+    doc = _new_drawing(LAYERS | NOTE_LAYERS | ROUTE_LAYERS)
     msp = doc.modelspace()
     _draw(msp, plan, DXF_TEXT_M, "SOLVER-LABELS")
+    _north_arrow(msp, plan.plot, PLAIN_ARROW_M_PER_MM)
     minx, miny, _, _ = plan.plot.bounds
     pitch = NOTE_PITCH * DXF_TEXT_M
     for i, line in enumerate(notes, 2):
@@ -203,7 +258,7 @@ def write_sheet(plan: Plan, path: Path, info: SheetInfo, statement: str,
     statement and title block, and the notes in the statement column above the title block."""
     scale = pick_scale(plan.plot)
     m = scale / 1000  # one printed millimetre in metres on the ground
-    doc = _new_drawing(LAYERS | SHEET_LAYERS | NOTE_LAYERS)
+    doc = _new_drawing(LAYERS | SHEET_LAYERS | NOTE_LAYERS | ROUTE_LAYERS)
     msp = doc.modelspace()
     _draw(msp, plan, TEXT_MM * m, "SHEET-TEXT")
     _dimension(msp, plan.plot, [t.footprint for t in plan.towers], m)
@@ -276,6 +331,34 @@ def write_svg(plan: Plan, path: Path, title: str, subtitle: str, notes: list[str
                 for f in tower.flats]
         out += [shape(c, 'fill="#8a8a8a"') for c in tower.cores]
         out.append(text(tower.footprint.representative_point(), tower.name, "#bd3b27"))
+    # 2026-10-19: every road with its width, each tower's way in, and north
+    for words, pieces in plan.roads:
+        out += [text(part.representative_point(), words.title(), "#4a463d")
+                for piece in pieces for part in _parts(piece)]
+    for way in plan.ways:
+        drive = driveway_shape(way, plan.driveway_m)
+        if drive is not None:
+            out += [shape(part, 'fill="#f8bbd0" stroke="#c2185b" stroke-width="0.8"')
+                    for part in _parts(drive)]
+        if way.route is not None:
+            points = " ".join(xy(x, y) for x, y in [*way.route.coords,
+                                                    (way.road_point.x, way.road_point.y)])
+            out.append(f'<polyline points="{points}" fill="none" stroke="#c2185b" '
+                       'stroke-width="1.2" stroke-dasharray="5 3"/>')
+        at = way.entrance or _tower_point(plan, way.tower)
+        if at is None:
+            continue
+        x, y = xy(at.x, at.y).split(",")
+        if way.entrance is not None:
+            out.append(f'<circle cx="{x}" cy="{y}" r="4" fill="#c2185b" stroke="#fff"/>')
+        out.append(f'<text x="{float(x) + 6:.1f}" y="{float(y) - 6:.1f}" font-size="9" '
+                   f'fill="#880e4f">{escape(route_words(way))}</text>')
+    ax, ay = width - SVG_ARROW_PX - 10, SVG_HEAD_PX + 10
+    out.append(f'<path d="M {ax:.0f},{ay:.0f} l {-SVG_ARROW_PX / 3:.1f},{SVG_ARROW_PX} '
+               f'l {SVG_ARROW_PX / 3:.1f},{-SVG_ARROW_PX * 0.3:.1f} '
+               f'l {SVG_ARROW_PX / 3:.1f},{SVG_ARROW_PX * 0.3:.1f} Z" fill="#111"/>'
+               f'<text x="{ax:.0f}" y="{ay - 4:.0f}" font-size="13" font-weight="700" '
+               'text-anchor="middle">N</text>')
     top = SVG_HEAD_PX + drawing_h
     out += [f'<text x="14" y="{top + SVG_LINE_PX * i:.0f}" font-size="12" fill="#a3200b">'
             f'{escape(line)}</text>' for i, line in enumerate(notes, 1)]
