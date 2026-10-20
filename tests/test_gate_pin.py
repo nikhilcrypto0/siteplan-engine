@@ -4,14 +4,16 @@ road's side): a layout whose gate opens anywhere else fails the program check, i
 guard and is never offered; an answers file pins it as a project file does. Made-up land."""
 
 from search_support import made_up, strategy
-from shapely.geometry import LineString, box
+from shapely.geometry import LineString, Polygon, box
 from validator_helpers import fixture
 
 from siteplan.contracts import digest
 from siteplan.contracts.common import Line, Provenance, Sourced, SourceKind, Status
+from siteplan.geometry import line_runs
 from siteplan.intake import build_project
 from siteplan.legal.envelope import envelope
 from siteplan.optimizer.guard import inputs_of, off_gate, why_refused
+from siteplan.optimizer.search import network
 from siteplan.project import Project
 from siteplan.validator import validate
 from siteplan.validator.program import GATE_CHECK
@@ -76,6 +78,35 @@ def test_the_search_keeps_the_gate_where_it_is_pinned():
             assert gate.shape.to_shapely().centroid.distance(stretch) < 3.0, c.candidate_id
         report = validate(pinned.site, pinned.rules, pinned.brief, c, pinned.envelope)
         assert _gate_check(report).finding.status is Status.PASS
+
+
+def test_a_gate_pinned_on_an_edge_drawn_with_a_slight_bend_still_opens_there():
+    """Dhulapally's pinned mouth is 14 m of edge drawn as segments of 7.8, 6.1 and 0.3 m bending
+    half a degree: gates were placed on single segments only, none 9 m long, so no approach was
+    found and the search laid nothing. A straight run is read as the engine reads one anywhere."""
+    bend = (67.5, 0.04)
+    net = Polygon([(0, 0), bend, (200, 0), (200, 120), (0, 120)])
+    pin = [(60.0, 0.04 * 60 / 67.5), bend, (75.0, 0.04 - 0.04 * 7.5 / 132.5)]
+    assert network._gate_points(net, LineString(pin), 4.51)
+    made = made_up(net)
+    site = made.site.model_copy(deep=True)
+    site.access.gate = Sourced[Line](value=Line(points=pin), status=Provenance.USER_CONFIRMED,
+                                     source_kind=SourceKind.ARCHITECT, source=SOURCE)
+    rules = made.rules.model_copy(update={"site_ref": digest(site)})
+    pinned = made.__class__(site, rules, made.brief, envelope(site, rules), made.kit)
+    proposal = strategy().propose(pinned.context())
+    assert proposal.candidates
+    for c in proposal.candidates:
+        report = validate(pinned.site, pinned.rules, pinned.brief, c, pinned.envelope)
+        assert _gate_check(report).finding.status is Status.PASS
+
+
+def test_a_corner_is_never_read_as_one_straight_run():
+    corner = LineString([(0, 0), (10, 0), (10, 10)])
+    assert [round(r.length, 6) for r in line_runs(corner)] == [10.0, 10.0]
+    assert network._gate_points(box(0, 0, 10, 10), corner, 4.51) == network._gate_points(
+        box(0, 0, 10, 10), LineString([(0, 0), (10, 0)]), 4.51) + network._gate_points(
+        box(0, 0, 10, 10), LineString([(10, 0), (10, 10)]), 4.51)
 
 
 def test_an_answers_file_pins_the_gate_as_a_project_file_does():

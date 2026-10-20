@@ -37,7 +37,7 @@ from shapely.ops import unary_union
 
 from siteplan import rules as law
 from siteplan.contracts.candidate import RoadKind
-from siteplan.geometry import opening
+from siteplan.geometry import line_runs, opening
 from siteplan.optimizer.search.columns import Standing
 from siteplan.optimizer.search.frame import Frame
 from siteplan.optimizer.search.land import EMPTY, Land, Plot, grow, polygons
@@ -333,10 +333,12 @@ def _sliver(approach: BaseGeometry, ring: BaseGeometry, width_m: float) -> bool:
 def _gate_points(net: Polygon, line: LineString, half: float
                  ) -> list[tuple[tuple[float, float], tuple[float, float], tuple[float, float]]]:
     """Places along a stretch of boundary a gate of this half-width may open at: the point, the
-    direction along the boundary and the direction into the plot."""
-    coords = list(line.coords)
+    direction along the boundary and the direction into the plot. Each straight run of the
+    stretch (`geometry.line_runs`, as the engine reads a straight edge anywhere) is taken whole,
+    so a gate pinned on an edge drawn with a slight bend still opens along it."""
     out = []
-    for (x0, y0), (x1, y1) in zip(coords, coords[1:], strict=False):
+    for run in line_runs(line):
+        (x0, y0), (x1, y1) = run.line.coords[0][:2], run.line.coords[-1][:2]
         length = math.hypot(x1 - x0, y1 - y0)
         if length < 2 * half:
             continue

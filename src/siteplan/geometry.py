@@ -96,6 +96,22 @@ def straight_runs(polygon: Polygon, tolerance_deg: float = 3.0) -> list[Run]:
     return runs
 
 
+def line_runs(line: LineString, tolerance_deg: float = 3.0) -> list[Run]:
+    """The straight stretches of an open line, read as `straight_runs` reads an outline: an edge
+    whose direction is within `tolerance_deg` of the one before it continues its stretch."""
+    coords = [tuple(p[:2]) for p in line.coords]
+    coords = [p for k, p in enumerate(coords) if k == 0 or p != coords[k - 1]]
+    if len(coords) < 2:
+        return []
+    groups: list[list[tuple]] = [[coords[0], coords[1]]]
+    for a, b in zip(coords[1:], coords[2:], strict=False):
+        if angle_gap(_direction(a, b), _direction(*groups[-1][-2:])) <= tolerance_deg:
+            groups[-1].append(b)
+        else:
+            groups.append([a, b])
+    return [Run(LineString(g), _direction(g[0], g[-1])) for g in groups]
+
+
 def opening(shape, width_m: float):
     """Remove every part of a shape narrower than width_m (shrink by half, grow back)."""
     half = width_m / 2 - 1e-6
