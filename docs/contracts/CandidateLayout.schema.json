@@ -305,6 +305,35 @@
       "title": "LayerKind",
       "type": "string"
     },
+    "Line": {
+      "additionalProperties": false,
+      "description": "An open line (a road edge, a water line, a stretch of boundary), metres, survey frame.",
+      "properties": {
+        "points": {
+          "items": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "type": "array"
+          },
+          "minItems": 2,
+          "title": "Points",
+          "type": "array"
+        }
+      },
+      "required": [
+        "points"
+      ],
+      "title": "Line",
+      "type": "object"
+    },
     "Metrics": {
       "additionalProperties": false,
       "description": "The generator's own numbers, for reports; a validator recomputes what it checks.",
@@ -766,6 +795,17 @@
     "RoadPiece": {
       "additionalProperties": false,
       "properties": {
+        "centre_line": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Line"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "declared_width_m": {
           "exclusiveMinimum": 0,
           "title": "Declared Width M",

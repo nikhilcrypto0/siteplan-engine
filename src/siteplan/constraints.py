@@ -1345,10 +1345,14 @@ REGISTRY: tuple[Constraint, ...] = (
         f"by {routes.SIMPLIFY_M:g} m; a sight line {routes.COVER_EPS_M:g} m outside it still "
         f"inside; a driveway crossing under {routes.CROSSING_SQM:g} m² of another use does not "
         f"cross it; a block within {routes.ON_ROAD_M:g} m of a road stands on it, with no "
-        "driveway", Basis.ENGINE_DESIGN_ASSUMPTION, "none (validator.routes)",
+        f"driveway; a centre line more than {routes.CENTRE_LINE_SLACK_M:g} m off the pavement "
+        f"not followed, line ends within {routes.JOIN_M:g} m joined, junctions read to "
+        f"{routes.NODE_DECIMALS} decimals", Basis.ENGINE_DESIGN_ASSUMPTION,
+        "none (validator.routes)",
         ("validator.routes.CAR_CLEAR_M", "validator.routes.SIMPLIFY_M",
          "validator.routes.COVER_EPS_M", "validator.routes.CROSSING_SQM",
-         "validator.routes.ON_ROAD_M"),
+         "validator.routes.ON_ROAD_M", "validator.routes.CENTRE_LINE_SLACK_M",
+         "validator.routes.JOIN_M", "validator.routes.NODE_DECIMALS"),
         note="The route is the shortest path a car can take; a driver's line is a little "
              "longer. The driveway's width is rule 13(c)(viii)'s. A requirement of the "
              "client's, never law.",

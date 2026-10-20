@@ -9,6 +9,7 @@ import ezdxf
 import search_support
 from shapely import affinity
 from shapely.geometry import LineString, Point, box
+from shapely.ops import unary_union
 from validator_helpers import fixture
 
 from siteplan import validator as independent
@@ -137,6 +138,44 @@ def test_a_tower_with_no_way_in_says_so_on_every_drawing(tmp_path):
     assert sum("NO DRIVABLE ROUTE" in t for t in texts) == towers
     items = [i for _, group in scene.candidate_layers(plan, None, "") for i in group]
     assert sum("no drivable route" in i.get("text", "") for i in items) == towers
+
+
+# --- Along the roads' centre lines (2026-10-19: a straight line between points looked as if it
+# crossed a park or a block) ---------------------------------------------------------------
+
+
+def test_a_route_follows_the_centre_lines_of_the_roads_it_takes():
+    """The full search's layouts carry each road's centre line; every bend of a route lies on
+    one, and only its last step leaves it, across to where the driveway starts."""
+    c = search_support.proposal_on_the_rectangle().candidates[0]
+    lines = routes.centre_lines(c)
+    assert len(lines) == len(c.circulation.roads)
+    net = unary_union(lines)
+    for way in routes.ways(c, DRIVEWAY_M):
+        assert way.found, way.why
+        assert all(net.distance(Point(xy)) < 1e-6 for xy in way.route.coords), way.tower
+        assert math.isclose(way.route.length + way.route.boundary.geoms[-1].distance(
+            way.road_point), way.route_m, abs_tol=1e-6)
+
+
+def test_without_centre_lines_a_route_still_runs_inside_the_pavement():
+    c = search_support.proposal_on_the_rectangle().candidates[0]
+    bare = c.model_copy(update={"circulation": c.circulation.model_copy(update={"roads": [
+        r.model_copy(update={"centre_line": None}) for r in c.circulation.roads]})})
+    assert routes.centre_lines(bare) == []
+    assert "centre_line" not in bare.circulation.roads[0].model_dump()  # stored as before
+    ground = routes.drivable(bare).buffer(1e-3)
+    for way in routes.ways(bare, DRIVEWAY_M):
+        assert way.found and ground.covers(way.route)
+
+
+def test_a_centre_line_off_the_pavement_is_not_followed():
+    c = search_support.proposal_on_the_rectangle().candidates[0]
+    stray = c.model_copy(deep=True)
+    road = stray.circulation.roads[0]
+    road.centre_line = road.centre_line.model_copy(update={"points": [
+        (x + 50.0, y) for x, y in road.centre_line.points]})
+    assert routes.centre_lines(stray) == []
 
 
 # --- Never a tower the roads do not reach (2026-10-19: two layouts placed blocks that only

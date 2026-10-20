@@ -168,7 +168,9 @@ changes, but each candidate carries the rules' digest, so the same notes, the sa
 and the same ten shown carry new digests; the model's answer and the approval page are unchanged.
 Re-pinned on 2026-10-19 for the same reason: the stilt reading's sources gain the public Abids,
 Stilt + 5 and Kollur permits (legal/readings.ABIDS_PERMIT, STILT5_PERMITS, KOLLUR_PERMIT); only the
-proposed and shown digests move.
+proposed and shown digests move. Re-pinned again on 2026-10-19: each road of a candidate carries
+the centre line it was drawn from (RoadPiece.centre_line), so the same notes, 39 proposed and ten
+shown carry new digests; the model's answer and the approval page are unchanged.
 
 The values pin exact output on the locked dependencies (uv.lock). They move only with a normative
 replacement and an entry in docs/behaviour-changes.md.
@@ -273,7 +275,7 @@ PINNED = {
         "full-ALL-ALL-4", "full-plates-ALL-ALL-47", "full-ALL-ALL-137", "full-ALL-ALL-138",
         "full-ALL-ALL-140", "full-ALL-ALL-114", "full-ALL-ALL-13", "full-plates-ALL-allowed-72",
     ],
-    "proposed_sha256": "c24a8fa30ce3a37513a908bf08c234526781e26bca7b5af11383e1a98de2f834",
+    "proposed_sha256": "7525ac5855bf9edf0fee934be6e228e867841f4b04380f90d8abd1aaadc06c0e",
     "shown": [
         ["full-not_counted-allowed-156", "BALANCED"],
         ["full-not_counted-allowed-86", "MAX_YIELD"],
@@ -286,10 +288,10 @@ PINNED = {
         ["full-not_counted-allowed-93", None],
         ["full-plates-not_counted-allowed-90", None],
     ],
-    "shown_digests": ["66771304c7d3f99a", "65136d40bad11c6c", "23a778a966d91753",
-                      "9eafc086666d4b4c", "3ff2299945005a31", "fac9df3092e59473",
-                      "9097c52e2d0113f8", "63a7d3fda9c35a2e", "68f057844d04bbaa",
-                      "ae05833513f6e26a"],
+    "shown_digests": ["9505d54acd1227b8", "c4c6ce3f7f813853", "5e78dd70285a43c0",
+                      "27b45ba353e24ead", "2fc6b7a199aee0df", "7bb44f3c469833cb",
+                      "cdbe2ec48133f378", "de837d9fe5d431d4", "be939791828c03d0",
+                      "1b6a4867fd93ee6b"],
     "answer_sha256": "37d082e87155917243ca82749d4d1e1db84ff1a271018228e8e132a2c6250939",
     "approval_page_sha256": "2b9223fec60c0f2988b8ade6b34bb309ab94b2935c794437dad5a125cb6ce087",
 }

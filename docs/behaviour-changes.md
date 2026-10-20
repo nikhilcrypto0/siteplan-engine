@@ -4,6 +4,24 @@ A characterization test (tests/manifest.py) pins what the engine produces today.
 only together with a normative replacement test and an entry here: what changed, why, the
 evidence, and the test that now holds the behaviour. Newest first.
 
+## 2026-10-19: routes run along the roads' centre lines
+
+- **What changed.** Each road of a candidate the full search makes carries the centre line it
+  was drawn from (`RoadPiece.centre_line`, optional, left out of a stored candidate when absent,
+  so candidates stored before keep their digest), and `validator/routes.py` routes each tower's
+  way in along those lines when every road carries one lying on the pavement drawn; otherwise
+  (a layout drawn by hand) the shortest path inside the pavement, as before. Every drawing of a
+  route (DXF, sheet, SVG, FreeCAD) follows the same line.
+- **Why.** The user, 2026-10-19: a route drawn as straight lines between corners looked as if it
+  crossed a park or a block. A route along the centre lines is a little longer than the corner-
+  hugging path (on the made-up rectangle 159.8 m against 142.5 m to its farthest tower).
+- **Tests.** `tests/test_service_proposals_baseline.py` (characterization) is re-pinned: every
+  candidate carries its roads' centre lines, so the proposed and shown digests move; the notes,
+  the 39 proposed, the ten shown, the model's answer and the approval page are unchanged. The
+  normative tests are `test_a_route_follows_the_centre_lines_of_the_roads_it_takes`,
+  `test_without_centre_lines_a_route_still_runs_inside_the_pavement` and
+  `test_a_centre_line_off_the_pavement_is_not_followed` (`tests/test_routes.py`).
+
 ## 2026-10-19: public sanctioned permits support the stilt reading and test Table III
 
 - **What changed.** The sources of `stilt_in_rule_height` gain three entries read off public

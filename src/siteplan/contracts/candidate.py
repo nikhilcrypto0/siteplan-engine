@@ -13,7 +13,7 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Any
 
-from pydantic import Field, PositiveInt, model_validator
+from pydantic import Field, PositiveInt, model_serializer, model_validator
 from shapely import affinity
 from shapely.geometry import Polygon
 
@@ -22,6 +22,7 @@ from siteplan.contracts.common import (
     Contract,
     FacilityUse,
     Finding,
+    Line,
     Part,
     Shape,
     Side,
@@ -47,6 +48,17 @@ class RoadPiece(Part):
     shapes: list[Shape] = Field(min_length=1)
     declared_width_m: float = Field(gt=0)
     tags: list[str] = []  # other functions of the same pavement, e.g. FIRE_ACCESS
+    # Since 2026-10-19: the line the road was drawn from (the full search's road graph), so a
+    # route is drawn and measured along the road it follows. Left out of a stored candidate when
+    # absent (one made before, or by another generator), so it keeps its digest.
+    centre_line: Line | None = None
+
+    @model_serializer(mode="wrap")
+    def _as_stored_when_absent(self, handler):
+        dumped = handler(self)
+        if dumped.get("centre_line") is None:
+            dumped.pop("centre_line", None)
+        return dumped
 
 
 class Gate(Part):

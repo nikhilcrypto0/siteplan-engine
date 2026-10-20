@@ -250,9 +250,11 @@ def _declared_m(road: Road, laid: Laid, q: Quantities) -> float:
 
 def _roads(laid: Laid, q: Quantities) -> list[dict]:
     """Every road of the graph, each declaring the width it is drawn at: the validator measures
-    the drawing and a declaration wider than the road is a claim it holds against the layout."""
+    the drawing and a declaration wider than the road is a claim it holds against the layout.
+    Each carries the centre line it was drawn from (2026-10-19), which routes follow."""
     roads = [{"id": r.id, "kind": r.kind.value, "shapes": shapes_from(r.ground),
               "declared_width_m": _declared_m(r, laid, q),
+              "centre_line": {"points": [(x, y) for x, y, *_ in r.line.coords]},
               **({"tags": ["FIRE_ACCESS"]} if r.kind in FIRE_ROADS else {})}
              for r in laid.graph.roads]
     return [r for r in roads if r["shapes"]]
