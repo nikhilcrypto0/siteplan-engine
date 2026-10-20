@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import math
 
+from shapely.geometry import LineString
+
 from siteplan.contracts.candidate import CandidateLayout
 from siteplan.contracts.common import Status
 from siteplan.contracts.design_brief import (
@@ -19,6 +21,7 @@ from siteplan.contracts.design_brief import (
     UnitsMode,
 )
 from siteplan.contracts.resolved_rules import ResolvedRules
+from siteplan.contracts.site_model import CanonicalSiteModel
 from siteplan.contracts.validation import Check, Family
 from siteplan.validator import routes
 from siteplan.validator.measure import TOL_M, TowerGeometry
@@ -33,6 +36,9 @@ UNITS_TARGET_TOLERANCE = 0.05  # a units target is met within this share
 SIZE_SLACK_SQM = 0.5
 ORIENTATION_TOLERANCE_DEG = 1.0  # a required orientation is met within this
 ORIENTATION_SLACK_DEG = 0.01  # a block laid on its window's edge measures a hair over it
+GATE_CHECK = "Gate: at the pinned entrance"
+GATE_PIN_TOL_M = 0.5  # a gate opening this near the pinned stretch opens on it
+GATE_EDGE_M = 0.05  # a gate's shape this near the plot's edge opens on it
 
 
 def units_by_type(towers: tuple[TowerGeometry, ...]) -> dict[str, int]:
@@ -213,6 +219,35 @@ def _orientation_checks(brief: DesignBrief, towers: tuple[TowerGeometry, ...]) -
                          f"faces look north and south), within {within:g} degrees: the "
                          "client's requirement, never law", source))
     return out
+
+
+def gate_check(site: CanonicalSiteModel, candidate: CandidateLayout) -> Check | None:
+    """The gate where the project pins it (2026-10-20, the architect's rule: the main road is the
+    main entrance, fixed, never changed): every gate drawn opens on the pinned stretch of the net
+    plot's edge, within GATE_PIN_TOL_M. Said only where a gate is pinned; a layout that fails it
+    is never offered (`guard.off_gate`)."""
+    pin = site.access.gate
+    if pin is None or site.net_plot is None:
+        return None
+    stretch = LineString(pin.value.points).buffer(GATE_PIN_TOL_M)
+    edge = polygon_of(site.net_plot.value)[0].exterior
+    required = (f"on the stretch the project pins, {LineString(pin.value.points).length:.1f} m "
+                "of the net plot's edge: the main road's mouth, the architect's rule")
+    gates = candidate.circulation.gates
+    if not gates:
+        return plain(Family.PROGRAM, GATE_CHECK, Status.FAIL, "no gate drawn", required,
+                     pin.source or BRIEF)
+    off = []
+    for k, gate in enumerate(gates, 1):
+        shape = polygon_of(gate.shape)[0]
+        opens = edge.intersection(shape.buffer(GATE_EDGE_M))
+        if opens.is_empty or not stretch.covers(opens):
+            centre = shape.centroid
+            off.append(f"gate {k} opens at ({centre.x:.0f}, {centre.y:.0f}), "
+                       f"{shape.distance(LineString(pin.value.points)):.1f} m off it")
+    return plain(Family.PROGRAM, GATE_CHECK, verdict(not off),
+                 "; ".join(off) if off else "every gate on the pinned stretch", required,
+                 pin.source or BRIEF)
 
 
 def route_checks(candidate: CandidateLayout, rules: ResolvedRules) -> list[Check]:

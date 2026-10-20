@@ -1359,6 +1359,17 @@ REGISTRY: tuple[Constraint, ...] = (
         settles="The architect, who may ask for a driver's line or another clearance.",
     ),
     Constraint(
+        "Towers", "How near the stretch a project pins a gate must open on it (2026-10-20, the "
+                  "architect's rule: the main road is the main entrance, fixed).",
+        f"a gate's shape within {program.GATE_EDGE_M:g} m of the plot's edge opens on it; it "
+        f"opens on the pinned stretch within {program.GATE_PIN_TOL_M:g} m",
+        Basis.ENGINE_DESIGN_ASSUMPTION, "none (validator.program)",
+        ("validator.program.GATE_EDGE_M", "validator.program.GATE_PIN_TOL_M"),
+        note="The pinned stretch itself is a site input (the project's gate_m); a layout whose "
+             "gate opens elsewhere is never offered.",
+        settles="Nothing: drawing tolerances.",
+    ),
+    Constraint(
         "Towers", "How closely a block must run along an orientation the brief requires (the "
                   "client's Vastu requirement of 2026-10-19: long faces north and south).",
         f"its long side within the tolerance the brief states, never less than "

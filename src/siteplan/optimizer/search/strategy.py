@@ -43,7 +43,7 @@ from siteplan import validator as independent
 from siteplan.contracts import CandidateLayout, DesignBrief, TowerPrototype, ValidationReport
 from siteplan.contracts.validation import LegalVerdict
 from siteplan.legal.widths import width_profile
-from siteplan.optimizer.guard import STUDY_NOT_LAID, held_to, unreached
+from siteplan.optimizer.guard import STUDY_NOT_LAID, held_to, off_gate, unreached
 from siteplan.optimizer.interfaces import Budget, Proposal, SearchContext, Validator
 from siteplan.optimizer.objective import Scores, measure
 from siteplan.optimizer.pareto import Scored, leaders, pareto_front, same_idea, select
@@ -131,6 +131,7 @@ class Tally:
     exhausted: bool = False
     low_blocks: list[list[Polygon]] = field(default_factory=list)  # of each layout laid out
     unreached: list[str] = field(default_factory=list)  # layouts dropped: a tower with no way in
+    off_gate: list[str] = field(default_factory=list)  # layouts dropped: the gate not where pinned
 
 
 @dataclass
@@ -526,6 +527,10 @@ class FullSearchStrategy:
             if stranded:  # 2026-10-19: no layout with a tower no road or pathway reaches
                 tally.unreached.append(f"{candidate.candidate_id}: {'; '.join(stranded)}")
                 continue
+            moved = off_gate(report)
+            if moved:  # 2026-10-20: the gate stays where the project pins it
+                tally.off_gate.append(f"{candidate.candidate_id}: {'; '.join(moved)}")
+                continue
             study = [STUDY_CAVEAT] if brief.objectives.study else []
             noted = candidate.model_copy(update={
                 "caveats": [*candidate.caveats, *study, *caveats(report)]})
@@ -670,6 +675,9 @@ def _notes(run: Run | None, tally: Tally, found: Sequence[Judged], chosen: Seque
         notes.append(f"{len(tally.unreached)} layout(s) dropped because a tower has no road or "
                      "pathway from the gate to its entrance (never shown): "
                      + "; ".join(tally.unreached[:3]))
+    if tally.off_gate:
+        notes.append(f"{len(tally.off_gate)} layout(s) dropped because the gate is not at the "
+                     "entrance the project pins (never shown): " + "; ".join(tally.off_gate[:3]))
     if not found:
         common = "; ".join(f"{reason} (x{n})" for reason, n in tally.reasons.most_common(3))
         notes.append("no layout was laid that the ground and the rules allow"

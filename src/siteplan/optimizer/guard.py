@@ -102,6 +102,17 @@ def unreached(report: ValidationReport) -> list[str]:
             if c.finding.rule.startswith(ROUTE_CHECK) and c.finding.status is Status.FAIL]
 
 
+GATE_CHECK = "Gate: at the pinned entrance"  # the validator's program check of a pinned gate
+
+
+def off_gate(report: ValidationReport) -> list[str]:
+    """Why a layout's gate is not where the project pins it (2026-10-20, the architect's rule: the
+    main road is the main entrance, fixed): never offered."""
+    return [f"the gate is not at the pinned entrance: {c.finding.measured}"
+            for c in report.program
+            if c.finding.rule == GATE_CHECK and c.finding.status is Status.FAIL]
+
+
 def why_refused(candidate: CandidateLayout, report: ValidationReport, inputs: Inputs,
                 *, study: bool = False) -> list[str]:
     """Why a candidate may not be returned on this report; empty when it may. `study` is the
@@ -125,6 +136,7 @@ def why_refused(candidate: CandidateLayout, report: ValidationReport, inputs: In
     if not study and tot_lot_missing(candidate, report) and TOT_LOT_MISSING not in reasons:
         reasons.append(TOT_LOT_MISSING)
     reasons += unreached(report)
+    reasons += off_gate(report)
     return reasons
 
 

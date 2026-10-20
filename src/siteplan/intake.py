@@ -318,7 +318,9 @@ def build_project(draft: Draft, answers: dict, defaults: WorkspaceDefaults | Non
     `application_date` where it was received, labelled through the three maps like any answer;
     with neither, nothing is selected and the application stays unknown. An `orientation` (the
     project file's `layout.orientation`: the towers' axis, its source and status) carries the
-    client's requirement the same way (2026-10-19)."""
+    client's requirement the same way (2026-10-19), and a `gate_m` (the project file's
+    `site.gate_m`: the stretch of the net plot's edge the entrance is pinned to) the entrance
+    (2026-10-20)."""
     defaults = defaults or WorkspaceDefaults()
     problems = missing(draft, answers)
     if problems:
@@ -389,6 +391,10 @@ def build_project(draft: Draft, answers: dict, defaults: WorkspaceDefaults | Non
         layout["readings"] = answers["readings"]
     if answers.get("orientation"):  # the client's requirement, never law (2026-10-19)
         layout["orientation"] = answers["orientation"]
+    if answers.get("gate_m"):  # the entrance pinned where the main road meets the plot
+        site["gate_m"] = answers["gate_m"]  # (2026-10-20); labelled by the maps below
+        sources["gate_m"] = "the architect: the entrance pinned"
+        status["gate_m"] = Provenance.USER_CONFIRMED
     for key in ("application_status", "application_date"):
         if answers.get(key):
             site[key] = answers[key]
