@@ -42,6 +42,7 @@ from shapely.geometry.base import BaseGeometry
 from siteplan import validator as independent
 from siteplan.contracts import CandidateLayout, DesignBrief, TowerPrototype, ValidationReport
 from siteplan.contracts.validation import LegalVerdict
+from siteplan.legal.widths import width_profile
 from siteplan.optimizer.guard import STUDY_NOT_LAID, held_to
 from siteplan.optimizer.interfaces import Budget, Proposal, SearchContext, Validator
 from siteplan.optimizer.objective import Scores, measure
@@ -733,12 +734,22 @@ def _region_notes(run: Run, tally: Tally, chosen: Sequence[Judged]) -> list[str]
 
 
 def _narrow_regions(run: Run) -> list[Polygon]:
-    """The regions of the net plot's width profile beside its largest, the main body."""
+    """The regions of the net plot's width profile beside its largest, the main body; then
+    (2026-10-19) those of the land each kind of block below 21 m stands on by its own band's
+    setbacks (`Run.own_lands`), unless most of one lies in a region already listed. An arm wider
+    than the net plot's split is no region of the net plot, but once a low block's setbacks are
+    kept it is one of its own: Dhulapally's north arm, 35 m across and 21 m of land for a block of
+    7 to 15 m, whose note had looked at its 525 m² tip alone and said no block fits."""
     profile = next((p for p in run.envelope.width_profiles if p.applies_to == "net plot"), None)
     if profile is None:
         return []
-    shapes = sorted((r.shape.to_shapely() for r in profile.regions), key=lambda s: -s.area)
-    return shapes[1:]
+    shapes = sorted((r.shape.to_shapely() for r in profile.regions), key=lambda s: -s.area)[1:]
+    for land in run.own_lands.values():
+        for region in width_profile("low block's land", land).regions[1:]:
+            piece = region.shape.to_shapely()
+            if all(piece.intersection(s).area <= piece.area / 2 for s in shapes):
+                shapes.append(piece)
+    return shapes
 
 
 def _low_options(run: Run) -> list[Choice]:

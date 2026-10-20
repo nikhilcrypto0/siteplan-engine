@@ -14,16 +14,19 @@ no fire lane or turning room round a block that is not a high-rise, and the plan
 III asks.
 """
 
+import re
 from unittest.mock import patch
 
 from search_support import (
+    Made,
     l_plot,
     made_up,
     proposal_on_the_l_plot,
     rectangle,
+    slim_prototype,
     strategy,
 )
-from shapely.geometry import box
+from shapely.geometry import Point, box
 from shapely.ops import unary_union
 
 from siteplan import validator as independent
@@ -301,6 +304,29 @@ def test_the_arm_is_tried_for_a_low_block_and_says_why_none_stands_there():
     for candidate in proposal.candidates:
         assert not any(candidate.placed_footprint(t).intersection(ARM).area > 1.0
                        for t in candidate.towers)
+
+
+def test_an_arm_too_wide_for_the_plots_split_is_tried_once_a_low_blocks_setbacks_narrow_it():
+    """Found on a client site (2026-10-19): an arm 35 m across is no narrow part of the net plot
+    (its width profile splits at 30 m), so the note looked at the arm's tip alone and said no
+    block fits, when the land a block of 7 to 15 m keeps there was 21 m wide and held one. Here
+    an arm 34 m across, 80 m long: the net plot keeps it in its main body, the land a three-floor
+    block keeps (6 m from each side) is 22 m across, and the note tries it and finds the slim
+    block fits."""
+    plot = unary_union([box(0, 0, 150, 100), box(0, 100, 34, 180)])
+    made = made_up(plot)
+    made = Made(made.site, made.rules, made.brief, made.envelope, (*made.kit, slim_prototype()))
+    net_regions = next(p for p in made.envelope.width_profiles
+                       if p.applies_to == "net plot").regions
+    arm = box(0, 110, 34, 180)
+    assert not any(r.shape.to_shapely().intersection(arm).area > 100 for r in net_regions[1:])
+    run = make_run(made.site, made.rules, made.brief, made.envelope, made.kit,
+                   profiles(made.rules, made.brief, list(made.kit)))
+    notes = strategy_module._region_notes(run, strategy_module.Tally(), [])
+    at = [(n, re.match(r"the narrow part of the plot at \(([\d,]+), ([\d,]+)\)", n))
+          for n in notes]
+    in_arm = [n for n, m in at if m and arm.contains(Point(float(m[1]), float(m[2])))]
+    assert len(in_arm) == 1 and "one fits (slim-" in in_arm[0], notes
 
 
 def test_where_a_block_fits_the_arm_the_objective_decides_and_the_layouts_say_which_did():
