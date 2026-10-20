@@ -228,7 +228,7 @@ def route_checks(candidate: CandidateLayout, rules: ResolvedRules) -> list[Check
         else:
             measured = f"no drivable route: {way.why}"
         out.append(plain(Family.PROGRAM, f"Route: {way.tower}", verdict(way.found), measured,
-                         f"a road a car can drive from a gate to its entrance, then a "
+                         f"a road or a rule 8(l) pathway from a gate to its entrance, then a "
                          f"{driveway:g} m driveway where it stands back from the road: the "
                          "client's requirement, never law", BRIEF, subject=way.tower,
                          note="the shortest path a car's centre can take, kept "

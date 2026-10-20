@@ -43,7 +43,7 @@ from siteplan import validator as independent
 from siteplan.contracts import CandidateLayout, DesignBrief, TowerPrototype, ValidationReport
 from siteplan.contracts.validation import LegalVerdict
 from siteplan.legal.widths import width_profile
-from siteplan.optimizer.guard import STUDY_NOT_LAID, held_to
+from siteplan.optimizer.guard import STUDY_NOT_LAID, held_to, unreached
 from siteplan.optimizer.interfaces import Budget, Proposal, SearchContext, Validator
 from siteplan.optimizer.objective import Scores, measure
 from siteplan.optimizer.pareto import Scored, leaders, pareto_front, same_idea, select
@@ -130,6 +130,7 @@ class Tally:
     rejected: list[str] = field(default_factory=list)
     exhausted: bool = False
     low_blocks: list[list[Polygon]] = field(default_factory=list)  # of each layout laid out
+    unreached: list[str] = field(default_factory=list)  # layouts dropped: a tower with no way in
 
 
 @dataclass
@@ -519,6 +520,10 @@ class FullSearchStrategy:
                 tally.rejected.append(f"{candidate.candidate_id}: "
                                       + ("; ".join(problems) or "a blocking discrepancy"))
                 continue
+            stranded = unreached(report)
+            if stranded:  # 2026-10-19: no layout with a tower no road or pathway reaches
+                tally.unreached.append(f"{candidate.candidate_id}: {'; '.join(stranded)}")
+                continue
             study = [STUDY_CAVEAT] if brief.objectives.study else []
             noted = candidate.model_copy(update={
                 "caveats": [*candidate.caveats, *study, *caveats(report)]})
@@ -659,6 +664,10 @@ def _notes(run: Run | None, tally: Tally, found: Sequence[Judged], chosen: Seque
     if tally.rejected:
         notes.append(f"the validator failed {len(tally.rejected)} layout(s): "
                      + "; ".join(tally.rejected[:3]))
+    if tally.unreached:
+        notes.append(f"{len(tally.unreached)} layout(s) dropped because a tower has no road or "
+                     "pathway from the gate to its entrance (never shown): "
+                     + "; ".join(tally.unreached[:3]))
     if not found:
         common = "; ".join(f"{reason} (x{n})" for reason, n in tally.reasons.most_common(3))
         notes.append("no layout was laid that the ground and the rules allow"

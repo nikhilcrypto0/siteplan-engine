@@ -90,6 +90,18 @@ def tot_lot_missing(candidate: CandidateLayout, report: ValidationReport) -> boo
             and _selected(asked) not in (Status.PASS, Status.INFO, Status.NOT_CHECKED))
 
 
+ROUTE_CHECK = "Route: "  # how the validator's program names each tower's way in
+
+
+def unreached(report: ValidationReport) -> list[str]:
+    """The towers no road or pathway reaches from the gate, with why (2026-10-19, the user: a
+    layout with any route FAIL is never shown as an option or an alternative). The way in is the
+    client's requirement, not law, so the legal verdict says nothing of it; this does."""
+    return [f"{c.finding.rule.removeprefix(ROUTE_CHECK)} has {c.finding.measured}"
+            for c in report.program
+            if c.finding.rule.startswith(ROUTE_CHECK) and c.finding.status is Status.FAIL]
+
+
 def why_refused(candidate: CandidateLayout, report: ValidationReport, inputs: Inputs,
                 *, study: bool = False) -> list[str]:
     """Why a candidate may not be returned on this report; empty when it may. `study` is the
@@ -112,6 +124,7 @@ def why_refused(candidate: CandidateLayout, report: ValidationReport, inputs: In
                     for d in report.cross_checks if d.blocks_pass]
     if not study and tot_lot_missing(candidate, report) and TOT_LOT_MISSING not in reasons:
         reasons.append(TOT_LOT_MISSING)
+    reasons += unreached(report)
     return reasons
 
 

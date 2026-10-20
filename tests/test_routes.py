@@ -3,14 +3,22 @@ the road and the shortest route a car can drive, measured by the validator and j
 client's requirement, never law. Made-up land (tests/contract_fixtures)."""
 
 import math
+from unittest.mock import patch
 
 import ezdxf
-from shapely.geometry import LineString, Point
+import search_support
+from shapely import affinity
+from shapely.geometry import LineString, Point, box
 from validator_helpers import fixture
 
+from siteplan import validator as independent
 from siteplan.cad import scene
-from siteplan.contracts.common import Status
+from siteplan.contracts.candidate import RoadKind, RoadPiece
+from siteplan.contracts.common import Shape, Status
 from siteplan.contracts.validation import Family
+from siteplan.optimizer.guard import inputs_of, unreached, why_refused
+from siteplan.optimizer.search import fringe
+from siteplan.optimizer.search.layout import make_run
 from siteplan.service.render import plan_of, write_dxf, write_sheet, write_svg
 from siteplan.sheet import SheetInfo
 from siteplan.validator import routes
@@ -129,3 +137,59 @@ def test_a_tower_with_no_way_in_says_so_on_every_drawing(tmp_path):
     assert sum("NO DRIVABLE ROUTE" in t for t in texts) == towers
     items = [i for _, group in scene.candidate_layers(plan, None, "") for i in group]
     assert sum("no drivable route" in i.get("text", "") for i in items) == towers
+
+
+# --- Never a tower the roads do not reach (2026-10-19: two layouts placed blocks that only
+# touched the ring road at a corner, with no way in) -------------------------------------------
+
+
+def test_a_block_that_only_touches_the_road_at_a_corner_is_not_on_it():
+    made = search_support.rectangle()  # any made-up site: the rules give the pathway's 6 m
+    run = make_run(made.site, made.rules, made.brief, made.envelope, made.kit, [])
+    ring = box(0, 0, 100, 9)
+    along = box(10, 9, 40, 23)  # faces the road along 30 m
+    corner = affinity.rotate(box(50, 9, 80, 23), 30, origin=(50, 9))  # touches it at a point
+    assert fringe.fronts_road(along, ring, run.q)
+    assert along.distance(ring) < 1e-9 and corner.distance(ring) < 1e-6
+    assert not fringe.fronts_road(corner, ring, run.q)
+
+
+def test_a_pathway_is_a_way_in():
+    c = fixture("rectangle").candidate
+    path = box(-50, -50, -44, -40)  # a 6 m pathway, somewhere on its own
+    edited = c.model_copy(deep=True)
+    edited.circulation.roads.append(RoadPiece(id="pathway-9", kind=RoadKind.PATHWAY,
+                                              shapes=[Shape.from_shapely(path)],
+                                              declared_width_m=6.0))
+    assert routes.drivable(edited).covers(path)
+
+
+def test_a_layout_with_a_tower_no_road_reaches_is_refused_by_the_guard():
+    inputs = fixture("rectangle").edited(lambda c: c.circulation.gates.clear())
+    report = inputs.report()
+    why = why_refused(inputs.candidate, report, inputs_of(inputs.site, inputs.rules,
+                                                          inputs.brief))
+    stranded = unreached(report)
+    assert stranded and all("no gate is drawn" in s for s in stranded)
+    assert set(stranded) <= set(why)
+    assert not unreached(fixture("rectangle").report())
+
+
+def test_the_search_never_proposes_a_layout_with_a_tower_it_cannot_reach():
+    """A tower the route check says no road reaches: the search drops its layout and says so in
+    its notes; every layout it proposes reaches every tower."""
+    made = search_support.rectangle()
+    real = routes.ways
+
+    def stranding(candidate, driveway_m):  # the first tower of every other layout stranded
+        found = real(candidate, driveway_m)
+        if sum(ord(ch) for ch in candidate.candidate_id) % 2:
+            found[0] = routes.Way(found[0].tower, why="made up for the test")
+        return found
+
+    with patch.object(routes, "ways", stranding):
+        proposal = search_support.strategy().propose(made.context())
+        for c in proposal.candidates:
+            report = independent.validate(made.site, made.rules, made.brief, c, made.envelope)
+            assert not unreached(report), c.candidate_id
+    assert any("dropped because a tower has no road or pathway" in n for n in proposal.notes)

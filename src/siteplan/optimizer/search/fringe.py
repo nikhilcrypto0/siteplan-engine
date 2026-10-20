@@ -43,7 +43,7 @@ from shapely.ops import polylabel, unary_union
 
 from siteplan.contracts import TowerPrototype
 from siteplan.contracts.resolved_rules import HEIGHT_TOL_M
-from siteplan.geometry import opening
+from siteplan.geometry import frontage, opening
 from siteplan.optimizer.preferences import DISTINCT_DEG, Orientation
 from siteplan.optimizer.search.columns import STEP_M, Choice, Standing
 from siteplan.optimizer.search.fit import fit_rectangle
@@ -89,6 +89,15 @@ def pathway_serves(q: Quantities, cls: FloorClass) -> bool:
     if q.pathway_m is None:
         return False
     return q.pathway_any_block or cls.physical_m <= q.pathway_max_height_m + HEIGHT_TOL_M
+
+
+def fronts_road(block: Polygon, ring: BaseGeometry, q: Quantities) -> bool:
+    """Whether a block standing against the ring road faces it along at least a pathway's width
+    (2026-10-19, the user: a block that only touched the road at a corner had no way in; rule
+    8(l)'s stricter reading, `opens_onto_road` frontage, so it holds under both): one that does
+    not is reached by a pathway or not placed."""
+    least = q.pathway_m if q.pathway_m is not None else q.driveway_m
+    return frontage(block, ring, TOUCH_M) + CONTAIN_TOL_M >= least
 
 
 def need_m(q: Quantities, a: FloorClass, b: FloorClass) -> float:
@@ -263,17 +272,18 @@ def _best(choices: Sequence[Choice], fits: _Fits, ring: BaseGeometry, paths: Bas
             boxes, distances = fits.of(choices[index])
             by_path = pathway_serves(q, choices[index].cls)
             for footprint, distance in zip(boxes, distances, strict=True):
-                if distance <= TOUCH_M or by_path:
+                on_road = distance <= TOUCH_M and fronts_road(footprint, ring, q)
+                if on_road or by_path:
                     x0, y0, _, _ = footprint.bounds
                     found.append((_tied(float(distance)), _tied(y0), _tied(x0), index,
-                                  footprint, float(distance)))
-        for _, _, _, index, footprint, distance in sorted(found, key=lambda f: f[:4]):
+                                  footprint, on_road))
+        for _, _, _, index, footprint, on_road in sorted(found, key=lambda f: f[:4]):
             if tried >= ENTRANCES_TRIED:
                 break
             tried += 1
             path: LineString | None = None
             pathway: BaseGeometry = EMPTY
-            if distance > TOUCH_M:
+            if not on_road:
                 found_path = _pathway(footprint, ring, paths, q)
                 if found_path is None:
                     continue

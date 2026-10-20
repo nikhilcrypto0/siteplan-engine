@@ -64,12 +64,14 @@ def test_a_ring_the_ground_cuts_into_is_still_narrower_than_a_road(turn_deg):
 @pytest.mark.parametrize("distances", [[1e-13, 0.0], [0.0, 1e-13]])
 def test_between_blocks_equally_near_the_ring_the_last_digits_never_choose(distances):
     """Two blocks the ring touches, one 1e-13 m away by noise: the western one is taken either
-    way, by its place, not by which of them the noise put nearer."""
+    way, by its place, not by which of them the noise put nearer. (Since 2026-10-19 a block is on
+    the ring only where it faces it along a pathway's width, so the ring is drawn under both.)"""
     q = SimpleNamespace(pathway_m=6.0, pathway_any_block=False, pathway_max_height_m=12.0)
     choice = SimpleNamespace(value=100.0, cls=SimpleNamespace(gap_m=5.0, physical_m=30.0))
     west, east = box(10, 0, 30, 40), box(50, 0, 70, 40)
+    ring = box(0, -9, 100, 0)  # along both blocks' south faces
     fits = SimpleNamespace(of=lambda _: (np.array([west, east]), np.array(distances)))
-    pick = fringe._best([choice], fits, EMPTY, EMPTY, q, box(-100, -100, 200, 200), 0.0)
+    pick = fringe._best([choice], fits, ring, EMPTY, q, box(-100, -100, 200, 200), 0.0)
     assert pick is not None and pick[0].equals(west)
 
 

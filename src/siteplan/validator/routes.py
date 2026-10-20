@@ -7,10 +7,12 @@ NBC 4.6's fire access and rule 8(m)/(l)'s roads are judged elsewhere, as law.
 Everything is the validator's own reading of the candidate as drawn, so the drawings (the
 service's DXF, sheet and SVG, and FreeCAD) show the same ways the report measures:
 
-- the roads a car drives are every road but a rule 8(l) pathway, and the gates; a car's centre
-  keeps CAR_CLEAR_M in from their edges;
-- a tower's entrance is at a core, on one of its long faces (its lobby), or at the middle of a
-  short face (the end of its corridor); a block with no core is entered at its middle;
+- the ways in are every road, a rule 8(l) pathway among them (the access the rule gives a
+  block up to 12 m; 2026-10-19, the user: a block's road or 6 m pathway), and the gates; a car's
+  centre keeps CAR_CLEAR_M in from their edges;
+- a tower's entrance is at the middle of the stretch of its outline that faces its road or
+  pathway, at a core on one of its long faces (its lobby), or at the middle of a short face (the
+  end of its corridor); a block with no core is entered at its middle;
 - its driveway runs straight from the entrance to the nearest point of a road, as wide as the
   rules' driveway (rule 13(c)(viii)), and is refused where it crosses another block, the club
   house, a facility or the organised open space; it is nothing where the block stands on a road
@@ -31,9 +33,9 @@ import numpy as np
 import shapely
 from shapely.geometry import LineString, Point, Polygon
 from shapely.geometry.base import BaseGeometry
-from shapely.ops import nearest_points, unary_union
+from shapely.ops import linemerge, nearest_points, unary_union
 
-from siteplan.contracts.candidate import CandidateLayout, PlacedTower, RoadKind
+from siteplan.contracts.candidate import CandidateLayout, PlacedTower
 from siteplan.validator.shapes import oriented_box, polygon_of, polygons_of
 
 CAR_CLEAR_M = 1.0  # a car's centre keeps this far in from a road's edge (half a car and a little)
@@ -72,21 +74,23 @@ class Way:
 
 
 def drivable(candidate: CandidateLayout) -> BaseGeometry:
-    """The ground a car drives on: every road but a pathway, and the gates."""
-    return unary_union([_shape(s) for r in candidate.circulation.roads
-                        if r.kind is not RoadKind.PATHWAY for s in r.shapes]
+    """The ground a block is reached on: every road, its pathways included, and the gates."""
+    return unary_union([_shape(s) for r in candidate.circulation.roads for s in r.shapes]
                        + [_shape(g.shape) for g in candidate.circulation.gates])
 
 
-def entrances(footprint: Polygon, cores: list[Polygon]) -> list[Point]:
-    """Where a block may be entered: out from each core to both long faces, and the middle of
+def entrances(footprint: Polygon, cores: list[Polygon], ground: BaseGeometry | None = None
+              ) -> list[Point]:
+    """Where a block may be entered: the middle of the stretch of its outline that faces the
+    ground given (its road or pathway), out from each core to both long faces, and the middle of
     each short face; from its middle when it has no core."""
     angle, long_m, _ = oriented_box(footprint)
     along = np.array([math.cos(angle), math.sin(angle)])
     across = np.array([-along[1], along[0]])
     reach = 2 * long_m + 1.0
     centre = footprint.centroid
-    out = []
+    out = [_facing(footprint, ground)] if ground is not None else []
+    out = [p for p in out if p is not None]
     for start, directions in [*((c.centroid, (across, -across)) for c in cores or [centre]),
                               (centre, (along, -along))]:
         for d in directions:
@@ -97,6 +101,17 @@ def entrances(footprint: Polygon, cores: list[Polygon]) -> list[Point]:
             if points:
                 out.append(max(points, key=start.distance))
     return out
+
+
+def _facing(footprint: Polygon, ground: BaseGeometry) -> Point | None:
+    """The middle of the longest stretch of the outline within ON_ROAD_M of the ground."""
+    close = footprint.exterior.intersection(ground.buffer(ON_ROAD_M))
+    runs = [g for g in getattr(close, "geoms", [close]) if isinstance(g, LineString) and g.length]
+    if not runs:
+        return None
+    merged = linemerge(runs)
+    longest = max(getattr(merged, "geoms", [merged]), key=lambda g: g.length)
+    return longest.interpolate(0.5, normalized=True)
 
 
 class _Graph:
@@ -217,7 +232,7 @@ def _way(tower: PlacedTower, footprint: Polygon, cores: list[Polygon], ground: B
         return Way(tower.name, why="its footprint cannot be measured")
     best: Way | None = None
     crossed = False
-    for entrance in entrances(footprint, cores):
+    for entrance in entrances(footprint, cores, ground):
         road_point = nearest_points(ground, entrance)[0]
         drive = entrance.distance(road_point)
         if drive > ON_ROAD_M and LineString([entrance, road_point]).buffer(
