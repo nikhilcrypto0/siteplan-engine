@@ -472,9 +472,10 @@ class Session:
         return self._edit(name, run_id, layout_id, lambda _: final, words, moved)
 
     def alternatives_around(self, name: str, run_id: str, layout_id: str,
-                            n: int = SHOWN_LAYOUTS) -> dict:
+                            n: int = SHOWN_LAYOUTS, slide_m: float = 0.0) -> dict:
         """Up to n genuinely different alternatives round the blocks locked in a layout (Stage D,
-        service.around): the locked blocks kept to the millimetre, the rest placed again and the
+        service.around): the locked blocks kept to the millimetre (or slid all together, never
+        turned, at most `slide_m`, said in each version's edits), the rest placed again and the
         roads, club house, tot-lot and parking laid again, each judged by the validator and saved
         as a version of the layout; the first drawn. When none can be laid, why. The rest are laid
         with every block the firm's flat library in the site's workspace gives."""
@@ -483,10 +484,11 @@ class Session:
         if not workspace:
             raise ValueError(f"the sites file names no 'workspace' for {name}: the alternatives "
                              "are laid with the firm's flat library from it")
-        got = around.alternatives(out, Path(workspace), record, layout_id, n)
+        got = around.alternatives(out, Path(workspace), record, layout_id, n, slide_m=slide_m)
         net = judge.judge_again(out, record, layout_id).inputs.site.net_plot.value.to_shapely()
         shown = [a.candidate for a in got.alternatives]
         rows = [{"version": a.version.version_id, "verdict": a.report.verdict.legal.value,
+                 "edits": list(a.version.edits),
                  "description": describe.describe(a.candidate, net, shown),
                  "broke": list(a.version.broke)} for a in got.alternatives]
         if rows:

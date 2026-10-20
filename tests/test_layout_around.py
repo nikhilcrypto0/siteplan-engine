@@ -7,6 +7,7 @@ rectangle, 200 x 120 m, its net plot 150 x 100 m) and the search's quick limits.
 
 import asyncio
 import json
+import math
 from functools import cache
 from pathlib import Path
 
@@ -20,6 +21,7 @@ from siteplan.cad.live import Session
 from siteplan.cad.server import build
 from siteplan.intake import WORKSPACE_FILE
 from siteplan.optimizer.pareto import same_idea
+from siteplan.optimizer.search import layout
 from siteplan.service import around, edits, judge, store, versions
 from siteplan.service.edits import EditRefused
 from siteplan.service.service import search_kit
@@ -159,8 +161,9 @@ def test_the_cad_tool_lays_the_alternatives_and_draws_the_first(tmp_path):
     assert "alternatives_around" in names
     session_around = around.alternatives  # the CAD tool runs the same, with the default limits
 
-    def quick(out, workspace, record_, layout_id, n, limits=None, seed=0):
-        return session_around(out, workspace, record_, layout_id, n, limits=FAST, seed=seed)
+    def quick(out, workspace, record_, layout_id, n, limits=None, seed=0, slide_m=0.0):
+        return session_around(out, workspace, record_, layout_id, n, limits=FAST, seed=seed,
+                              slide_m=slide_m)
 
     around.alternatives = quick
     try:
@@ -210,3 +213,79 @@ def test_the_cad_tool_asks_for_the_sites_workspace(tmp_path):
     session = Session({"plot": {"runs": str(tmp_path), "mode": "blind"}}, Drawing())
     with pytest.raises(ValueError, match="names no 'workspace' for plot"):
         session.alternatives_around("plot", RUN, locked.version.version_id, 2)
+
+
+def _slid(alt) -> list[str]:
+    return [e for e in alt.version.edits if " slid " in e]
+
+
+def test_a_lock_that_may_slide_lays_where_an_exact_one_cannot(tmp_path):
+    """2026-10-20 (the user: the north arm failed by 11 to 31 m² because the locked towers were
+    frozen to the millimetre): T1 pushed 3 m north leaves no room for the ring road while it is
+    held exactly; allowed to slide 1 m it is laid, slid, never turned, its block and height kept,
+    and every version whose blocks slid says so."""
+    record, _, locked = _locked_run(tmp_path, lambda c: edits.moved_block(c, "T1", 0.0, 3.0))
+    exact = _alternatives(tmp_path, locked.version.version_id, 2)
+    assert exact.alternatives == ()
+    got = around.alternatives(tmp_path, _workspace(tmp_path), store.read_record(tmp_path, RUN),
+                              locked.version.version_id, 2, limits=FAST, slide_m=1.0)
+    assert got.alternatives and got.why_none == ""
+    t1 = _tower(locked.candidate, "T1")
+    was = locked.candidate.placed_footprint(t1)
+    for alt in got.alternatives:
+        mine = _tower(alt.candidate, "T1")
+        assert (mine.prototype_id, mine.floors_above_stilt) == (t1.prototype_id,
+                                                                 t1.floors_above_stilt)
+        assert mine.rotation_deg % 360 == pytest.approx(t1.rotation_deg % 360)
+        moved = alt.candidate.placed_footprint(mine).centroid.distance(was.centroid)
+        assert 0.001 < moved <= 1.001  # it had to slide, and no further than the lock allows
+        assert _slid(alt) == [f"the locked T1 slid {moved:.2f} m south, all together and none "
+                              "turned, within the 1 m the lock allows: not exactly where they "
+                              "stood"]
+        assert alt.report.verdict.legal.value != "FAIL"
+
+
+def test_the_slides_tried_start_with_none_and_reach_the_lock_exactly():
+    assert layout.lock_slides(0.0) == [(0.0, 0.0)]
+    slides = layout.lock_slides(1.2)
+    assert slides[0] == (0.0, 0.0)
+    reach = [round(math.hypot(*s), 9) for s in slides]
+    assert reach == sorted(reach) and max(reach) == pytest.approx(1.2)
+    assert len(slides) == 1 + layout.LOCK_SLIDE_DIRECTIONS * 3  # 0.5, 1.0 and 1.2 m out
+
+
+def test_a_slide_never_accepts_a_turned_block_or_one_further_than_the_lock(tmp_path):
+    _, _, locked = _locked_run(tmp_path)
+    t1 = [_tower(locked.candidate, "T1")]
+    moved = edits.moved_block(locked.candidate, "T1", 0.8, 0.0)
+    assert around._keeps(moved, locked.candidate, t1, 1.0) == pytest.approx((0.8, 0.0))
+    assert around._keeps(moved, locked.candidate, t1, 0.5) is None
+    assert around._keeps(moved, locked.candidate, t1) is None  # no slide: to the millimetre
+    turned = edits.turned_block(locked.candidate, "T1", 0.5)
+    assert around._keeps(turned, locked.candidate, t1, 1.0) is None
+
+
+def test_a_negative_slide_is_refused(tmp_path):
+    _, _, locked = _locked_run(tmp_path)
+    with pytest.raises(EditRefused, match="0 m or more"):
+        around.alternatives(tmp_path, _workspace(tmp_path), store.read_record(tmp_path, RUN),
+                            locked.version.version_id, 2, limits=FAST, slide_m=-1.0)
+
+
+def test_the_cad_tool_passes_the_slide_and_shows_it(tmp_path):
+    _, _, locked = _locked_run(tmp_path, lambda c: edits.moved_block(c, "T1", 0.0, 3.0))
+    session = Session({"plot": {"runs": str(tmp_path), "mode": "blind",
+                               "workspace": str(_workspace(tmp_path))}}, Drawing())
+    real = around.alternatives
+
+    def quick(out, workspace, record_, layout_id, n, limits=None, seed=0, slide_m=0.0):
+        return real(out, workspace, record_, layout_id, n, limits=FAST, seed=seed,
+                    slide_m=slide_m)
+
+    around.alternatives = quick
+    try:
+        got = session.alternatives_around("plot", RUN, locked.version.version_id, 2, 1.0)
+    finally:
+        around.alternatives = real
+    assert got["alternatives"]
+    assert all(any(" slid " in e for e in row["edits"]) for row in got["alternatives"])

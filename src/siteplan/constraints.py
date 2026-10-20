@@ -2123,6 +2123,21 @@ REGISTRY: tuple[Constraint, ...] = (
         settles="Nothing: the architect's requirement.",
     ),
     Constraint(
+        "Towers", "A lock that lets its blocks slide (2026-10-20): the locked blocks are tried "
+                  "together, never turned, at slides of this step out to the distance the lock "
+                  "states, in this many directions, none first; a version whose blocks slid "
+                  "says how far and which way.",
+        f"{_m(search_layout.LOCK_SLIDE_STEP_M)}; {search_layout.LOCK_SLIDE_DIRECTIONS} "
+        "directions", Basis.ENGINE_DESIGN_ASSUMPTION,
+        "the user, 2026-10-20: a locked tower may slide up to a stated distance so the ring "
+        "road can move in", ("optimizer.search.layout.LOCK_SLIDE_STEP_M",
+                             "optimizer.search.layout.LOCK_SLIDE_DIRECTIONS"),
+        note="A search grid, never a rule: the slide itself is the architect's, stated per "
+             "lock (0 keeps the blocks to the millimetre), and the validator judges every "
+             "layout.",
+        settles="Nothing: the search's grid.",
+    ),
+    Constraint(
         "Live CAD", "The acceptance run moves its test tower this far east through MCP and this "
                     "far south in FreeCAD itself, using the firm's two-core block when the kit "
                     "has one.",

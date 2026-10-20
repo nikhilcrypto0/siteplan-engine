@@ -74,6 +74,8 @@ class SearchContext:
     # Stage D (2026-10-17): blocks every layout keeps exactly where they stand (the full search
     # places the rest round them); their prototypes are among `prototypes`
     locked: tuple[PlacedTower, ...] = ()
+    # 2026-10-20: how far the locked blocks may slide, together and never turned (0: exactly)
+    lock_slide_m: float = 0.0
 
     def rng(self, stream: str = "") -> random.Random:
         """A generator seeded from the run's seed (and a name, for a strategy that wants

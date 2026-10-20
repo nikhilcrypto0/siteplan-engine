@@ -90,6 +90,10 @@ MAX_CLUSTERS = 3  # the first cluster of blocks and at most two more, each round
 ZONE_ANGLES = 4  # a further cluster is tried in its configuration's direction and three of its own
 LOCK_EXACT_M = 0.001  # Stage D: a locked block stands where it stood, to the millimetre
 LOCKED_COLUMN = -1  # where a locked block sorts among the columns: first, in a column of none
+# 2026-10-20: a lock may let its blocks slide, together and never turned, up to a distance the
+# architect states (`Run.lock_slide_m`); the slides tried, in this step and in these directions
+LOCK_SLIDE_STEP_M = 0.5
+LOCK_SLIDE_DIRECTIONS = 16  # every 22.5 degrees: 45 missed a 1.5 m slide Dhulapally fits
 
 
 @dataclass(frozen=True)
@@ -138,6 +142,8 @@ class Run:
     # floor plate in the families' pass): they keep a locked block where it stands, and are never
     # offered to the search for a block of its own
     locked_kit: tuple[TowerPrototype, ...] = ()
+    # 2026-10-20: how far the locked blocks may slide, together and never turned (0: exactly)
+    lock_slide_m: float = 0.0
 
     @property
     def orientation(self) -> Orientation | None:
@@ -182,7 +188,7 @@ def make_run(site: CanonicalSiteModel, rules: ResolvedRules, brief: DesignBrief,
              envelope: BuildableEnvelope, kit: Sequence[TowerPrototype],
              profiles: Sequence[Profile], with_margins: bool = True,
              locked: Sequence[PlacedTower] = (),
-             locked_kit: Sequence[TowerPrototype] = ()) -> Run:
+             locked_kit: Sequence[TowerPrototype] = (), lock_slide_m: float = 0.0) -> Run:
     q = quantities(site, rules, brief, with_margins)
     # The library's own blocks set the main depth; a floor plate sized to the land (2026-10-13)
     # joins the columns of that depth, or competes as another depth, never outvotes them.
@@ -199,16 +205,32 @@ def make_run(site: CanonicalSiteModel, rules: ResolvedRules, brief: DesignBrief,
     every = [c for found in classes.values() for counts in found.values() for c in counts]
     return Run(site, rules, brief, envelope, plot, q, tuple(used), depth, classes,
                tuple(profiles), tuple(kit), fringe.own_lands(plot, q, every), tuple(locked),
-               tuple(extra))
+               tuple(extra), lock_slide_m)
 
 
-def locked_standing(run: Run, profile: Profile) -> tuple[list[Standing], str]:
+def lock_slides(slide_m: float) -> list[tuple[float, float]]:
+    """The offsets the locked blocks are tried at, all of them together: none first, then every
+    LOCK_SLIDE_STEP_M out to `slide_m` (and `slide_m` itself) in LOCK_SLIDE_DIRECTIONS
+    directions, the nearest first."""
+    out = [(0.0, 0.0)]
+    steps = math.ceil(slide_m / LOCK_SLIDE_STEP_M - 1e-9) if slide_m > 0 else 0
+    for k in range(1, steps + 1):
+        reach = min(k * LOCK_SLIDE_STEP_M, slide_m)
+        for d in range(LOCK_SLIDE_DIRECTIONS):
+            turn = 2 * math.pi * d / LOCK_SLIDE_DIRECTIONS
+            out.append((reach * math.cos(turn), reach * math.sin(turn)))
+    return out
+
+
+def locked_standing(run: Run, profile: Profile, slide: tuple[float, float] = (0.0, 0.0)
+                    ) -> tuple[list[Standing], str]:
     """Each locked block as a block that stands in a frame of its own, exactly where it stands
-    (its placement reproduced to LOCK_EXACT_M), at its own height: or, when one cannot be, why
-    (its prototype not in the kit, its floor count not one these readings leave open, a mirrored
-    block)."""
+    moved by `slide` (its placement reproduced to LOCK_EXACT_M), at its own height: or, when one
+    cannot be, why (its prototype not in the kit, its floor count not one these readings leave
+    open, a mirrored block)."""
     out = []
-    for tower in run.locked:
+    for tower in (t.model_copy(update={"x": t.x + slide[0], "y": t.y + slide[1]})
+                  for t in run.locked):
         prototype = next((p for p in (*run.fringe_kit, *run.locked_kit)
                           if p.id == tower.prototype_id), None)
         if prototype is None:
@@ -314,6 +336,19 @@ def _gap(q: Quantities):
 
 
 def evaluate(run: Run, config: Config) -> Evaluation | Failure:
+    """The configuration laid out, or why it cannot be. Where the lock lets its blocks slide
+    (2026-10-20), they are tried at each slide in turn, none first, and the first that lays out
+    is kept; the reason given is the one without a slide."""
+    first: Failure | None = None
+    for slide in lock_slides(run.lock_slide_m) if run.locked else [(0.0, 0.0)]:
+        got = _evaluate_at(run, config, slide)
+        if not isinstance(got, Failure):
+            return got
+        first = first or got
+    return first
+
+
+def _evaluate_at(run: Run, config: Config, slide: tuple[float, float]) -> Evaluation | Failure:
     q, plot = run.q, run.plot
     classes = {pid: [c for c in found if c.floors <= config.max_floors
                      and (c.high_rise or config.low_blocks)]
@@ -325,7 +360,7 @@ def evaluate(run: Run, config: Config) -> Evaluation | Failure:
         return Failure("no floor count is left open")
     beyond = fringe.options(run.fringe_kit, classes, config.max_floors, q) \
         if config.low_blocks else []
-    locked, why = locked_standing(run, config.profile) if run.locked else ([], "")
+    locked, why = locked_standing(run, config.profile, slide) if run.locked else ([], "")
     if why:
         return Failure(why)
     # the setback zone is as deep as the deepest any block standing needs, the locked ones

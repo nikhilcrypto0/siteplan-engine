@@ -12,17 +12,24 @@ firm's flat library in the site's workspace gives the stored brief, composed as 
 composed the run's own search (`service.search_kit`), with the chosen layout's blocks beside them
 (2026-10-18, the architect: every block type in the firm's library, not only those the run used).
 An alternative that does not keep every locked block where it stood is never offered (it cannot
-arise; it is checked all the same).
+arise; it is checked all the same). Since 2026-10-20 a lock may let its blocks slide, all together
+and never turned, up to a distance the architect states (`slide_m`; 0, the default, keeps them to
+the millimetre): the search tries them at slides out to it, and a version whose blocks slid says
+so in its edits, how far and which way.
 """
 
 from __future__ import annotations
 
+import math
 import time
 from dataclasses import dataclass
 from pathlib import Path
 
+from shapely import affinity
+
 from siteplan import validator
 from siteplan.contracts import CandidateLayout, TowerPrototype, ValidationReport
+from siteplan.geometry import bearing_to, compass_of
 from siteplan.intake import WORKSPACE_FILE, load_defaults
 from siteplan.library import FlatLibrary
 from siteplan.optimizer.core import _rests
@@ -59,8 +66,12 @@ class Around:
 
 
 def alternatives(out: Path, workspace: Path, record: RunRecord, layout_id: str, n: int,
-                 limits: Limits | None = None, seed: int = 0) -> Around:
-    """Up to `n` different alternatives round the blocks locked in `layout_id`, each a version."""
+                 limits: Limits | None = None, seed: int = 0, slide_m: float = 0.0) -> Around:
+    """Up to `n` different alternatives round the blocks locked in `layout_id`, each a version;
+    the locked blocks kept where they stand, or, with `slide_m`, slid together (never turned) at
+    most that far."""
+    if not math.isfinite(slide_m) or slide_m < 0:
+        raise EditRefused("a lock's slide is a distance of 0 m or more")
     started = time.monotonic()
     parent = judge.judge_again(out, record, layout_id)
     if parent.references:
@@ -76,9 +87,11 @@ def alternatives(out: Path, workspace: Path, record: RunRecord, layout_id: str, 
         return Around(layout_id, tuple(names), (), why, (), time.monotonic() - started)
     context = SearchContext(inputs.site, inputs.rules, inputs.brief, inputs.envelope,
                             tuple(_kit(workspace, inputs, parent.candidate)), seed,
-                            Budget(inputs.brief.objectives.search_budget_s), tuple(locked))
+                            Budget(inputs.brief.objectives.search_budget_s), tuple(locked),
+                            slide_m)
     proposal = FullSearchStrategy(limits=(limits or Limits()).for_options(n)).propose(context)
-    kept = [c for c in proposal.candidates if _keeps(c, parent.candidate, locked)]
+    kept = [c for c in proposal.candidates
+            if _keeps(c, parent.candidate, locked, slide_m) is not None]
     passed = guard(kept, validator, inputs.site, inputs.rules, inputs.brief,
                    inputs.envelope).passed
     pool = [Scored(v.candidate, measure(v.candidate, inputs.brief), _rests(v.report))
@@ -94,10 +107,14 @@ def alternatives(out: Path, workspace: Path, record: RunRecord, layout_id: str, 
         short += f"; {failed.split(':', 1)[0]} the search judged round them"
     made = []
     for k, pick in enumerate(picks, 1):
+        said = [f"laid again round the locked {', '.join(names)}: alternative {k} of "
+                f"{len(picks)}"]
+        slid = _keeps(pick.scored.candidate, parent.candidate, locked, slide_m)
+        if slid is not None and math.hypot(*slid) > LOCK_EXACT_M:
+            said.append(_slid_words(names, slid, slide_m))
         version, candidate, report = versions.make_version(
-            out, record, layout_id, pick.scored.candidate,
-            [f"laid again round the locked {', '.join(names)}: alternative {k} of {len(picks)}"],
-            locked=names, before=parent.report)
+            out, record, layout_id, pick.scored.candidate, said, locked=names,
+            before=parent.report)
         made.append(Alternative(version, candidate, report))
     why_none = "" if made else _why_none(proposal.notes, len(proposal.candidates), len(kept),
                                          len(passed))
@@ -118,19 +135,35 @@ def _cannot_hold(candidate: CandidateLayout, locked, net) -> str:
     return f"the locked blocks stand on each other: {'; '.join(on)}" if on else ""
 
 
-def _keeps(candidate: CandidateLayout, parent: CandidateLayout, locked) -> bool:
-    """Whether every locked block stands in the candidate exactly where and as high as it does in
-    the chosen layout."""
+def _keeps(candidate: CandidateLayout, parent: CandidateLayout, locked, slide_m: float = 0.0
+           ) -> tuple[float, float] | None:
+    """How far the locked blocks moved in the candidate, all of them together, when each stands
+    as it does in the chosen layout (its block, its height, never turned) moved by that one slide
+    of at most `slide_m`; None when one does not."""
     by_name = {t.name: t for t in candidate.towers}
+    slide: tuple[float, float] | None = None
     for t in locked:
         got = by_name.get(t.name)
         if got is None or got.prototype_id != t.prototype_id \
                 or got.floors_above_stilt != t.floors_above_stilt:
-            return False
-        if candidate.placed_footprint(got).hausdorff_distance(
-                parent.placed_footprint(t)) > LOCK_EXACT_M:
-            return False
-    return True
+            return None
+        now, was = candidate.placed_footprint(got), parent.placed_footprint(t)
+        moved = (now.centroid.x - was.centroid.x, now.centroid.y - was.centroid.y)
+        if slide is None:
+            slide = moved
+        if math.hypot(moved[0] - slide[0], moved[1] - slide[1]) > LOCK_EXACT_M \
+                or math.hypot(*moved) > slide_m + LOCK_EXACT_M \
+                or affinity.translate(now, -moved[0], -moved[1]).hausdorff_distance(was) \
+                > LOCK_EXACT_M:
+            return None
+    return slide or (0.0, 0.0)
+
+
+def _slid_words(names: list[str], slid: tuple[float, float], slide_m: float) -> str:
+    """The plain note a version carries when its locked blocks slid."""
+    return (f"the locked {', '.join(names)} slid {math.hypot(*slid):.2f} m "
+            f"{compass_of(bearing_to((0.0, 0.0), slid))}, all together and none turned, within "
+            f"the {slide_m:g} m the lock allows: not exactly where they stood")
 
 
 def library_of(workspace: Path) -> FlatLibrary:
