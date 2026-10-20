@@ -38,7 +38,7 @@ from siteplan.contracts import (
 from siteplan.contracts.candidate import PlacedTower, RoadKind
 from siteplan.contracts.design_brief import ClubSize
 from siteplan.geometry import frontage
-from siteplan.optimizer.preferences import required_axis_deg
+from siteplan.optimizer.preferences import Orientation, required_orientation
 from siteplan.optimizer.search import fringe, ground, network
 from siteplan.optimizer.search.build import (
     FIRE_ROADS,
@@ -136,16 +136,22 @@ class Run:
     locked: tuple[PlacedTower, ...] = ()
 
     @property
-    def axis_deg(self) -> float | None:
-        """The one direction every block runs when the brief requires an orientation (the
-        client's requirement, never law, 2026-10-19); None when blocks may run any way."""
-        return required_axis_deg(self.brief.objectives.soft_preferences)
+    def orientation(self) -> Orientation | None:
+        """The window every block runs in when the brief requires an orientation (the client's
+        requirement, never law, 2026-10-19); None when blocks may run any way."""
+        return required_orientation(self.brief.objectives.soft_preferences)
 
     def directions(self, ground: BaseGeometry) -> list[float]:
-        """The directions blocks are tried in on this ground: the required axis alone, or along
-        and across its longest edges."""
-        axis = self.axis_deg
-        return [axis] if axis is not None else orientations(ground)
+        """The directions blocks are tried in on this ground: along and across its longest
+        edges, or, where the brief requires an orientation, those brought into its window, with
+        the axis and the window's edges."""
+        return self.allowed(orientations(ground))
+
+    def allowed(self, angles: Sequence[float]) -> list[float]:
+        """The directions given, as the required orientation lets blocks run (unchanged when the
+        brief requires none)."""
+        required = self.orientation
+        return list(angles) if required is None else required.allowed(angles)
 
     @property
     def other_depths(self) -> tuple[TowerPrototype, ...]:
@@ -358,7 +364,8 @@ def evaluate(run: Run, config: Config) -> Evaluation | Failure:
     extra = fringe.place(plot, q, frame, land, rings, hulls, [*fitted, *locked], beyond,
                          own=run.own_lands, kept_clear=kept_clear,
                          roads_in_setback=config.profile.roads_may_use_setback,
-                         eps_m=EPS_LAND_M, turns=run.axis_deg is None,
+                         eps_m=EPS_LAND_M,
+                         directions=run.directions(plot.net) if run.orientation else None,
                          room_sqm=run.reserve_target_sqm if config.fringe_room else 0.0) \
         if beyond else []
     if config.low_blocks and not extra and all(s.choice.cls.high_rise for s in fitted):
@@ -396,8 +403,9 @@ def _more_clusters(run: Run, config: Config, frame: Frame, land: Land, choices: 
             break
         best: tuple | None = None
         smallest = min(c.depth_m * c.length_m for c in [*choices, *others])
-        angles = ([frame.angle_deg] if run.axis_deg is not None  # the required axis alone
-                  else zone_angles(rest.cluster_land, frame.angle_deg, smallest))  # C4-03
+        # C4-03, kept to the window a required orientation allows (2026-10-19)
+        angles = run.allowed(zone_angles(rest.cluster_land, frame.angle_deg,
+                                         smallest))[:ZONE_ANGLES]
         for angle in angles:
             turned = Frame(angle)
             standing, _ = _columns(run, config, turned, rest, choices, street, others)

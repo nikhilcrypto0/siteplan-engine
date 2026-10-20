@@ -310,7 +310,10 @@ def _orientation(r: LayoutRequest) -> list[SoftPreference]:
     required orientation preference with where it came from."""
     if r.orientation is None:
         return []
-    return [SoftPreference(kind="orientation", params={"axis_deg": r.orientation.axis_deg},
+    params = {"axis_deg": r.orientation.axis_deg}
+    if r.orientation.tolerance_deg:  # stated only when there is one, as stored briefs were
+        params["tolerance_deg"] = r.orientation.tolerance_deg
+    return [SoftPreference(kind="orientation", params=params,
                            required=True, status=Provenance(r.orientation.status),
                            source_kind=SourceKind.ARCHITECT, source=r.orientation.source)]
 
@@ -320,7 +323,9 @@ def _orientation_back(brief: DesignBrief) -> dict | None:
                  if p.required and p.kind == "orientation"), None)
     if wish is None:
         return None
-    return {"axis_deg": wish.params["axis_deg"], "source": wish.source or "the brief",
+    return {"axis_deg": wish.params["axis_deg"],
+            "tolerance_deg": wish.params.get("tolerance_deg", 0.0),
+            "source": wish.source or "the brief",
             "status": "USER_CONFIRMED" if wish.status is Provenance.USER_CONFIRMED
             else "ASSUMED_FOR_TEST"}
 

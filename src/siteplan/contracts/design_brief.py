@@ -263,6 +263,7 @@ class DesignMargins(Part):
 
 
 REQUIRABLE_KINDS = ("orientation",)  # the preferences the search can hold every layout to
+MAX_TOLERANCE_DEG = 45.0  # beyond this an orientation's window takes in every direction
 
 
 class SoftPreference(Part):
@@ -292,6 +293,14 @@ class SoftPreference(Part):
         if self.required and self.kind not in REQUIRABLE_KINDS:
             raise ValueError(f"only {', '.join(REQUIRABLE_KINDS)} can be required, not "
                              f"{self.kind}")
+        # an orientation's tolerance (2026-10-19), when the brief states one: how far off its
+        # axis a block may turn, in degrees
+        tolerance = self.params.get("tolerance_deg")
+        if self.kind == "orientation" and tolerance is not None and (
+                isinstance(tolerance, bool) or not isinstance(tolerance, int | float)
+                or not 0 <= tolerance <= MAX_TOLERANCE_DEG):
+            raise ValueError(f"an orientation's tolerance_deg is a number of degrees from 0 to "
+                             f"{MAX_TOLERANCE_DEG:g}, not {tolerance!r}")
         return self
 
 

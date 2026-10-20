@@ -107,6 +107,9 @@ class TowerOrientation(BaseModel):
         0.0, ge=0, lt=180, description="The towers' long axis, in degrees anticlockwise from the "
         "survey's x axis (east): 0 runs the long axis east-west, so the long faces look north "
         "and south")
+    tolerance_deg: float = Field(
+        0.0, ge=0, le=45, description="How far off the axis a block may turn, in degrees (the "
+        "brief states it; 0: on the axis itself)")
     source: str = Field(min_length=1, description="Who asked for it and when")
     status: Literal["USER_CONFIRMED", "ASSUMED_FOR_TEST"] = Field(
         "ASSUMED_FOR_TEST", description="USER_CONFIRMED when the architect said so")

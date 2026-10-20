@@ -32,6 +32,7 @@ PLATE_MARK = "ENGINE-COMPOSED floor plate, PRELIMINARY"
 UNITS_TARGET_TOLERANCE = 0.05  # a units target is met within this share
 SIZE_SLACK_SQM = 0.5
 ORIENTATION_TOLERANCE_DEG = 1.0  # a required orientation is met within this
+ORIENTATION_SLACK_DEG = 0.01  # a block laid on its window's edge measures a hair over it
 
 
 def units_by_type(towers: tuple[TowerGeometry, ...]) -> dict[str, int]:
@@ -190,16 +191,18 @@ def _off_axis_deg(footprint, axis_deg: float) -> float:
 
 def _orientation_checks(brief: DesignBrief, towers: tuple[TowerGeometry, ...]) -> list[Check]:
     """Each orientation the brief requires (2026-10-19, the architect's Vastu: the long faces
-    look north and south): every block's long side, measured on its outline, within
-    ORIENTATION_TOLERANCE_DEG of the axis. The client's requirement, never law; a preference
-    the brief only wishes for is scored by the optimizer and not judged here."""
+    look north and south): every block's long side, measured on its outline, within the
+    tolerance the brief states (`tolerance_deg`, since 2026-10-19), never less than
+    ORIENTATION_TOLERANCE_DEG of the axis. The client's requirement, never law; a preference the
+    brief only wishes for is scored by the optimizer and not judged here."""
     out = []
     for wish in brief.objectives.soft_preferences:
         if not (wish.required and wish.kind == "orientation") or not towers:
             continue
         axis = float(wish.params["axis_deg"]) % 180.0
+        within = max(float(wish.params.get("tolerance_deg", 0.0)), ORIENTATION_TOLERANCE_DEG)
         off = {t.name: _off_axis_deg(t.footprint, axis) for t in towers}
-        astray = {n: d for n, d in off.items() if d > ORIENTATION_TOLERANCE_DEG}
+        astray = {n: d for n, d in off.items() if d > within + ORIENTATION_SLACK_DEG}
         measured = ("; ".join(f"{n} turned {d:.1f} degrees from it" for n, d in astray.items())
                     if astray else f"every block's long side within {max(off.values()):.1f} "
                     "degrees of it")
@@ -207,8 +210,8 @@ def _orientation_checks(brief: DesignBrief, towers: tuple[TowerGeometry, ...]) -
                            if x) or BRIEF
         out.append(plain(Family.PROGRAM, "Orientation", verdict(not astray), measured,
                          f"long axis at {axis:g} degrees from the survey's east (0: the long "
-                         f"faces look north and south), within {ORIENTATION_TOLERANCE_DEG:g} "
-                         "degrees: the client's requirement, never law", source))
+                         f"faces look north and south), within {within:g} degrees: the "
+                         "client's requirement, never law", source))
     return out
 
 

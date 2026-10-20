@@ -110,9 +110,13 @@ READINGS = {"stilt_in_rule_height": {"reading": "not_counted", "status": "USER_C
 
 def test_the_answers_may_carry_the_clients_orientation_as_a_project_file_does():
     """2026-10-19: the architect's Vastu requirement reaches a blind run built from answers."""
-    given = {"axis_deg": 0, "source": "the architect, 2026-10-19", "status": "USER_CONFIRMED"}
+    given = {"axis_deg": 0, "tolerance_deg": 10, "source": "the architect, 2026-10-19",
+             "status": "USER_CONFIRMED"}
     project = Project.model_validate(build_project(_draft(), ANSWERS | {"orientation": given}))
     assert project.layout.orientation.model_dump() == given
+    plain = {k: v for k, v in given.items() if k != "tolerance_deg"}  # none stated: the axis
+    project = Project.model_validate(build_project(_draft(), ANSWERS | {"orientation": plain}))
+    assert project.layout.orientation.tolerance_deg == 0
     assert Project.model_validate(build_project(_draft(), ANSWERS)).layout.orientation is None
 
 

@@ -670,10 +670,14 @@ def _notes(run: Run | None, tally: Tally, found: Sequence[Judged], chosen: Seque
                  "location is not known), and the 45 t loading of the paving is not checked (a "
                  "specification)")
     wished = run.brief.objectives.soft_preferences
-    if run.axis_deg is not None:  # 2026-10-19: the client's requirement, never law
-        notes.append(f"every block laid with its long axis at {run.axis_deg:g} degrees from the "
-                     "survey's east (0: the long faces look north and south), the orientation "
-                     "the brief requires; a layout that cannot be laid so is not offered")
+    required = run.orientation
+    if required is not None:  # 2026-10-19: the client's requirement, never law
+        window = (f"within {required.tolerance_deg:g} degrees of " if required.tolerance_deg
+                  else "at ")
+        notes.append(f"every block laid with its long axis {window}{required.axis_deg:g} degrees "
+                     "from the survey's east (0: the long faces look north and south), the "
+                     "orientation the brief requires; a layout that cannot be laid so is not "
+                     "offered")
     if wished:  # C4-16: what of the architect's soft preferences was weighed, and what was not
         weighed = [p.kind for p in wished if p.kind not in not_weighed([p])]
         if weighed:

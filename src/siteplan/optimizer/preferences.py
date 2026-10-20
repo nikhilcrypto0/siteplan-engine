@@ -7,7 +7,8 @@ The kinds the engine knows, and their parameters:
 
 - orientation (`axis_deg`): the blocks' long sides run along this direction, in degrees from the
   drawing's x axis as a block's rotation is measured; a block scores the |cos| of the angle
-  between its long axis and that one;
+  between its long axis and that one; when the brief requires it, `tolerance_deg` (optional, 0
+  by default) says how far off the axis a block may turn, and the search keeps to that window;
 - max_towers (`towers`): at most this many blocks; 1 at or under, the share of them when over;
 - keep_away_from_road (`m`): every block at least this far from the entrances on the access road;
   the share of the blocks that are;
@@ -22,6 +23,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass
 from typing import Any
 
 from shapely.ops import unary_union
@@ -90,13 +92,50 @@ def understood(preference: SoftPreference) -> bool:
     return True
 
 
-def required_axis_deg(preferences: Sequence[SoftPreference]) -> float | None:
-    """The axis every block must run along when the brief requires an orientation (2026-10-19,
-    the client's requirement, never law): the search lays every block at it alone. None when
-    the brief requires none."""
+@dataclass(frozen=True)
+class Orientation:
+    """The way the brief requires every block to run (2026-10-19, the client's requirement, never
+    law): its long axis within `tolerance_deg` of `axis_deg`, both in degrees from the survey's x
+    axis, modulo 180."""
+
+    axis_deg: float
+    tolerance_deg: float = 0.0
+
+    def off_deg(self, angle_deg: float) -> float:
+        """How far a direction turns from the axis, 0 to 90."""
+        turn = (angle_deg - self.axis_deg) % 180.0
+        return min(turn, 180.0 - turn)
+
+    def clamp(self, angle_deg: float) -> float:
+        """The allowed direction nearest the one given: itself when within the tolerance, else
+        the window's nearer edge."""
+        turn = (angle_deg - self.axis_deg + 90.0) % 180.0 - 90.0  # signed, -90 to 90
+        return (self.axis_deg + max(-self.tolerance_deg, min(self.tolerance_deg, turn))) % 180.0
+
+    def allowed(self, angles: Sequence[float]) -> list[float]:
+        """The directions to try: the axis, each given direction brought into the window, and the
+        window's edges, no two the same (within DISTINCT_DEG, finer than the search's own five
+        degrees, so a window of five degrees is not taken for the axis)."""
+        tried = [self.axis_deg, *(self.clamp(a) for a in angles)]
+        if self.tolerance_deg > 0:
+            tried += [self.axis_deg - self.tolerance_deg, self.axis_deg + self.tolerance_deg]
+        kept: list[float] = []
+        for angle in (a % 180.0 for a in tried):
+            if all(Orientation(other).off_deg(angle) > DISTINCT_DEG for other in kept):
+                kept.append(angle)
+        return kept
+
+
+DISTINCT_DEG = 0.5  # two allowed directions nearer than this are one
+
+
+def required_orientation(preferences: Sequence[SoftPreference]) -> Orientation | None:
+    """The orientation every block must keep when the brief requires one (the search lays every
+    block in the allowed window alone); None when the brief requires none."""
     for p in preferences:
         if p.required and p.kind == "orientation" and understood(p):
-            return float(p.params["axis_deg"]) % 180.0
+            return Orientation(float(p.params["axis_deg"]) % 180.0,
+                               float(p.params.get("tolerance_deg", 0.0)))
     return None
 
 

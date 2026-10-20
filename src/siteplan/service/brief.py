@@ -158,8 +158,10 @@ def approval_lines(*, debug: bool, finished: tuple[str, ...], project_file: str,
         if wish.required and wish.kind == "orientation":  # 2026-10-19: the client's, never law
             how = ", ".join(x for x in (wish.status.value if wish.status else "", wish.source)
                             if x)
-            lines.append(f"Every tower's long axis at {wish.params['axis_deg']:g} degrees from "
-                         "the survey's east (0: long faces north and south), the client's "
+            tolerance = wish.params.get("tolerance_deg") or 0
+            within = f"within {tolerance:g} degrees of " if tolerance else "at "
+            lines.append(f"Every tower's long axis {within}{wish.params['axis_deg']:g} degrees "
+                         "from the survey's east (0: long faces north and south), the client's "
                          f"requirement, never law" + (f" [{how}]" if how else ""))
     if intent.massing is not None:
         lines.append(f"Shown first (the brief): {intent.massing.value}")

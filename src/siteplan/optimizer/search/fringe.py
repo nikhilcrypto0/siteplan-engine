@@ -44,6 +44,7 @@ from shapely.ops import polylabel, unary_union
 from siteplan.contracts import TowerPrototype
 from siteplan.contracts.resolved_rules import HEIGHT_TOL_M
 from siteplan.geometry import opening
+from siteplan.optimizer.preferences import DISTINCT_DEG, Orientation
 from siteplan.optimizer.search.columns import STEP_M, Choice, Standing
 from siteplan.optimizer.search.fit import fit_rectangle
 from siteplan.optimizer.search.frame import Frame, distinct_angles
@@ -136,8 +137,8 @@ def own_lands(plot: Plot, q: Quantities, classes: Sequence[FloorClass]
 def place(plot: Plot, q: Quantities, frame: Frame, land: Land, rings: BaseGeometry,
           hulls: BaseGeometry, standing: Sequence[Standing], choices: Sequence[Choice], *,
           own: Mapping[tuple[float, float], BaseGeometry], kept_clear: BaseGeometry | None,
-          roads_in_setback: bool, eps_m: float, room_sqm: float, turns: bool = True
-          ) -> list[Fringed]:
+          roads_in_setback: bool, eps_m: float, room_sqm: float,
+          directions: Sequence[float] | None = None) -> list[Fringed]:
     """The blocks the fringe of this layout holds, most valuable first, each with the pathway that
     reaches it. `rings` are the ring roads' ground (and the links between them), `hulls` the
     clusters' outlines; `standing` are the blocks of the columns; `own` the ground each kind of
@@ -149,16 +150,19 @@ def place(plot: Plot, q: Quantities, frame: Frame, land: Land, rings: BaseGeomet
     The fringe is laid in the configuration's direction and (C4-05) in up to FRINGE_DIRECTIONS of
     the plot's own, along and across its longest edges, where the ground the columns leave often
     runs; the most valuable is kept, the configuration's between equals, and a block laid in
-    another direction carries it (`Standing.frame`). With `turns` off (a brief that requires
-    an orientation, 2026-10-19) it is laid in the configuration's direction alone."""
+    another direction carries it (`Standing.frame`). Where a brief requires an orientation
+    (2026-10-19), `directions` are the ones it allows (`Run.directions`), tried in place of the
+    plot's own: none but the configuration's when it allows the axis alone."""
     if not choices:
         return []
     given = dict(own=own, kept_clear=kept_clear, roads_in_setback=roads_in_setback, eps_m=eps_m,
                  room_sqm=room_sqm)
     best = _place_in(plot, q, frame, land, rings, hulls, standing, choices, **given)
     framed = [s if s.frame is not None else replace(s, frame=frame) for s in standing]
-    for angle in distinct_angles([frame.angle_deg, *orientations(plot.net)])[
-            1:1 + FRINGE_DIRECTIONS] if turns else []:
+    others = (distinct_angles([frame.angle_deg, *orientations(plot.net)])[1:]
+              if directions is None else
+              [a for a in directions if Orientation(frame.angle_deg).off_deg(a) > DISTINCT_DEG])
+    for angle in others[:FRINGE_DIRECTIONS]:
         turned = Frame(angle)
         found = _place_in(plot, q, turned, land, rings, hulls, framed, choices, **given)
         if _value(found) > _value(best):

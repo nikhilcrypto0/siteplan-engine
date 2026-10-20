@@ -26,7 +26,7 @@ from siteplan.contracts.resolved_rules import (
 )
 from siteplan.contracts.validation import Family
 from siteplan.layout import TowerOrientation
-from siteplan.optimizer.preferences import required_axis_deg
+from siteplan.optimizer.preferences import Orientation, required_orientation
 from siteplan.validator.shapes import oriented_box
 
 TEST_CLASS = "normative"
@@ -55,9 +55,15 @@ def slanted() -> Made:
     return made_up(affinity.rotate(box(0, 0, 200, 120), 25, origin=(0, 0)))
 
 
+def _within(tolerance: float) -> SoftPreference:
+    return NORTH_SOUTH.model_copy(update={"params": {"axis_deg": 0.0,
+                                                     "tolerance_deg": tolerance}})
+
+
 @cache
-def _proposals(required: bool):
-    made = _requiring(slanted()) if required else slanted()
+def _proposals(required: bool, tolerance: float = 0.0):
+    wish = _within(tolerance) if tolerance else NORTH_SOUTH
+    made = _requiring(slanted(), wish) if required else slanted()
     return made, strategy().propose(made.context())
 
 
@@ -88,7 +94,7 @@ def test_the_project_files_orientation_reaches_the_brief_with_its_source_and_bac
     assert (wish.kind, wish.params, wish.required) == ("orientation", {"axis_deg": 0.0}, True)
     assert (wish.status, wish.source_kind, wish.source) == (
         Provenance.USER_CONFIRMED, SourceKind.ARCHITECT, SOURCE)
-    assert required_axis_deg(brief.objectives.soft_preferences) == 0.0
+    assert required_orientation(brief.objectives.soft_preferences) == Orientation(0.0, 0.0)
     readings = Readings({STILT_IN_RULE_HEIGHT: "counted",
                          CIRCULATION_IN_SETBACK: "not_allowed"}, WhenOpen.STOP)
     back = request(brief, readings, floors_for_max=8).orientation
@@ -140,3 +146,54 @@ def test_a_layout_off_the_axis_does_not_meet_the_requirement():
                                       made.envelope)
     assert not [c for c in unrequired.program if c.finding.rule == "Orientation"]
     assert report.verdict.legal == unrequired.verdict.legal
+
+
+# --- A tolerance (2026-10-19: squaring cost 28% of the flats; the architect is asked which
+# tolerance Vastu allows) -------------------------------------------------------------------
+
+
+def test_a_tolerance_brings_every_direction_into_its_window():
+    ten = Orientation(0.0, 10.0)
+    assert ten.clamp(25) == 10 and ten.clamp(5) == 5 and math.isclose(ten.clamp(115), 170)
+    assert sorted(round(a, 6) for a in ten.allowed([25, 115])) == [0, 10, 170]
+    assert Orientation(0.0).allowed([25, 115]) == [0.0]  # no tolerance: the axis alone
+    # a window of five degrees is not taken for the axis, as the search's own 5 degrees would
+    assert sorted(Orientation(0.0, 5.0).allowed([])) == [0.0, 5.0, 175.0]
+
+
+@pytest.mark.parametrize("tolerance", [-1, 50, "ten", True])
+def test_a_tolerance_that_is_not_0_to_45_degrees_is_refused(tolerance):
+    with pytest.raises(ValueError, match="tolerance_deg"):
+        SoftPreference(kind="orientation", params={"axis_deg": 0, "tolerance_deg": tolerance},
+                       required=True)
+
+
+def test_the_project_files_tolerance_reaches_the_brief_and_back():
+    project = fixture_project("made-up", {"boundary": box(0, 0, 200, 120),
+                                          "net": box(0, 0, 200, 120), "side": "S",
+                                          "road_ft": 60, "dead_end": False, "join": True,
+                                          "floors": 8})
+    project.layout.orientation = TowerOrientation(axis_deg=0, tolerance_deg=15, source=SOURCE)
+    brief = make_brief(project)
+    [wish] = brief.objectives.soft_preferences
+    assert wish.params == {"axis_deg": 0.0, "tolerance_deg": 15.0}
+    assert required_orientation(brief.objectives.soft_preferences) == Orientation(0.0, 15.0)
+    readings = Readings({STILT_IN_RULE_HEIGHT: "counted",
+                         CIRCULATION_IN_SETBACK: "not_allowed"}, WhenOpen.STOP)
+    assert request(brief, readings, floors_for_max=8).orientation == project.layout.orientation
+
+
+def test_a_required_window_lays_every_block_within_it_and_uses_it():
+    """On the plot turned 25 degrees a window of 20 degrees lets the blocks turn 20 of the 25
+    towards its edges: every block within it, and the window used, not the axis alone."""
+    made, proposal = _proposals(required=True, tolerance=20)
+    assert proposal.candidates
+    turned = [_off_axis(c, t) for c in proposal.candidates for t in c.towers]
+    assert max(turned) <= 20 + 1e-6 and max(turned) > 1
+    assert any("within 20 degrees of 0 degrees" in n for n in proposal.notes)
+    for candidate in proposal.candidates:
+        report = independent.validate(made.site, made.rules, made.brief, candidate,
+                                      made.envelope)
+        [check] = [c for c in report.program if c.finding.rule == "Orientation"]
+        assert check.finding.status is Status.PASS
+        assert "within 20 degrees" in check.finding.required

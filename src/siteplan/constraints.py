@@ -57,6 +57,7 @@ from siteplan.contracts import design_brief, prototype, resolved_rules, site_mod
 from siteplan.legal import frontage, widths
 from siteplan.optimizer import floors as optimizer_floors
 from siteplan.optimizer import objective as optimizer_objective
+from siteplan.optimizer import preferences
 from siteplan.optimizer.search import (
     build,
     columns,
@@ -1356,9 +1357,14 @@ REGISTRY: tuple[Constraint, ...] = (
     Constraint(
         "Towers", "How closely a block must run along an orientation the brief requires (the "
                   "client's Vastu requirement of 2026-10-19: long faces north and south).",
-        f"its long side within {program.ORIENTATION_TOLERANCE_DEG:g} degree of the axis",
-        Basis.ENGINE_DESIGN_ASSUMPTION, "none (validator.program)",
-        ("validator.program.ORIENTATION_TOLERANCE_DEG",),
+        f"its long side within the tolerance the brief states, never less than "
+        f"{program.ORIENTATION_TOLERANCE_DEG:g} degree of the axis; a stated tolerance at most "
+        f"{design_brief.MAX_TOLERANCE_DEG:g} degrees; the search's allowed directions kept "
+        f"{preferences.DISTINCT_DEG:g} degree apart; a block on the window's edge measured to "
+        f"{program.ORIENTATION_SLACK_DEG:g} degree",
+        Basis.ENGINE_DESIGN_ASSUMPTION, "none (validator.program, optimizer.preferences)",
+        ("validator.program.ORIENTATION_TOLERANCE_DEG", "validator.program.ORIENTATION_SLACK_DEG",
+         "contracts.design_brief.MAX_TOLERANCE_DEG", "optimizer.preferences.DISTINCT_DEG"),
         note="The search lays every block exactly on the axis; the slack is for a block an "
              "architect turns by hand in CAD. A requirement of the client's, never law.",
         settles="The architect, who may ask for a finer or a looser fit.",
