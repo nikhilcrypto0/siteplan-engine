@@ -60,6 +60,30 @@ BACHUPALLY_PERMIT = (
     "proposed height of 35.4 m, which is 12 x 2.95 m; counting the stilt, twelve floors of NBC "
     "Part 3 12.2.1's 2.75 m room and a 0.15 m slab would leave it 0.6 m, so the height leaves the "
     "stilt out. The permit names no setback, so it does not show which Table IV row was applied")
+# Public sanctioned permits read on 2026-10-19 (RERA disclosure copies; the architect's request):
+# each read off the permit itself, each supporting or consistent, none settling the reading.
+STILT5_PERMITS = (
+    "supporting for how the authorities measure, not settling the reading: five sanctioned "
+    "Stilt + 5 buildings whose permitted height is their five upper floors alone, GHMC permits "
+    "2/C11/10296/2021 (Budvel, 15.00 m), 2/C1/15022/2019 (Khapra, 14.75 m) and 1/C26/10166/2021 "
+    "(Gajularamaram, cellar + stilt + 5, 14.35 m), HMDA TS-bPASS 008027/BP/HMDA/1754/GHT/2023 "
+    "(Nagaram, cellar + stilt + 5, 14.49 m) and TG-bPASS TS/000875/2025 (Kukatpally, 14.95 m): "
+    "2.87 to 3.0 m a floor over five; with the stilt in, six storeys of NBC Part 3 12.2.1's 2.75 m "
+    "room alone come to 16.5 m. They are below 21 m, where rule 5(c) already leaves the stilt out "
+    "of Table III's height, so they do not show which Table IV row or high-rise class a stilt + N "
+    "tower takes")
+ABIDS_PERMIT = (
+    "supporting, not settling: GHMC revised permit 5353/GHMC/KHB/2025-BP of 17-06-2025 (Abids, "
+    "Muralidharbagh) permits Tower A, 1 cellar + 4 stilts + 16 upper floors, and Tower B, 16 upper "
+    "floors and no stilt, both at a height of 49.95 m: the four parking levels are not in the "
+    "height, as G.O.Ms.No.7 of 2016 leaves parking floors out of Table IV's. The abutting road's "
+    "width is not printed, so its setbacks (A 14.02/7/7/9 m, B 14.02/44.91/9.59/9 m) do not show "
+    "which Table IV row was applied")
+KOLLUR_PERMIT = (
+    "consistent, not evidence alone: HMDA TS-bPASS permit 009872/BP/HMDA/2153/SKP/2023 of "
+    "14-12-2023 (Kollur) permits towers of 3 cellars + 1 stilt + 36 upper floors at 113.39 m, "
+    "3.15 m a floor over 36 or 3.06 m over 37: both are ordinary storeys, so it does not show "
+    "whether the stilt is in the height")
 AMENITY_2016_READ = (
     "G.O.Ms.No.7 of 2016, Amendment 15 (pp.4-5), read from its text on 2026-10-13: 'upto 3% of "
     "the total built up area (or) 50,000 Sft. whichever is lower shall be planned and developed "
@@ -116,7 +140,7 @@ def _defaults(master_plan_road: bool) -> list[dict]:
                      rules.PARKING_FLOOR_HEIGHT_CLAUSE,
                      "the firm's own unsanctioned drawing keeps setbacks as if the stilt were "
                      "not counted (not evidence)",
-                     BACHUPALLY_PERMIT],
+                     BACHUPALLY_PERMIT, ABIDS_PERMIT, STILT5_PERMITS, KOLLUR_PERMIT],
             settles="a sanctioned stilt + N high-rise whose approved setback or road width fits "
                     "one reading only"),
         _reading(

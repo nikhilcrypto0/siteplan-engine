@@ -4,6 +4,27 @@ A characterization test (tests/manifest.py) pins what the engine produces today.
 only together with a normative replacement test and an entry here: what changed, why, the
 evidence, and the test that now holds the behaviour. Newest first.
 
+## 2026-10-19: public sanctioned permits support the stilt reading and test Table III
+
+- **What changed.** The sources of `stilt_in_rule_height` gain three entries read off public
+  sanctioned permits (RERA disclosure copies, kept in gitignored `out/REFERENCE-RERA-20261019/`):
+  GHMC's Abids permit 5353/GHMC/KHB/2025-BP (a tower of 1 cellar + 4 stilts + 16 floors and one of
+  16 floors, both 49.95 m: supporting), five Stilt + 5 permits whose heights of 14.35 to 15.0 m
+  are their five floors alone (supporting, below 21 m, where rule 5(c) already leaves the stilt
+  out) and HMDA's Kollur Stilt + 36 at 113.39 m (consistent only)
+  (`legal/readings.ABIDS_PERMIT`, `STILT5_PERMITS`, `KOLLUR_PERMIT`; the inventory entry says the
+  same). The reading stays open: ALL by default, both readings judged.
+- **Why.** The architect's request of 2026-10-19; every figure was read off the permit itself.
+- **Tests.** `tests/test_service_proposals_baseline.py` (characterization) is re-pinned: the
+  rules' digest moves, so the proposed and shown digests move; the notes, the 39 proposed, the
+  ten shown, the model's answer and the approval page are unchanged. The normative tests are
+  `test_the_public_permits_join_the_stilt_readings_sources_and_settle_nothing`
+  (`tests/test_project_inputs.py`) and, for Table III, `tests/test_sanctioned_table_iii.py`: three
+  of the permits that print their minimum setbacks (Budvel, Khapra, Gajularamaram) held to our
+  Table III lookup. Budvel and Khapra agree, on a road up to 12 m; Gajularamaram's 2.5 m sides and
+  rear are G.O.168 rule 16(b)'s floor for a plot that surrendered land to road widening, which
+  our Table III (5 m) does not take: a disagreement listed and explained in its case.
+
 ## 2026-10-19: the firm's stilt is the architect's 2.65 m
 
 - **What changed.** No engine code. The firm's workspace settings and both sites' project files

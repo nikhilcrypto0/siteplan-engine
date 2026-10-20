@@ -29,7 +29,12 @@ from siteplan.contracts.common import Provenance, SourceKind, Status
 from siteplan.contracts.resolved_rules import CIRCULATION_IN_SETBACK, STILT_IN_RULE_HEIGHT
 from siteplan.contracts.site_model import ApplicationStatus
 from siteplan.contracts.validation import DependsOn
-from siteplan.legal.readings import BACHUPALLY_PERMIT
+from siteplan.legal.readings import (
+    ABIDS_PERMIT,
+    BACHUPALLY_PERMIT,
+    KOLLUR_PERMIT,
+    STILT5_PERMITS,
+)
 from siteplan.legal.resolve import resolve
 from siteplan.optimizer.search.verdicts import rests_on
 from siteplan.service import ProposeLayouts, ResolveRules, Service
@@ -100,6 +105,21 @@ def test_the_bachupally_permit_supports_the_stilt_reading_and_settles_nothing(ws
     unselected = resolve(fixture("rectangle").site).interpretation("stilt_in_rule_height")
     assert BACHUPALLY_PERMIT in unselected.sources and unselected.selected == "ALL"
     assert not unselected.settled
+
+
+def test_the_public_permits_join_the_stilt_readings_sources_and_settle_nothing(ws):
+    """2026-10-19: the Abids high-rise (4 stilts + 16 and 16 floors, both 49.95 m), five Stilt + 5
+    permits (14.35 to 15.0 m) and the Kollur Stilt + 36 (113.39 m, consistent only) are supporting
+    or consistent evidence beside Bachupally; the reading stays open and both are judged."""
+    stilt = next(i for i in _rules(ws).interpretations if i.id == "stilt_in_rule_height")
+    for source in (ABIDS_PERMIT, STILT5_PERMITS, KOLLUR_PERMIT):
+        assert source in stilt.sources
+        assert "not settling" in source or "not evidence alone" in source
+    assert "49.95 m" in ABIDS_PERMIT and "1/C26/10166/2021" in STILT5_PERMITS
+    assert KOLLUR_PERMIT.startswith("consistent, not evidence alone")
+    assert sorted(stilt.readings_evaluated) == ["counted", "not_counted"]
+    unselected = resolve(fixture("rectangle").site).interpretation("stilt_in_rule_height")
+    assert ABIDS_PERMIT in unselected.sources and not unselected.settled
 
 
 def test_a_reading_said_twice_two_ways_is_refused(tmp_path):

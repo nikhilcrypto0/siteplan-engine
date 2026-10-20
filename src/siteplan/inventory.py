@@ -135,7 +135,12 @@ INVENTORY: tuple[Entry, ...] = (
                 "sanctioned) keeps the setbacks of its blocks without their stilt. Supporting "
                 "since 2026-10-18 (not settling): HMDA's TG-bPASS permit "
                 "004812/BP/HMDA/1054/MED/2024 (Bachupally) permits a 1 stilt + 12 floors block "
-                "at 35.4 m = 12 x 2.95 m, its height without the stilt; it names no setback.",
+                "at 35.4 m = 12 x 2.95 m, its height without the stilt; it names no setback. "
+                "Since 2026-10-19 (public permits, read from each): GHMC's Abids permit "
+                "5353/GHMC/KHB/2025-BP gives a tower of 4 stilts + 16 floors and one of 16 floors "
+                "the same 49.95 m (supporting); five Stilt + 5 permits print 14.35 to 15.0 m, "
+                "their five floors alone (supporting, below 21 m, where rule 5(c) already leaves "
+                "the stilt out); HMDA's Kollur Stilt + 36 at 113.39 m is consistent only.",
     ),
     Entry(
         "Height", "The storeys start above the ground the height is measured from: a parking "
