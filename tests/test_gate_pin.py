@@ -101,6 +101,16 @@ def test_a_gate_pinned_on_an_edge_drawn_with_a_slight_bend_still_opens_there():
         assert _gate_check(report).finding.status is Status.PASS
 
 
+def test_a_stretch_with_an_edge_a_gate_fits_keeps_its_places_on_the_edges():
+    """Reading every stretch by its straight runs moved the places an unpinned search opened its
+    approach at and cost Suchitra 16 flats (144 to 128, 2026-10-20): the runs are read only for
+    a stretch none of whose edges takes a gate."""
+    net = Polygon([(0, 0), (20, 0), (26, 0.05), (26, 30), (0, 30)])
+    bent = LineString([(0, 0), (20, 0), (26, 0.05)])
+    assert network._gate_points(net, bent, 4.51) == network._gate_points(
+        net, LineString([(0, 0), (20, 0)]), 4.51)
+
+
 def test_a_corner_is_never_read_as_one_straight_run():
     corner = LineString([(0, 0), (10, 0), (10, 10)])
     assert [round(r.length, 6) for r in line_runs(corner)] == [10.0, 10.0]
