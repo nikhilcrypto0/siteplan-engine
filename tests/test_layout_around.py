@@ -258,7 +258,8 @@ def test_a_slide_never_accepts_a_turned_block_or_one_further_than_the_lock(tmp_p
     _, _, locked = _locked_run(tmp_path)
     t1 = [_tower(locked.candidate, "T1")]
     moved = edits.moved_block(locked.candidate, "T1", 0.8, 0.0)
-    assert around._keeps(moved, locked.candidate, t1, 1.0) == pytest.approx((0.8, 0.0))
+    slide, slid = around._keeps(moved, locked.candidate, t1, 1.0)
+    assert slide == pytest.approx((0.8, 0.0)) and slid == ["T1"]
     assert around._keeps(moved, locked.candidate, t1, 0.5) is None
     assert around._keeps(moved, locked.candidate, t1) is None  # no slide: to the millimetre
     turned = edits.turned_block(locked.candidate, "T1", 0.5)

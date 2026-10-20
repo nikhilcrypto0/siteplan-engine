@@ -90,7 +90,7 @@ MAX_CLUSTERS = 3  # the first cluster of blocks and at most two more, each round
 ZONE_ANGLES = 4  # a further cluster is tried in its configuration's direction and three of its own
 LOCK_EXACT_M = 0.001  # Stage D: a locked block stands where it stood, to the millimetre
 LOCKED_COLUMN = -1  # where a locked block sorts among the columns: first, in a column of none
-# 2026-10-20: a lock may let its blocks slide, together and never turned, up to a distance the
+# 2026-10-20: a lock may let its high-rises slide, together and never turned, up to a distance the
 # architect states (`Run.lock_slide_m`); the slides tried, in this step and in these directions
 LOCK_SLIDE_STEP_M = 0.5
 LOCK_SLIDE_DIRECTIONS = 16  # every 22.5 degrees: 45 missed a 1.5 m slide Dhulapally fits
@@ -225,12 +225,12 @@ def lock_slides(slide_m: float) -> list[tuple[float, float]]:
 def locked_standing(run: Run, profile: Profile, slide: tuple[float, float] = (0.0, 0.0)
                     ) -> tuple[list[Standing], str]:
     """Each locked block as a block that stands in a frame of its own, exactly where it stands
-    moved by `slide` (its placement reproduced to LOCK_EXACT_M), at its own height: or, when one
-    cannot be, why (its prototype not in the kit, its floor count not one these readings leave
-    open, a mirrored block)."""
+    (its placement reproduced to LOCK_EXACT_M), at its own height: or, when one cannot be, why
+    (its prototype not in the kit, its floor count not one these readings leave open, a mirrored
+    block). The high-rises are moved by `slide`, the ring road being what they slide for; a block
+    below the high-rise height stands outside the ring on its own way in and stays where it is."""
     out = []
-    for tower in (t.model_copy(update={"x": t.x + slide[0], "y": t.y + slide[1]})
-                  for t in run.locked):
+    for tower in run.locked:
         prototype = next((p for p in (*run.fringe_kit, *run.locked_kit)
                           if p.id == tower.prototype_id), None)
         if prototype is None:
@@ -240,6 +240,8 @@ def locked_standing(run: Run, profile: Profile, slide: tuple[float, float] = (0.
         if cls is None:
             return [], (f"the locked {tower.name} at Stilt + {tower.floors_above_stilt} is not a "
                         f"floor count the readings {profile.key} leave open")
+        if cls.high_rise:
+            tower = tower.model_copy(update={"x": tower.x + slide[0], "y": tower.y + slide[1]})
         if tower.mirrored:
             return [], f"the locked {tower.name} is mirrored, which the search does not place"
         frame = Frame(tower.rotation_deg)

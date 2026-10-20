@@ -12,10 +12,11 @@ firm's flat library in the site's workspace gives the stored brief, composed as 
 composed the run's own search (`service.search_kit`), with the chosen layout's blocks beside them
 (2026-10-18, the architect: every block type in the firm's library, not only those the run used).
 An alternative that does not keep every locked block where it stood is never offered (it cannot
-arise; it is checked all the same). Since 2026-10-20 a lock may let its blocks slide, all together
-and never turned, up to a distance the architect states (`slide_m`; 0, the default, keeps them to
-the millimetre): the search tries them at slides out to it, and a version whose blocks slid says
-so in its edits, how far and which way.
+arise; it is checked all the same). Since 2026-10-20 a lock may let its high-rises slide, all
+together and never turned, up to a distance the architect states (`slide_m`; 0, the default, keeps
+them to the millimetre), so the ring road round them can move: the search tries them at slides out
+to it, a locked block below the high-rise height (outside the ring, on its own way in) stays where
+it stood, and a version whose blocks slid says so in its edits, which, how far and which way.
 """
 
 from __future__ import annotations
@@ -109,9 +110,9 @@ def alternatives(out: Path, workspace: Path, record: RunRecord, layout_id: str, 
     for k, pick in enumerate(picks, 1):
         said = [f"laid again round the locked {', '.join(names)}: alternative {k} of "
                 f"{len(picks)}"]
-        slid = _keeps(pick.scored.candidate, parent.candidate, locked, slide_m)
-        if slid is not None and math.hypot(*slid) > LOCK_EXACT_M:
-            said.append(_slid_words(names, slid, slide_m))
+        kept = _keeps(pick.scored.candidate, parent.candidate, locked, slide_m)
+        if kept is not None and kept[1]:
+            said.append(_slid_words(names, kept[1], kept[0], slide_m))
         version, candidate, report = versions.make_version(
             out, record, layout_id, pick.scored.candidate, said, locked=names,
             before=parent.report)
@@ -136,12 +137,14 @@ def _cannot_hold(candidate: CandidateLayout, locked, net) -> str:
 
 
 def _keeps(candidate: CandidateLayout, parent: CandidateLayout, locked, slide_m: float = 0.0
-           ) -> tuple[float, float] | None:
-    """How far the locked blocks moved in the candidate, all of them together, when each stands
-    as it does in the chosen layout (its block, its height, never turned) moved by that one slide
-    of at most `slide_m`; None when one does not."""
+           ) -> tuple[tuple[float, float], list[str]] | None:
+    """The one slide the locked blocks that moved share, and their names, when each locked block
+    stands in the candidate as it does in the chosen layout (its block, its height, never turned),
+    either where it stood or moved by that slide of at most `slide_m` (the search slides the
+    high-rises, never a block below them); None when one does not."""
     by_name = {t.name: t for t in candidate.towers}
     slide: tuple[float, float] | None = None
+    slid: list[str] = []
     for t in locked:
         got = by_name.get(t.name)
         if got is None or got.prototype_id != t.prototype_id \
@@ -149,21 +152,27 @@ def _keeps(candidate: CandidateLayout, parent: CandidateLayout, locked, slide_m:
             return None
         now, was = candidate.placed_footprint(got), parent.placed_footprint(t)
         moved = (now.centroid.x - was.centroid.x, now.centroid.y - was.centroid.y)
-        if slide is None:
-            slide = moved
+        if affinity.translate(now, -moved[0], -moved[1]).hausdorff_distance(was) > LOCK_EXACT_M:
+            return None  # turned, or not the same block
+        if math.hypot(*moved) <= LOCK_EXACT_M:
+            continue
+        slide = slide or moved
         if math.hypot(moved[0] - slide[0], moved[1] - slide[1]) > LOCK_EXACT_M \
-                or math.hypot(*moved) > slide_m + LOCK_EXACT_M \
-                or affinity.translate(now, -moved[0], -moved[1]).hausdorff_distance(was) \
-                > LOCK_EXACT_M:
+                or math.hypot(*moved) > slide_m + LOCK_EXACT_M:
             return None
-    return slide or (0.0, 0.0)
+        slid.append(t.name)
+    return (slide or (0.0, 0.0)), slid
 
 
-def _slid_words(names: list[str], slid: tuple[float, float], slide_m: float) -> str:
+def _slid_words(names: list[str], slid: list[str], slide: tuple[float, float],
+                slide_m: float) -> str:
     """The plain note a version carries when its locked blocks slid."""
-    return (f"the locked {', '.join(names)} slid {math.hypot(*slid):.2f} m "
-            f"{compass_of(bearing_to((0.0, 0.0), slid))}, all together and none turned, within "
-            f"the {slide_m:g} m the lock allows: not exactly where they stood")
+    kept = [n for n in names if n not in slid]
+    return (f"the locked {', '.join(slid)} slid {math.hypot(*slide):.2f} m "
+            f"{compass_of(bearing_to((0.0, 0.0), slide))}, all together and none turned, within "
+            f"the {slide_m:g} m the lock allows: not exactly where they stood"
+            + (f"; {', '.join(kept)} kept exactly where {'it' if len(kept) == 1 else 'they'} "
+               "stood" if kept else ""))
 
 
 def library_of(workspace: Path) -> FlatLibrary:

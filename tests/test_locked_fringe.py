@@ -6,6 +6,7 @@ floor plate in the families' pass). Made-up land (search_support.py)."""
 
 from functools import cache
 
+import pytest
 from search_support import l_plot, slim_prototype, strategy
 from shapely import affinity
 from shapely.ops import unary_union
@@ -13,6 +14,7 @@ from shapely.ops import unary_union
 from siteplan.contracts.candidate import PlacedTower
 from siteplan.contracts.common import Shape
 from siteplan.optimizer.interfaces import Budget, SearchContext
+from siteplan.optimizer.search.build import placement_of
 from siteplan.optimizer.search.layout import locked_standing, make_run
 from siteplan.optimizer.search.readings import profiles
 from siteplan.validator import routes
@@ -76,3 +78,26 @@ def test_a_locked_blocks_prototype_is_found_when_the_passs_kit_leaves_it_out():
     standing, why = locked_standing(run, found[0])
     assert not why and [s.name for s in standing] == ["T9"]
     assert slim_prototype().id not in {p.id for p in run.fringe_kit}  # never offered itself
+
+
+def test_a_slide_moves_the_locked_high_rises_and_never_a_low_block():
+    """2026-10-20: the slide is for the ring road round the high-rises; slid with them, a locked
+    arm block below 21 m was carried into its front setback (Dhulapally: 3.82 m at the front),
+    so a block below the high-rise height stays exactly where it stood."""
+    made = l_plot(True)
+    high = next(t for t in _proposal(122.0).candidates[0].towers if t.name != "T9")
+    found = profiles(made.rules, made.brief, list(made.kit))
+    run = make_run(made.site, made.rules, made.brief, made.envelope, made.kit, found,
+                   locked=[high, _slim_at(122.0)], lock_slide_m=1.0)
+
+    profile = next(p for p in found if not locked_standing(run, p)[1])  # one T1's height is in
+
+    def where(slide):
+        standing, why = locked_standing(run, profile, slide)
+        assert not why
+        return {s.name: placement_of(s, s.name, s.frame) for s in standing}
+
+    still, slid = where((0.0, 0.0)), where((1.0, 0.0))
+    assert (slid[high.name].x - still[high.name].x,
+            slid[high.name].y - still[high.name].y) == pytest.approx((1.0, 0.0))
+    assert (slid["T9"].x, slid["T9"].y) == (still["T9"].x, still["T9"].y)
