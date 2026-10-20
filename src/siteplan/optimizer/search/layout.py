@@ -134,6 +134,10 @@ class Run:
     # Stage D (2026-10-17): blocks the architect locked, which every layout keeps exactly where
     # and as high as they stand (`locked_standing`); their prototypes are in the kit
     locked: tuple[PlacedTower, ...] = ()
+    # 2026-10-19: the locked blocks' own prototypes, whichever pass's kit leaves them out (a
+    # floor plate in the families' pass): they keep a locked block where it stands, and are never
+    # offered to the search for a block of its own
+    locked_kit: tuple[TowerPrototype, ...] = ()
 
     @property
     def orientation(self) -> Orientation | None:
@@ -177,7 +181,8 @@ class Run:
 def make_run(site: CanonicalSiteModel, rules: ResolvedRules, brief: DesignBrief,
              envelope: BuildableEnvelope, kit: Sequence[TowerPrototype],
              profiles: Sequence[Profile], with_margins: bool = True,
-             locked: Sequence[PlacedTower] = ()) -> Run:
+             locked: Sequence[PlacedTower] = (),
+             locked_kit: Sequence[TowerPrototype] = ()) -> Run:
     q = quantities(site, rules, brief, with_margins)
     # The library's own blocks set the main depth; a floor plate sized to the land (2026-10-13)
     # joins the columns of that depth, or competes as another depth, never outvotes them.
@@ -186,12 +191,15 @@ def make_run(site: CanonicalSiteModel, rules: ResolvedRules, brief: DesignBrief,
         depths.setdefault(round(prototype.depth_m, 2), []).append(prototype)
     depth, _ = max(depths.items(), key=lambda item: (len(item[1]), item[0]))
     used = [p for p in kit if round(p.depth_m, 2) == depth]
-    classes = {profile.key: {p.id: floor_classes(rules, brief, p, profile) for p in kit}
+    extra = [p for p in locked_kit if p.id not in {k.id for k in kit}]
+    classes = {profile.key: {p.id: floor_classes(rules, brief, p, profile)
+                             for p in [*kit, *extra]}
                for profile in profiles}
     plot = plot_of(site, envelope)
     every = [c for found in classes.values() for counts in found.values() for c in counts]
     return Run(site, rules, brief, envelope, plot, q, tuple(used), depth, classes,
-               tuple(profiles), tuple(kit), fringe.own_lands(plot, q, every), tuple(locked))
+               tuple(profiles), tuple(kit), fringe.own_lands(plot, q, every), tuple(locked),
+               tuple(extra))
 
 
 def locked_standing(run: Run, profile: Profile) -> tuple[list[Standing], str]:
@@ -201,7 +209,8 @@ def locked_standing(run: Run, profile: Profile) -> tuple[list[Standing], str]:
     block)."""
     out = []
     for tower in run.locked:
-        prototype = next((p for p in run.fringe_kit if p.id == tower.prototype_id), None)
+        prototype = next((p for p in (*run.fringe_kit, *run.locked_kit)
+                          if p.id == tower.prototype_id), None)
         if prototype is None:
             return [], f"the locked {tower.name}'s block {tower.prototype_id} is not in the kit"
         cls = next((c for c in run.classes[profile.key][prototype.id]
@@ -236,6 +245,15 @@ def _through_locked(locked: Sequence[Standing], frame: Frame, roads: Sequence[Ro
     blocks = unary_union([placement_of(s, s.name or "", frame).footprint for s in locked])
     return next((r.id for r in roads
                  if r.ground.intersection(blocks).area > network.RING_CLIP_SQM), "")
+
+
+def _locked_under(locked: Sequence[Standing], frame: Frame, rings: BaseGeometry) -> str:
+    """The first locked block the ring road's pavement would run over, by name; '' when none
+    does (2026-10-19: a locked block below 21 m stands outside the cluster, never under its
+    ring)."""
+    return next((s.name or "" for s in locked
+                 if placement_of(s, s.name or "", frame).footprint.intersection(rings).area
+                 > network.RING_CLIP_SQM), "")
 
 
 def _locked_room(run: Run, locked: Sequence[Standing], choices: Sequence[Choice]
@@ -339,7 +357,8 @@ def evaluate(run: Run, config: Config) -> Evaluation | Failure:
     fitted, streets, cluster, why = network.fit_cluster(
         standing, frame, street, land, q.road_m, q.legal_road_m,
         [s.choice.value for s in standing],
-        fixed=[placement_of(s, s.name or "", frame).footprint for s in locked])
+        fixed=[placement_of(s, s.name or "", frame).footprint for s in locked
+               if s.choice.cls.high_rise])
     if cluster is None:
         return Failure(f"round the locked blocks, {why}" if locked else why)
     if not run.brief.height_intent.mixed_heights_allowed and fitted:  # the rest keep its height
@@ -361,8 +380,26 @@ def evaluate(run: Run, config: Config) -> Evaluation | Failure:
         return Failure(f"{crossing} would run through a locked block")
     rings = unary_union([*(c.ring for c in clusters), *(r.ground for r in links)])
     hulls = unary_union([c.hull for c in clusters])
+    run_over = _locked_under(locked, frame, rings)
+    if run_over:
+        return Failure(f"the ring road would run through the locked {run_over}")
+    # 2026-10-19: a locked block below the high-rise height is served as the fringe serves its
+    # own, the ring road along a pathway's width or a pathway of at most 30 m, first, or the
+    # layout is not laid (the user: never a block the roads do not reach)
+    served, taken = [], [kept_clear] if kept_clear is not None else []
+    for s in (s for s in locked if not s.choice.cls.high_rise):
+        found = fringe.serve(plot, q, land, rings, hulls,
+                             [*fitted, *(o for o in locked if o is not s)], s,
+                             unary_union(taken) if taken else None,
+                             config.profile.roads_may_use_setback, EPS_LAND_M)
+        if found is None:
+            return Failure(f"the locked {s.name} has neither the ring road along a pathway's "
+                           f"width nor a pathway of at most {q.pathway_max_length_m:g} m to it")
+        served.append(found[0])
+        taken.append(found[1])
+    keep = unary_union(taken) if taken else None
     extra = fringe.place(plot, q, frame, land, rings, hulls, [*fitted, *locked], beyond,
-                         own=run.own_lands, kept_clear=kept_clear,
+                         own=run.own_lands, kept_clear=keep,
                          roads_in_setback=config.profile.roads_may_use_setback,
                          eps_m=EPS_LAND_M,
                          directions=run.directions(plot.net) if run.orientation else None,
@@ -370,14 +407,16 @@ def evaluate(run: Run, config: Config) -> Evaluation | Failure:
         if beyond else []
     if config.low_blocks and not extra and all(s.choice.cls.high_rise for s in fitted):
         return Failure("no block below 21 m stands in this configuration")
-    # the locked blocks join the columns' (after the streets, which run between columns only)
-    standing_all = (*fitted, *locked)
+    # the locked high-rises join the columns' (after the streets, which run between columns
+    # only); a locked block below 21 m stands on the fringe with its own way in
+    standing_all = (*fitted, *(s for s in locked if s.choice.cls.high_rise))
+    fringed = (*served, *extra)
     return Evaluation(
         config=config, frame=frame, land=land, street_m=street, standing=standing_all,
         streets=tuple(streets), clusters=tuple(clusters),
         value=sum(s.choice.value for s in standing_all)
-        + sum(f.standing.choice.value for f in extra),
-        kept_clear=kept_clear, fringe=tuple(extra), links=tuple(links))
+        + sum(f.standing.choice.value for f in fringed),
+        kept_clear=kept_clear, fringe=fringed, links=tuple(links))
 
 
 def _more_clusters(run: Run, config: Config, frame: Frame, land: Land, choices: list[Choice],

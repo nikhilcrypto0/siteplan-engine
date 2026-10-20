@@ -228,6 +228,32 @@ def _place_in(plot: Plot, q: Quantities, frame: Frame, land: Land, rings: BaseGe
         free = free.difference(_cost(footprint, choice, pathway))
 
 
+def serve(plot: Plot, q: Quantities, land: Land, rings: BaseGeometry, hulls: BaseGeometry,
+          others: Sequence[Standing], block: Standing, kept_clear: BaseGeometry | None,
+          roads_in_setback: bool, eps_m: float) -> tuple[Fringed, BaseGeometry] | None:
+    """A block placed already (one the architect locked, below the high-rise height) served as
+    the fringe serves its own (2026-10-19): standing against the ring road along a pathway's
+    width, or reached by a rule 8(l) pathway of at most 30 m from it, laid in the block's own
+    frame on the ground a pathway may take; with the pathway's ground (empty when none), or None
+    when neither can be (it is then never placed: the user, a block the roads do not reach)."""
+    frame = block.frame or Frame(0.0)
+    upright = box(block.x0, block.y0, block.x1, block.y1)
+    ring = frame.to_turned(rings)
+    if upright.distance(ring) <= TOUCH_M and fronts_road(upright, ring, q):
+        return Fringed(block, None), EMPTY
+    if not pathway_serves(q, block.choice.cls):
+        return None
+    water = [frame.to_turned(plot.excluded)] if not plot.excluded.is_empty else []
+    kept = [*water, *([frame.to_turned(kept_clear)] if kept_clear is not None else [])]
+    paths = _pathway_ground(plot, frame, land, frame.to_turned(hulls), kept,
+                            [_in_frame(s, frame) for s in others], roads_in_setback, eps_m)
+    found = _pathway(upright, ring, paths, q)
+    if found is None:
+        return None
+    pathway, line = found
+    return Fringed(block, frame.to_survey(line)), frame.to_survey(pathway)
+
+
 def _in_frame(standing: Standing, frame: Frame) -> Polygon:
     """A block of the columns in this turned frame: upright when it was laid in it, turned when
     its cluster was laid in a frame of its own."""
