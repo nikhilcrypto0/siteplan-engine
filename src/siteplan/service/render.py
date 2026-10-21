@@ -17,6 +17,7 @@ dimension.
 
 from __future__ import annotations
 
+import math
 import textwrap
 from dataclasses import dataclass
 from html import escape
@@ -24,12 +25,15 @@ from pathlib import Path
 
 import ezdxf
 from ezdxf.enums import MTextEntityAlignment, TextEntityAlignment
-from shapely.geometry import Polygon
+from shapely.geometry import Point, Polygon
+from shapely.ops import unary_union
 
 from siteplan import rules as law
-from siteplan.contracts import CandidateLayout, CanonicalSiteModel
+from siteplan.contracts import CandidateLayout, CanonicalSiteModel, DesignBrief, ResolvedRules
 from siteplan.contracts.candidate import RoadKind
 from siteplan.contracts.common import Shape
+from siteplan.contracts.resolved_rules import ALL, CIRCULATION_IN_SETBACK, STILT_IN_RULE_HEIGHT
+from siteplan.geometry import straight_runs
 from siteplan.layout_export import LAYERS, ROAD_LABELS, _parts, _ring
 from siteplan.sheet import (
     SHEET_LAYERS,
@@ -42,6 +46,8 @@ from siteplan.sheet import (
     _scale_bar,
     pick_scale,
 )
+from siteplan.validator import context as judging
+from siteplan.validator import zones
 from siteplan.validator.routes import Way, ways
 
 NOTE_LAYERS = {"SOLVER-NOTES": 1, "SHEET-NOTES": 1}  # AutoCAD colour index: red
@@ -61,6 +67,15 @@ SVG_PAD_M = 12.0
 SVG_HEAD_PX = 70
 SVG_LINE_PX = 16
 SVG_NOTE_CHARS = 120  # a note's line, wrapped to the drawing's width
+# 2026-10-21 (the user: why the green border shows in one layout and not another, and why the
+# loop road stands at different distances from the boundary): the setback band and the green
+# strip carry their widths, side by side, and the strip the rule that asks it
+LABEL_RUN_M = 15.0  # a stretch of plot line shorter than this carries no label of its own
+STRIP_SEEN_SQM = 1.0  # less drawn strip than this along a stretch is none
+STRIP_ROUND_M = 0.5  # a strip's width as drawn, read to this
+LABEL_SPACING_M = 30.0  # the same words this near an earlier label are not said again
+SETBACK_LAYER = "SOLVER-SETBACK"
+MARGIN_LAYERS = {SETBACK_LAYER: 8, "SOLVER-MARGIN-LABELS": 8}  # AutoCAD grey
 # The contract's road kinds, in the legacy writer's label keys (layout_export.ROAD_LABELS).
 LEGACY_KIND = {RoadKind.LOOP: "loop", RoadKind.PERIMETER_LANE: "perimeter",
                RoadKind.APPROACH: "main approach", RoadKind.INTERNAL: "internal",
@@ -96,6 +111,18 @@ class Plan:
     bays: tuple[Polygon, ...]
     ways: tuple[Way, ...] = ()  # each tower's entrance, driveway and route from the gate
     driveway_m: float = law.DRIVEWAY_MIN_WIDTH_M  # rule 13(c)(viii), the width drawn
+    setback: tuple[Polygon, ...] = ()  # the mandatory setback, as the validator holds it
+    edge_labels: tuple[EdgeLabel, ...] = ()  # each stretch's setback and green strip, in words
+    margin_notes: tuple[str, ...] = ()  # why the setback is that deep and the strip there or not
+
+
+@dataclass(frozen=True)
+class EdgeLabel:
+    """Words laid along a stretch of the plot line, inside it."""
+
+    at: tuple[float, float]
+    text: str
+    angle_deg: float  # the stretch's direction, turned to read from the left
 
 
 def _shapes(shapes: list[Shape]) -> tuple[Polygon, ...]:
@@ -108,7 +135,12 @@ def _road_label(kind: RoadKind, width_m: float) -> str:
     return f"{words} {width_m:g} M"
 
 
-def plan_of(site: CanonicalSiteModel, candidate: CandidateLayout) -> Plan:
+def plan_of(site: CanonicalSiteModel, candidate: CandidateLayout,
+            rules: ResolvedRules | None = None, brief: DesignBrief | None = None) -> Plan:
+    """The candidate's shapes; with the rules and the brief also its setback band and green
+    strip in words (`margins`)."""
+    setback, labels, notes = margins(site, rules, brief, candidate) \
+        if rules is not None and brief is not None else ((), (), ())
     towers = []
     for tower in candidate.towers:
         prototype = candidate.prototype(tower.prototype_id)
@@ -129,7 +161,128 @@ def plan_of(site: CanonicalSiteModel, candidate: CandidateLayout) -> Plan:
         club_floors=p.club_house.floors if p.club_house else 0,
         amenities=tuple((a.name, a.shape.to_shapely()) for a in p.amenities),
         ramps=_shapes(p.ramps), cellars=_shapes(p.cellars.outline) if p.cellars else (),
-        bays=_shapes(p.bays), ways=tuple(ways(candidate, law.DRIVEWAY_MIN_WIDTH_M)))
+        bays=_shapes(p.bays), ways=tuple(ways(candidate, law.DRIVEWAY_MIN_WIDTH_M)),
+        setback=setback, edge_labels=labels, margin_notes=notes)
+
+
+def margins(site: CanonicalSiteModel, rules: ResolvedRules, brief: DesignBrief,
+            candidate: CandidateLayout
+            ) -> tuple[tuple[Polygon, ...], tuple[EdgeLabel, ...], tuple[str, ...]]:
+    """The mandatory setback as the independent validator holds it (validator.zones: as deep as
+    the deepest any block here asks, the front apart where a band gives one) and the green strip
+    the candidate draws, each stretch of the plot line labelled with how deep or wide it is, the
+    strip with the rule that asks it, and two notes saying why. The stilt read as the study
+    selects it, else as asks the deeper setback: never the more lenient."""
+    ctx = judging.build(site, rules, brief, candidate)
+    if ctx is None or not ctx.classes:
+        return (), (), ()
+    reading = _reading(rules, ctx)
+    depths = zones.setback_depths(ctx, reading)
+    if depths is None:
+        return (), (), ()
+    front, side = depths
+    zone = zones.setback_zone(ctx, reading)
+    groups = zones.edge_groups(ctx) if abs(front - side) > zones.DEPTH_EPS_M else None
+    strip = unary_union(_shapes(candidate.program.green_strip)) \
+        if candidate.program.green_strip else Polygon()
+    asks = zones.strips_asked(ctx, reading)
+    labels = []
+    for run in straight_runs(ctx.net):
+        if run.length < LABEL_RUN_M:
+            continue
+        (x0, y0), (x1, y1) = run.line.coords[0][:2], run.line.coords[-1][:2]
+        ux, uy = (x1 - x0) / run.length, (y1 - y0) / run.length
+        mid = run.line.interpolate(0.5, normalized=True)
+        nx, ny = -uy, ux
+        if not ctx.net.contains(Point(mid.x + nx * 0.5, mid.y + ny * 0.5)):
+            nx, ny = -nx, -ny
+        is_front = groups is not None and run.line.intersection(
+            groups[0].buffer(0.01)).length > run.length / 2
+        deep = front if is_front else side if groups is not None else max(front, side)
+        turn = math.degrees(math.atan2(uy, ux))
+        turn = turn - 180 if turn > 90 else turn + 180 if turn <= -90 else turn
+        ahead = run.length * 0.18
+        _say(labels, EdgeLabel((mid.x + ux * ahead + nx * deep / 2,
+                                mid.y + uy * ahead + ny * deep / 2), f"setback {deep:g} m", turn))
+        drawn = strip.intersection(run.line.buffer(max(deep, 0.5), cap_style="flat"))
+        if drawn.area < STRIP_SEEN_SQM:
+            continue
+        wide = max(STRIP_ROUND_M, round(drawn.area / run.length / STRIP_ROUND_M) * STRIP_ROUND_M)
+        _say(labels, EdgeLabel((mid.x - ux * ahead + nx * wide / 2,
+                                mid.y - uy * ahead + ny * wide / 2),
+                               _strip_words(rules, asks, wide), turn))
+    notes = (_setback_note(ctx, reading, front, side, groups is not None),
+             _strip_note(rules, asks))
+    return (tuple(_parts_of(zone)), tuple(labels), notes)
+
+
+def _say(labels: list[EdgeLabel], label: EdgeLabel) -> None:
+    """Add a label unless the same words already stand within LABEL_SPACING_M (the short
+    stretches of a bent side would print them over each other)."""
+    if not any(o.text == label.text and math.dist(o.at, label.at) < LABEL_SPACING_M
+               for o in labels):
+        labels.append(label)
+
+
+def _reading(rules: ResolvedRules, ctx) -> str:
+    chosen = next((i.selected for i in rules.interpretations if i.id == STILT_IN_RULE_HEIGHT),
+                  ALL)
+    if chosen in ctx.classes:
+        return chosen
+    return max(ctx.classes, key=lambda r: max(zones.setback_depths(ctx, r) or (0.0, 0.0)))
+
+
+def _parts_of(shape) -> list[Polygon]:
+    if shape is None or shape.is_empty:
+        return []
+    return [g for g in getattr(shape, "geoms", [shape]) if isinstance(g, Polygon)]
+
+
+def _strip_words(rules: ResolvedRules, asks, wide: float) -> str:
+    ask = min(asks, key=lambda a: abs(a.width_m - wide)) if asks else None
+    if ask is not None and abs(ask.width_m - wide) <= STRIP_ROUND_M:
+        wide = ask.width_m  # the strip the rule asks, not the drawing's rounding at a corner
+    if ask is not None and ask.given:
+        return f"green strip {wide:g} m, rule 5(f), low block"
+    where = rules.green_strip.where_setback_from_m.value
+    return (f"green strip {wide:g} m, G.O.7 2016, setback {where:g} m+" if where > 0
+            else f"green strip {wide:g} m, rule 7(a)(viii)")
+
+
+def _setback_note(ctx, reading: str, front: float, side: float, apart: bool) -> str:
+    classes = ctx.classes[reading]
+    deepest = max(front, side)
+    setting = sorted(n for n, c in classes.items()
+                     if c.setback_m is not None and max(c.front_m, c.setback_m) >= deepest - 0.01)
+    heights = sorted({t.floors for t in ctx.towers if t.name in setting})
+    figures = (f"{front:g} m at the front (the stretches facing the access road), {side:g} m on "
+               "the other sides" if apart else f"{deepest:g} m all round")
+    roads_in = next((i.alternatives.get(i.selected, "") for i in ctx.rules.interpretations
+                     if i.id == CIRCULATION_IN_SETBACK and i.selected != ALL), "")
+    inside = (" Roads and fire lanes may run inside it (the study's selection: "
+              f"{roads_in}), which is why the loop road stands in the shaded band."
+              if roads_in and "may run" in roads_in else "")
+    return (f"Setback (shaded): {figures}, the deepest any block here asks: "
+            f"{', '.join(setting)} at Stilt + {'/'.join(str(h) for h in heights)}. "
+            "A layout of lower blocks asks less, so its roads can stand nearer the boundary."
+            + inside)
+
+
+def _strip_note(rules: ResolvedRules, asks) -> str:
+    where = rules.green_strip.where_setback_from_m.value
+    if not asks:
+        return ("No green strip: no block here asks one. A high-rise asks "
+                f"{rules.green_strip.width_m.value:g} m only along the sides whose setback is "
+                f"{where:g} m or more (G.O.Ms.No.7 of 2016); a block below 21 m asks 1 m round "
+                "the plot (G.O.168 rule 5(f)).")
+    said = []
+    for ask in asks:
+        sides = ("all round" if ask.front and ask.others else
+                 "along the front" if ask.front else "along the other sides")
+        rule = ("G.O.168 rule 5(f), for a block below 21 m" if ask.given else
+                f"G.O.Ms.No.7 of 2016, where the setback is {where:g} m or more")
+        said.append(f"{ask.width_m:g} m {sides} ({rule})")
+    return "Green strip: " + "; ".join(dict.fromkeys(said)) + ", inside the setback."
 
 
 def driveway_shape(way: Way, width_m: float) -> Polygon | None:
@@ -178,8 +331,14 @@ def _draw(msp, plan: Plan, text_h: float, label_layer: str) -> None:
                      ).set_placement((at.x, at.y), align=TextEntityAlignment.MIDDLE_CENTER)
 
     poly(plan.plot, "Plot")
+    for part in plan.setback:
+        poly(part, SETBACK_LAYER)
     for part in plan.green_strip:
         poly(part, "SOLVER-GREEN-STRIP")
+    for words in plan.edge_labels:
+        msp.add_text(words.text.upper(), height=text_h * 0.6, rotation=words.angle_deg,
+                     dxfattribs={"layer": "SOLVER-MARGIN-LABELS"}
+                     ).set_placement(words.at, align=TextEntityAlignment.MIDDLE_CENTER)
     for words, pieces in plan.roads:  # every piece of every road says its width (2026-10-19)
         for piece in pieces:
             poly(piece, "SOLVER-ROADS")
@@ -240,7 +399,8 @@ def _draw_ways(msp, plan: Plan, text_h: float) -> None:
 
 
 def write_dxf(plan: Plan, path: Path, notes: list[str]) -> Path:
-    doc = _new_drawing(LAYERS | NOTE_LAYERS | ROUTE_LAYERS)
+    notes = [*notes, *plan.margin_notes]
+    doc = _new_drawing(LAYERS | NOTE_LAYERS | ROUTE_LAYERS | MARGIN_LAYERS)
     msp = doc.modelspace()
     _draw(msp, plan, DXF_TEXT_M, "SOLVER-LABELS")
     _north_arrow(msp, plan.plot, PLAIN_ARROW_M_PER_MM)
@@ -258,7 +418,8 @@ def write_sheet(plan: Plan, path: Path, info: SheetInfo, statement: str,
     statement and title block, and the notes in the statement column above the title block."""
     scale = pick_scale(plan.plot)
     m = scale / 1000  # one printed millimetre in metres on the ground
-    doc = _new_drawing(LAYERS | SHEET_LAYERS | NOTE_LAYERS | ROUTE_LAYERS)
+    notes = [*notes, *plan.margin_notes]
+    doc = _new_drawing(LAYERS | SHEET_LAYERS | NOTE_LAYERS | ROUTE_LAYERS | MARGIN_LAYERS)
     msp = doc.modelspace()
     _draw(msp, plan, TEXT_MM * m, "SHEET-TEXT")
     _dimension(msp, plan.plot, [t.footprint for t in plan.towers], m)
@@ -287,11 +448,13 @@ def write_svg(plan: Plan, path: Path, title: str, subtitle: str, notes: list[str
     """A plain drawing for a browser, with the notes under it, wrapped to its width."""
     notes = [part for line in notes
              for part in textwrap.wrap(line, SVG_NOTE_CHARS, subsequent_indent="  ")]
+    said = [part for line in plan.margin_notes
+            for part in textwrap.wrap(line, SVG_NOTE_CHARS, subsequent_indent="  ")]
     minx, miny, maxx, maxy = plan.plot.bounds
     scale = SVG_WIDTH_PX / max(maxx - minx + 2 * SVG_PAD_M, maxy - miny + 2 * SVG_PAD_M)
     width = (maxx - minx + 2 * SVG_PAD_M) * scale
     drawing_h = (maxy - miny + 2 * SVG_PAD_M) * scale
-    height = SVG_HEAD_PX + drawing_h + SVG_LINE_PX * (len(notes) + 1)
+    height = SVG_HEAD_PX + drawing_h + SVG_LINE_PX * (len(notes) + len(said) + 1)
 
     def xy(x: float, y: float) -> str:
         across = (x - minx + SVG_PAD_M) * scale
@@ -314,7 +477,9 @@ def write_svg(plan: Plan, path: Path, title: str, subtitle: str, notes: list[str
            f'<text x="14" y="26" font-size="17" font-weight="700">{escape(title)}</text>',
            f'<text x="14" y="50" font-size="13" fill="#444">{escape(subtitle)}</text>',
            shape(plan.plot, 'fill="none" stroke="#ad2677" stroke-width="2"')]
-    layers = ((plan.green_strip, 'fill="#d9ead0" stroke="none"'),
+    layers = ((plan.setback, 'fill="#efe9dc" stroke="#b9ab8c" stroke-width="0.8" '
+                             'stroke-dasharray="3 2"'),
+              (plan.green_strip, 'fill="#cfe5c2" stroke="#6b9b55" stroke-width="0.6"'),
               ([p for _, pieces in plan.roads for p in pieces], 'fill="#d6d2c6" stroke="#9c9587"'),
               (plan.fire, 'fill="#f3e3c7" stroke="#d0a24c" stroke-dasharray="4 3"'),
               (plan.gates, 'fill="#f6d6cc" stroke="#bd3b27"'),
@@ -353,6 +518,13 @@ def write_svg(plan: Plan, path: Path, title: str, subtitle: str, notes: list[str
             out.append(f'<circle cx="{x}" cy="{y}" r="4" fill="#c2185b" stroke="#fff"/>')
         out.append(f'<text x="{float(x) + 6:.1f}" y="{float(y) - 6:.1f}" font-size="9" '
                    f'fill="#880e4f">{escape(route_words(way))}</text>')
+    for words in plan.edge_labels:
+        x, y = xy(*words.at).split(",")
+        colour = "#3f6b2b" if words.text.startswith("green") else "#7a6a48"
+        out.append(f'<text x="{x}" y="{y}" font-size="8.5" text-anchor="middle" '
+                   f'dominant-baseline="middle" fill="{colour}" '
+                   f'transform="rotate({-words.angle_deg:.1f} {x} {y})">{escape(words.text)}'
+                   '</text>')
     ax, ay = width - SVG_ARROW_PX - 10, SVG_HEAD_PX + 10
     out.append(f'<path d="M {ax:.0f},{ay:.0f} l {-SVG_ARROW_PX / 3:.1f},{SVG_ARROW_PX} '
                f'l {SVG_ARROW_PX / 3:.1f},{-SVG_ARROW_PX * 0.3:.1f} '
@@ -362,6 +534,8 @@ def write_svg(plan: Plan, path: Path, title: str, subtitle: str, notes: list[str
     top = SVG_HEAD_PX + drawing_h
     out += [f'<text x="14" y="{top + SVG_LINE_PX * i:.0f}" font-size="12" fill="#a3200b">'
             f'{escape(line)}</text>' for i, line in enumerate(notes, 1)]
+    out += [f'<text x="14" y="{top + SVG_LINE_PX * i:.0f}" font-size="12" fill="#5a5345">'
+            f'{escape(line)}</text>' for i, line in enumerate(said, len(notes) + 1)]
     out.append("</svg>")
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("\n".join(out))

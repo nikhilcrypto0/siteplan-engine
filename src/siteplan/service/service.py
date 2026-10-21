@@ -633,7 +633,8 @@ def _write_outputs(out: Path, judged: judge.Judged, items: list[UnresolvedItem],
                   *(f"- {item.item}" for item in items)]
     statement = render_statement(report.area_statement_of(candidate, judged.inputs.site,
                                                           judged.inputs.brief))
-    plan = render.plan_of(judged.inputs.site, candidate)
+    plan = render.plan_of(judged.inputs.site, candidate, judged.inputs.rules,
+                          judged.inputs.brief)
     sheet = record.sheet
     info = SheetInfo(project=record.project_name, client=sheet.get("client", ""),
                      architect=sheet.get("architect", ""),

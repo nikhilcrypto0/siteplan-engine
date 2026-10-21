@@ -373,7 +373,8 @@ class Session:
         out, record = self._run(name, run_id)
         judged = judge.judge_again(out, record, layout_id)
         candidate, report = judged.candidate, judged.report
-        plan = render.plan_of(judged.inputs.site, candidate)
+        plan = render.plan_of(judged.inputs.site, candidate, judged.inputs.rules,
+                              judged.inputs.brief)
         plates = {t.name for t in candidate.towers
                   if candidate.prototype(t.prototype_id).source.startswith(PLATE_SOURCE)}
         items = [i for _, group in scene.candidate_layers(plan, None, "") for i in group]

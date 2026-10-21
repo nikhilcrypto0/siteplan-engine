@@ -13,6 +13,7 @@ import textwrap
 from shapely import set_precision
 from shapely.geometry import LineString, Point, Polygon
 from shapely.geometry.base import BaseGeometry
+from shapely.ops import unary_union
 from shapely.validation import make_valid
 
 from siteplan.cad.bridge import to_cad
@@ -291,6 +292,8 @@ def candidate_layers(plan, setback_zone: BaseGeometry | None, setback_words: str
             groups.append((layer, items))
 
     add(NET, "layout-net", "Net plot", [plan.plot])
+    if setback_zone is None and plan.setback:  # the validator's band (render.margins)
+        setback_zone, setback_words = unary_union(plan.setback), "Setback"
     add(SETBACK, "layout-setback", setback_words, [setback_zone] if setback_zone else [])
     add(GREEN, "layout-green", "Green strip", plan.green_strip)
     for n, (words, pieces) in enumerate(plan.roads, 1):  # two roads may share a name
@@ -320,8 +323,18 @@ def candidate_layers(plan, setback_zone: BaseGeometry | None, setback_words: str
                       "kind": "text", "at": to_cad((c.x, c.y)), "size": TEXT_SIZE_M * 1500,
                       "text": tower_label(tower, "\n")})
         groups.append((f"{TOWERS}: {tower.name}", items))
-    groups += [g for g in (_road_labels(plan), _ways(plan), _north(plan.plot)) if g[1]]
+    groups += [g for g in (_road_labels(plan), _margin_labels(plan), _ways(plan),
+                           _north(plan.plot)) if g[1]]
     return groups
+
+
+def _margin_labels(plan) -> tuple[str, list[dict]]:
+    """Each stretch's setback and green strip, how deep or wide and which rule asks the strip
+    (2026-10-21), at the points render.margins gives; FreeCAD's text stands level."""
+    items = [{"id": f"layout-margin-{k}", "label": words.text, "layer": NOTES, "kind": "text",
+              "at": to_cad(words.at), "size": TEXT_SIZE_M * 700, "text": words.text}
+             for k, words in enumerate(getattr(plan, "edge_labels", ()), 1)]
+    return NOTES, items
 
 
 def _road_labels(plan) -> tuple[str, list[dict]]:
