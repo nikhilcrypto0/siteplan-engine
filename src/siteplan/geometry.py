@@ -147,6 +147,9 @@ def strip_along_side(boundary: Polygon, side: str, width_m: float) -> Polygon:
 
 
 STRIP_LENGTH_TOL_M = 0.01  # how closely the length of a strip from a corner is found
+# a strip edge running on a slanted plot edge leaves, in floating point, a zero-width spike up
+# to 18 m long on the plot left (Dhulapally, 2026-10-21): anything thinner than this goes
+SPIKE_M = 0.01
 
 
 @dataclass(frozen=True)
@@ -203,7 +206,7 @@ def strip_from_corner(boundary: Polygon, corner: str, toward: str, width_m: floa
         mid = (short + long) / 2
         short, long = (mid, long) if band(mid).area < area_sqm else (short, mid)
     strip = band(long)
-    rest = boundary.difference(strip)
+    rest = opening(boundary.difference(strip), SPIKE_M)  # no edge-thin leftover where they meet
     parts = [p for p in getattr(rest, "geoms", [rest]) if p.geom_type == "Polygon"]
     if not parts:
         raise ValueError(f"A {width_m:g} m strip from the {corner} corner leaves no plot.")

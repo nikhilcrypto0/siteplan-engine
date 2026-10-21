@@ -509,10 +509,13 @@ REGISTRY: tuple[Constraint, ...] = (
                 "toward the compass point named, the way along the boundary that sets off "
                 "nearer the direction named, round any corner on the way, measured square into "
                 "the plot from each run, mitred at a bend and cut square at its end, run as far "
-                "as the stated deduction takes it.",
-        f"its length found to within {geometry.STRIP_LENGTH_TOL_M:g} m",
+                "as the stated deduction takes it; where the plot's other side runs back behind "
+                "its start it takes the whole tip (2026-10-21), and any part of the plot left "
+                "thinner than the second figure (a floating-point spike) goes.",
+        f"its length found to within {geometry.STRIP_LENGTH_TOL_M:g} m; "
+        f"{geometry.SPIKE_M:g} m",
         Basis.ENGINE_DESIGN_ASSUMPTION, "none (geometry.strip_from_corner, runner.load_plot)",
-        ("geometry.STRIP_LENGTH_TOL_M",),
+        ("geometry.STRIP_LENGTH_TOL_M", "geometry.SPIKE_M"),
         note="The corner, the direction, the width and the area are the architect's (SITE_INPUT); "
              "how the strip turns a corner, and that its length comes from the area, are the "
              "engine's reading of words like 'along the east side, at the right-hand corner'.",

@@ -9,11 +9,12 @@ even width invented a 6.6 m strip where the firm draws a 40 ft road along part o
 import json
 
 import pytest
+from shapely import affinity
 from shapely.geometry import Point, Polygon, box
 
 from siteplan.adapters.legacy_site import _site_fields, site_model
 from siteplan.contracts.accounting import LocationHow
-from siteplan.geometry import strip_from_corner
+from siteplan.geometry import opening, strip_from_corner
 from siteplan.project import Project
 from siteplan.runner import load_plot
 
@@ -101,6 +102,17 @@ def test_a_strip_from_a_wide_corner_takes_the_whole_tip():
     assert not cut.plot.contains(Point(97, 61))  # beside the tip, behind a square start
     assert cut.plot.intersection(Point(100, 60).buffer(3)).area < 0.01
     assert cut.plot.contains(Point(85, 66))  # beyond 10 m of the east side: the plot's
+
+
+def test_a_strip_on_a_slanted_plot_leaves_no_spike():
+    """On a plot turned off the axes (Dhulapally runs 17.4 degrees off), the strip's edge on the
+    plot's edge left, in floating point, a zero-width spike 10 m long on the plot (18.5 m at
+    Dhulapally's east tip): drawn as a line poking out of the plot."""
+    plot = affinity.rotate(Polygon([(0, 0), (100, 0), (100, 60), (60, 80), (0, 80)]), 17.4,
+                           origin=(0, 0))
+    cut = strip_from_corner(plot, "NE", "S", 10, 800)
+    assert cut.plot.hausdorff_distance(opening(cut.plot, 0.01)) < 0.02
+    assert cut.plot.area == pytest.approx(plot.area - 800, abs=1)
 
 
 def test_a_corner_strip_that_cannot_hold_the_deduction_is_refused():
