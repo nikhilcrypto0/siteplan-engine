@@ -38,7 +38,7 @@ from siteplan.contracts import (
 from siteplan.contracts.candidate import PlacedTower, RoadKind
 from siteplan.contracts.design_brief import ClubSize
 from siteplan.geometry import frontage
-from siteplan.optimizer.preferences import Orientation, required_orientation
+from siteplan.optimizer.preferences import Orientation, required_orientation, tot_lot_toward
 from siteplan.optimizer.search import fringe, ground, network
 from siteplan.optimizer.search.build import (
     FIRE_ROADS,
@@ -909,7 +909,8 @@ def _furnish(run: Run, program: _Program, repair: str | None = None
     pocket_room = p.open_land.difference(unary_union(keep_off)) if keep_off else p.open_land
     pocket_room = pocket_room.difference(p.gate_way)  # never in front of the gate
     pockets, total = ground.choose_open_space(
-        pocket_room, q, angle, unary_union([pl.footprint for pl in p.placements]))
+        pocket_room, q, angle, unary_union([pl.footprint for pl in p.placements]),
+        tot_lot_toward(run.brief.objectives.soft_preferences))
     if total + 1e-6 < q.open_space_sqm:
         return None, (f"{NO_OPEN} {total:,.0f} m² of pockets 3 m wide, "
                       f"{q.open_space_sqm:,.0f} m² needed")

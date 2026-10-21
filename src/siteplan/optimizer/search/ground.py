@@ -138,13 +138,23 @@ def open_space_target(q: Quantities) -> float:
 
 
 def choose_open_space(room: BaseGeometry, q: Quantities, turn_deg: float,
-                      blocks: BaseGeometry = EMPTY) -> tuple[list[Polygon], float]:
+                      blocks: BaseGeometry = EMPTY, toward: tuple[float, float] | None = None
+                      ) -> tuple[list[Polygon], float]:
     """The open space the rule asks for, the most usable pockets first (C4-12: the part a lawn or
-    a play area fits in, near the blocks; objective.usable_open_sqm)."""
+    a play area fits in, near the blocks; objective.usable_open_sqm); where the brief asks for it
+    at one end of the plot (`toward`, 2026-10-21), the pockets furthest that way first."""
     reach = reach_of(blocks)
 
     def usable(pocket: BaseGeometry) -> float:
         return usable_open_sqm(pocket, reach)
+
+    if toward is not None:
+        def far(pocket: BaseGeometry) -> float:
+            c = pocket.centroid
+            return c.x * toward[0] + c.y * toward[1]
+
+        return choose_pockets(room, q.open_space_sqm, q.pocket_width_m, q.pocket_sqm, turn_deg,
+                              far)
 
     return choose_pockets(room, q.open_space_sqm, q.pocket_width_m, q.pocket_sqm, turn_deg,
                           usable if not blocks.is_empty else None)

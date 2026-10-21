@@ -7,6 +7,7 @@ in their columns. Made-up land."""
 
 from functools import cache
 
+import pytest
 from search_support import made_up, strategy
 from shapely.geometry import Polygon, box
 
@@ -78,6 +79,32 @@ def test_a_tot_lot_in_few_large_pieces_by_the_entrance_scores_higher():
         return preferences._tot_lot_few_large(c.model_copy(update={"program": program}), {})
 
     assert score(two) == 1.0 and score(scattered) < 0.5
+
+
+def test_asked_for_the_tot_lot_at_the_north_end_the_layout_packs_it_from_there():
+    """2026-10-21, the user: the tot-lot at the north arm's tip, as the firm laid it. Asked, every
+    layout lays its pockets from the north end first; the objective scores it."""
+    made = made_up(box(0, 0, 200, 120))
+    north = SoftPreference(kind="tot_lot_toward", params={"bearing_deg": 0})
+    brief = made.brief.model_copy(deep=True)
+    brief.objectives.soft_preferences.append(north)
+    inputs = made.__class__(made.site, made.rules, brief, made.envelope, made.kit)
+    asked = strategy().propose(inputs.context()).candidates
+    _, plain = _search(False)
+
+    def mean_y(c) -> float:
+        pieces = [s.to_shapely() for s in c.program.open_space]
+        return sum(p.centroid.y * p.area for p in pieces) / sum(p.area for p in pieces)
+
+    assert asked and plain.candidates
+    def average(cs) -> float:
+        return sum(mean_y(c) for c in cs) / len(cs)
+
+    assert average(asked) > average(plain.candidates) + 1  # metres further north, on average
+    best = max(asked, key=mean_y)
+    assert preferences._tot_lot_toward(best, north.params) > 0.5
+    assert preferences.tot_lot_toward([north]) == pytest.approx((0.0, 1.0))
+    assert preferences.tot_lot_toward([]) is None
 
 
 def test_a_project_names_its_wishes_and_they_reach_the_brief_and_back():

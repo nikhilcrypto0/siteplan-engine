@@ -22,7 +22,11 @@ The kinds the engine knows, and their parameters:
 - tot_lot_few_large (`pieces` and `near_m`, optional; 2026-10-21, after the firm's Dhulapally
   plan): the tot-lot in few large pieces, one of them by the entrance: half for the share of it in
   its `pieces` largest pieces (TOT_LOT_PIECES by default), half for a piece of at least
-  TOT_LOT_BIG_SHARE of it within `near_m` of an entrance (TOT_LOT_NEAR_M by default).
+  TOT_LOT_BIG_SHARE of it within `near_m` of an entrance (TOT_LOT_NEAR_M by default);
+- tot_lot_toward (`bearing_deg`: 0 north, 90 east; 2026-10-21, the user: the tot-lot at the north
+  arm's tip, as the firm laid it): the tot-lot as far that way as the plot goes, the mean of how
+  far each square metre of it lies along the bearing across the layout's extent, 0 to 1; asked
+  for, the layout also lays its tot-lot pockets from that end first (`tot_lot_toward`).
 
 A preference of another kind, or one whose parameters are missing or not numbers, is not weighed
 (`not_weighed`), and the search says so in its notes rather than drop it unsaid.
@@ -126,6 +130,38 @@ def _tot_lot_few_large(candidate: CandidateLayout, params: Mapping[str, Any]) ->
     return 0.5 * sum(g.area for g in pieces[:max(many, 1)]) / whole + 0.5 * by_gate
 
 
+def toward_of(bearing_deg: float) -> tuple[float, float]:
+    """A compass bearing (0 north, 90 east; the survey's +y is north) as a unit vector."""
+    turn = math.radians(bearing_deg)
+    return math.sin(turn), math.cos(turn)
+
+
+def _tot_lot_toward(candidate: CandidateLayout, params: Mapping[str, Any]) -> float:
+    pieces = [g for s in candidate.program.open_space
+              for g in getattr(s.to_shapely(), "geoms", [s.to_shapely()]) if isinstance(g, Polygon)]
+    whole = sum(g.area for g in pieces)
+    if whole <= 0:
+        return 0.0
+    ux, uy = toward_of(float(params["bearing_deg"]))
+    ground = unary_union([*pieces, *(candidate.placed_footprint(t) for t in candidate.towers),
+                          *(s.to_shapely() for r in candidate.circulation.roads
+                            for s in r.shapes)])
+    along = [x * ux + y * uy for x, y in ground.convex_hull.exterior.coords]
+    lo, hi = min(along), max(along)
+    if hi - lo <= 0:
+        return 0.0
+    return sum(g.area * ((g.centroid.x * ux + g.centroid.y * uy) - lo) / (hi - lo)
+               for g in pieces) / whole
+
+
+def tot_lot_toward(preferences: Sequence[SoftPreference]) -> tuple[float, float] | None:
+    """The way the brief asks the tot-lot laid from (a unit vector), when it asks."""
+    for p in preferences:
+        if p.kind == "tot_lot_toward" and p.weight > 0 and understood(p):
+            return toward_of(float(p.params["bearing_deg"]))
+    return None
+
+
 KINDS: dict[str, tuple[Callable[[CandidateLayout, Mapping[str, Any]], float], tuple[str, ...]]] = {
     "orientation": (_orientation, ("axis_deg",)),
     "max_towers": (_max_towers, ("towers",)),
@@ -133,6 +169,7 @@ KINDS: dict[str, tuple[Callable[[CandidateLayout, Mapping[str, Any]], float], tu
     "club_near_entrance": (_club_near_entrance, ("m",)),
     "at_right_angles_to_road": (_right_angles_to_road, ()),
     "tot_lot_few_large": (_tot_lot_few_large, ()),
+    "tot_lot_toward": (_tot_lot_toward, ("bearing_deg",)),
 }
 OPTIONAL: dict[str, tuple[str, ...]] = {"tot_lot_few_large": ("pieces", "near_m")}
 
