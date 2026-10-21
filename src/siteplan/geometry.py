@@ -164,9 +164,13 @@ def strip_from_corner(boundary: Polygon, corner: str, toward: str, width_m: floa
     """The plot left after a strip `width_m` wide, measured square into the plot from the
     boundary, comes off it from the plot's corner furthest toward `corner` (a compass point),
     running along the boundary the way that sets off nearer `toward` and on round any corner it
-    meets, for as long as it takes to reach `area_sqm`; it ends cut square. Nothing is inferred:
-    the corner, the direction, the width and the area are the architect's, and the caller checks
-    what comes off against the stated deduction."""
+    meets, for as long as it takes to reach `area_sqm`; it ends cut square. Where the corner it
+    starts from is sharper than a right angle, the strip takes all of the tip within its width of
+    that side, its inner edge carried on to the plot's other side as a road's edge runs, rather
+    than cut square at the tip (2026-10-21: Dhulapally's east tip, where the firm's plan gives up
+    the whole tip and a square start left a sliver nobody could use). Nothing is inferred: the
+    corner, the direction, the width and the area are the architect's, and the caller checks what
+    comes off against the stated deduction."""
     if area_sqm <= 0:
         raise ValueError(f"A strip of {area_sqm:,.0f} m² takes nothing off the plot.")
     ring = list(boundary.exterior.coords)[:-1]
@@ -181,9 +185,14 @@ def strip_from_corner(boundary: Polygon, corner: str, toward: str, width_m: floa
         raise ValueError(f"From the {corner} corner both ways along the boundary head as far "
                          f"from {toward}; say which way the strip runs.")
     path = LineString(ways[0])
+    back = _tip_reach(ways[0][0], ways[0][1], ways[1][1], width_m)
+    (x0, y0), (x1, y1) = ways[0][0], ways[0][1]
+    run = math.hypot(x1 - x0, y1 - y0)
+    lead = LineString([(x0 - (x1 - x0) / run * back, y0 - (y1 - y0) / run * back),
+                       *ways[0]]) if back > 0 else path
 
     def band(length: float) -> BaseGeometry:
-        line = substring(path, 0, length)
+        line = substring(lead, 0, length + back)
         return line.buffer(width_m, cap_style="flat", join_style="mitre").intersection(boundary)
 
     if band(path.length).area < area_sqm:
@@ -200,6 +209,25 @@ def strip_from_corner(boundary: Polygon, corner: str, toward: str, width_m: floa
         raise ValueError(f"A {width_m:g} m strip from the {corner} corner leaves no plot.")
     return CornerStrip(max(parts, key=lambda p: p.area), strip, substring(path, 0, long),
                        ring[start])
+
+
+def _tip_reach(tip, along, other, width_m: float) -> float:
+    """How far before the corner `tip` a strip `width_m` wide running from it toward `along` must
+    start to take all of the corner's tip, the other side leaving it toward `other`: none where
+    the corner is a right angle or sharper (the other side runs ahead of a square start), else as
+    far back as the other side runs within that width of the strip's side, which a square start
+    would leave as a sliver (and no further than that side's own length)."""
+    ux, uy = along[0] - tip[0], along[1] - tip[1]
+    vx, vy = other[0] - tip[0], other[1] - tip[1]
+    lu, lv = math.hypot(ux, uy), math.hypot(vx, vy)
+    if lu == 0 or lv == 0:
+        return 0.0
+    behind = -(ux * vx + uy * vy) / (lu * lv)  # the other side's run back behind the start
+    if behind <= 0:
+        return 0.0
+    sin = math.sqrt(max(0.0, 1 - behind * behind))
+    reach = width_m * behind / sin if sin > 0 else lv
+    return min(reach, lv * behind)
 
 
 def frontage(footprint: Polygon, near: BaseGeometry, within_m: float) -> float:

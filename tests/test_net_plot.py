@@ -9,7 +9,7 @@ even width invented a 6.6 m strip where the firm draws a 40 ft road along part o
 import json
 
 import pytest
-from shapely.geometry import Point, box
+from shapely.geometry import Point, Polygon, box
 
 from siteplan.adapters.legacy_site import _site_fields, site_model
 from siteplan.contracts.accounting import LocationHow
@@ -86,6 +86,21 @@ def test_the_way_a_corner_strip_runs_is_the_architects(tmp_path):
     plot, _ = load_plot(_project(tmp_path, **{**CORNER, "road_strip_toward": "W"}), "survey.pdf")
     assert not plot.contains(Point(95, 55)) and not plot.contains(Point(50, 55))  # the north side
     assert plot.contains(Point(95, 30))
+
+
+def test_a_strip_from_a_wide_corner_takes_the_whole_tip():
+    """2026-10-21, Dhulapally's east tip: the plot's other side leaves the corner back behind
+    the strip's start (a corner of about 107 degrees), and a strip cut square at the tip left a
+    sliver the firm's plan gives up with the road. Here the corner is 117 degrees: the strip's
+    inner edge runs on to the north-east side, the tip goes with it, the area is still the
+    stated deduction, and it ends that much sooner along the south."""
+    plot = Polygon([(0, 0), (100, 0), (100, 60), (60, 80), (0, 80)])
+    cut = strip_from_corner(plot, "NE", "S", 10, 800)
+    assert cut.corner == (100, 60)
+    assert cut.strip.area == pytest.approx(800, abs=1)
+    assert not cut.plot.contains(Point(97, 61))  # beside the tip, behind a square start
+    assert cut.plot.intersection(Point(100, 60).buffer(3)).area < 0.01
+    assert cut.plot.contains(Point(85, 66))  # beyond 10 m of the east side: the plot's
 
 
 def test_a_corner_strip_that_cannot_hold_the_deduction_is_refused():
