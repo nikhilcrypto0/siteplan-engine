@@ -241,8 +241,8 @@ def _parts_of(shape) -> list[Polygon]:
 
 def _strip_words(rules: ResolvedRules, asks, wide: float) -> str:
     ask = min(asks, key=lambda a: abs(a.width_m - wide)) if asks else None
-    if ask is not None and abs(ask.width_m - wide) <= STRIP_ROUND_M:
-        wide = ask.width_m  # the strip the rule asks, not the drawing's rounding at a corner
+    if ask is not None:  # the strip is laid at the width its rule asks; measured across a
+        wide = ask.width_m  # tapering tip or a corner it reads wider (a "3 m" at a 2 m strip)
     if ask is not None and _low_strip(rules, ask):
         return f"green strip {wide:g} m, rule 5(f), low block"
     where = rules.green_strip.where_setback_from_m.value

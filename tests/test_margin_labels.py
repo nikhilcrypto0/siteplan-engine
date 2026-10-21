@@ -85,6 +85,9 @@ def test_a_high_rises_strip_is_never_called_a_low_blocks():
     assert "G.O.7 2016" in render._strip_words(rules, [high], high.width_m) or \
         "rule 7(a)(viii)" in render._strip_words(rules, [high], high.width_m)
     assert render._strip_words(rules, [low], 1.0) == "green strip 1 m, rule 5(f), low block"
+    # measured across a tapering tip a 2 m strip reads 3 m: the label says the width asked
+    assert render._strip_words(rules, [high], 3.0).startswith(
+        f"green strip {high.width_m:g} m, ")
     assert "rule 5(f)" not in render._strip_note(rules, [high])
     assert "rule 5(f), for a block below 21 m" in render._strip_note(rules, [low])
 
