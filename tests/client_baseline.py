@@ -65,6 +65,7 @@ def debug_profile(reading: str) -> dict:
 # answers as they were when it was made, so a decided input never reads as a change of code.
 DECIDED_SINCE = ("club_house_floors", "floors_at_most")
 DECIDED_READINGS_SINCE = ("open_space_basis",)
+PINNED_MIX = "70% 2BHK, 30% 3BHK"  # the mix the baseline was made on (the user's is 60/40 since)
 
 
 def baseline_answers() -> dict:
@@ -76,6 +77,9 @@ def baseline_answers() -> dict:
             answers.get(labels, {}).pop(key, None)
     answers["readings"] = {k: v for k, v in answers.get("readings", {}).items()
                            if k not in DECIDED_READINGS_SINCE}
+    answers["mix"] = PINNED_MIX
+    for labels in ("_source", "_status", "_source_kind"):
+        answers.get(labels, {}).pop("mix", None)
     return answers
 
 
