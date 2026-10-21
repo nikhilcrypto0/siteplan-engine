@@ -86,10 +86,15 @@ def placement_of(standing: Standing, name: str, frame: Frame) -> Placement:
     minx, miny, maxx, maxy = local.bounds
     bx, by = (minx + maxx) / 2, (miny + maxy) / 2
     centre = ((standing.x0 + standing.x1) / 2, (standing.y0 + standing.y1) / 2)
-    origin_turned = (centre[0] + by, centre[1] - bx)  # a quarter turn takes (bx, by) to (-by, bx)
+    if standing.choice.turned:  # the comb: no quarter turn, the long side across the column
+        origin_turned = (centre[0] - bx, centre[1] - by)
+        angle = frame.angle_deg - 90.0
+    else:
+        origin_turned = (centre[0] + by, centre[1] - bx)  # a quarter turn: (bx, by) to (-by, bx)
+        angle = frame.angle_deg
     x, y = frame.point_to_survey(*origin_turned)
-    footprint = affinity.translate(affinity.rotate(local, frame.angle_deg, origin=(0, 0)), x, y)
-    return Placement(standing, name, x, y, frame.angle_deg, footprint)
+    footprint = affinity.translate(affinity.rotate(local, angle, origin=(0, 0)), x, y)
+    return Placement(standing, name, x, y, angle, footprint)
 
 
 def _sorted_standing(standing: Sequence[Standing]) -> list[Standing]:

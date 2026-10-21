@@ -172,4 +172,4 @@ def _with_class(standing: Standing, cls: FloorClass) -> Standing:
     choice = standing.choice
     return replace(standing, choice=Choice(
         choice.prototype, cls, choice.length_m, choice.depth_m,
-        choice.prototype.per_floor.saleable_sqft * cls.floors))
+        choice.prototype.per_floor.saleable_sqft * cls.floors, choice.turned))

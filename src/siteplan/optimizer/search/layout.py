@@ -109,12 +109,14 @@ class Config:
     mixed_depths: bool = False  # columns may be of the kit's other depths too (C4-04)
     fringe_room: bool = True  # the fringe keeps the room the program is reckoned to need; False:
     # the exact half alone says whether the program still has room (C4-07)
+    turned: bool = False  # 2026-10-21: the columns' blocks turned a quarter, the comb
 
     @property
     def key(self) -> tuple:
         return (self.profile.key, round(self.angle_deg, 3), round(self.offset_m, 3),
                 self.max_floors, self.reserve or "", self.reserve_scale, self.low_blocks,
-                self.more_clusters, self.mixed_depths, self.fringe_room)
+                self.more_clusters, self.mixed_depths, self.fringe_room) + (
+                    ("turned",) if self.turned else ())
 
 
 @dataclass(frozen=True)
@@ -355,9 +357,10 @@ def _evaluate_at(run: Run, config: Config, slide: tuple[float, float]) -> Evalua
     classes = {pid: [c for c in found if c.floors <= config.max_floors
                      and (c.high_rise or config.low_blocks)]
                for pid, found in run.classes[config.profile.key].items()}
-    choices = choices_for(run.kit, classes)
+    choices = choices_for(run.kit, classes, turned=config.turned)
     # C4-04: in a configuration of its own, the kit's other depths may stand in columns too
-    others = choices_for(run.other_depths, classes) if config.mixed_depths else []
+    others = choices_for(run.other_depths, classes, turned=config.turned) \
+        if config.mixed_depths else []
     if not choices:
         return Failure("no floor count is left open")
     beyond = fringe.options(run.fringe_kit, classes, config.max_floors, q) \

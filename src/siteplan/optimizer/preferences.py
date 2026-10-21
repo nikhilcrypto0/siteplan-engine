@@ -13,7 +13,16 @@ The kinds the engine knows, and their parameters:
 - keep_away_from_road (`m`): every block at least this far from the entrances on the access road;
   the share of the blocks that are;
 - club_near_entrance (`m`): the club house within this distance of an entrance; 1 when it is, the
-  distance asked over the distance found when not, 0 with no club house.
+  distance asked over the distance found when not, 0 with no club house;
+- at_right_angles_to_road (no parameters; 2026-10-21, the user's comb): each block's long side at
+  right angles to the road nearest it, the |sin| of the angle between the two, where the road's
+  centre line passes nearest; the mean over the blocks. The search also lays blocks turned a
+  quarter in their columns when it is asked (`wants_comb`), so the street meets each at its
+  short end;
+- tot_lot_few_large (`pieces` and `near_m`, optional; 2026-10-21, after the firm's Dhulapally
+  plan): the tot-lot in few large pieces, one of them by the entrance: half for the share of it in
+  its `pieces` largest pieces (TOT_LOT_PIECES by default), half for a piece of at least
+  TOT_LOT_BIG_SHARE of it within `near_m` of an entrance (TOT_LOT_NEAR_M by default).
 
 A preference of another kind, or one whose parameters are missing or not numbers, is not weighed
 (`not_weighed`), and the search says so in its notes rather than drop it unsaid.
@@ -26,6 +35,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
+from shapely.geometry import LineString, Polygon
 from shapely.ops import unary_union
 
 from siteplan.contracts import CandidateLayout
@@ -71,12 +81,60 @@ def _club_near_entrance(candidate: CandidateLayout, params: Mapping[str, Any]) -
     return 1.0 if found <= near else near / found
 
 
+TOT_LOT_PIECES = 2
+TOT_LOT_NEAR_M = 30.0
+TOT_LOT_BIG_SHARE = 0.25
+
+
+def _road_lines(candidate: CandidateLayout) -> list[LineString]:
+    """Every segment of every road's centre line (a road drawn without one gives none)."""
+    out = []
+    for road in candidate.circulation.roads:
+        if road.centre_line is None:
+            continue
+        points = road.centre_line.points
+        out += [LineString([a, b]) for a, b in zip(points, points[1:], strict=False) if a != b]
+    return out
+
+
+def _right_angles_to_road(candidate: CandidateLayout, params: Mapping[str, Any]) -> float:
+    towers, segments = candidate.towers, _road_lines(candidate)
+    if not towers or not segments:
+        return 0.0
+    total = 0.0
+    for tower in towers:
+        foot = candidate.placed_footprint(tower)
+        near = min(segments, key=foot.distance)
+        (x0, y0), (x1, y1) = near.coords
+        road = math.degrees(math.atan2(y1 - y0, x1 - x0))
+        total += abs(math.sin(math.radians(_long_axis(candidate, tower) - road)))
+    return total / len(towers)
+
+
+def _tot_lot_few_large(candidate: CandidateLayout, params: Mapping[str, Any]) -> float:
+    pieces = sorted((g for s in candidate.program.open_space
+                     for g in getattr(s.to_shapely(), "geoms", [s.to_shapely()])
+                     if isinstance(g, Polygon)), key=lambda g: -g.area)
+    whole = sum(g.area for g in pieces)
+    if whole <= 0:
+        return 0.0
+    many = int(params.get("pieces", TOT_LOT_PIECES))
+    near = float(params.get("near_m", TOT_LOT_NEAR_M))
+    gates = _gates(candidate)
+    by_gate = not gates.is_empty and any(
+        g.area >= TOT_LOT_BIG_SHARE * whole and g.distance(gates) <= near for g in pieces)
+    return 0.5 * sum(g.area for g in pieces[:max(many, 1)]) / whole + 0.5 * by_gate
+
+
 KINDS: dict[str, tuple[Callable[[CandidateLayout, Mapping[str, Any]], float], tuple[str, ...]]] = {
     "orientation": (_orientation, ("axis_deg",)),
     "max_towers": (_max_towers, ("towers",)),
     "keep_away_from_road": (_away_from_road, ("m",)),
     "club_near_entrance": (_club_near_entrance, ("m",)),
+    "at_right_angles_to_road": (_right_angles_to_road, ()),
+    "tot_lot_few_large": (_tot_lot_few_large, ()),
 }
+OPTIONAL: dict[str, tuple[str, ...]] = {"tot_lot_few_large": ("pieces", "near_m")}
 
 
 def understood(preference: SoftPreference) -> bool:
@@ -84,12 +142,21 @@ def understood(preference: SoftPreference) -> bool:
     known = KINDS.get(preference.kind)
     if known is None:
         return False
-    for name in known[1]:
+    given = [*known[1], *(n for n in OPTIONAL.get(preference.kind, ())
+                          if n in preference.params)]
+    for name in given:
         value = preference.params.get(name)
         if isinstance(value, bool) or not isinstance(value, int | float) \
                 or not math.isfinite(value):
             return False
     return True
+
+
+def wants_comb(preferences: Sequence[SoftPreference]) -> bool:
+    """Whether the brief asks for blocks at right angles to their road (the search then also lays
+    blocks turned a quarter in their columns)."""
+    return any(p.kind == "at_right_angles_to_road" and p.weight > 0 and understood(p)
+               for p in preferences)
 
 
 @dataclass(frozen=True)

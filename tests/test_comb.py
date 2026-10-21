@@ -1,0 +1,96 @@
+"""The comb (2026-10-21, the user's sketch, after the firm's Dhulapally plan): blocks at right
+angles to the road that serves them, the road meeting each at its short end, like the teeth of a
+comb; and the tot-lot in few large pieces, one by the entrance. Both are the client's design
+wishes, never rules: a project names them (`LayoutRequest.preferences`), the objective weighs
+them, and only when the brief asks for the comb does the search also lay blocks turned a quarter
+in their columns. Made-up land."""
+
+from functools import cache
+
+from search_support import made_up, strategy
+from shapely.geometry import Polygon, box
+
+from siteplan.adapters.legacy_site import _preferences, _preferences_back
+from siteplan.contracts.common import Provenance
+from siteplan.contracts.design_brief import SoftPreference
+from siteplan.layout import DesignPreference, LayoutRequest
+from siteplan.optimizer import preferences
+from siteplan.optimizer.search.build import placement_of
+from siteplan.optimizer.search.columns import Choice, Standing
+from siteplan.optimizer.search.frame import Frame
+from siteplan.validator import validate
+
+TEST_CLASS = "normative"
+COMB = SoftPreference(kind="at_right_angles_to_road")
+
+
+@cache
+def _search(wish: bool):
+    made = made_up(box(0, 0, 200, 120))
+    brief = made.brief.model_copy(deep=True)
+    if wish:
+        brief.objectives.soft_preferences.append(COMB)
+    inputs = made.__class__(made.site, made.rules, brief, made.envelope, made.kit)
+    return inputs, strategy().propose(inputs.context())
+
+
+def test_a_turned_block_stands_exactly_in_its_column_its_long_side_across_it():
+    made = made_up(box(0, 0, 200, 120))
+    p = made.kit[0]
+    for angle in (0.0, 17.4, 63.0):
+        frame = Frame(angle)
+        s = Standing(Choice(p, None, p.depth_m, p.length_m, 0.0, True), 0, 10.0, 20.0)
+        placed = placement_of(s, "T1", frame)
+        column = frame.to_survey(box(10, 20, 10 + p.length_m, 20 + p.depth_m))
+        assert placed.footprint.hausdorff_distance(column) < 1e-6
+
+
+def test_asked_for_the_comb_the_search_offers_one_and_the_validator_judges_it():
+    inputs, proposal = _search(True)
+    combs = [c for c in proposal.candidates
+             if preferences._right_angles_to_road(c, {}) > 0.99]
+    assert combs, [round(preferences._right_angles_to_road(c, {}), 2)
+                   for c in proposal.candidates]
+    for c in combs:
+        report = validate(inputs.site, inputs.rules, inputs.brief, c, inputs.envelope)
+        assert report.verdict.legal.value != "FAIL"
+
+
+def test_not_asked_the_search_lays_no_turned_block():
+    _, without = _search(False)
+    assert not any(preferences._right_angles_to_road(c, {}) > 0.99
+                   for c in without.candidates)
+    assert not preferences.wants_comb([])
+
+
+def test_a_tot_lot_in_few_large_pieces_by_the_entrance_scores_higher():
+    _, proposal = _search(False)
+    c = proposal.candidates[0]
+    gates = preferences._gates(c)
+    near = gates.centroid
+    two = [Polygon(box(near.x - 20, near.y, near.x + 20, near.y + 25)),
+           Polygon(box(150, 90, 190, 115))]
+    scattered = [Polygon(box(10 + 15 * k, 100, 20 + 15 * k, 110)) for k in range(8)]
+
+    def score(pieces):
+        program = c.program.model_copy(update={"open_space": [
+            type(c.program.open_space[0]).from_shapely(p) for p in pieces]})
+        return preferences._tot_lot_few_large(c.model_copy(update={"program": program}), {})
+
+    assert score(two) == 1.0 and score(scattered) < 0.5
+
+
+def test_a_project_names_its_wishes_and_they_reach_the_brief_and_back():
+    r = LayoutRequest(floors=8, unit_mix={"2BHK": 1.0}, preferences=[
+        DesignPreference(kind="at_right_angles_to_road", source="the user, 2026-10-21"),
+        DesignPreference(kind="tot_lot_few_large", params={"pieces": 2, "near_m": 30},
+                         source="the user, 2026-10-21", status="USER_CONFIRMED")])
+    wishes = _preferences(r)
+    assert [w.kind for w in wishes] == ["at_right_angles_to_road", "tot_lot_few_large"]
+    assert wishes[1].status is Provenance.USER_CONFIRMED and not wishes[1].required
+    assert all(preferences.understood(w) for w in wishes)
+    brief_like = type("B", (), {"objectives": type("O", (), {"soft_preferences": wishes})})
+    back = _preferences_back(brief_like)
+    assert [b["kind"] for b in back] == ["at_right_angles_to_road", "tot_lot_few_large"]
+    assert not preferences.understood(SoftPreference(kind="tot_lot_few_large",
+                                                     params={"pieces": "two"}))

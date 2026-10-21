@@ -1388,6 +1388,21 @@ REGISTRY: tuple[Constraint, ...] = (
         settles="The architect, who may ask for a finer or a looser fit.",
     ),
     Constraint(
+        "Open space", "How the preference for a tot-lot in few large pieces, one by the "
+                      "entrance, is scored when the brief does not say (2026-10-21, after the "
+                      "firm's Dhulapally plan): the share of the tot-lot in this many of its "
+                      "largest pieces, and a piece of at least this share of it within this "
+                      "distance of an entrance.",
+        f"{preferences.TOT_LOT_PIECES} pieces; {preferences.TOT_LOT_BIG_SHARE:.0%} of it within "
+        f"{_m(preferences.TOT_LOT_NEAR_M)}",
+        Basis.ENGINE_DESIGN_ASSUMPTION, "none (optimizer.preferences)",
+        ("optimizer.preferences.TOT_LOT_PIECES", "optimizer.preferences.TOT_LOT_NEAR_M",
+         "optimizer.preferences.TOT_LOT_BIG_SHARE"),
+        note="A preference of the client's, never law: it weighs layouts, it fails none; the "
+             "10% tot-lot itself is the law's and never traded.",
+        settles="The architect, who may say how many pieces and how near the entrance.",
+    ),
+    Constraint(
         "Towers", "The tower prototypes composed from the firm's flats: the cores a block has, "
                   "the flats each core serves on a side, and what a core holds.",
         "; ".join(f"{family.value} {plan.cores} x {plan.flats_per_core_per_side}"

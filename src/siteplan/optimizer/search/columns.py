@@ -53,10 +53,13 @@ class Choice:
     length_m: float  # along the column
     depth_m: float  # across it
     value: float  # saleable sqft the block adds
+    # 2026-10-21 (the user's comb): the block turned a quarter, its long side across the column,
+    # so the street beside the column meets it at its short end
+    turned: bool = False
 
     @property
-    def key(self) -> tuple[str, int, float, float]:
-        return self.prototype.id, *class_key(self.cls)
+    def key(self) -> tuple:
+        return (self.prototype.id, *class_key(self.cls)) + (("turned",) if self.turned else ())
 
 
 @dataclass(frozen=True)
@@ -88,19 +91,23 @@ class Standing:
 
 
 def choices_for(prototypes: Sequence[TowerPrototype],
-                classes: Mapping[str, Sequence[FloorClass]]) -> list[Choice]:
+                classes: Mapping[str, Sequence[FloorClass]], turned: bool = False
+                ) -> list[Choice]:
     """Every block that may stand, for the prototypes and the floor counts each leaves open. Of the
     floor counts that ask and rest on the same (`readings.resources`) only the tallest is kept:
     the others add nothing but a lower yield. (C4-06: the setback and gap alone once hid a shorter
-    count that NBC's own line does not hold to its fire access.)"""
+    count that NBC's own line does not hold to its fire access.) `turned`: each block turned a
+    quarter in its column, the comb (its length across the column, its depth along it)."""
     found = []
     for prototype in prototypes:
         by_resources: dict[tuple, FloorClass] = {}
         for cls in classes[prototype.id]:
             by_resources[resources(cls)] = cls  # lowest first: the tallest wins
         for cls in by_resources.values():
-            found.append(Choice(prototype, cls, prototype.length_m, prototype.depth_m,
-                                prototype.per_floor.saleable_sqft * cls.floors))
+            along, across = ((prototype.depth_m, prototype.length_m) if turned
+                             else (prototype.length_m, prototype.depth_m))
+            found.append(Choice(prototype, cls, along, across,
+                                prototype.per_floor.saleable_sqft * cls.floors, turned))
     return found
 
 

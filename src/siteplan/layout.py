@@ -115,6 +115,17 @@ class TowerOrientation(BaseModel):
         "ASSUMED_FOR_TEST", description="USER_CONFIRMED when the architect said so")
 
 
+class DesignPreference(BaseModel):
+    """A design wish of the client's, never law and never a requirement (2026-10-21): weighed by
+    the search's objective (optimizer.preferences, which names the kinds it knows) and said in
+    its notes when it is not understood."""
+
+    kind: str = Field(min_length=1, description="e.g. 'at_right_angles_to_road'")
+    params: dict[str, float] = {}
+    source: str = Field(min_length=1, description="Who asked for it and when")
+    status: Literal["USER_CONFIRMED", "ASSUMED_FOR_TEST"] = "ASSUMED_FOR_TEST"
+
+
 class LayoutRequest(BaseModel):
     """What the architect (or, in Stage 2b, the LLM from a brief) asks the solver for."""
 
@@ -167,6 +178,9 @@ class LayoutRequest(BaseModel):
         None, description="The way every tower must run, the client's requirement (Vastu); "
         "read by the contract pipeline (the service's full search and the validator's program "
         "check), not by this legacy layout")
+    preferences: list[DesignPreference] = Field(
+        [], description="The client's design wishes, never law: read by the contract pipeline "
+        "(the full search's objective), not by this legacy layout")
     cellar_floor_height_m: PositiveFloat = Field(
         3.0, description="Floor to floor of a cellar: the rise each 1 in 8 ramp climbs")
     cellar_utilities_pct: float = Field(

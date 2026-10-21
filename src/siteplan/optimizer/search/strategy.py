@@ -47,7 +47,7 @@ from siteplan.optimizer.guard import STUDY_NOT_LAID, held_to, off_gate, unreache
 from siteplan.optimizer.interfaces import Budget, Proposal, SearchContext, Validator
 from siteplan.optimizer.objective import Scores, measure
 from siteplan.optimizer.pareto import Scored, leaders, pareto_front, same_idea, select
-from siteplan.optimizer.preferences import not_weighed
+from siteplan.optimizer.preferences import not_weighed, wants_comb
 from siteplan.optimizer.search import fringe
 from siteplan.optimizer.search.build import build_candidate
 from siteplan.optimizer.search.columns import Choice, Standing
@@ -356,23 +356,32 @@ class FullSearchStrategy:
         # the others and in an order of its own, so those are evaluated as they were before
         more = [*configs[False], *configs[True]]
         context.rng("evaluate-clusters").shuffle(more)
-        plans = [*((c, False, False) for c in [*configs[False], *configs[True]]),
-                 *((c, True, False) for c in more)]
+        plans = [*((c, False, False, False) for c in [*configs[False], *configs[True]]),
+                 *((c, True, False, False) for c in more)]
         if run.other_depths:
             # each again with columns of the kit's other depths too (C4-04), where it has any:
             # after all of the others and in an order of its own, as further clusters are
-            mixed = [(c, clusters, True) for c, clusters, _ in plans]
+            mixed = [(c, clusters, True, False) for c, clusters, _, _ in plans]
             context.rng("evaluate-depths").shuffle(mixed)
             plans += mixed
+        if wants_comb(run.brief.objectives.soft_preferences):
+            # 2026-10-21 (the user's comb): each again with the blocks turned a quarter in their
+            # columns, the street meeting each at its short end, only when the brief asks for
+            # blocks at right angles to their road; after all of the others, in an order of its
+            # own, so the others are evaluated as they were
+            comb = [(c, clusters, depths, True) for c, clusters, depths, _ in plans]
+            context.rng("evaluate-comb").shuffle(comb)
+            plans += comb
         queues: dict[str, list[Evaluation]] = {p.key: [] for p in wanted}
-        for (profile, angle, tallest, step, low), clusters, depths in plans:
+        for (profile, angle, tallest, step, low), clusters, depths, turned in plans:
             if stage.expired():
                 tally.exhausted = True
                 break
             pitch = run.depth_m + max(run.q.road_m, PITCH_GAP_M)
             ev = _guarded(evaluate, run, Config(profile, angle, step * pitch / self.limits.offsets,
                                                 tallest, None, low_blocks=low,
-                                                more_clusters=clusters, mixed_depths=depths))
+                                                more_clusters=clusters, mixed_depths=depths,
+                                                turned=turned))
             tally.evaluated += 1
             if isinstance(ev, Failure):
                 tally.reasons[ev.reason] += 1
@@ -390,11 +399,13 @@ class FullSearchStrategy:
         numbers."""
         laid: list[tuple[Profile, Config, object]] = []
         by_key = {p.key: p for p in run.profiles}
-        for mixed in (False, True):
-            for key, evaluations in queues.items():
-                laid += self._lay_out_profile(
-                    run, by_key[key], [ev for ev in evaluations
-                                       if ev.config.mixed_depths == mixed], tally, stage)
+        for turned in (False, True):  # the comb's (2026-10-21) with quotas of their own too
+            for mixed in (False, True):
+                for key, evaluations in queues.items():
+                    laid += self._lay_out_profile(
+                        run, by_key[key], [ev for ev in evaluations
+                                           if ev.config.mixed_depths == mixed
+                                           and ev.config.turned == turned], tally, stage)
         return laid
 
     def _improve(self, run: Run, laid: list[tuple[Profile, Config, object]], tally: Tally,
