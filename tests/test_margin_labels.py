@@ -53,7 +53,8 @@ def test_a_layout_with_a_low_block_names_rule_5f_and_one_without_never_does():
     ctx = judging.build(made.site, made.rules, made.brief, made.candidate)
     asks = zones.strips_asked(ctx, render._reading(made.rules, ctx))
     said = " ".join(plan.margin_notes)
-    assert ("rule 5(f), for a block below 21 m" in said) == any(a.given for a in asks)
+    assert ("rule 5(f), for a block below 21 m" in said) == any(
+        render._low_strip(made.rules, a) for a in asks)
 
 
 def test_the_picture_the_plain_dxf_and_freecad_carry_the_band_and_the_words(tmp_path):
@@ -72,6 +73,20 @@ def test_the_picture_the_plain_dxf_and_freecad_carry_the_band_and_the_words(tmp_
     assert "layout-setback-1" in ids
     assert any(i["id"].startswith("layout-margin-") and i["text"].startswith("setback ")
                for i in items)
+
+
+def test_a_high_rises_strip_is_never_called_a_low_blocks():
+    """A high-rise band states its own strip (`StripAsk.given`) as a Table III row does: labelled
+    by that, Dhulapally's comb at Stilt + 10 read 'rule 5(f), low block' round its 2 m strip."""
+    made = fixture("rectangle")
+    rules = made.rules
+    high = zones.StripAsk(rules.green_strip.width_m.value, True, True, True)
+    low = zones.StripAsk(1.0, True, True, True)
+    assert "G.O.7 2016" in render._strip_words(rules, [high], high.width_m) or \
+        "rule 7(a)(viii)" in render._strip_words(rules, [high], high.width_m)
+    assert render._strip_words(rules, [low], 1.0) == "green strip 1 m, rule 5(f), low block"
+    assert "rule 5(f)" not in render._strip_note(rules, [high])
+    assert "rule 5(f), for a block below 21 m" in render._strip_note(rules, [low])
 
 
 def test_without_the_rules_a_plan_is_drawn_as_before():

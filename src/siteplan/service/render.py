@@ -73,6 +73,7 @@ SVG_NOTE_CHARS = 120  # a note's line, wrapped to the drawing's width
 LABEL_RUN_M = 15.0  # a stretch of plot line shorter than this carries no label of its own
 STRIP_SEEN_SQM = 1.0  # less drawn strip than this along a stretch is none
 STRIP_ROUND_M = 0.5  # a strip's width as drawn, read to this
+STRIP_SAME_M = 0.01  # two strip widths this close are the same strip
 LABEL_SPACING_M = 30.0  # the same words this near an earlier label are not said again
 SETBACK_LAYER = "SOLVER-SETBACK"
 MARGIN_LAYERS = {SETBACK_LAYER: 8, "SOLVER-MARGIN-LABELS": 8}  # AutoCAD grey
@@ -242,11 +243,18 @@ def _strip_words(rules: ResolvedRules, asks, wide: float) -> str:
     ask = min(asks, key=lambda a: abs(a.width_m - wide)) if asks else None
     if ask is not None and abs(ask.width_m - wide) <= STRIP_ROUND_M:
         wide = ask.width_m  # the strip the rule asks, not the drawing's rounding at a corner
-    if ask is not None and ask.given:
+    if ask is not None and _low_strip(rules, ask):
         return f"green strip {wide:g} m, rule 5(f), low block"
     where = rules.green_strip.where_setback_from_m.value
     return (f"green strip {wide:g} m, G.O.7 2016, setback {where:g} m+" if where > 0
             else f"green strip {wide:g} m, rule 7(a)(viii)")
+
+
+def _low_strip(rules: ResolvedRules, ask) -> bool:
+    """Whether a strip is Table III's (rule 5(f), a block below 21 m) rather than the high-rise
+    strip of rule 7(a)(viii): a high-rise band states its strip too (`StripAsk.given`), so the
+    width tells them apart, the high-rise strip's being the rules' `green_strip.width_m`."""
+    return abs(ask.width_m - rules.green_strip.width_m.value) > STRIP_SAME_M
 
 
 def _setback_note(ctx, reading: str, front: float, side: float, apart: bool) -> str:
@@ -279,7 +287,7 @@ def _strip_note(rules: ResolvedRules, asks) -> str:
     for ask in asks:
         sides = ("all round" if ask.front and ask.others else
                  "along the front" if ask.front else "along the other sides")
-        rule = ("G.O.168 rule 5(f), for a block below 21 m" if ask.given else
+        rule = ("G.O.168 rule 5(f), for a block below 21 m" if _low_strip(rules, ask) else
                 f"G.O.Ms.No.7 of 2016, where the setback is {where:g} m or more")
         said.append(f"{ask.width_m:g} m {sides} ({rule})")
     return "Green strip: " + "; ".join(dict.fromkeys(said)) + ", inside the setback."
