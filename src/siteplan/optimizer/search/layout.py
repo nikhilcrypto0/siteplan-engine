@@ -836,7 +836,7 @@ def _furnish_where_best(run: Run, program: _Program) -> tuple[_Furnished | None,
     far = _far_point(program.open_land, program.anchor)
     if far is not None:
         tries.append(replace(program, club_anchor=far))
-    toward = club_toward(run.brief.objectives.soft_preferences)
+    toward = club_toward(run.brief.objectives.soft_preferences) if run is not None else None
     end = _end_point(program.open_land, toward) if toward is not None else None
     if end is not None:  # 2026-10-21: the brief asks the club house at one end of the ground
         tries.append(replace(program, club_anchor=end))
@@ -852,7 +852,7 @@ def _furnish_where_best(run: Run, program: _Program) -> tuple[_Furnished | None,
         if furnished is None:
             continue
         reach = ground.reach_of(unary_union([pl.footprint for pl in trial.placements]))
-        score = (_along(furnished.club, toward),
+        score = (_along(furnished.club if toward is not None else None, toward),
                  ground.usable_open_sqm(unary_union(furnished.pockets), reach),
                  -furnished.plan.levels, -n)
         if best is None or score > best[0]:
