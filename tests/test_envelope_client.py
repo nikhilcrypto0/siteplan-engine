@@ -183,7 +183,9 @@ def test_the_blind_dhulapally_site_takes_its_net_plot_from_the_architects_answer
     deduction, = site.ownership.deductions
     where = deduction.location
     assert where.how.value == "EXTENT" and where.width_m == pytest.approx(12.192)
-    assert where.extent.to_shapely().length == pytest.approx(104.9, abs=0.5)
+    # 104.9 m until 2026-10-21, when the strip took the east tip (as the firm's plan gives it up)
+    # and, keeping the architect's 1,113 m², ended that much sooner along the south
+    assert where.extent.to_shapely().length == pytest.approx(103.1, abs=0.5)
     assert site.net_plot.value.to_shapely().area == pytest.approx(19_018.1, abs=1)
     assert envelope(site, resolve(site)).bands
 
