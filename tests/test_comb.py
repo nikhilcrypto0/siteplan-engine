@@ -107,6 +107,27 @@ def test_asked_for_the_tot_lot_at_the_north_end_the_layout_packs_it_from_there()
     assert preferences.tot_lot_toward([]) is None
 
 
+def test_asked_for_the_club_house_at_the_south_end_the_layout_places_it_there():
+    """2026-10-21, the user: the club house out of Dhulapally's north arm, so the arm goes to a
+    tower. Asked toward the south, it stands further south than the search would put it."""
+    made = made_up(box(0, 0, 200, 120))
+    south = SoftPreference(kind="club_toward", params={"bearing_deg": 180})
+    brief = made.brief.model_copy(deep=True)
+    brief.objectives.soft_preferences.append(south)
+    inputs = made.__class__(made.site, made.rules, brief, made.envelope, made.kit)
+    asked = strategy().propose(inputs.context()).candidates
+    _, plain = _search(False)
+
+    def club_y(cs) -> float:
+        ys = [c.program.club_house.shape.to_shapely().centroid.y for c in cs
+              if c.program.club_house]
+        return sum(ys) / len(ys)
+
+    assert asked and club_y(asked) < club_y(plain.candidates) - 1
+    assert preferences.club_toward([south]) == pytest.approx((0.0, -1.0))
+    assert preferences.club_toward([]) is None
+
+
 def test_a_project_names_its_wishes_and_they_reach_the_brief_and_back():
     r = LayoutRequest(floors=8, unit_mix={"2BHK": 1.0}, preferences=[
         DesignPreference(kind="at_right_angles_to_road", source="the user, 2026-10-21"),

@@ -26,7 +26,11 @@ The kinds the engine knows, and their parameters:
 - tot_lot_toward (`bearing_deg`: 0 north, 90 east; 2026-10-21, the user: the tot-lot at the north
   arm's tip, as the firm laid it): the tot-lot as far that way as the plot goes, the mean of how
   far each square metre of it lies along the bearing across the layout's extent, 0 to 1; asked
-  for, the layout also lays its tot-lot pockets from that end first (`tot_lot_toward`).
+  for, the layout also lays its tot-lot pockets from that end first (`tot_lot_toward`);
+- club_toward (`bearing_deg`; 2026-10-21, the user: the club house out of the north arm, so the
+  arm's ground goes to a tower): the club house as far that way as the layout goes, 0 to 1;
+  asked for, the layout also tries the club house at that end of the open ground and keeps the
+  furnishing that places it furthest that way (`club_toward`).
 
 A preference of another kind, or one whose parameters are missing or not numbers, is not weighed
 (`not_weighed`), and the search says so in its notes rather than drop it unsaid.
@@ -143,15 +147,38 @@ def _tot_lot_toward(candidate: CandidateLayout, params: Mapping[str, Any]) -> fl
     if whole <= 0:
         return 0.0
     ux, uy = toward_of(float(params["bearing_deg"]))
-    ground = unary_union([*pieces, *(candidate.placed_footprint(t) for t in candidate.towers),
-                          *(s.to_shapely() for r in candidate.circulation.roads
-                            for s in r.shapes)])
-    along = [x * ux + y * uy for x, y in ground.convex_hull.exterior.coords]
-    lo, hi = min(along), max(along)
+    lo, hi = _extent(candidate, ux, uy)
     if hi - lo <= 0:
         return 0.0
     return sum(g.area * ((g.centroid.x * ux + g.centroid.y * uy) - lo) / (hi - lo)
                for g in pieces) / whole
+
+
+def _extent(candidate: CandidateLayout, ux: float, uy: float) -> tuple[float, float]:
+    ground = unary_union([*(s.to_shapely() for s in candidate.program.open_space),
+                          *(candidate.placed_footprint(t) for t in candidate.towers),
+                          *(s.to_shapely() for r in candidate.circulation.roads
+                            for s in r.shapes)])
+    along = [x * ux + y * uy for x, y in ground.convex_hull.exterior.coords]
+    return min(along), max(along)
+
+
+def _club_toward(candidate: CandidateLayout, params: Mapping[str, Any]) -> float:
+    club = candidate.program.club_house
+    if club is None:
+        return 0.0
+    ux, uy = toward_of(float(params["bearing_deg"]))
+    lo, hi = _extent(candidate, ux, uy)
+    c = club.shape.to_shapely().centroid
+    return 0.0 if hi - lo <= 0 else min(1.0, max(0.0, (c.x * ux + c.y * uy - lo) / (hi - lo)))
+
+
+def club_toward(preferences: Sequence[SoftPreference]) -> tuple[float, float] | None:
+    """The way the brief asks the club house placed (a unit vector), when it asks."""
+    for p in preferences:
+        if p.kind == "club_toward" and p.weight > 0 and understood(p):
+            return toward_of(float(p.params["bearing_deg"]))
+    return None
 
 
 def tot_lot_toward(preferences: Sequence[SoftPreference]) -> tuple[float, float] | None:
@@ -170,6 +197,7 @@ KINDS: dict[str, tuple[Callable[[CandidateLayout, Mapping[str, Any]], float], tu
     "at_right_angles_to_road": (_right_angles_to_road, ()),
     "tot_lot_few_large": (_tot_lot_few_large, ()),
     "tot_lot_toward": (_tot_lot_toward, ("bearing_deg",)),
+    "club_toward": (_club_toward, ("bearing_deg",)),
 }
 OPTIONAL: dict[str, tuple[str, ...]] = {"tot_lot_few_large": ("pieces", "near_m")}
 

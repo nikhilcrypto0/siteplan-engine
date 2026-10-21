@@ -38,7 +38,12 @@ from siteplan.contracts import (
 from siteplan.contracts.candidate import PlacedTower, RoadKind
 from siteplan.contracts.design_brief import ClubSize
 from siteplan.geometry import frontage
-from siteplan.optimizer.preferences import Orientation, required_orientation, tot_lot_toward
+from siteplan.optimizer.preferences import (
+    Orientation,
+    club_toward,
+    required_orientation,
+    tot_lot_toward,
+)
 from siteplan.optimizer.search import fringe, ground, network
 from siteplan.optimizer.search.build import (
     FIRE_ROADS,
@@ -830,6 +835,10 @@ def _furnish_where_best(run: Run, program: _Program) -> tuple[_Furnished | None,
     far = _far_point(program.open_land, program.anchor)
     if far is not None:
         tries.append(replace(program, club_anchor=far))
+    toward = club_toward(run.brief.objectives.soft_preferences)
+    end = _end_point(program.open_land, toward) if toward is not None else None
+    if end is not None:  # 2026-10-21: the brief asks the club house at one end of the ground
+        tries.append(replace(program, club_anchor=end))
     best, first_why = None, ""
     for n, trial in enumerate(tries):
         furnished, why = _furnish(run, trial)
@@ -842,11 +851,30 @@ def _furnish_where_best(run: Run, program: _Program) -> tuple[_Furnished | None,
         if furnished is None:
             continue
         reach = ground.reach_of(unary_union([pl.footprint for pl in trial.placements]))
-        score = (ground.usable_open_sqm(unary_union(furnished.pockets), reach),
+        score = (_along(furnished.club, toward),
+                 ground.usable_open_sqm(unary_union(furnished.pockets), reach),
                  -furnished.plan.levels, -n)
         if best is None or score > best[0]:
             best = (score, furnished)
     return (best[1], "") if best else (None, first_why)
+
+
+def _end_point(ground_: BaseGeometry, toward: tuple[float, float]) -> Point | None:
+    """The corner of the ground furthest the way given, or None when there is no ground."""
+    if ground_.is_empty:
+        return None
+    corners = [Point(c) for part in getattr(ground_, "geoms", [ground_])
+               for c in getattr(part, "exterior", part).coords]
+    return max(corners, key=lambda p: p.x * toward[0] + p.y * toward[1]) if corners else None
+
+
+def _along(club: Polygon | None, toward: tuple[float, float] | None) -> float:
+    """How far the club house stands the way the brief asks it (0 when it asks none, so the
+    furnishings are compared as before)."""
+    if toward is None or club is None:
+        return 0.0
+    c = club.centroid
+    return round(c.x * toward[0] + c.y * toward[1], 3)
 
 
 def _far_point(ground_: BaseGeometry, gate: Point) -> Point | None:
