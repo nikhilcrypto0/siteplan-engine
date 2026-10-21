@@ -1403,6 +1403,16 @@ REGISTRY: tuple[Constraint, ...] = (
         settles="The architect, who may say how many pieces and how near the entrance.",
     ),
     Constraint(
+        "Open space", "A club house kept short of a line the brief draws (club_not_beyond, "
+                      "2026-10-21: never in Dhulapally's north arm): its edge this close to the "
+                      "line still counts as short of it.",
+        _m(preferences.KEEP_OUT_SLACK_M), Basis.ENGINE_DESIGN_ASSUMPTION,
+        "none (optimizer.preferences, optimizer.search.layout)",
+        ("optimizer.preferences.KEEP_OUT_SLACK_M",),
+        note="A drawing tolerance on the client's wish; the line itself is the brief's.",
+        settles="Nothing: a drawing tolerance.",
+    ),
+    Constraint(
         "Towers", "The tower prototypes composed from the firm's flats: the cores a block has, "
                   "the flats each core serves on a side, and what a core holds.",
         "; ".join(f"{family.value} {plan.cores} x {plan.flats_per_core_per_side}"

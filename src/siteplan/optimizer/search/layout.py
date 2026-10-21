@@ -40,6 +40,7 @@ from siteplan.contracts.design_brief import ClubSize
 from siteplan.geometry import frontage
 from siteplan.optimizer.preferences import (
     Orientation,
+    club_keep_out,
     club_toward,
     required_orientation,
     tot_lot_toward,
@@ -859,6 +860,21 @@ def _furnish_where_best(run: Run, program: _Program) -> tuple[_Furnished | None,
     return (best[1], "") if best else (None, first_why)
 
 
+def _beyond(run: Run, near: BaseGeometry) -> BaseGeometry:
+    """The ground beyond the line the brief keeps the club house short of, over `near`; empty
+    when it draws none."""
+    kept = club_keep_out(run.brief.objectives.soft_preferences)
+    if kept is None or near.is_empty:
+        return EMPTY
+    (ux, uy), along = kept
+    minx, miny, maxx, maxy = near.bounds
+    reach = math.hypot(maxx - minx, maxy - miny) + abs(along) + 1.0
+    # a square far larger than the ground, whose near side is the line
+    side = Polygon([(-reach, 0.0), (reach, 0.0), (reach, 2 * reach), (-reach, 2 * reach)])
+    turned = affinity.rotate(side, -math.degrees(math.atan2(ux, uy)), origin=(0, 0))
+    return affinity.translate(turned, ux * along, uy * along).intersection(near.envelope)
+
+
 def _end_point(ground_: BaseGeometry, toward: tuple[float, float]) -> Point | None:
     """The corner of the ground furthest the way given, or None when there is no ground."""
     if ground_.is_empty:
@@ -914,6 +930,9 @@ def _furnish(run: Run, program: _Program, repair: str | None = None
                 return None, NO_RAMP
             ramps = [ramp]
             avoid = ramp.buffer(ground.CLEARANCE_M, join_style="mitre")
+    beyond = _beyond(run, p.land.zone.union(p.buildable))  # 2026-10-21: club_not_beyond
+    if not beyond.is_empty:
+        avoid = beyond if avoid.is_empty else avoid.union(beyond)
     club, club_floors, why = _club(run, p.land, p.buildable, p.zones, p.placements, p.tower_sqm,
                                    p.units, p.angles, p.club_anchor or p.anchor, avoid)
     if why:

@@ -128,6 +128,26 @@ def test_asked_for_the_club_house_at_the_south_end_the_layout_places_it_there():
     assert preferences.club_toward([]) is None
 
 
+def test_a_club_house_kept_short_of_a_line_never_stands_beyond_it():
+    """2026-10-21, the user: the club house never in Dhulapally's north arm, so the arm's ground
+    goes to the tot-lot and a tower. Here kept south of y = 60 m on the made-up rectangle (its
+    net plot runs to 100 m): every layout's club house stands wholly short of the line."""
+    made = made_up(box(0, 0, 200, 120))
+    line = SoftPreference(kind="club_not_beyond", params={"bearing_deg": 0, "along_m": 60})
+    brief = made.brief.model_copy(deep=True)
+    brief.objectives.soft_preferences.append(line)
+    inputs = made.__class__(made.site, made.rules, brief, made.envelope, made.kit)
+    asked = strategy().propose(inputs.context()).candidates
+    clubs = [c for c in asked if c.program.club_house]
+    assert clubs
+    for c in clubs:
+        assert c.program.club_house.shape.to_shapely().bounds[3] <= 60.01, c.candidate_id
+        assert preferences._club_not_beyond(c, line.params) == 1.0
+    _, plain = _search(False)
+    assert any(c.program.club_house.shape.to_shapely().bounds[3] > 60.01
+               for c in plain.candidates if c.program.club_house)  # it binds here
+
+
 def test_a_project_names_its_wishes_and_they_reach_the_brief_and_back():
     r = LayoutRequest(floors=8, unit_mix={"2BHK": 1.0}, preferences=[
         DesignPreference(kind="at_right_angles_to_road", source="the user, 2026-10-21"),

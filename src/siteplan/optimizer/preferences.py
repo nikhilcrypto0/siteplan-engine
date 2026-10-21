@@ -30,7 +30,12 @@ The kinds the engine knows, and their parameters:
 - club_toward (`bearing_deg`; 2026-10-21, the user: the club house out of the north arm, so the
   arm's ground goes to a tower): the club house as far that way as the layout goes, 0 to 1;
   asked for, the layout also tries the club house at that end of the open ground and keeps the
-  furnishing that places it furthest that way (`club_toward`).
+  furnishing that places it furthest that way (`club_toward`);
+- club_not_beyond (`bearing_deg` and `along_m`; 2026-10-21, the user: the club house never in
+  Dhulapally's north arm): the club house never stands beyond the line square to the bearing
+  `along_m` along it (the survey's coordinates measured that way); unlike the others the layout
+  holds to it, the club house laid only on the ground short of the line (`club_keep_out`), and a
+  layout with no room for it there is not laid. Scored 1 when kept, else 0.
 
 A preference of another kind, or one whose parameters are missing or not numbers, is not weighed
 (`not_weighed`), and the search says so in its notes rather than drop it unsaid.
@@ -173,6 +178,25 @@ def _club_toward(candidate: CandidateLayout, params: Mapping[str, Any]) -> float
     return 0.0 if hi - lo <= 0 else min(1.0, max(0.0, (c.x * ux + c.y * uy - lo) / (hi - lo)))
 
 
+def _club_not_beyond(candidate: CandidateLayout, params: Mapping[str, Any]) -> float:
+    club = candidate.program.club_house
+    if club is None:
+        return 0.0
+    ux, uy = toward_of(float(params["bearing_deg"]))
+    far = max(x * ux + y * uy for x, y in club.shape.to_shapely().exterior.coords)
+    return 1.0 if far <= float(params["along_m"]) + KEEP_OUT_SLACK_M else 0.0
+
+
+def club_keep_out(preferences: Sequence[SoftPreference]
+                  ) -> tuple[tuple[float, float], float] | None:
+    """The line the club house never stands beyond, when the brief draws one: the way (a unit
+    vector) and how far along it."""
+    for p in preferences:
+        if p.kind == "club_not_beyond" and p.weight > 0 and understood(p):
+            return toward_of(float(p.params["bearing_deg"])), float(p.params["along_m"])
+    return None
+
+
 def club_toward(preferences: Sequence[SoftPreference]) -> tuple[float, float] | None:
     """The way the brief asks the club house placed (a unit vector), when it asks."""
     for p in preferences:
@@ -198,7 +222,9 @@ KINDS: dict[str, tuple[Callable[[CandidateLayout, Mapping[str, Any]], float], tu
     "tot_lot_few_large": (_tot_lot_few_large, ()),
     "tot_lot_toward": (_tot_lot_toward, ("bearing_deg",)),
     "club_toward": (_club_toward, ("bearing_deg",)),
+    "club_not_beyond": (_club_not_beyond, ("bearing_deg", "along_m")),
 }
+KEEP_OUT_SLACK_M = 0.01  # the club house's edge on the line is short of it
 OPTIONAL: dict[str, tuple[str, ...]] = {"tot_lot_few_large": ("pieces", "near_m")}
 
 
