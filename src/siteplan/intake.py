@@ -385,8 +385,17 @@ def build_project(draft: Draft, answers: dict, defaults: WorkspaceDefaults | Non
     if given["floors"].lower() == "max":
         layout["floors"] = _most_floors(site, draft, defaults)
         layout["maximise"] = True
+        if answers.get("floors_at_most"):  # the client's cap, never law (2026-10-21)
+            layout["floors_at_most"] = int(answers["floors_at_most"])
+            layout["floors"] = min(layout["floors"], layout["floors_at_most"])
+            sources["floors_at_most"] = "the client: the floors above the stilt at most"
+            status["floors_at_most"] = Provenance.USER_CONFIRMED
     else:
         layout["floors"] = int(given["floors"])
+    if answers.get("club_house_floors"):  # the client's storeys (2026-10-21)
+        layout["club_house_floors"] = int(answers["club_house_floors"])
+        sources["club_house_floors"] = "the client: the club house's storeys"
+        status["club_house_floors"] = Provenance.USER_CONFIRMED
     if answers.get("readings"):
         layout["readings"] = answers["readings"]
     if answers.get("orientation"):  # the client's requirement, never law (2026-10-19)

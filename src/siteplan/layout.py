@@ -193,6 +193,10 @@ class LayoutRequest(BaseModel):
     maximise: bool = Field(
         False, description="floors is the most the rules allow; search every height from there "
         "down and keep the layouts that pass")
+    floors_at_most: PositiveInt | None = Field(
+        None, description="With maximise: the client's cap on the floors above the stilt, never "
+        "law (2026-10-21, Dhulapally: Stilt + 9 at most, under NBC's 30 m line); the search lays "
+        "any height up to it, lower blocks included")
 
     @model_validator(mode="after")
     def _mix_adds_up(self) -> LayoutRequest:

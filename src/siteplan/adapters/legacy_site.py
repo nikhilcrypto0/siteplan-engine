@@ -289,8 +289,11 @@ def brief(project: Project, defaults: WorkspaceDefaults | None = None,
                                      "status": Provenance.ASSUMED_FOR_TEST,
                                      "source_kind": SourceKind.ENGINE_DEFAULT,
                                      "source": "the engine's reading of the notation"},
-            "mode": HeightMode.MAX_LEGAL if r.maximise else HeightMode.FIXED,
-            "floors_above_stilt": None if r.maximise else r.floors},
+            "mode": (HeightMode.RANGE if r.maximise and r.floors_at_most
+                     else HeightMode.MAX_LEGAL if r.maximise else HeightMode.FIXED),
+            "floors_above_stilt": None if r.maximise else r.floors,
+            # the client's cap (2026-10-21): any height up to it, never above
+            "floors_range": (1, r.floors_at_most) if r.maximise and r.floors_at_most else None},
         firm_standards={
             **standards,
             "cellar_utilities_share": sourced(project, "cellar_utilities_pct",
@@ -371,7 +374,9 @@ def request(brief: DesignBrief, readings: Readings, floors_for_max: int | None =
         cellar_floor_height_m=f.cellar_floor_height_m.value,
         cellar_utilities_pct=round(f.cellar_utilities_share.value * 100, 9),
         max_cellars=p.parking.max_cellars.value, options=brief.objectives.options,
-        maximise=h.mode is HeightMode.MAX_LEGAL, orientation=_orientation_back(brief),
+        maximise=h.mode in (HeightMode.MAX_LEGAL, HeightMode.RANGE),
+        floors_at_most=h.floors_range[1] if h.mode is HeightMode.RANGE else None,
+        orientation=_orientation_back(brief),
         preferences=_preferences_back(brief))
 
 

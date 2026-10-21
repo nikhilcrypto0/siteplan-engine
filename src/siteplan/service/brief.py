@@ -74,7 +74,9 @@ def design(project: Project, defaults: WorkspaceDefaults, amenities: AmenityLibr
     """The project's DesignBrief with what the brief states in place of its own values."""
     base = brief_of(project, defaults, amenities=amenities)
     height = base.height_intent
-    if intent.height is HeightChoice.MOST_THE_RULES_ALLOW:
+    if intent.height is HeightChoice.MOST_THE_RULES_ALLOW and height.mode is HeightMode.RANGE:
+        pass  # the most the rules allow within the client's cap (2026-10-21), kept as a range
+    elif intent.height is HeightChoice.MOST_THE_RULES_ALLOW:
         height = height.model_copy(update={"mode": HeightMode.MAX_LEGAL,
                                            "floors_above_stilt": None})
     elif intent.height is HeightChoice.FLOORS_ABOVE_STILT:
@@ -110,7 +112,8 @@ def brief_facts(project: Project) -> list[Fact]:
                     source=project.sources.get(key, "project file"))
 
     mix = ", ".join(f"{k} {v * 100:g}%" for k, v in sorted(layout.unit_mix.items()))
-    return [of("floors above the stilt", "floors", "max" if layout.maximise else layout.floors),
+    most = (f"max, at most {layout.floors_at_most}" if layout.floors_at_most else "max")
+    return [of("floors above the stilt", "floors", most if layout.maximise else layout.floors),
             of("unit mix", "unit_mix", mix), of("club house", "club_house", layout.club_house)]
 
 
@@ -149,7 +152,11 @@ def approval_lines(*, debug: bool, finished: tuple[str, ...], project_file: str,
                      "rules apply is open")
     lines += [s.line() for s in standards]
     lines += list(left_out)
-    height = ("the most the rules allow" if h.mode is HeightMode.MAX_LEGAL
+    height = (f"the most the rules allow, at most stilt + {h.floors_range[1]} floors (the "
+              "client's cap)" if h.mode is HeightMode.RANGE and h.floors_range[0] == 1
+              else f"stilt + {h.floors_range[0]} to {h.floors_range[1]} floors"
+              if h.mode is HeightMode.RANGE
+              else "the most the rules allow" if h.mode is HeightMode.MAX_LEGAL
               else f"stilt + {h.floors_above_stilt} floors")
     lines += [f"Height ({'the brief' if intent.height else 'the project file'}): {height}",
               f"Unit mix ({'the brief' if intent.unit_mix_percent else 'the project file'}): "
