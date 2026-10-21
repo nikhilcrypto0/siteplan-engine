@@ -60,11 +60,30 @@ def debug_profile(reading: str) -> dict:
             "layout": layout, "open_facts": OPEN_FACTS}
 
 
+# 2026-10-21: the user's decisions (the club house at 4 floors, the tot-lot on the net plot,
+# Stilt + 9 at most) live in the answers since. The regression load pins the legacy path on the
+# answers as they were when it was made, so a decided input never reads as a change of code.
+DECIDED_SINCE = ("club_house_floors", "floors_at_most")
+DECIDED_READINGS_SINCE = ("open_space_basis",)
+
+
+def baseline_answers() -> dict:
+    """The answers without what the user decided after the baseline was pinned."""
+    answers = json.loads(ANSWERS.read_text())
+    for key in DECIDED_SINCE:
+        answers.pop(key, None)
+        for labels in ("_source", "_status", "_source_kind"):
+            answers.get(labels, {}).pop(key, None)
+    answers["readings"] = {k: v for k, v in answers.get("readings", {}).items()
+                           if k not in DECIDED_READINGS_SINCE}
+    return answers
+
+
 def run(reading: str, out: Path):
     from siteplan.acceptance import generate
     from siteplan.profiles import load_profile
 
-    return generate(SURVEY, json.loads(ANSWERS.read_text()), out, WORKSPACE,
+    return generate(SURVEY, baseline_answers(), out, WORKSPACE,
                     conservative_parking=True, profile=load_profile(profile_path(reading)),
                     mode="debug")
 

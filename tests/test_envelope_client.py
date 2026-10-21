@@ -294,9 +294,11 @@ def test_the_firms_own_site_plan_given_as_the_survey_is_a_debug_outline_with_the
 def test_the_stilt_reading_changes_the_rules_record_and_not_the_land():
     project, site = _dhulapally(NOT_COUNTED)
     selections, when_open = readings_of(project)
-    # the profile's switch, and since 2026-10-18 the architect's four selections from the answers
+    # the profile's switch, since 2026-10-18 the architect's four selections from the answers, and
+    # since 2026-10-21 the user's: the tot-lot on the net plot
     assert selections == {STILT_IN_RULE_HEIGHT: "not_counted", CIRCULATION_IN_SETBACK: "allowed",
-                          "nbc_fire_height": "nbc_line", "opens_onto_road": "fire_band"}
+                          "nbc_fire_height": "nbc_line", "opens_onto_road": "fire_band",
+                          "open_space_basis": "net_after_surrender"}
     rules = resolve(site, selections=selections, when_open=when_open)
     stilt = rules.interpretation(STILT_IN_RULE_HEIGHT)
     assert stilt.selected == "not_counted" and stilt.status is Provenance.ASSUMED_FOR_TEST
