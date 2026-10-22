@@ -3,7 +3,7 @@
 import ezdxf
 import pytest
 from ezdxf.fonts import fonts
-from shapely.geometry import box
+from shapely.geometry import Point, Polygon, box
 
 from siteplan.layout import LayoutRequest, solve
 from siteplan.library import FlatLibrary
@@ -11,6 +11,7 @@ from siteplan.sheet import (
     SHEET_LAYERS,
     STATEMENT_CHARS,
     STATEMENT_WIDTH_MM,
+    TITLE_BLOCK_MM,
     SheetInfo,
     pick_scale,
     write_sheet_dxf,
@@ -105,11 +106,31 @@ def test_towers_and_amenities_are_named_on_the_drawing(drawing):
 
 @pytest.mark.parametrize(("plot", "expected"), [
     (box(0, 0, 60, 40), 100),        # a small site prints large
-    (box(0, 0, 150, 120), 250),
-    (box(0, 0, 900, 700), 1500),     # a big one steps down the standard scales
+    (box(0, 0, 150, 120), 300),      # at 1:250 it ran under the title block (2026-10-22)
+    (box(0, 0, 900, 700), 2000),     # a big one steps down the standard scales
 ])
 def test_the_scale_is_the_tightest_standard_one_that_fits(plot, expected):
     assert pick_scale(plot) == expected
+
+
+def test_the_plan_and_its_dimensions_keep_clear_of_the_title_block(drawing):
+    """2026-10-22, Suchitra's A1 sheet: at the tightest scale the plan, centred on the sheet,
+    ran its width dimension under the title block."""
+    doc, _ = drawing
+    msp = doc.modelspace()
+    scale = int(next(e.dxf.text for e in msp.query("TEXT")
+                     if e.dxf.text.startswith("1:")).split(":")[1].split()[0])
+    wide, tall = (mm * scale / 1000 for mm in TITLE_BLOCK_MM)
+    block = next(f for f in (Polygon(e.get_points("xy"))
+                             for e in msp.query("LWPOLYLINE[layer=='SHEET-BORDER']"))
+                 if abs(f.bounds[2] - f.bounds[0] - wide) < 1e-6
+                 and abs(f.bounds[3] - f.bounds[1] - tall) < 1e-6)
+    drawn = [e for e in msp if e.dxf.layer in ("Plot", "SHEET-DIMENSIONS")]
+    points = [p for e in drawn if e.dxftype() == "LWPOLYLINE" for p in e.get_points("xy")]
+    for dim in (e for e in drawn if e.dxftype() == "DIMENSION"):
+        points += [p for t in doc.blocks.get(dim.dxf.geometry) if t.dxftype() == "LINE"
+                   for p in ((t.dxf.start.x, t.dxf.start.y), (t.dxf.end.x, t.dxf.end.y))]
+    assert points and not any(block.contains(Point(p)) for p in points)
 
 
 def test_a_long_project_name_is_cut_to_the_title_block(tmp_path):

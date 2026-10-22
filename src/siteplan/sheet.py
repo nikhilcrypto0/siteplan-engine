@@ -73,16 +73,42 @@ def _fit(text: str, chars: int) -> str:
     return text if len(text) <= chars else text[: chars - 1].rstrip(" ,;(") + "…"
 
 
-def pick_scale(plot: Polygon) -> int:
-    """The tightest standard scale that still leaves room for the title block."""
+# What the sheet draws round the plot, in printed millimetres: the height dimension on the left,
+# the north arrow on the right, the width dimension and the scale bar with its figures below, the
+# towers' dimensions above.
+FURNITURE_MM = {"left": 12.0, "right": 10.0, "below": 20.0, "above": 6.0}
+COLUMN_GAP_MM = 6.0  # between the drawing and the statement column
+TOP_STRIP_MM = 14.0  # for the labels above the drawing
+
+
+def _area_mm() -> tuple[float, float]:
+    """The drawing's area inside the margins, left of the statement column."""
+    return (SHEET_MM[0] - 2 * MARGIN_MM - STATEMENT_WIDTH_MM - COLUMN_GAP_MM,
+            SHEET_MM[1] - 2 * MARGIN_MM - TOP_STRIP_MM)
+
+
+def _placement(plot: Polygon, scale: int) -> tuple[float, float] | None:
+    """Where the drawing, with its dimensions, scale bar and north arrow, stands at this scale
+    clear of the title block, which takes the bottom right of the drawing's area (2026-10-22:
+    at the tightest scale Suchitra's width dimension ran under it): its lower left, in printed
+    millimetres from the inner frame's, beside the block when it fits the full height, else
+    above it across the full width; None when it fits neither."""
     minx, miny, maxx, maxy = plot.bounds
-    usable_mm = (
-        SHEET_MM[0] - 2 * MARGIN_MM - STATEMENT_WIDTH_MM - 6,
-        SHEET_MM[1] - 2 * MARGIN_MM - 14,  # strip for the labels above the drawing
-    )
+    wide = (maxx - minx) * 1000 / scale + FURNITURE_MM["left"] + FURNITURE_MM["right"]
+    tall = (maxy - miny) * 1000 / scale + FURNITURE_MM["below"] + FURNITURE_MM["above"]
+    area_w, area_h = _area_mm()
+    under = TITLE_BLOCK_MM[0] - STATEMENT_WIDTH_MM - COLUMN_GAP_MM  # the block's reach left
+    if wide <= area_w - under and tall <= area_h:
+        return (area_w - under - wide) / 2, (area_h - tall) / 2
+    if wide <= area_w and tall <= area_h - TITLE_BLOCK_MM[1]:
+        return (area_w - wide) / 2, TITLE_BLOCK_MM[1] + (area_h - TITLE_BLOCK_MM[1] - tall) / 2
+    return None
+
+
+def pick_scale(plot: Polygon) -> int:
+    """The tightest standard scale at which the drawing keeps clear of the title block."""
     for scale in STANDARD_SCALES:
-        if ((maxx - minx) * 1000 / scale <= usable_mm[0]
-                and (maxy - miny) * 1000 / scale <= usable_mm[1]):
+        if _placement(plot, scale) is not None:
             return scale
     return STANDARD_SCALES[-1]
 
@@ -225,9 +251,13 @@ def _border(msp, plot: Polygon, statement: str, info: SheetInfo, scale: int,
     block, so a caller can set a note between them."""
     width, height = SHEET_MM[0] * m, SHEET_MM[1] * m
     minx, miny, maxx, maxy = plot.bounds
-    # Centre the drawing in the space left of the area statement column.
-    left = (minx + maxx) / 2 - (width - STATEMENT_WIDTH_MM * m) / 2
-    bottom = (miny + maxy) / 2 - height / 2
+    placed = _placement(plot, scale)
+    if placed is not None:  # the drawing where it keeps clear of the title block
+        left = minx - (MARGIN_MM + placed[0] + FURNITURE_MM["left"]) * m
+        bottom = miny - (MARGIN_MM + placed[1] + FURNITURE_MM["below"]) * m
+    else:  # too big for the largest scale: centred left of the area statement column
+        left = (minx + maxx) / 2 - (width - STATEMENT_WIDTH_MM * m) / 2
+        bottom = (miny + maxy) / 2 - height / 2
     frame = [(left, bottom), (left + width, bottom), (left + width, bottom + height),
              (left, bottom + height)]
     msp.add_lwpolyline(frame, close=True, dxfattribs={"layer": "SHEET-BORDER"})
