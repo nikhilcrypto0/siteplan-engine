@@ -1,7 +1,7 @@
 """Where the net plot meets the access road, and the access zones where a gate may open.
 
 Where the survey draws the road, the site model carries the stretches of the surveyed boundary
-it reaches (`site.access.frontage`, step 1's reading), and the frontage is the net plot's edge
+it reaches (the access road's `frontage`, step 1's reading), and the frontage is the net plot's edge
 there (`geometry.road_meets`, which the validator measures the same way): an entrance opens onto
 the road, never onto an edge that only faces the road's side (2026-10-21: Suchitra's R2 meets
 the plot at one notch, and the gate went 80 m away to an edge no road touches). Where nothing
@@ -44,7 +44,8 @@ def access_zones(site: CanonicalSiteModel, net: Polygon, excluded) -> list[Acces
                            frontage=gate.value, length_m=line.length,
                            note=f"the entrance the project pins ({gate.source}, "
                                 f"{gate.status.value}): the main approach comes in here only")]
-    met = site.access.frontage
+    road = site.access_road()
+    met = road.frontage if road is not None else None
     if met is not None:
         gross = site.boundary.to_shapely() if site.boundary is not None else None
         runs = road_meets(net, gross, [LineString(line.points) for line in met.value],

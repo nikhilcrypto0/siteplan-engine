@@ -54,7 +54,7 @@ def site_from_project(project: Project, survey: str | Path | None = None, *,
             by_architect = bool(site.ownership.deductions) and not is_net
             site = site_model(_with_net_plot(project, path, by_architect), site_id=site_id,
                               boundary=boundary, draft=draft)
-    return _with_access_road(_with_water(site, project, path), drawn, draft)
+    return _with_road_frontages(_with_water(site, project, path), drawn, draft)
 
 
 def readings_of(project: Project) -> tuple[dict[str, str], WhenOpen]:
@@ -133,24 +133,28 @@ def _with_net_plot(project: Project, survey: Path, by_architect: bool) -> Projec
     return out
 
 
-def _with_access_road(site: CanonicalSiteModel, survey: Survey | None,
-                      draft: Draft | None) -> CanonicalSiteModel:
-    """Where the access road meets the plot, as step 1 reads the survey (2026-10-21): an entrance
-    not pinned opens only there. Empty when the survey draws the road short of the plot, so no
-    entrance is invented on another edge; nothing at all when no survey draws the road."""
-    road = site.access_road()
-    if survey is None or draft is None or road is None or not 0 < road.id <= len(draft.roads):
+def _with_road_frontages(site: CanonicalSiteModel, survey: Survey | None,
+                         draft: Draft | None) -> CanonicalSiteModel:
+    """Where each road the survey draws meets the plot, as step 1 reads it (2026-10-21): an
+    entrance not pinned opens only where the access road's does. Empty for a road drawn short of
+    the plot, so no entrance is invented on another edge; nothing where no survey draws it."""
+    if survey is None or draft is None or not site.roads:
         return site
-    met = meets(draft.roads[road.id - 1], survey.boundary, survey.roads)
-    lines = [Line(points=list(g.coords)) for g in getattr(met, "geoms", [met])
-             if g.geom_type == "LineString" and g.length > 0]
-    said = (f"the survey: where road {road.id} reaches the plot, {met.length:.1f} m of its edge "
-            "(step 1's reading)") if lines else (
-            f"the survey: road {road.id} is drawn short of the plot (step 1's reading)")
-    frontage = Sourced[list[Line]](value=lines, status=Provenance.EXTRACTED,
-                                   source_kind=SourceKind.SURVEY, source=said)
-    return site.model_copy(update={"access": site.access.model_copy(
-        update={"frontage": frontage})})
+    roads = []
+    for road in site.roads:
+        if not 0 < road.id <= len(draft.roads):
+            roads.append(road)
+            continue
+        met = meets(draft.roads[road.id - 1], survey.boundary, survey.roads)
+        lines = [Line(points=list(g.coords)) for g in getattr(met, "geoms", [met])
+                 if g.geom_type == "LineString" and g.length > 0]
+        said = (f"the survey: where road {road.id} reaches the plot, {met.length:.1f} m of its "
+                "edge (step 1's reading)") if lines else (
+                f"the survey: road {road.id} is drawn short of the plot (step 1's reading)")
+        roads.append(road.model_copy(update={"frontage": Sourced[list[Line]](
+            value=lines, status=Provenance.EXTRACTED, source_kind=SourceKind.SURVEY,
+            source=said)}))
+    return site.model_copy(update={"roads": roads})
 
 
 def _with_water(site: CanonicalSiteModel, project: Project,

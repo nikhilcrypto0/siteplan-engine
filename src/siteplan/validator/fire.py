@@ -375,27 +375,35 @@ def _street_sides(ctx: Context) -> tuple[list[str], list[str]]:
 
 def _gate_problems(ctx: Context) -> tuple[list[str], list[str]]:
     """What is wrong with each gate, and what only makes it doubtful. Every gate is held to it:
-    a gate that fails is not a way in, whatever else is drawn."""
+    a gate that fails is not a way in, whatever else is drawn. Where the survey draws the access
+    road, a gate is held to where the roads meet the plot (2026-10-21); else to the side the
+    access road runs."""
     fire = ctx.rules.fire
     least, most = fire.entrance_width_m.value, ctx.rules.circulation.approach_m.value[1]
     street, others = _street_sides(ctx)
     problems, doubts = [], []
-    road = _access_road_edge(ctx)
+    met = _roads_meet(ctx)
+    access = ctx.site.access.road_id.value
     for n, gate in enumerate(ctx.drawn.gates, 1):
         label = f"gate {n}" if len(ctx.drawn.gates) > 1 else "the gate"
         if gate.shape.distance(ctx.net.boundary) > GATE_ON_BOUNDARY_M:
             problems.append(f"{label} is not on the plot's boundary")
             continue
-        off_road = _off_the_road(gate.shape, ctx.net, road)
-        if off_road:
-            problems.append(f"{label} {off_road}")
-            continue
+        if access in met:
+            onto = _opens_onto(gate.shape, ctx.net, met, access)
+            if onto is None:
+                problems.append(f"{label} {_onto_no_road(gate.shape, met[access])}")
+                continue
+            if onto != access:
+                doubts.append(_onto_another_road(ctx, label, onto, access))
         width = width_along_edge(gate.shape, ctx.net, GATE_ON_BOUNDARY_M)
         if width + TOL_M < least:
             problems.append(f"{label} is {width:.2f} m wide")
         elif width > most + TOL_M:
             doubts.append(f"{label} is {width:.1f} m wide, more than the {most:g} m of the widest "
                           "main approach road rule 8(m) allows")
+        if access in met:  # where the roads meet the plot is known: the side is not asked
+            continue
         facing = bearings_near(ctx.net, gate.shape, GATE_ON_BOUNDARY_M)
         if not (street and facing) or any(faces(f, side) for f in facing for side in street):
             continue
@@ -409,32 +417,47 @@ def _gate_problems(ctx: Context) -> tuple[list[str], list[str]]:
     return problems, doubts
 
 
-def _access_road_edge(ctx: Context) -> BaseGeometry | None:
-    """Where the access road meets the net plot, when the survey draws it (2026-10-21); None
-    where nothing draws it, and the side the road runs is all there is to hold a gate to."""
-    met = ctx.site.access.frontage
-    if met is None:
-        return None
+def _roads_meet(ctx: Context) -> dict[int, BaseGeometry]:
+    """Where each road the survey draws meets the net plot (2026-10-21), by road id: its
+    stretch of the surveyed boundary, and the inner edge of land given up beside it."""
     gross = ctx.site.boundary.to_shapely() if ctx.site.boundary is not None else None
-    return unary_union(road_meets(ctx.net, gross, [LineString(line.points) for line in met.value],
-                                  ACCESS_ROAD_REACH_M))
+    return {road.id: unary_union(road_meets(
+                ctx.net, gross, [LineString(line.points) for line in road.frontage.value],
+                ACCESS_ROAD_REACH_M))
+            for road in ctx.site.roads if road.frontage is not None}
 
 
-def _off_the_road(shape: BaseGeometry, net: Polygon, road: BaseGeometry | None) -> str:
-    """Why a gate opens onto no road, or nothing: its opening in the plot's edge must lie, for
-    GATE_ON_ROAD_M at least, where the access road meets the plot. A gate on another edge that
-    only faces the road's side opens onto the land beside the plot (Suchitra, 2026-10-21: 80 m
-    from where R2 meets it)."""
-    if road is None:
-        return ""
-    if road.is_empty:
-        return "opens onto no road: the survey draws the access road short of the plot"
+def _opens_onto(shape: BaseGeometry, net: Polygon, met: dict[int, BaseGeometry],
+                access: int) -> int | None:
+    """The road a gate opens onto, the access road first: GATE_ON_ROAD_M at least of its opening
+    in the plot's edge lies where that road meets the plot. None: onto no road."""
     opening = net.exterior.intersection(shape.buffer(GATE_ON_BOUNDARY_M))
-    if opening.intersection(road.buffer(GATE_ON_BOUNDARY_M)).length >= GATE_ON_ROAD_M:
-        return ""
+    for road_id in sorted(met, key=lambda i: i != access):
+        where = met[road_id]
+        if not where.is_empty and opening.intersection(
+                where.buffer(GATE_ON_BOUNDARY_M)).length >= GATE_ON_ROAD_M:
+            return road_id
+    return None
+
+
+def _onto_no_road(shape: BaseGeometry, access_met: BaseGeometry) -> str:
+    """A gate on an edge that only faces the road's side opens onto the land beside the plot
+    (Suchitra, 2026-10-21: 80 m from where R2 meets it)."""
+    if access_met.is_empty:
+        return "opens onto no road: the survey draws the access road short of the plot"
     centre = shape.centroid
-    return (f"opens at ({centre.x:.0f}, {centre.y:.0f}), {shape.distance(road):.0f} m from where "
-            "the access road meets the plot: it opens onto no road")
+    return (f"opens at ({centre.x:.0f}, {centre.y:.0f}), {shape.distance(access_met):.0f} m from "
+            "where the access road meets the plot: it opens onto no road")
+
+
+def _onto_another_road(ctx: Context, label: str, onto: int, access: int) -> str:
+    """A gate onto a road the survey draws that is not the access road: a way in, but whether it
+    may be the entrance is not settled (the height is read from the access road)."""
+    road = next(r for r in ctx.site.roads if r.id == onto)
+    width = f", {road.drawn_width_m:.1f} m as drawn" if road.drawn_width_m else ""
+    return (f"{label} opens onto road {onto}{width}, not the access road {access} the height is "
+            "read from (Table IV): whether it may be the entrance, and whether the street it "
+            "opens to is the 12 m street NBC Part 3 4.6(a) asks, are not settled")
 
 
 def entrance_check(ctx: Context, ground: Ground) -> Check:

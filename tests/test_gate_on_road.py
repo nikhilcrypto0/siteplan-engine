@@ -13,6 +13,7 @@ from validator_helpers import fixture
 
 from siteplan.contracts import digest
 from siteplan.contracts.common import Line, Provenance, Sourced, SourceKind, Status
+from siteplan.contracts.site_model import Road
 from siteplan.legal.envelope import envelope
 from siteplan.legal.resolve import resolve
 from siteplan.legal.site import site_from_project
@@ -36,9 +37,13 @@ def _entrance(report):
     return next(c for c in report.legal if c.finding.rule == ENTRANCE)
 
 
-def _road_meets(points_list):
+def _road_meets(points_list, *, another=None):
+    """The rectangle with its access road (road 1) meeting the plot along `points_list`, and
+    optionally a second surveyed road meeting it along `another`."""
     def edit(site):
-        site.access.frontage = _meets(points_list)
+        site.roads[0].frontage = _meets(points_list)
+        if another is not None:
+            site.roads.append(Road(id=2, side="S", drawn_width_m=7.7, frontage=_meets(another)))
     return fixture("rectangle").with_site(edit)
 
 
@@ -77,7 +82,7 @@ def _project():
 
 def test_the_survey_says_where_the_access_road_meets_the_plot(tmp_path):
     site = site_from_project(_project(), _survey(tmp_path))
-    met = site.access.frontage
+    met = site.access_road().frontage
     assert met is not None and met.status is Provenance.EXTRACTED
     assert met.source_kind is SourceKind.SURVEY and "road 1" in met.source
     assert sum(LineString(line.points).length for line in met.value) == pytest.approx(12, abs=1)
@@ -87,7 +92,7 @@ def test_the_survey_says_where_the_access_road_meets_the_plot(tmp_path):
 
 def test_a_site_whose_survey_draws_no_road_keeps_the_side_reading():
     site = made_up(box(0, 0, 200, 120)).site
-    assert site.access.frontage is None
+    assert site.access_road().frontage is None
     assert _zones_length(site) == pytest.approx(200, abs=1)  # the south edge facing the road
 
 
@@ -111,6 +116,17 @@ def test_a_gate_away_from_where_the_road_meets_the_plot_fails():
     assert "where the access road meets it" in check.finding.required
 
 
+def test_a_gate_onto_another_surveyed_road_is_a_way_in_but_not_settled():
+    """The access road (road 1, the one the height is read from) meets the plot on its east edge;
+    a second road the survey draws meets it where the gate opens: the gate is a way in, and
+    whether it may be the entrance, onto a street NBC 4.6(a) asks be 12 m, is CONDITIONAL."""
+    check = _entrance(_road_meets([[(150.0, 40.0), (150.0, 60.0)]],
+                                  another=[[(0.0, -3.0), (20.0, -3.0)]]).report())
+    assert check.finding.status not in (Status.PASS, Status.FAIL)
+    assert "opens onto road 2, 7.7 m as drawn, not the access road 1" in check.finding.measured
+    assert "NBC Part 3 4.6(a)" in check.finding.measured
+
+
 def test_land_given_up_to_widen_the_road_is_the_road_s():
     """The rectangle gives up a 3 m strip all along its south edge; the road reaches the surveyed
     boundary 100 to 130 m along, and the strip beside it becomes road, so a gate on the strip's
@@ -130,7 +146,7 @@ def test_a_road_drawn_short_of_the_plot_leaves_no_entrance():
 
 def _with_road(made, points_list):
     site = made.site.model_copy(deep=True)
-    site.access.frontage = _meets(points_list)
+    site.roads[0].frontage = _meets(points_list)
     rules = made.rules.model_copy(update={"site_ref": digest(site)})
     return made.__class__(site, rules, made.brief, envelope(site, rules), made.kit)
 

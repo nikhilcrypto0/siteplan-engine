@@ -6,17 +6,6 @@
         "dead_end": {
           "$ref": "#/$defs/Sourced_Union_bool__NoneType__"
         },
-        "frontage": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/Sourced_list_Line__"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
         "gate": {
           "anyOf": [
             {
@@ -413,6 +402,17 @@
           ],
           "default": null,
           "title": "Drawn Width M"
+        },
+        "frontage": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Sourced_list_Line__"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "id": {
           "title": "Id",
