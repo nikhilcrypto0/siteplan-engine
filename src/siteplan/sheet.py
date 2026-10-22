@@ -237,9 +237,10 @@ def _border(msp, plot: Polygon, statement: str, info: SheetInfo, scale: int,
     )
 
     right = left + width - inner
-    msp.add_mtext(statement.replace("\n", "\\P"), dxfattribs={"layer": "SHEET-TEXT"}).set_location(
-        (right - STATEMENT_WIDTH_MM * m, bottom + height - inner - 4 * m)
-    ).dxf.char_height = 2.2 * m
+    text = msp.add_mtext(statement.replace("\n", "\\P"), dxfattribs={"layer": "SHEET-TEXT"})
+    text.set_location((right - STATEMENT_WIDTH_MM * m, bottom + height - inner - 4 * m))
+    text.dxf.char_height = 2.2 * m
+    text.dxf.width = STATEMENT_WIDTH_MM * m  # wrapped in its column, never past the frame
 
     block_w, block_h = TITLE_BLOCK_MM[0] * m, TITLE_BLOCK_MM[1] * m
     x0, y0 = right - block_w, bottom + inner
@@ -250,11 +251,14 @@ def _border(msp, plot: Polygon, statement: str, info: SheetInfo, scale: int,
     for i, (key, value) in enumerate(rows):
         y = y0 + block_h - (i + 1) * line_h
         msp.add_line((x0, y), (x0 + block_w, y), dxfattribs={"layer": "SHEET-BORDER"})
+        # each row's words in its own band, below its line (above it they fell in the band of
+        # the row before, the first over the title: 2026-10-21)
+        row_y = y - line_h * 0.7
         msp.add_text(key, height=2.2 * m, dxfattribs={"layer": "SHEET-TEXT"}).set_placement(
-            (x0 + 2 * m, y + line_h * 0.3), align=ezdxf.enums.TextEntityAlignment.LEFT)
+            (x0 + 2 * m, row_y), align=ezdxf.enums.TextEntityAlignment.LEFT)
         msp.add_text(_fit(value or "-", ROW_CHARS), height=2.6 * m,
                      dxfattribs={"layer": "SHEET-TEXT"}).set_placement(
-            (x0 + 34 * m, y + line_h * 0.3), align=ezdxf.enums.TextEntityAlignment.LEFT)
+            (x0 + 34 * m, row_y), align=ezdxf.enums.TextEntityAlignment.LEFT)
     msp.add_text(_fit(info.project, TITLE_CHARS), height=3.6 * m,
                  dxfattribs={"layer": "SHEET-TEXT"}).set_placement(
         (x0 + 2 * m, y0 + block_h - line_h * 0.55), align=ezdxf.enums.TextEntityAlignment.LEFT)

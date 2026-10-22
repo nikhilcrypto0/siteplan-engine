@@ -6,7 +6,13 @@ from shapely.geometry import box
 
 from siteplan.layout import LayoutRequest, solve
 from siteplan.library import FlatLibrary
-from siteplan.sheet import SHEET_LAYERS, SheetInfo, pick_scale, write_sheet_dxf
+from siteplan.sheet import (
+    SHEET_LAYERS,
+    STATEMENT_WIDTH_MM,
+    SheetInfo,
+    pick_scale,
+    write_sheet_dxf,
+)
 
 PLOT = box(0, 0, 150, 120)
 LIBRARY = FlatLibrary(
@@ -62,6 +68,22 @@ def test_the_sheet_says_what_it_is(drawing):
     assert "m" in text                            # scale bar units
     statement = " ".join(e.text for e in doc.modelspace().query("MTEXT"))
     assert "AREA STATEMENT" in statement and "TOTAL AREA OF ALL TOWERS" in statement
+
+
+def test_the_statement_wraps_in_its_column_and_the_title_block_rows_keep_their_bands(drawing):
+    """2026-10-21, Dhulapally's A1 sheet: the statement ran past the frame (no width to wrap
+    at), and each title-block row's words sat in the band above, the first over the title."""
+    doc, _ = drawing
+    msp = doc.modelspace()
+    statement = next(e for e in msp.query("MTEXT") if "AREA STATEMENT" in e.text)
+    scale = int(next(e.dxf.text for e in msp.query("TEXT")
+                     if e.dxf.text.startswith("1:")).split(":")[1].split()[0])
+    assert statement.dxf.width == pytest.approx(STATEMENT_WIDTH_MM * scale / 1000)
+    texts = {e.dxf.text: e.dxf.insert.y for e in msp.query("TEXT")}
+    title_y = texts["Test site"]
+    labels = [y for t, y in texts.items() if t in ("PROJECT", "CLIENT", "ARCHITECT")]
+    assert labels and all(y < title_y - 1e-6 for y in labels)
+    assert texts["PROJECT"] > texts["CLIENT"] > texts["ARCHITECT"]
 
 
 def test_towers_and_amenities_are_named_on_the_drawing(drawing):
