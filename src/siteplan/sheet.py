@@ -12,6 +12,7 @@ scale around it, which is how these sheets are usually set out.
 
 from __future__ import annotations
 
+import textwrap
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
@@ -28,6 +29,7 @@ SHEET_MM = (841.0, 594.0)  # A1 landscape
 MARGIN_MM = 15.0
 TITLE_BLOCK_MM = (190.0, 78.0)
 STATEMENT_WIDTH_MM = 62.0
+STATEMENT_CHARS = 44  # a statement line, wrapped to fit its column at its text height
 TEXT_MM = 2.6  # printed text height; everything else is sized from it
 TITLE_CHARS = 42  # what fits on the title block's heading line
 ROW_CHARS = 30  # and in a title block row's value column
@@ -237,7 +239,9 @@ def _border(msp, plot: Polygon, statement: str, info: SheetInfo, scale: int,
     )
 
     right = left + width - inner
-    text = msp.add_mtext(statement.replace("\n", "\\P"), dxfattribs={"layer": "SHEET-TEXT"})
+    lines = [part for line in statement.split("\n")
+             for part in (textwrap.wrap(line, STATEMENT_CHARS, subsequent_indent="  ") or [""])]
+    text = msp.add_mtext("\\P".join(lines), dxfattribs={"layer": "SHEET-TEXT"})
     text.set_location((right - STATEMENT_WIDTH_MM * m, bottom + height - inner - 4 * m))
     text.dxf.char_height = 2.2 * m
     text.dxf.width = STATEMENT_WIDTH_MM * m  # wrapped in its column, never past the frame

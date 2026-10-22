@@ -8,6 +8,7 @@ from siteplan.layout import LayoutRequest, solve
 from siteplan.library import FlatLibrary
 from siteplan.sheet import (
     SHEET_LAYERS,
+    STATEMENT_CHARS,
     STATEMENT_WIDTH_MM,
     SheetInfo,
     pick_scale,
@@ -79,6 +80,8 @@ def test_the_statement_wraps_in_its_column_and_the_title_block_rows_keep_their_b
     scale = int(next(e.dxf.text for e in msp.query("TEXT")
                      if e.dxf.text.startswith("1:")).split(":")[1].split()[0])
     assert statement.dxf.width == pytest.approx(STATEMENT_WIDTH_MM * scale / 1000)
+    # wrapped by the sheet itself, so no viewer joins a wrapped line to the next one
+    assert all(len(line) <= STATEMENT_CHARS for line in statement.text.split("\\P"))
     texts = {e.dxf.text: e.dxf.insert.y for e in msp.query("TEXT")}
     title_y = texts["Test site"]
     labels = [y for t, y in texts.items() if t in ("PROJECT", "CLIENT", "ARCHITECT")]
