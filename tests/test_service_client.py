@@ -3,8 +3,11 @@
 Dhulapally runs in DEBUG mode: its net outline is the firm's own, fitted onto the survey and
 tagged FIRM_FINISHED_PLAN (the regression load, built as tests/search_compare.py builds it), so a
 blind service refuses it and every output of the debug run says DEBUG RUN. Suchitra runs BLIND
-from its survey and the project file the architect's answers make through the intake flow. The
-files are copied into a workspace under pytest's temporary folder, which is never committed.
+from its survey and the project file the architect's answers make through the intake flow, with
+its entrance pinned on R1 where the surveyor drew the gate, ASSUMED_FOR_TEST: its access road R2
+touches the plot at a corner only, where no entrance fits (2026-10-21), and the architect has not
+placed it; the stretch is worked out from the survey here, never written into a file. The files
+are copied into a workspace under pytest's temporary folder, which is never committed.
 What is asserted is what the service promises, never a number: FULL alternatives, no legal FAIL
 among them when the service judges each again, DEBUG RUN on Dhulapally's drawings and report,
 and Suchitra's own longest block (56 m, as the architect's project file sets it) kept: no tower
@@ -20,16 +23,24 @@ from pathlib import Path
 import ezdxf
 import pytest
 from client_baseline import ANSWERS, SURVEY, WORKSPACE, profile_path
-from shapely.geometry import Polygon
+from shapely.geometry import LineString, Polygon
+from shapely.ops import linemerge
 
+from siteplan import rules
 from siteplan.contracts import CandidateLayout, DesignBrief
 from siteplan.contracts.common import SourceKind
 from siteplan.contracts.design_brief import ParetoPoint
 from siteplan.contracts.validation import LegalVerdict
 from siteplan.intake import WORKSPACE_FILE, build_project, extract, load_defaults, save
+from siteplan.legal.envelope import envelope
+from siteplan.legal.site import resolve_project, site_from_project
 from siteplan.optimizer.pareto import same_idea
+from siteplan.optimizer.search import network
+from siteplan.optimizer.search.land import plot_of
 from siteplan.profiles import apply_profile, load_profile
+from siteplan.project import Project
 from siteplan.provenance import Provenance
+from siteplan.runner import read_survey
 from siteplan.service import (
     ExportCandidate,
     ExportStatus,
@@ -44,6 +55,8 @@ from siteplan.service import (
     ValidateCandidate,
 )
 from siteplan.service.brief import SHOWN_LAYOUTS
+from siteplan.steps.gate import around
+from siteplan.steps.survey_copy import meets
 from siteplan.validator.shapes import sides_of
 
 TEST_CLASS = "normative"
@@ -94,6 +107,25 @@ def _dhulapally(folder: Path) -> tuple[str, str]:
     return "dhulapally.debug.project.json", SURVEY.name
 
 
+R1_ENTRANCE = ("test: the entrance on R1 where the surveyor drew the gate, 9 m round its mouth, "
+               "until the architect places it (R2 touches the plot at a corner only)")
+
+
+def _r1_mouth() -> list[list[float]]:
+    """The 9 m stretch round R1's mouth, as the steps' gate places one round a road narrower
+    than the main approach road (`steps.gate.gate_line`), from the survey itself."""
+    survey = read_survey(SUCHITRA_SURVEY)
+    met = meets(extract(SUCHITRA_SURVEY).roads[0], survey.boundary, survey.roads)
+    merged = linemerge([g for g in getattr(met, "geoms", [met])
+                        if g.geom_type == "LineString" and g.length])
+    line = max(getattr(merged, "geoms", [merged]), key=lambda g: g.length)
+    edge = LineString(survey.boundary.exterior.coords)
+    narrowest, widest = rules.MAIN_APPROACH_ROAD_M
+    middle = edge.project(line.interpolate(0.5, normalized=True))
+    gate = linemerge(around(edge, middle, min(max(line.length, narrowest), widest) / 2))
+    return [list(point) for point in gate.coords]
+
+
 def _suchitra(folder: Path) -> tuple[str, str]:
     """Suchitra's project as `siteplan start` writes it from the architect's answers, with the
     longest block the architect's own project file sets (the workspace sets none)."""
@@ -114,6 +146,9 @@ def _suchitra(folder: Path) -> tuple[str, str]:
             if "application_status" in architect.get(part, {}):
                 built.setdefault(part, {})["application_status"] = (
                     architect[part]["application_status"])
+    built["site"]["gate_m"] = _r1_mouth()
+    built["sources"]["gate_m"] = R1_ENTRANCE
+    built["status"]["gate_m"] = Provenance.ASSUMED_FOR_TEST
     save(built, folder / "suchitra.project.json")
     shutil.copy(SUCHITRA_SURVEY, folder / SUCHITRA_SURVEY.name)
     return "suchitra.project.json", SUCHITRA_SURVEY.name
@@ -199,3 +234,20 @@ def test_the_first_alternative_exports_and_the_debug_run_is_labelled_on_every_ou
         else:
             text = Path(path).read_text()
         assert ("DEBUG RUN" in text) is (name == "dhulapally"), (name, path)
+
+
+def test_suchitra_without_a_pinned_entrance_lays_none_there_and_says_why():
+    """Its access road R2 runs past the plot and touches it at a corner only (2026-10-21): the
+    search used to open the gate 80 m away on an edge no road touches. Unpinned, the only
+    stretch a gate may open on is that touch, shorter than the 9 m approach road, and the search
+    says so before anything else."""
+    if not all(path.exists() for path in NEEDED["suchitra"]):
+        pytest.skip("the suchitra fixtures are not present")
+    project = Project.model_validate(build_project(extract(SUCHITRA_SURVEY), SUCHITRA_ANSWERS,
+                                                   load_defaults(WORKSPACE)))
+    site = site_from_project(project, SUCHITRA_SURVEY)
+    assert site.access.gate is None and site.access_road().id == 2
+    zones = envelope(site, resolve_project(site, project)).circulation.access_zones
+    assert sum(z.length_m for z in zones) < 5  # the corner touch, not the edges facing NE
+    why = network.too_short(plot_of(site, envelope(site, resolve_project(site, project))), 9.0)
+    assert "the access road meets the plot along 3.5 m" in why
