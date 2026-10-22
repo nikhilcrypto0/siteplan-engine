@@ -248,6 +248,13 @@ def _frontage(how: str, ground: Polygon, road: Road, plot: Polygon) -> BaseGeome
     return unary_union(pieces) if pieces else LineString()
 
 
+def meets(road: Road, plot: Polygon, raw: tuple[LineString, ...]) -> BaseGeometry:
+    """The stretch of the plot's boundary a road meets, as step 1 reads it; empty when the road
+    does not reach the plot. The site model carries it for the access road (`legal.site`)."""
+    how, _, ground = reach(road, plot, raw)
+    return _frontage(how, ground, road, plot)
+
+
 def _seen(number: int, road: Road, inputs: Inputs) -> RoadSeen:
     plot = inputs.survey.boundary
     how, carried, ground = reach(road, plot, inputs.survey.roads)

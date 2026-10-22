@@ -1373,6 +1373,21 @@ REGISTRY: tuple[Constraint, ...] = (
         settles="Nothing: drawing tolerances.",
     ),
     Constraint(
+        "Towers", "Where an entrance not pinned may open (2026-10-21): only where the access road "
+                  "meets the plot, as step 1 reads the survey, never on another edge that only "
+                  "faces the road's side.",
+        f"the net plot's edge within {frontage.ROAD_MEETS_M:g} m of where the road's drawn ground "
+        "reaches the plot, and the inner edge of land given up beside it; a gate opens onto the "
+        f"road when {fire.GATE_ON_ROAD_M:g} m of its opening lies there",
+        Basis.ENGINE_DESIGN_ASSUMPTION, "none (legal.frontage, validator.fire)",
+        ("legal.frontage.ROAD_MEETS_M", "validator.fire.ACCESS_ROAD_REACH_M",
+         "validator.fire.GATE_ON_ROAD_M"),
+        note="The 1 m is step 1's ROAD_TOUCH_M. Where the road meets the plot along less than the "
+             "approach road's width, no entrance is laid and the search says so: the architect "
+             "pins it.",
+        settles="Nothing: drawing tolerances; where the entrance goes is the architect's.",
+    ),
+    Constraint(
         "Towers", "How closely a block must run along an orientation the brief requires (the "
                   "client's Vastu requirement of 2026-10-19: long faces north and south).",
         f"its long side within the tolerance the brief states, never less than "

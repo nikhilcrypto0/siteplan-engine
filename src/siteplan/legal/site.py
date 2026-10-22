@@ -20,7 +20,7 @@ from shapely.ops import polygonize, unary_union
 
 from siteplan.adapters import site_model
 from siteplan.contracts.accounting import LocationHow
-from siteplan.contracts.common import Line, SourceKind, shapes_from
+from siteplan.contracts.common import Line, Sourced, SourceKind, shapes_from
 from siteplan.contracts.resolved_rules import (
     CIRCULATION_IN_SETBACK,
     STILT_IN_RULE_HEIGHT,
@@ -28,11 +28,13 @@ from siteplan.contracts.resolved_rules import (
     WhenOpen,
 )
 from siteplan.contracts.site_model import CanonicalSiteModel
-from siteplan.intake import extract, load_defaults
+from siteplan.intake import Draft, extract, load_defaults
 from siteplan.legal.resolve import resolve
 from siteplan.project import Project
 from siteplan.provenance import Provenance, weakest
 from siteplan.runner import NET_AREA_TOLERANCE_SQM, load_plot, read_survey
+from siteplan.steps.survey_copy import meets
+from siteplan.survey import Survey
 
 PLACED_BY_ARCHITECT = (LocationHow.OUTLINE, LocationHow.SIDE_AND_WIDTH, LocationHow.EXTENT)
 
@@ -43,7 +45,8 @@ def site_from_project(project: Project, survey: str | Path | None = None, *,
     net plot where it can be placed, and the lines of each named water body."""
     path = Path(survey) if survey else None
     draft = extract(path) if path else None
-    boundary = read_survey(path).boundary if path else None
+    drawn = read_survey(path) if path else None
+    boundary = drawn.boundary if drawn else None
     site = site_model(project, site_id=site_id, boundary=boundary, draft=draft)
     if site.net_plot is None and path is not None:
         is_net = _is_the_net_outline(project, boundary)
@@ -51,7 +54,7 @@ def site_from_project(project: Project, survey: str | Path | None = None, *,
             by_architect = bool(site.ownership.deductions) and not is_net
             site = site_model(_with_net_plot(project, path, by_architect), site_id=site_id,
                               boundary=boundary, draft=draft)
-    return _with_water(site, project, path)
+    return _with_access_road(_with_water(site, project, path), drawn, draft)
 
 
 def readings_of(project: Project) -> tuple[dict[str, str], WhenOpen]:
@@ -128,6 +131,26 @@ def _with_net_plot(project: Project, survey: Path, by_architect: bool) -> Projec
     out.status["net_plot_m"] = status
     out.source_kinds["net_plot_m"] = kind
     return out
+
+
+def _with_access_road(site: CanonicalSiteModel, survey: Survey | None,
+                      draft: Draft | None) -> CanonicalSiteModel:
+    """Where the access road meets the plot, as step 1 reads the survey (2026-10-21): an entrance
+    not pinned opens only there. Empty when the survey draws the road short of the plot, so no
+    entrance is invented on another edge; nothing at all when no survey draws the road."""
+    road = site.access_road()
+    if survey is None or draft is None or road is None or not 0 < road.id <= len(draft.roads):
+        return site
+    met = meets(draft.roads[road.id - 1], survey.boundary, survey.roads)
+    lines = [Line(points=list(g.coords)) for g in getattr(met, "geoms", [met])
+             if g.geom_type == "LineString" and g.length > 0]
+    said = (f"the survey: where road {road.id} reaches the plot, {met.length:.1f} m of its edge "
+            "(step 1's reading)") if lines else (
+            f"the survey: road {road.id} is drawn short of the plot (step 1's reading)")
+    frontage = Sourced[list[Line]](value=lines, status=Provenance.EXTRACTED,
+                                   source_kind=SourceKind.SURVEY, source=said)
+    return site.model_copy(update={"access": site.access.model_copy(
+        update={"frontage": frontage})})
 
 
 def _with_water(site: CanonicalSiteModel, project: Project,

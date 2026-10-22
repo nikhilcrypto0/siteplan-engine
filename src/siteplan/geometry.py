@@ -245,3 +245,25 @@ def frontage(footprint: Polygon, near: BaseGeometry, within_m: float) -> float:
         return 0.0
     merged = linemerge(runs)  # a stretch over the ring's first point comes back in two pieces
     return max(g.length for g in getattr(merged, "geoms", [merged]))
+
+
+def road_meets(net: Polygon, gross: Polygon | None, stretches: list[LineString],
+               reach_m: float) -> list[LineString]:
+    """Where a road meets the net plot (2026-10-21): the net plot's edge within `reach_m` of the
+    stretches of the surveyed boundary the road reaches, and the inner edge of any land given up
+    that lies beside them (a strip widening the road leaves the net edge set back from it). The
+    envelope opens an entrance only there and the validator measures the same."""
+    near = [s.buffer(reach_m, cap_style="flat") for s in stretches if not s.is_empty]
+    if not near:
+        return []
+    reach = unary_union(near)
+    if gross is not None:
+        given = gross.difference(net)
+        reach = unary_union([reach, *(piece.buffer(reach_m) for piece in getattr(
+            given, "geoms", [given]) if not piece.is_empty and piece.intersects(reach))])
+    met = net.exterior.intersection(reach)
+    lines = [g for g in getattr(met, "geoms", [met]) if isinstance(g, LineString) and g.length]
+    if not lines:
+        return []
+    merged = linemerge(lines)  # a stretch over the ring's first point comes back in two pieces
+    return [g for g in getattr(merged, "geoms", [merged]) if g.length]

@@ -23,7 +23,7 @@ so, as NOT_CHECKED, and judges nothing.
 
 from __future__ import annotations
 
-from shapely.geometry import Polygon
+from shapely.geometry import LineString, Polygon
 from shapely.geometry.base import BaseGeometry
 from shapely.ops import unary_union
 
@@ -35,6 +35,7 @@ from siteplan.contracts.resolved_rules import (
     STILT_IN_RULE_HEIGHT,
 )
 from siteplan.contracts.validation import Check, Discrepancy, Family
+from siteplan.geometry import road_meets
 from siteplan.validator.context import GATE_ON_BOUNDARY_M, Context, is_known
 from siteplan.validator.ground import Ground
 from siteplan.validator.measure import TOL_M, TowerGeometry
@@ -77,6 +78,10 @@ LOW_FIRE_CLAUSE = ("G.O.168 rule 15(a)(i) (a building below the high-rise height
 REACH_MIN_SQM = 1.0  # a lane that only touches a block's band at a point does not reach it
 GATE_SLACK_M = 0.05  # a gate may measure this much under the width it declares
 GATE_TOUCH_M = 0.5  # a lane this close to the entrance's ground starts from it
+# The validator's own copy of legal.frontage.ROAD_MEETS_M: the net edge this near where the
+# access road's drawn ground reaches the plot meets the road (2026-10-21).
+ACCESS_ROAD_REACH_M = 1.0
+GATE_ON_ROAD_M = 0.5  # a gate opens onto the road when this much of its opening lies on it
 NOT_ASKED = "nothing: neither a high-rise nor a special building under this reading"
 MAYBE_SPECIAL_NOTE = ("A cellar is drawn without its outline, so which blocks stand over it, and "
                       "so which are special buildings held to 4.6, is not known: what fails only "
@@ -375,10 +380,15 @@ def _gate_problems(ctx: Context) -> tuple[list[str], list[str]]:
     least, most = fire.entrance_width_m.value, ctx.rules.circulation.approach_m.value[1]
     street, others = _street_sides(ctx)
     problems, doubts = [], []
+    road = _access_road_edge(ctx)
     for n, gate in enumerate(ctx.drawn.gates, 1):
         label = f"gate {n}" if len(ctx.drawn.gates) > 1 else "the gate"
         if gate.shape.distance(ctx.net.boundary) > GATE_ON_BOUNDARY_M:
             problems.append(f"{label} is not on the plot's boundary")
+            continue
+        off_road = _off_the_road(gate.shape, ctx.net, road)
+        if off_road:
+            problems.append(f"{label} {off_road}")
             continue
         width = width_along_edge(gate.shape, ctx.net, GATE_ON_BOUNDARY_M)
         if width + TOL_M < least:
@@ -399,11 +409,39 @@ def _gate_problems(ctx: Context) -> tuple[list[str], list[str]]:
     return problems, doubts
 
 
+def _access_road_edge(ctx: Context) -> BaseGeometry | None:
+    """Where the access road meets the net plot, when the survey draws it (2026-10-21); None
+    where nothing draws it, and the side the road runs is all there is to hold a gate to."""
+    met = ctx.site.access.frontage
+    if met is None:
+        return None
+    gross = ctx.site.boundary.to_shapely() if ctx.site.boundary is not None else None
+    return unary_union(road_meets(ctx.net, gross, [LineString(line.points) for line in met.value],
+                                  ACCESS_ROAD_REACH_M))
+
+
+def _off_the_road(shape: BaseGeometry, net: Polygon, road: BaseGeometry | None) -> str:
+    """Why a gate opens onto no road, or nothing: its opening in the plot's edge must lie, for
+    GATE_ON_ROAD_M at least, where the access road meets the plot. A gate on another edge that
+    only faces the road's side opens onto the land beside the plot (Suchitra, 2026-10-21: 80 m
+    from where R2 meets it)."""
+    if road is None:
+        return ""
+    if road.is_empty:
+        return "opens onto no road: the survey draws the access road short of the plot"
+    opening = net.exterior.intersection(shape.buffer(GATE_ON_BOUNDARY_M))
+    if opening.intersection(road.buffer(GATE_ON_BOUNDARY_M)).length >= GATE_ON_ROAD_M:
+        return ""
+    centre = shape.centroid
+    return (f"opens at ({centre.x:.0f}, {centre.y:.0f}), {shape.distance(road):.0f} m from where "
+            "the access road meets the plot: it opens onto no road")
+
+
 def entrance_check(ctx: Context, ground: Ground) -> Check:
     fire = ctx.rules.fire
-    required = (f">= {fire.entrance_width_m.value:g} m wide, in the plot's boundary on the side "
-                f"the road runs; {fire.entrance_clear_height_m.value:g} m clear under anything "
-                "built over it")
+    required = (f">= {fire.entrance_width_m.value:g} m wide, in the plot's boundary where the "
+                "access road meets it (on the side it runs, where no survey draws it); "
+                f"{fire.entrance_clear_height_m.value:g} m clear under anything built over it")
     if not ctx.drawn.gates:
         return plain(Family.FIRE, "Fire access: entrance", Status.FAIL, "no entrance drawn",
                      required, fire.entrance_width_m.clause,

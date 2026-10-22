@@ -44,12 +44,18 @@ class Access(Part):
     # from site models stored before it, and left out of the dump when absent, so a stored site
     # model keeps its digest.
     gate: Sourced[Line] | None = None
+    # Where the access road meets the plot, as the survey draws it (2026-10-21): the stretches of
+    # the surveyed boundary the road's drawn ground reaches (step 1's reading). An entrance not
+    # pinned opens only there, never on another edge merely facing the road's side. Absent where
+    # no survey draws the road, and left out of the dump when absent, as `gate` is.
+    frontage: Sourced[list[Line]] | None = None
 
     @model_serializer(mode="wrap")
     def _as_stored_when_absent(self, handler):
         dumped = handler(self)
-        if dumped.get("gate") is None:
-            dumped.pop("gate", None)
+        for key in ("gate", "frontage"):
+            if dumped.get(key) is None:
+                dumped.pop(key, None)
         return dumped
 
 

@@ -6,6 +6,17 @@
         "dead_end": {
           "$ref": "#/$defs/Sourced_Union_bool__NoneType__"
         },
+        "frontage": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Sourced_list_Line__"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "gate": {
           "anyOf": [
             {
@@ -916,6 +927,36 @@
         "source_kind"
       ],
       "title": "Sourced[int]",
+      "type": "object"
+    },
+    "Sourced_list_Line__": {
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "default": "",
+          "title": "Source",
+          "type": "string"
+        },
+        "source_kind": {
+          "$ref": "#/$defs/SourceKind"
+        },
+        "status": {
+          "$ref": "#/$defs/Provenance"
+        },
+        "value": {
+          "items": {
+            "$ref": "#/$defs/Line"
+          },
+          "title": "Value",
+          "type": "array"
+        }
+      },
+      "required": [
+        "value",
+        "status",
+        "source_kind"
+      ],
+      "title": "Sourced[list[Line]]",
       "type": "object"
     },
     "Sourced_tuple_float__float__": {

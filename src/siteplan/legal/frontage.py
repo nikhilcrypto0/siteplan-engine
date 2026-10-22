@@ -1,11 +1,14 @@
-"""Where the net plot faces the access road: the stretches of its boundary that face the side the
-road runs along, and the access zones where a gate may open.
+"""Where the net plot meets the access road, and the access zones where a gate may open.
 
-The survey gives the road's side and width but not the edge it runs beside, so the frontage is
-the straight runs of the net plot's boundary that face that side as `geometry.faces` reads it
-(within 45 degrees, a diagonal label half a compass step more), the reading the search and the
-validator take. An access zone is that frontage less any statutory exclusion (a gate cannot open
-into a water buffer). Nothing here draws a road or a gate.
+Where the survey draws the road, the site model carries the stretches of the surveyed boundary
+it reaches (`site.access.frontage`, step 1's reading), and the frontage is the net plot's edge
+there (`geometry.road_meets`, which the validator measures the same way): an entrance opens onto
+the road, never onto an edge that only faces the road's side (2026-10-21: Suchitra's R2 meets
+the plot at one notch, and the gate went 80 m away to an edge no road touches). Where nothing
+draws it, the project's side is all there is, and the frontage is the straight runs of the net
+plot's boundary facing that side as `geometry.faces` reads it (within 45 degrees, a diagonal
+label half a compass step more). An access zone is that frontage less any statutory exclusion (a
+gate cannot open into a water buffer). Nothing here draws a road or a gate.
 """
 
 from __future__ import annotations
@@ -16,9 +19,10 @@ from shapely.ops import linemerge
 from siteplan.contracts.common import Line
 from siteplan.contracts.envelope import AccessZone
 from siteplan.contracts.site_model import CanonicalSiteModel
-from siteplan.geometry import faces, facing_deg, straight_runs
+from siteplan.geometry import faces, facing_deg, road_meets, straight_runs
 
 MIN_ZONE_M = 0.5  # a shorter stretch is drawing noise, not frontage
+ROAD_MEETS_M = 1.0  # the net edge this near where the road's drawn ground reaches the plot meets it
 
 
 def front_runs(net: Polygon, side: str | None) -> list[LineString]:
@@ -40,7 +44,13 @@ def access_zones(site: CanonicalSiteModel, net: Polygon, excluded) -> list[Acces
                            frontage=gate.value, length_m=line.length,
                            note=f"the entrance the project pins ({gate.source}, "
                                 f"{gate.status.value}): the main approach comes in here only")]
-    runs = front_runs(net, side)
+    met = site.access.frontage
+    if met is not None:
+        gross = site.boundary.to_shapely() if site.boundary is not None else None
+        runs = road_meets(net, gross, [LineString(line.points) for line in met.value],
+                          ROAD_MEETS_M)
+    else:
+        runs = front_runs(net, side)
     if not runs:
         return []
     frontage = linemerge(MultiLineString(runs)) if len(runs) > 1 else runs[0]
@@ -51,6 +61,8 @@ def access_zones(site: CanonicalSiteModel, net: Polygon, excluded) -> list[Acces
     road_id = site.access.road_id.value
     return [AccessZone(id=f"access-{i}", road_id=road_id, side=side,
                        frontage=Line(points=list(line.coords)), length_m=line.length,
-                       note=f"the net plot's frontage facing {side}, where the access road "
+                       note=(f"where the access road meets the net plot ({met.source}), less "
+                             "any statutory exclusion") if met is not None else
+                            f"the net plot's frontage facing {side}, where the access road "
                             "runs, less any statutory exclusion")
             for i, line in enumerate(pieces, 1)]
