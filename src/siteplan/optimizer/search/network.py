@@ -368,7 +368,7 @@ def _along(net: Polygon, edges, half: float
     out = []
     for (x0, y0), (x1, y1) in edges:
         length = math.hypot(x1 - x0, y1 - y0)
-        if length < 2 * half:
+        if length < 2 * half - 2 * EPS_M:  # shorter than the approach road itself
             continue
         along = ((x1 - x0) / length, (y1 - y0) / length)
         normal = (-along[1], along[0])
@@ -376,6 +376,9 @@ def _along(net: Polygon, edges, half: float
         inward = normal if net.contains(Point(middle[0] + normal[0] * 0.5,
                                               middle[1] + normal[1] * 0.5)) else (
             -normal[0], -normal[1])
+        if length < 2 * half:  # exactly as wide as the approach (the steps' 9 m mouth round a
+            out.append((middle, along, inward))  # narrower road, 2026-10-21): one gate, there
+            continue
         steps = int((length - 2 * half) // GATE_STEP_M)
         for i in range(steps + 1):
             t = half + i * GATE_STEP_M

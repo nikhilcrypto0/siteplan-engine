@@ -177,3 +177,14 @@ def test_a_road_meeting_the_plot_along_less_than_the_approach_lays_no_gate_and_s
     assert not proposal.candidates
     assert any(n.startswith("NO ENTRANCE: the access road meets the plot along 4.0 m")
                for n in proposal.notes)
+
+
+def test_a_stretch_exactly_as_wide_as_the_approach_takes_one_gate():
+    """The steps' gate makes a mouth exactly 9 m wide round a road narrower than that (Suchitra's
+    R1, 7.7 m); the search read a gate as needing 2 cm more and laid none there."""
+    net = box(0, 0, 200, 120)
+    places = network._gate_points(net, LineString([(60.0, 0.0), (69.0, 0.0)]),
+                                  4.5 + network.EPS_M)
+    assert [(round(x, 2), round(y, 2)) for (x, y), _, _ in places] == [(64.5, 0.0)]
+    assert not network._gate_points(net, LineString([(60.0, 0.0), (68.9, 0.0)]),
+                                    4.5 + network.EPS_M)
