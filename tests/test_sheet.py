@@ -2,6 +2,7 @@
 
 import ezdxf
 import pytest
+from ezdxf.fonts import fonts
 from shapely.geometry import box
 
 from siteplan.layout import LayoutRequest, solve
@@ -81,7 +82,11 @@ def test_the_statement_wraps_in_its_column_and_the_title_block_rows_keep_their_b
                      if e.dxf.text.startswith("1:")).split(":")[1].split()[0])
     assert statement.dxf.width == pytest.approx(STATEMENT_WIDTH_MM * scale / 1000)
     # wrapped by the sheet itself, so no viewer joins a wrapped line to the next one
-    assert all(len(line) <= STATEMENT_CHARS for line in statement.text.split("\\P"))
+    lines = statement.text.split("\\P")
+    assert all(len(line) <= STATEMENT_CHARS for line in lines)
+    # measured in a drawing font, every line fits the column (44 capitals ran to about 75 mm)
+    font = fonts.make_font("Arial.ttf", statement.dxf.char_height * 1000 / scale)
+    assert max(font.text_width(line) for line in lines) <= STATEMENT_WIDTH_MM
     texts = {e.dxf.text: e.dxf.insert.y for e in msp.query("TEXT")}
     title_y = texts["Test site"]
     labels = [y for t, y in texts.items() if t in ("PROJECT", "CLIENT", "ARCHITECT")]
