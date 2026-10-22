@@ -48,7 +48,7 @@ from siteplan.optimizer.interfaces import Budget, Proposal, SearchContext, Valid
 from siteplan.optimizer.objective import Scores, measure
 from siteplan.optimizer.pareto import Scored, leaders, pareto_front, same_idea, select
 from siteplan.optimizer.preferences import not_weighed, wants_comb
-from siteplan.optimizer.search import fringe
+from siteplan.optimizer.search import fringe, network
 from siteplan.optimizer.search.build import build_candidate
 from siteplan.optimizer.search.columns import Choice, Standing
 from siteplan.optimizer.search.layout import (
@@ -678,6 +678,9 @@ def _notes(run: Run | None, tally: Tally, found: Sequence[Judged], chosen: Seque
         return []
     notes = [f"{tally.evaluated} configurations evaluated, {tally.laid} laid out, {tally.judged} "
              f"judged by the validator, {len(chosen)} proposed"]
+    no_entrance = network.too_short(run.plot, run.q.approach_m)
+    if no_entrance:
+        notes.append(f"NO ENTRANCE: {no_entrance}")
     if tally.exhausted:
         notes.append("stopped on the time budget: part of the search was not tried")
     if tally.rejected:

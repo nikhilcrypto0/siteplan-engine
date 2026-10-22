@@ -156,3 +156,8 @@ def test_a_road_meeting_the_plot_along_less_than_the_approach_lays_no_gate_and_s
                                           9.0, 2.0)
     assert entrance is None
     assert "meets the plot along 4.0 m" in why and "the architect's to say" in why
+    # the run says so first, whatever else stopped its configurations sooner
+    proposal = strategy().propose(met.context())
+    assert not proposal.candidates
+    assert any(n.startswith("NO ENTRANCE: the access road meets the plot along 4.0 m")
+               for n in proposal.notes)

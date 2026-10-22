@@ -257,6 +257,20 @@ class Entrance:
         return self.road.ground if self.road is not None else EMPTY
 
 
+def too_short(plot: Plot, width_m: float) -> str:
+    """Why no entrance can open where the access road meets the plot, or nothing: every stretch
+    of it is shorter than the approach road (2026-10-21: Suchitra's R2 meets its plot along
+    3.5 m). Never an entrance invented on an edge the road does not meet; the architect pins it."""
+    if not plot.gate_runs:
+        return ""
+    longest = max(line.length for line in plot.gate_runs)
+    if longest >= width_m:
+        return ""
+    return (f"the access road meets the plot along {longest:.1f} m of its edge at most, less than "
+            f"the {width_m:g} m approach road: where the entrance goes is the architect's to say "
+            "(pin it, gate_m)")
+
+
 def find_entrance(plot: Plot, clusters: Sequence[Cluster], blocked: BaseGeometry, width_m: float,
                   strip_width_m: float, turnings: Sequence[Turning] = (),
                   solid: BaseGeometry = EMPTY, lane_m: float = 0.0
@@ -271,11 +285,9 @@ def find_entrance(plot: Plot, clusters: Sequence[Cluster], blocked: BaseGeometry
     water stands in under every reading of the radius is passed over for the next."""
     if not plot.gate_runs:
         return None, "the access side gives no stretch of boundary a gate may open in"
-    longest = max(line.length for line in plot.gate_runs)
-    if longest < width_m:  # never an entrance invented on an edge the road does not meet
-        return None, (f"the access road meets the plot along {longest:.1f} m of its edge at most, "
-                      f"less than the {width_m:g} m approach road: where the entrance goes is "
-                      "the architect's to say (pin it, gate_m)")
+    short = too_short(plot, width_m)
+    if short:
+        return None, short
     half = width_m / 2 + EPS_M
     hulls = unary_union([c.hull for c in clusters])
     found: list[tuple[float, float, int, Polygon, BaseGeometry, LineString]] = []
