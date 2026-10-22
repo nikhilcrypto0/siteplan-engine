@@ -186,5 +186,8 @@ def test_a_stretch_exactly_as_wide_as_the_approach_takes_one_gate():
     places = network._gate_points(net, LineString([(60.0, 0.0), (69.0, 0.0)]),
                                   4.5 + network.EPS_M)
     assert [(round(x, 2), round(y, 2)) for (x, y), _, _ in places] == [(64.5, 0.0)]
+    # a slightly bent mouth read as one run: its chord a hair short of 9 m still takes the gate
+    assert len(network._gate_points(net, LineString([(60.0, 0.0), (68.9998, 0.0)]),
+                                    4.5 + network.EPS_M)) == 1
     assert not network._gate_points(net, LineString([(60.0, 0.0), (68.9, 0.0)]),
                                     4.5 + network.EPS_M)

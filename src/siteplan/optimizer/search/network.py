@@ -368,8 +368,8 @@ def _along(net: Polygon, edges, half: float
     out = []
     for (x0, y0), (x1, y1) in edges:
         length = math.hypot(x1 - x0, y1 - y0)
-        if length < 2 * half - 2 * EPS_M:  # shorter than the approach road itself
-            continue
+        if length < 2 * half - 3 * EPS_M:  # shorter than the approach road itself, beyond the
+            continue  # hair a slightly bent mouth's chord falls short (Suchitra's R1: 0.14 mm)
         along = ((x1 - x0) / length, (y1 - y0) / length)
         normal = (-along[1], along[0])
         middle = ((x0 + x1) / 2, (y0 + y1) / 2)
